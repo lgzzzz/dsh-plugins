@@ -1,71 +1,32 @@
 /**
- * 视图层：文件标签、编辑器视图、Monaco 容器、文件链接点击拦截。
+ * 视图层：文件标签、编辑器视图、差异视图、Monaco 容器。
  *
- * 所有「动作」都经 commands.ts 触发（requestOpen / requestSave / requestClose），
- * 由 controller.ts 注册处理——组件不反向 import 编排层，避免依赖成环。
+ * 本插件只提供基础能力（openFile / showDiff），不再直接拦截文件链接点击；
+ * 所有「动作」都经 commands.ts 触发（requestSave / requestClose /
+ * requestDiffNext / requestDiffPrev / requestDiffClose），由 controller.ts 注册
+ * 处理——组件不反向 import 编排层，避免依赖成环。
  */
 import * as React from 'react'
-import { getState, subscribe } from './state.ts'
+import type { DiffFile } from './api.ts'
+import { getDiffState, getState, setState, subscribe, subscribeDiff } from './state.ts'
 import {
   currentTheme,
   ensureMonaco,
+  getActiveDiffEditor,
   getActiveEditor,
   getActiveMonaco,
+  setActiveDiffEditor,
   setActiveEditor,
   setActiveMonaco,
 } from './monaco.ts'
-import { languageFor } from './path.ts'
-import { requestClose, requestOpen, requestSave } from './commands.ts'
-
-// ── 文件链接点击拦截（按当前会话挂载） ─────────────────────────────────────
-/** 产物 chips 带完整路径于 title。 */
-const CHIP_SELECTOR = '[data-produced-files-row] button[title]'
-/** read/write/edit 工具卡片摘要里的可打开路径链接。 */
-const FILELINK_SELECTOR = [
-  '[data-tool="read"] button[class*="_fileLink"]',
-  '[data-tool="write"] button[class*="_fileLink"]',
-  '[data-tool="edit"] button[class*="_fileLink"]',
-].join(', ')
-const TARGET_SELECTOR = `${CHIP_SELECTOR}, ${FILELINK_SELECTOR}`
-
-interface SessionListState {
-  byId?: Record<string, { cwd?: string } | undefined>
-}
-interface InterceptorProps {
-  sessionId: string | undefined
-  useSessions: (selector: (s: SessionListState) => string | undefined) => string | undefined
-}
-
-/** 会话头部 actions 行里的隐形条目：只挂载文档级捕获监听，渲染为空。 */
-export function Interceptor(props: InterceptorProps): null {
-  const sessionId = props.sessionId
-  const useSessions = props.useSessions
-  const cwdRef = React.useRef('')
-  cwdRef.current = useSessions((s) => {
-    if (sessionId === undefined || s === null || s === undefined || s.byId === undefined) return undefined
-    return s.byId[sessionId]?.cwd
-  }) ?? ''
-
-  React.useEffect(() => {
-    const onClick = (event: MouseEvent): void => {
-      const target = event.target
-      const chip = target instanceof Element
-        ? target.closest(TARGET_SELECTOR)
-        : null
-      if (chip === null) return
-      const path = (chip.getAttribute('title') ?? (chip.textContent ?? '').trim())
-      if (path === '' || path === '.') return
-      // 阻断宿主 OS 打开，改在本应用内打开。
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      requestOpen(path, cwdRef.current, sessionId)
-    }
-    document.addEventListener('click', onClick, true)
-    return () => { document.removeEventListener('click', onClick, true) }
-  }, [sessionId])
-
-  return null
-}
+import { basename, languageFor } from './path.ts'
+import {
+  requestClose,
+  requestDiffClose,
+  requestDiffNext,
+  requestDiffPrev,
+  requestSave,
+} from './commands.ts'
 
 // ── 标签 ────────────────────────────────────────────────────────────────────
 /** 标签内容：被打开文件的 basename + × 关闭按钮（反应式跟随 fileState）。 */
@@ -91,6 +52,30 @@ export function TabLabel(): React.ReactElement {
   )
 }
 
+// ── 差异视图标签 ────────────────────────────────────────────────────────────
+/** 「差异」tab 标签：文件数 + × 关闭按钮（反应式跟随 diffState）。 */
+export function DiffTabLabel(): React.ReactElement {
+  const state = React.useSyncExternalStore(subscribeDiff, getDiffState)
+  const count = state !== null ? state.files.length : 0
+  const label = count > 0 ? `差异 · ${count}` : '差异'
+  return React.createElement('span', { className: 'dsh-te-tab' },
+    React.createElement('span', {
+      className: 'dsh-te-diff-tab-label',
+      title: state !== null ? `当前 ${state.index + 1} / ${count}` : undefined,
+    }, label),
+    React.createElement('span', {
+      role: 'button',
+      className: 'dsh-te-tab-close',
+      title: '关闭',
+      'aria-label': '关闭差异视图',
+      onClick: (event: React.MouseEvent<HTMLSpanElement>) => {
+        event.stopPropagation()
+        requestDiffClose()
+      },
+    }, '×'),
+  )
+}
+
 // ── 编辑器视图 ──────────────────────────────────────────────────────────────
 export function FileView(): React.ReactElement | null {
   const state = React.useSyncExternalStore(subscribe, getState)
@@ -107,7 +92,14 @@ export function FileView(): React.ReactElement | null {
         : state.notice
   return React.createElement('div', { className: 'dsh-te-root' },
     React.createElement('div', { className: 'dsh-te-toolbar' },
-      React.createElement('span', { className: 'dsh-te-path', title: state.path }, state.label),
+      React.createElement('span', { className: 'dsh-te-path', title: state.path }, state.path),
+      React.createElement('button', {
+        type: 'button',
+        className: state.dirty ? 'dsh-te-save dsh-te-save-dirty' : 'dsh-te-save',
+        title: '保存 (Ctrl+S)',
+        onClick: () => { void requestSave() },
+        disabled: state.loading || state.error !== null,
+      }, state.dirty ? '未保存' : '保存'),
       statusText !== undefined && statusText !== null && statusText !== ''
         ? React.createElement('span', {
           className: state.error !== null ? 'dsh-te-status dsh-te-status-error' : 'dsh-te-status',
@@ -116,13 +108,6 @@ export function FileView(): React.ReactElement | null {
       state.binary
         ? React.createElement('span', { className: 'dsh-te-status dsh-te-status-error' }, '二进制文件')
         : null,
-      React.createElement('button', {
-        type: 'button',
-        className: 'dsh-te-save',
-        title: '保存',
-        onClick: () => { void requestSave() },
-        disabled: state.loading || state.error !== null,
-      }, '保存'),
     ),
     React.createElement('div', { className: 'dsh-te-body' },
       state.binary || state.error !== null
@@ -143,9 +128,13 @@ function MonacoHost({ content, path }: { content: string; path: string }): React
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const [ready, setReady] = React.useState(false)
   const [loadError, setLoadError] = React.useState<string | null>(null)
+  // 程序化 setValue（换文件/重载）会触发 content change 事件，用该标志忽略，
+  // 避免把「刚加载的文件」误标为未保存。
+  const suppressChangeRef = React.useRef(false)
 
   React.useEffect(() => {
     let cancelled = false
+    let changeSub: { dispose(): void } | null = null
     void ensureMonaco().then((monaco) => {
       if (cancelled || containerRef.current === null) return
       setActiveMonaco(monaco)
@@ -163,12 +152,20 @@ function MonacoHost({ content, path }: { content: string; path: string }): React
         tabSize: 2,
       })
       setActiveEditor(editor)
+      // 用户编辑（内容变动）→ 标记为未保存（不自动保存），并清掉旧的「已保存」提示。
+      changeSub = editor.onDidChangeModelContent(() => {
+        if (suppressChangeRef.current) return
+        const s = getState()
+        if (s !== null && !s.dirty) setState({ ...s, dirty: true, notice: null })
+      })
       setReady(true)
     }).catch((error: unknown) => {
       if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error))
     })
     return () => {
       cancelled = true
+      changeSub?.dispose()
+      changeSub = null
       const editor = getActiveEditor()
       if (editor !== null) {
         editor.dispose()
@@ -185,7 +182,14 @@ function MonacoHost({ content, path }: { content: string; path: string }): React
     if (!ready) return
     const editor = getActiveEditor()
     if (editor === null) return
-    if (editor.getValue() !== content) editor.setValue(content)
+    if (editor.getValue() !== content) {
+      suppressChangeRef.current = true
+      editor.setValue(content)
+      suppressChangeRef.current = false
+      // 程序化重载后视为已保存状态。
+      const s = getState()
+      if (s !== null && s.dirty) setState({ ...s, dirty: false })
+    }
     const monaco = getActiveMonaco()
     if (monaco !== null) {
       const model = editor.getModel()
@@ -200,5 +204,115 @@ function MonacoHost({ content, path }: { content: string; path: string }): React
   return React.createElement('div', { className: 'dsh-te-monaco' },
     React.createElement('div', { ref: containerRef, className: 'dsh-te-monaco-host' }),
     !ready ? React.createElement('div', { className: 'dsh-te-note' }, '加载 Monaco 编辑器…') : null,
+  )
+}
+
+// ── 差异视图 ────────────────────────────────────────────────────────────────
+/** 「差异」tab 视图：顶部 上一个/下一个 + 进度，正文 Monaco 双栏 diff。 */
+export function DiffView(): React.ReactElement | null {
+  const state = React.useSyncExternalStore(subscribeDiff, getDiffState)
+  if (state === null || state.files.length === 0) {
+    return React.createElement('div', { className: 'dsh-te-root dsh-te-empty' },
+      React.createElement('div', { className: 'dsh-te-note' }, '未显示差异'))
+  }
+  const index = Math.min(Math.max(state.index, 0), state.files.length - 1)
+  const file = state.files[index]!
+  const label = file.label !== undefined && file.label !== ''
+    ? file.label
+    : (file.path !== undefined && file.path !== '' ? basename(file.path) : `文件 ${index + 1}`)
+  const hasNext = index < state.files.length - 1
+  const hasPrev = index > 0
+  return React.createElement('div', { className: 'dsh-te-root' },
+    React.createElement('div', { className: 'dsh-te-toolbar' },
+      React.createElement('button', {
+        type: 'button',
+        className: 'dsh-te-diff-nav',
+        title: '上一个文件',
+        disabled: !hasPrev,
+        onClick: () => { requestDiffPrev() },
+      }, '上一个'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dsh-te-diff-nav',
+        title: '下一个文件',
+        disabled: !hasNext,
+        onClick: () => { requestDiffNext() },
+      }, '下一个'),
+      React.createElement('span', { className: 'dsh-te-diff-counter' }, `${index + 1} / ${state.files.length}`),
+      React.createElement('span', { className: 'dsh-te-path', title: label }, label),
+    ),
+    React.createElement('div', { className: 'dsh-te-body' },
+      file.before === '' && file.after === ''
+        ? React.createElement('div', { className: 'dsh-te-note' }, '前后内容均为空，无差异可显示。')
+        : React.createElement(DiffHost, { file }),
+    ),
+  )
+}
+
+/** 承载 Monaco 双栏 diff 实例的容器（懒加载 Monaco，随当前文件切换模型）。 */
+function DiffHost({ file }: { file: DiffFile }): React.ReactElement {
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  const [ready, setReady] = React.useState(false)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let cancelled = false
+    void ensureMonaco().then((monaco) => {
+      if (cancelled || containerRef.current === null) return
+      setActiveMonaco(monaco)
+      const editor = monaco.editor.createDiffEditor(containerRef.current, {
+        theme: currentTheme(),
+        automaticLayout: true,
+        fontSize: 13,
+        lineNumbers: 'on',
+        minimap: { enabled: false },
+        readOnly: true,
+        scrollBeyondLastLine: false,
+        renderSideBySide: true,
+        enableSplitViewResizing: true,
+      })
+      setActiveDiffEditor(editor)
+      setReady(true)
+    }).catch((error: unknown) => {
+      if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error))
+    })
+    return () => {
+      cancelled = true
+      const editor = getActiveDiffEditor()
+      if (editor !== null) {
+        editor.dispose()
+        setActiveDiffEditor(null)
+      }
+      setActiveMonaco(null)
+    }
+    // 挂载时创建一次；文件切换走下面的模型更新 effect。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 当前文件变化时：建原文/新文模型并交给 diff 编辑器，替换并释放旧模型。
+  React.useEffect(() => {
+    if (!ready) return
+    const editor = getActiveDiffEditor()
+    if (editor === null) return
+    const monaco = getActiveMonaco()
+    if (monaco === null) return
+    const language = languageFor(file.path ?? file.label ?? '')
+    const original = monaco.editor.createModel(file.before, language)
+    const modified = monaco.editor.createModel(file.after, language)
+    const previous = editor.getModel()
+    editor.setModel({ original, modified })
+    if (previous !== null) {
+      previous.original.dispose()
+      previous.modified.dispose()
+    }
+  }, [file, ready])
+
+  if (loadError !== null) {
+    return React.createElement('div', { className: 'dsh-te-note' },
+      `Monaco 加载失败：${loadError}`)
+  }
+  return React.createElement('div', { className: 'dsh-te-monaco' },
+    React.createElement('div', { ref: containerRef, className: 'dsh-te-monaco-host' }),
+    !ready ? React.createElement('div', { className: 'dsh-te-note' }, '加载 Monaco 差异视图…') : null,
   )
 }

@@ -38,21 +38,31 @@ __export(client_exports, {
 });
 module.exports = __toCommonJS(client_exports);
 
+// src/api.ts
+var TEXT_EDITOR_SERVICE = "dsh-text-editor";
+
 // src/css.ts
 var CSS = [
   '.dsh-te-root{display:flex;flex-direction:column;flex:1;min-height:0;background:var(--dsw-alias-bg-base,#1e1e1e);color:var(--dsw-alias-label-primary,#e6e6e6);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:13px;line-height:1.5;}',
   ".dsh-te-empty{justify-content:center;align-items:center;}",
   ".dsh-te-toolbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.25));background:var(--dsw-alias-bg-layer-1,#252526);flex:none;}",
-  ".dsh-te-path{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;}",
+  ".dsh-te-path{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;max-width:60%;}",
   ".dsh-te-status{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;}",
   ".dsh-te-status-error{color:var(--dsw-alias-state-error-primary,#f48771);}",
-  ".dsh-te-save{margin-left:auto;border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;}",
+  ".dsh-te-save{border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;flex:none;}",
   ".dsh-te-save:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}",
   ".dsh-te-save:disabled{opacity:.5;cursor:default;}",
+  ".dsh-te-save-dirty{color:#dcdcaa;border-color:rgba(220,220,170,.6);}",
+  ".dsh-te-save-dirty:hover{background:rgba(220,220,170,.25);}",
   ".dsh-te-tab{display:inline-flex;align-items:center;gap:6px;}",
   ".dsh-te-tab-label{white-space:nowrap;}",
+  ".dsh-te-diff-tab-label{white-space:nowrap;}",
   ".dsh-te-tab-close{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;font-size:13px;line-height:1;color:var(--dsw-alias-label-secondary,#9d9d9d);cursor:pointer;user-select:none;}",
   ".dsh-te-tab-close:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.25));color:var(--dsw-alias-label-primary,#fff);}",
+  ".dsh-te-diff-nav{border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;}",
+  ".dsh-te-diff-nav:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}",
+  ".dsh-te-diff-nav:disabled{opacity:.5;cursor:default;}",
+  ".dsh-te-diff-counter{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;}",
   ".dsh-te-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;}",
   ".dsh-te-monaco{flex:1;min-height:0;position:relative;}",
   ".dsh-te-monaco-host{position:absolute;inset:0;}",
@@ -81,6 +91,24 @@ function setState(next) {
   fileState = next;
   emit();
 }
+var diffState = null;
+var diffListeners = /* @__PURE__ */ new Set();
+function emitDiff() {
+  for (const fn of diffListeners) fn();
+}
+function subscribeDiff(fn) {
+  diffListeners.add(fn);
+  return () => {
+    diffListeners.delete(fn);
+  };
+}
+function getDiffState() {
+  return diffState;
+}
+function setDiffState(next) {
+  diffState = next;
+  emitDiff();
+}
 
 // src/routes.ts
 var READ_ROUTE = "/dsh-text-editor/read";
@@ -91,6 +119,7 @@ var MONACO_BASE = "/dsh-text-editor/monaco";
 var monacoPromise = null;
 var activeMonaco = null;
 var activeEditor = null;
+var activeDiffEditor = null;
 function getActiveMonaco() {
   return activeMonaco;
 }
@@ -102,6 +131,12 @@ function getActiveEditor() {
 }
 function setActiveEditor(editor) {
   activeEditor = editor;
+}
+function getActiveDiffEditor() {
+  return activeDiffEditor;
+}
+function setActiveDiffEditor(editor) {
+  activeDiffEditor = editor;
 }
 function getMonacoWindow() {
   return window;
@@ -195,20 +230,25 @@ function languageFor(path) {
 }
 
 // src/commands.ts
-var openHandler = null;
 var saveHandler = null;
 var closeHandler = null;
-function setOpenHandler(fn) {
-  openHandler = fn;
-}
+var diffNextHandler = null;
+var diffPrevHandler = null;
+var diffCloseHandler = null;
 function setSaveHandler(fn) {
   saveHandler = fn;
 }
 function setCloseHandler(fn) {
   closeHandler = fn;
 }
-function requestOpen(path, cwd, sessionId) {
-  if (openHandler !== null) openHandler({ path, cwd, sessionId });
+function setDiffNextHandler(fn) {
+  diffNextHandler = fn;
+}
+function setDiffPrevHandler(fn) {
+  diffPrevHandler = fn;
+}
+function setDiffCloseHandler(fn) {
+  diffCloseHandler = fn;
 }
 function requestSave() {
   if (saveHandler !== null) saveHandler();
@@ -216,45 +256,18 @@ function requestSave() {
 function requestClose() {
   if (closeHandler !== null) closeHandler();
 }
+function requestDiffNext() {
+  if (diffNextHandler !== null) diffNextHandler();
+}
+function requestDiffPrev() {
+  if (diffPrevHandler !== null) diffPrevHandler();
+}
+function requestDiffClose() {
+  if (diffCloseHandler !== null) diffCloseHandler();
+}
 
 // src/ui.ts
 var React = __toESM(require("react"), 1);
-var CHIP_SELECTOR = "[data-produced-files-row] button[title]";
-var FILELINK_SELECTOR = [
-  '[data-tool="read"] button[class*="_fileLink"]',
-  '[data-tool="write"] button[class*="_fileLink"]',
-  '[data-tool="edit"] button[class*="_fileLink"]'
-].join(", ");
-var TARGET_SELECTOR = `${CHIP_SELECTOR}, ${FILELINK_SELECTOR}`;
-function Interceptor(props) {
-  var _a;
-  const sessionId = props.sessionId;
-  const useSessions = props.useSessions;
-  const cwdRef = React.useRef("");
-  cwdRef.current = (_a = useSessions((s) => {
-    var _a2;
-    if (sessionId === void 0 || s === null || s === void 0 || s.byId === void 0) return void 0;
-    return (_a2 = s.byId[sessionId]) == null ? void 0 : _a2.cwd;
-  })) != null ? _a : "";
-  React.useEffect(() => {
-    const onClick = (event) => {
-      var _a2, _b;
-      const target = event.target;
-      const chip = target instanceof Element ? target.closest(TARGET_SELECTOR) : null;
-      if (chip === null) return;
-      const path = (_b = chip.getAttribute("title")) != null ? _b : ((_a2 = chip.textContent) != null ? _a2 : "").trim();
-      if (path === "" || path === ".") return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      requestOpen(path, cwdRef.current, sessionId);
-    };
-    document.addEventListener("click", onClick, true);
-    return () => {
-      document.removeEventListener("click", onClick, true);
-    };
-  }, [sessionId]);
-  return null;
-}
 function TabLabel() {
   const state = React.useSyncExternalStore(subscribe, getState);
   const label = state !== null && state.label !== "" ? state.label : "\u6587\u4EF6";
@@ -277,6 +290,29 @@ function TabLabel() {
     }, "\xD7")
   );
 }
+function DiffTabLabel() {
+  const state = React.useSyncExternalStore(subscribeDiff, getDiffState);
+  const count = state !== null ? state.files.length : 0;
+  const label = count > 0 ? `\u5DEE\u5F02 \xB7 ${count}` : "\u5DEE\u5F02";
+  return React.createElement(
+    "span",
+    { className: "dsh-te-tab" },
+    React.createElement("span", {
+      className: "dsh-te-diff-tab-label",
+      title: state !== null ? `\u5F53\u524D ${state.index + 1} / ${count}` : void 0
+    }, label),
+    React.createElement("span", {
+      role: "button",
+      className: "dsh-te-tab-close",
+      title: "\u5173\u95ED",
+      "aria-label": "\u5173\u95ED\u5DEE\u5F02\u89C6\u56FE",
+      onClick: (event) => {
+        event.stopPropagation();
+        requestDiffClose();
+      }
+    }, "\xD7")
+  );
+}
 function FileView() {
   const state = React.useSyncExternalStore(subscribe, getState);
   if (state === null) {
@@ -293,20 +329,20 @@ function FileView() {
     React.createElement(
       "div",
       { className: "dsh-te-toolbar" },
-      React.createElement("span", { className: "dsh-te-path", title: state.path }, state.label),
-      statusText !== void 0 && statusText !== null && statusText !== "" ? React.createElement("span", {
-        className: state.error !== null ? "dsh-te-status dsh-te-status-error" : "dsh-te-status"
-      }, statusText) : null,
-      state.binary ? React.createElement("span", { className: "dsh-te-status dsh-te-status-error" }, "\u4E8C\u8FDB\u5236\u6587\u4EF6") : null,
+      React.createElement("span", { className: "dsh-te-path", title: state.path }, state.path),
       React.createElement("button", {
         type: "button",
-        className: "dsh-te-save",
-        title: "\u4FDD\u5B58",
+        className: state.dirty ? "dsh-te-save dsh-te-save-dirty" : "dsh-te-save",
+        title: "\u4FDD\u5B58 (Ctrl+S)",
         onClick: () => {
           void requestSave();
         },
         disabled: state.loading || state.error !== null
-      }, "\u4FDD\u5B58")
+      }, state.dirty ? "\u672A\u4FDD\u5B58" : "\u4FDD\u5B58"),
+      statusText !== void 0 && statusText !== null && statusText !== "" ? React.createElement("span", {
+        className: state.error !== null ? "dsh-te-status dsh-te-status-error" : "dsh-te-status"
+      }, statusText) : null,
+      state.binary ? React.createElement("span", { className: "dsh-te-status dsh-te-status-error" }, "\u4E8C\u8FDB\u5236\u6587\u4EF6") : null
     ),
     React.createElement(
       "div",
@@ -324,8 +360,10 @@ function MonacoHost({ content, path }) {
   const containerRef = React.useRef(null);
   const [ready, setReady] = React.useState(false);
   const [loadError, setLoadError] = React.useState(null);
+  const suppressChangeRef = React.useRef(false);
   React.useEffect(() => {
     let cancelled = false;
+    let changeSub = null;
     void ensureMonaco().then((monaco) => {
       if (cancelled || containerRef.current === null) return;
       setActiveMonaco(monaco);
@@ -343,12 +381,19 @@ function MonacoHost({ content, path }) {
         tabSize: 2
       });
       setActiveEditor(editor);
+      changeSub = editor.onDidChangeModelContent(() => {
+        if (suppressChangeRef.current) return;
+        const s = getState();
+        if (s !== null && !s.dirty) setState({ ...s, dirty: true, notice: null });
+      });
       setReady(true);
     }).catch((error) => {
       if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
     });
     return () => {
       cancelled = true;
+      changeSub == null ? void 0 : changeSub.dispose();
+      changeSub = null;
       const editor = getActiveEditor();
       if (editor !== null) {
         editor.dispose();
@@ -361,7 +406,13 @@ function MonacoHost({ content, path }) {
     if (!ready) return;
     const editor = getActiveEditor();
     if (editor === null) return;
-    if (editor.getValue() !== content) editor.setValue(content);
+    if (editor.getValue() !== content) {
+      suppressChangeRef.current = true;
+      editor.setValue(content);
+      suppressChangeRef.current = false;
+      const s = getState();
+      if (s !== null && s.dirty) setState({ ...s, dirty: false });
+    }
     const monaco = getActiveMonaco();
     if (monaco !== null) {
       const model = editor.getModel();
@@ -382,32 +433,154 @@ function MonacoHost({ content, path }) {
     !ready ? React.createElement("div", { className: "dsh-te-note" }, "\u52A0\u8F7D Monaco \u7F16\u8F91\u5668\u2026") : null
   );
 }
+function DiffView() {
+  const state = React.useSyncExternalStore(subscribeDiff, getDiffState);
+  if (state === null || state.files.length === 0) {
+    return React.createElement(
+      "div",
+      { className: "dsh-te-root dsh-te-empty" },
+      React.createElement("div", { className: "dsh-te-note" }, "\u672A\u663E\u793A\u5DEE\u5F02")
+    );
+  }
+  const index = Math.min(Math.max(state.index, 0), state.files.length - 1);
+  const file = state.files[index];
+  const label = file.label !== void 0 && file.label !== "" ? file.label : file.path !== void 0 && file.path !== "" ? basename(file.path) : `\u6587\u4EF6 ${index + 1}`;
+  const hasNext = index < state.files.length - 1;
+  const hasPrev = index > 0;
+  return React.createElement(
+    "div",
+    { className: "dsh-te-root" },
+    React.createElement(
+      "div",
+      { className: "dsh-te-toolbar" },
+      React.createElement("button", {
+        type: "button",
+        className: "dsh-te-diff-nav",
+        title: "\u4E0A\u4E00\u4E2A\u6587\u4EF6",
+        disabled: !hasPrev,
+        onClick: () => {
+          requestDiffPrev();
+        }
+      }, "\u4E0A\u4E00\u4E2A"),
+      React.createElement("button", {
+        type: "button",
+        className: "dsh-te-diff-nav",
+        title: "\u4E0B\u4E00\u4E2A\u6587\u4EF6",
+        disabled: !hasNext,
+        onClick: () => {
+          requestDiffNext();
+        }
+      }, "\u4E0B\u4E00\u4E2A"),
+      React.createElement("span", { className: "dsh-te-diff-counter" }, `${index + 1} / ${state.files.length}`),
+      React.createElement("span", { className: "dsh-te-path", title: label }, label)
+    ),
+    React.createElement(
+      "div",
+      { className: "dsh-te-body" },
+      file.before === "" && file.after === "" ? React.createElement("div", { className: "dsh-te-note" }, "\u524D\u540E\u5185\u5BB9\u5747\u4E3A\u7A7A\uFF0C\u65E0\u5DEE\u5F02\u53EF\u663E\u793A\u3002") : React.createElement(DiffHost, { file })
+    )
+  );
+}
+function DiffHost({ file }) {
+  const containerRef = React.useRef(null);
+  const [ready, setReady] = React.useState(false);
+  const [loadError, setLoadError] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    void ensureMonaco().then((monaco) => {
+      if (cancelled || containerRef.current === null) return;
+      setActiveMonaco(monaco);
+      const editor = monaco.editor.createDiffEditor(containerRef.current, {
+        theme: currentTheme(),
+        automaticLayout: true,
+        fontSize: 13,
+        lineNumbers: "on",
+        minimap: { enabled: false },
+        readOnly: true,
+        scrollBeyondLastLine: false,
+        renderSideBySide: true,
+        enableSplitViewResizing: true
+      });
+      setActiveDiffEditor(editor);
+      setReady(true);
+    }).catch((error) => {
+      if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+    });
+    return () => {
+      cancelled = true;
+      const editor = getActiveDiffEditor();
+      if (editor !== null) {
+        editor.dispose();
+        setActiveDiffEditor(null);
+      }
+      setActiveMonaco(null);
+    };
+  }, []);
+  React.useEffect(() => {
+    var _a, _b;
+    if (!ready) return;
+    const editor = getActiveDiffEditor();
+    if (editor === null) return;
+    const monaco = getActiveMonaco();
+    if (monaco === null) return;
+    const language = languageFor((_b = (_a = file.path) != null ? _a : file.label) != null ? _b : "");
+    const original = monaco.editor.createModel(file.before, language);
+    const modified = monaco.editor.createModel(file.after, language);
+    const previous = editor.getModel();
+    editor.setModel({ original, modified });
+    if (previous !== null) {
+      previous.original.dispose();
+      previous.modified.dispose();
+    }
+  }, [file, ready]);
+  if (loadError !== null) {
+    return React.createElement(
+      "div",
+      { className: "dsh-te-note" },
+      `Monaco \u52A0\u8F7D\u5931\u8D25\uFF1A${loadError}`
+    );
+  }
+  return React.createElement(
+    "div",
+    { className: "dsh-te-monaco" },
+    React.createElement("div", { ref: containerRef, className: "dsh-te-monaco-host" }),
+    !ready ? React.createElement("div", { className: "dsh-te-note" }, "\u52A0\u8F7D Monaco \u5DEE\u5F02\u89C6\u56FE\u2026") : null
+  );
+}
 
 // src/controller.ts
 var FILE_TAB_ID = "dsh-text-editor";
+var DIFF_TAB_ID = "dsh-text-editor-diff";
 var slotsRef = null;
 var registeredDisposer = null;
+var diffRegisteredDisposer = null;
 var loadSeq = 0;
 function bind(slots) {
   slotsRef = slots;
-  setOpenHandler((req) => openInEditor(req.path, req.cwd, req.sessionId));
   setSaveHandler(() => {
     const state = getState();
     if (state !== null) void saveFile(state);
   });
   setCloseHandler(closeEditor);
-  const disposeInject = slots.inject("conversation.session.header.actions", () => {
-    return slots.register({
-      name: "conversation.session.header.actions",
-      id: "dsh-text-editor-interceptor",
-      order: -100
-    }, Interceptor);
-  });
+  setDiffNextHandler(() => advanceDiff(1));
+  setDiffPrevHandler(() => advanceDiff(-1));
+  setDiffCloseHandler(closeDiff);
+  const onKeyDown = (event) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.key.toLowerCase() !== "s") return;
+    const state = getState();
+    if (state === null) return;
+    event.preventDefault();
+    void saveFile(state);
+  };
+  window.addEventListener("keydown", onKeyDown, true);
   return () => {
-    setOpenHandler(null);
+    window.removeEventListener("keydown", onKeyDown, true);
     setSaveHandler(null);
     setCloseHandler(null);
-    disposeInject();
+    setDiffNextHandler(null);
+    setDiffPrevHandler(null);
+    setDiffCloseHandler(null);
     slotsRef = null;
   };
 }
@@ -423,10 +596,31 @@ function ensureTab() {
     label: () => React2.createElement(TabLabel, null)
   }, FileView);
 }
+function ensureDiffTab() {
+  if (diffRegisteredDisposer !== null || slotsRef === null || slotsRef === void 0) return;
+  diffRegisteredDisposer = slotsRef.register({
+    name: "conversation.view",
+    id: DIFF_TAB_ID,
+    order: 110,
+    // 由 DiffTabLabel 渲染：显示「差异 · n」并带 × 关闭按钮。
+    label: () => React2.createElement(DiffTabLabel, null)
+  }, DiffView);
+}
 function openInEditor(path, cwd, sessionId) {
   ensureTab();
   loadFile(path, cwd, sessionId);
   activateTab();
+}
+function showDiffInTab(request) {
+  ensureDiffTab();
+  setDiffState({ files: request.files, index: 0, sessionId: request.sessionId });
+  activateDiffTab();
+}
+function advanceDiff(delta) {
+  const state = getDiffState();
+  if (state === null || state.files.length === 0) return;
+  const index = Math.min(Math.max(state.index + delta, 0), state.files.length - 1);
+  setDiffState({ ...state, index });
 }
 function loadFile(path, cwd, sessionId) {
   const seq = ++loadSeq;
@@ -441,7 +635,8 @@ function loadFile(path, cwd, sessionId) {
     error: null,
     notice: null,
     cwd,
-    sessionId
+    sessionId,
+    dirty: false
   });
   const url = `${READ_ROUTE}?path=${encodeURIComponent(path)}` + (cwd ? `&cwd=${encodeURIComponent(cwd)}` : "");
   fetch(url, { credentials: "same-origin", cache: "no-store" }).then((response) => response.json()).then((data) => {
@@ -459,7 +654,8 @@ function loadFile(path, cwd, sessionId) {
       error: null,
       notice: null,
       cwd,
-      sessionId
+      sessionId,
+      dirty: false
     });
   }).catch((error) => {
     if (seq !== loadSeq) return;
@@ -474,7 +670,8 @@ function loadFile(path, cwd, sessionId) {
       error: error instanceof Error ? error.message : String(error),
       notice: null,
       cwd,
-      sessionId
+      sessionId,
+      dirty: false
     });
   });
 }
@@ -499,7 +696,7 @@ async function saveFile(state) {
     if (!data.ok) throw new Error(data.error || "\u4FDD\u5B58\u5931\u8D25");
     const next = getState();
     if (next === null) return;
-    setState({ ...next, saving: false, notice: "\u5DF2\u4FDD\u5B58", error: null });
+    setState({ ...next, saving: false, notice: "\u5DF2\u4FDD\u5B58", error: null, dirty: false });
   } catch (error) {
     const next = getState();
     if (next === null) return;
@@ -516,6 +713,17 @@ function closeEditor() {
     registeredDisposer = null;
   }
   setState(null);
+  fallbackToChat();
+}
+function closeDiff() {
+  if (diffRegisteredDisposer !== null) {
+    diffRegisteredDisposer();
+    diffRegisteredDisposer = null;
+  }
+  setDiffState(null);
+  fallbackToChat();
+}
+function fallbackToChat() {
   let attempts = 0;
   const tryClick = () => {
     const tab = document.querySelector('[role="tablist"] [role="tab"][aria-selected="true"]');
@@ -540,6 +748,19 @@ function activateTab() {
   };
   tryClick();
 }
+function activateDiffTab() {
+  let attempts = 0;
+  const tryClick = () => {
+    const label = document.querySelector(".dsh-te-diff-tab-label");
+    const tab = label instanceof HTMLElement ? label.closest('[role="tab"]') : null;
+    if (tab instanceof HTMLElement) {
+      tab.click();
+      return;
+    }
+    if (++attempts < 40) setTimeout(tryClick, 25);
+  };
+  tryClick();
+}
 
 // src/client.ts
 var inject = ["slots"];
@@ -553,7 +774,15 @@ function apply(ctx) {
     tag.textContent = CSS;
     document.head.appendChild(tag);
     const unbind = bind(slots);
+    const stopProvide = ctx.provide(TEXT_EDITOR_SERVICE, {
+      openFile: (request) => {
+        var _a;
+        return openInEditor(request.path, (_a = request.cwd) != null ? _a : "", request.sessionId);
+      },
+      showDiff: (request) => showDiffInTab(request)
+    });
     return () => {
+      stopProvide();
       unbind();
       tag.remove();
     };

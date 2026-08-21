@@ -2,7 +2,7 @@
   "name": "dsh-text-editor",
   "version": "1.1.0",
   "private": true,
-  "description": "In-app Monaco-based text editor: open produced-file links (deliverables row) and read/write/edit tool-card file links in a dedicated DSH tab (文件) with a close button. Host half (index.ts) registers read/write/Monaco routes; browser half (src/client.ts → lib/client.js) registers the conversation.view tab and intercepts file-link clicks.",
+  "description": "In-app Monaco-based text-editor capability provider for the DSH Web GUI. Exposes two client-side capabilities via the 'dsh-text-editor' service (ctx.provide): openFile (open a file in a 文件 tab, editable + saveable) and showDiff (show a sequence of per-file diffs in a 差异 tab, manually advanced). Host half (index.ts) registers read/write/Monaco routes; browser half (src/client.ts → lib/client.js) registers the tabs and provides the service. No longer intercepts file-link clicks itself.",
   "type": "module",
   "exports": {
     ".": {

@@ -4,11 +4,18 @@
 
 ## 项目是什么（30 秒版）
 
-DSH Web GUI 里的应用内文本编辑器插件（Monaco，VSCode 同款）。当用户在会话中点击
-「产物」链接（会话完成时最后一条消息底部的文件 chips），或 read / write / edit
-工具卡片摘要里的文件路径链接时，不再交给操作系统打开，而是在 DSH 内一个叫
-**「文件」** 的会话标签页（与「对话」「轨迹」并排）里用 Monaco 打开，可编辑并可
-「保存」回磁盘（写入受会话沙箱策略约束）。标签带关闭按钮 ×。
+DSH Web GUI 里的**应用内文本编辑器基础能力提供方**（Monaco，VSCode 同款）。
+本插件**不再自行实现具体功能**（不再拦截文件链接点击），而是向其他客户端插件
+暴露两个**基础能力**（经 `ctx.provide('dsh-text-editor', …)` 提供的服务）：
+
+1. **openFile**：把某个文件打开到 DSH 内的 **「文件」** 会话标签页（与「对话」
+   「轨迹」并排），用 Monaco 显示、可编辑、可「保存」回磁盘（写入受会话沙箱策略
+   约束）。标签带关闭按钮 ×。
+2. **showDiff**：把一组文件的前后状态（before/after 文本）在 **「差异」** 标签页
+   里逐个显示 Monaco 双栏 diff；顶部「上一个 / 下一个」按钮手动推进（无自动定时）。
+
+其他客户端插件在 `inject: ['dsh-text-editor']` 后 `ctx.get('dsh-text-editor')`
+取用这两个能力（详见下文「对外能力（服务契约）」）。
 
 ## 两个半部（重要）
 
@@ -23,11 +30,45 @@ DSH Web GUI 里的应用内文本编辑器插件（Monaco，VSCode 同款）。�
 - **浏览器半部 `src/`**（真源，按职责拆模块，入口 `src/client.ts`）→
   `scripts/build-client.mjs` 用 **esbuild** 打包成单文件（bundle，仅 `react` 为
   external）并包进 `window.__ModuleLoader__.load(...)` → **`lib/client.js`**
-  （产物，勿手改）。负责：注册 `conversation.view` 的「文件」标签、挂
-  `conversation.session.header.actions` 拦截器捕获文件链接点击、懒加载 Monaco、
-  渲染并保存。模块图（单向无环）：
+  （产物，勿手改）。负责：注册 `conversation.view` 的「文件」「差异」两个标签、
+  用 `ctx.provide` 注册对外能力面（openFile / showDiff）、懒加载 Monaco、
+  渲染/保存/展示 diff。**不再有文件链接点击拦截器**。模块图（单向无环）：
   `client.ts → controller → ui → {state, monaco, path, routes, commands}`；
   ui 的「动作」经 `commands.ts` 命令总线触发，避免与 controller 成环。
+
+## 对外能力（服务契约）
+
+本插件经 `ctx.provide('dsh-text-editor', api)` 暴露能力面（类型在 `src/api.ts`）：
+
+```ts
+interface TextEditorService {
+  openFile(request: { path: string; cwd?: string; sessionId?: string }): void
+  showDiff(request: { files: { label?: string; path?: string; before: string; after: string }[]; sessionId?: string }): void
+}
+```
+
+其他**客户端插件**这样消费（机制与 `slots`/`theme` 相同，激活顺序与卸载清理
+都由框架保证）：
+
+```ts
+// 消费方插件
+export const inject = ['slots', 'dsh-text-editor']
+export function apply(ctx) {
+  ctx.effect(() => {
+    const te = ctx.get('dsh-text-editor')   // 未就绪返回 undefined，先判空
+    te?.openFile({ path, cwd, sessionId })
+    te?.showDiff({ files: [{ path, before, after }, …] })
+  })
+}
+```
+
+要点：
+- `showDiff` 是**纯客户端渲染**：before/after 是调用方传入的内存文本，不读磁盘，
+  不需要宿主新路由；`path` 仅用于语言高亮。
+- `openFile` 走现有 `/read`、`/write` 宿主路由：`~` 展开、相对路径按 `cwd` 解析、
+  保存按 `sessionId` 对应的会话沙箱策略。
+- 想恢复「点击产物/工具链接自动打开」的功能：由**其他插件**自己挂 DOM 拦截器并调
+  `openFile`，不要在本插件里加回（本插件定位是纯能力提供方）。
 
 ## 构建 / 验证（每次改代码后的标准流程）
 
@@ -91,35 +132,42 @@ curl -s "http://127.0.0.1:3080/dsh-text-editor/read"         # 期望 400 missin
 5. **`ctx.get(...)` 优先，且必须处理 undefined**：宿主用
    `ctx.get('fs')/ctx.get('webServer')`，缺失时静默 return（降级）；不要直接当
    ctx 属性访问，除非已在 `inject` 声明。
-6. **产物 chips / 工具链接的 selector**（改了 DSH 上游 DOM 需复查）：
+6. **产物 chips / 工具链接的 selector**（改了 DSH 上游 DOM 需复查；本插件**已不再**
+   拦截这些链接，以下选择器只对「想恢复点击打开」的消费方插件有用）：
    - chips：`[data-produced-files-row] button[title]`（title=完整路径）
    - 工具卡片：`[data-tool="read"|"write"|"edit"] button[class*="_fileLink"]`
      （文本为展示路径：cwd 相对 / 绝对 / `~` 开头）
-7. **读写路径解析**：`~` 展开为宿主主目录；相对路径按会话 cwd 解析
-   （拦截器经 `useSessions` 取 `s.byId[sessionId].cwd`）；保存按会话沙箱策略，
-   工作区外写入被 `fs` 拒绝（HTTP 403，状态栏显示错误）。
+7. **读写路径解析**：`~` 展开为宿主主目录；相对路径按调用方传入的 `cwd` 解析
+   （`openFile` 的 `cwd` 由消费方决定，通常取 `useSessions` 的 `s.byId[sessionId].cwd`）；
+   保存按 `sessionId` 对应的会话沙箱策略，工作区外写入被 `fs` 拒绝（HTTP 403，
+   状态栏显示错误）。
 8. **文件沙箱**：向 `~/.dsh/` 写文件需 danger-full-access（已授权）；系统提示若
    声明 approval=never 就不要设置 sandbox_permissions。
 9. **Monaco 发行版**：`vendor/monaco/`（约 13MB）来自 monaco-editor 0.52.2
    npm tgz，本地托管保证离线；改动用 /tmp 里的原始下载（`/tmp/monaco-dl/`）重铺。
-10. **fire/mount 顺序**：客户端注册「文件」标签是**惰性**的——首次点击文件链接才
-    `ensureTab()` 注册并 `activateTab()` 点选；关闭按钮走 `closeEditor()`（注销 + 点
-    当前选中标签回落 chat）。改这些逻辑时保持 store（`fileState`/`listeners`/`loadSeq`）
+10. **fire/mount 顺序**：客户端注册「文件」「差异」两个标签都是**惰性**的——
+    `openFile` 首次被调才 `ensureTab()` 注册并 `activateTab()` 点选；`showDiff`
+    首次被调才 `ensureDiffTab()` 注册并 `activateDiffTab()` 点选。关闭分别走
+    `closeEditor()` / `closeDiff()`（注销 + 点当前选中标签回落 chat）。两个标签
+    用不同 id（`dsh-text-editor` / `dsh-text-editor-diff`），**不能重复**。改这些
+    逻辑时保持 store（`fileState`/`listeners`/`loadSeq`、`diffState`/`diffListeners`）
     的模块级单例模式。
 11. **标签 label 是 React 元素，不是字符串**：DSH 渲染 tab 时用
     `resolveSlotLabel(entry.options.label)`（函数则调用、否则原样返回），返回值直接当
     标签 `<button role="tab">` 的 children。`ensureTab()` 里 `label` 返回
     `React.createElement(TabLabel, null)`——`TabLabel` 是真实 React 组件，用
     `useSyncExternalStore(subscribe, getState)` 反应式显示**被打开文件的 basename**
-    （不再固定显示「文件」；无文件时回落 FILE_TAB_LABEL），并带 × 关闭按钮。注意：
+    （不再固定显示「文件」；无文件时回落「文件」），并带 × 关闭按钮。
+    `DiffTabLabel` 同理订阅 diffStore 显示「差异 · n」。注意：
     - × 用 `<span role="button">` 而非 `<button>`（标签本身是 button，嵌套 button
       无效 HTML）；其 onClick 必须 `event.stopPropagation()`，否则冒泡触发外层 tab 的
       setView 切标签。
     - 因此 `activateTab()` 不能用 `textContent === '文件'` 精确匹配，要用
-      `document.querySelector('.dsh-te-tab-label').closest('[role="tab"]')` 定位。
+      `document.querySelector('.dsh-te-tab-label').closest('[role="tab"]')` 定位；
+      `activateDiffTab()` 用独立类 `.dsh-te-diff-tab-label`（两类不能混，否则点选串 tab）。
     - 用组件而非「重注册」来刷新标签：slots 的 `register` 对相同 `id` 重复注册会抛错，
-      且重注册有 FileView 重挂载（Monaco 重载）风险。`TabLabel` 订阅 fileState 后，
-      打开新文件只需 setState 触发 emit，标签文字自动更新，无需父级标签栏重渲染。
+      且重注册有视图重挂载（Monaco 重载）风险。`TabLabel`/`DiffTabLabel` 订阅各自
+      store 后，内容变化只需 setState 触发 emit，标签文字自动更新，无需父级标签栏重渲染。
     - 工具栏里已**不再有**关闭按钮（2025-08：关闭交互只放标签上），别加回去。
 
 ## 常用文件地图
@@ -132,15 +180,16 @@ curl -s "http://127.0.0.1:3080/dsh-text-editor/read"         # 期望 400 missin
 | `host/monaco.ts` | 宿主：/monaco/* 静态托管（目录穿越防护） |
 | `host/http.ts` | 宿主：JSON 响应 / 请求体解析 / `~` 展开 |
 | `host/types.ts` | 宿主：用到的 DSH 服务最小面类型 |
-| `src/client.ts` | 浏览器半部入口（inject / apply / CSS 注入） |
-| `src/controller.ts` | 浏览器：标签生命周期 + 打开/读取/保存/关闭 编排 |
-| `src/ui.ts` | 浏览器视图层：TabLabel / FileView / MonacoHost / Interceptor |
-| `src/monaco.ts` | 浏览器：Monaco AMD 加载封装 + 编辑器实例单例 |
-| `src/state.ts` | 浏览器：文件状态 store |
-| `src/commands.ts` | 浏览器：UI → 编排层的命令总线（破环） |
+| `src/client.ts` | 浏览器半部入口（inject / apply / CSS 注入 / ctx.provide 能力面） |
+| `src/api.ts` | 浏览器：对外能力契约（服务名 TEXT_EDITOR_SERVICE + 类型），供消费方使用 |
+| `src/controller.ts` | 浏览器：文件/差异 标签生命周期 + 打开/读取/保存/关闭/推进 编排 |
+| `src/ui.ts` | 浏览器视图层：TabLabel / DiffTabLabel / FileView / DiffView / MonacoHost / DiffHost |
+| `src/monaco.ts` | 浏览器：Monaco AMD 加载封装 + 编辑/diff 实例单例 |
+| `src/state.ts` | 浏览器：文件状态 store + 差异状态 store |
+| `src/commands.ts` | 浏览器：UI → 编排层的命令总线（破环；含 diff 推进/关闭） |
 | `src/routes.ts` | 浏览器：与宿主约定的 URL 常量与响应类型 |
 | `src/path.ts` | 浏览器：basename / 扩展名 → language id |
-| `src/css.ts` | 浏览器：编辑器样式 |
+| `src/css.ts` | 浏览器：编辑器 + 差异视图样式 |
 | `lib/client.js` | esbuild 产物（勿手改，改 src 后 build） |
 | `scripts/build-client.mjs` | esbuild 打包 + ModuleLoader 包装 |
 | `tsconfig.json` | 两端类型检查（noEmit，允许 .ts 扩展名 import） |

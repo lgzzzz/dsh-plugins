@@ -1,21 +1,32 @@
 /**
- * 编排层：标签生命周期 + 打开 / 读取 / 保存 / 关闭。
+ * 编排层：标签生命周期 + 打开 / 读取 / 保存 / 关闭 + 差异视图生命周期。
  *
  * 组件（ui.ts）通过 commands.ts 触发这里的动作；本模块反过来 import ui.ts 的
- * TabLabel / FileView / Interceptor 完成标签注册与拦截器挂载——单向依赖，
+ * TabLabel / FileView / DiffTabLabel / DiffView 完成标签注册——单向依赖，
  * 不构成环（controller → ui → commands / state / monaco）。
+ *
+ * 本插件只提供基础能力（openFile / showDiff），不再直接拦截文件链接点击；
+ * 对外的能力面由 client.ts 用 ctx.provide('dsh-text-editor', …) 注册。
  */
 import * as React from 'react'
-import { getState, setState } from './state.ts'
+import type { ShowDiffRequest } from './api.ts'
+import { getDiffState, getState, setDiffState, setState } from './state.ts'
 import { READ_ROUTE, WRITE_ROUTE } from './routes.ts'
 import { getActiveEditor } from './monaco.ts'
 import { basename } from './path.ts'
-import { setCloseHandler, setOpenHandler, setSaveHandler } from './commands.ts'
-import { FileView, Interceptor, TabLabel } from './ui.ts'
+import {
+  setCloseHandler,
+  setDiffCloseHandler,
+  setDiffNextHandler,
+  setDiffPrevHandler,
+  setSaveHandler,
+} from './commands.ts'
+import { DiffTabLabel, DiffView, FileView, TabLabel } from './ui.ts'
 import type { FileState } from './state.ts'
 import type { ReadResult, WriteResult } from './routes.ts'
 
 const FILE_TAB_ID = 'dsh-text-editor'
+const DIFF_TAB_ID = 'dsh-text-editor-diff'
 
 /** slots 服务的最小面。 */
 export interface SlotsFace {
@@ -25,32 +36,40 @@ export interface SlotsFace {
 
 let slotsRef: SlotsFace | null | undefined = null
 let registeredDisposer: (() => void) | null = null
+let diffRegisteredDisposer: (() => void) | null = null
 let loadSeq = 0
 
 /**
- * 由入口 apply 调用：注入 slots 依赖、注册命令处理函数与隐形拦截器。
+ * 由入口 apply 调用：注入 slots 依赖、注册命令处理函数。
  * @returns 清理函数（入口的 ctx.effect 析构时调用）。
  */
 export function bind(slots: SlotsFace): () => void {
   slotsRef = slots
-  setOpenHandler((req) => openInEditor(req.path, req.cwd, req.sessionId))
   setSaveHandler(() => {
     const state = getState()
     if (state !== null) void saveFile(state)
   })
   setCloseHandler(closeEditor)
-  const disposeInject = slots.inject('conversation.session.header.actions', () => {
-    return slots.register({
-      name: 'conversation.session.header.actions',
-      id: 'dsh-text-editor-interceptor',
-      order: -100,
-    }, Interceptor)
-  })
+  setDiffNextHandler(() => advanceDiff(1))
+  setDiffPrevHandler(() => advanceDiff(-1))
+  setDiffCloseHandler(closeDiff)
+  // Ctrl/Cmd+S 保存当前打开的文件（有文件打开时才拦截，避免影响其他用途）。
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (!(event.ctrlKey || event.metaKey)) return
+    if (event.key.toLowerCase() !== 's') return
+    const state = getState()
+    if (state === null) return
+    event.preventDefault()
+    void saveFile(state)
+  }
+  window.addEventListener('keydown', onKeyDown, true)
   return () => {
-    setOpenHandler(null)
+    window.removeEventListener('keydown', onKeyDown, true)
     setSaveHandler(null)
     setCloseHandler(null)
-    disposeInject()
+    setDiffNextHandler(null)
+    setDiffPrevHandler(null)
+    setDiffCloseHandler(null)
     slotsRef = null
   }
 }
@@ -69,11 +88,38 @@ function ensureTab(): void {
   }, FileView)
 }
 
-/** 把一个文件载入编辑器标签页并切换过去。 */
+/** 注册「差异」conversation.view 条目（尚未注册时；与文件 tab 并存）。 */
+function ensureDiffTab(): void {
+  if (diffRegisteredDisposer !== null || slotsRef === null || slotsRef === undefined) return
+  diffRegisteredDisposer = slotsRef.register({
+    name: 'conversation.view',
+    id: DIFF_TAB_ID,
+    order: 110,
+    // 由 DiffTabLabel 渲染：显示「差异 · n」并带 × 关闭按钮。
+    label: () => React.createElement(DiffTabLabel, null),
+  }, DiffView)
+}
+
+/** 把一个文件载入编辑器标签页并切换过去（能力 1 的内核）。 */
 export function openInEditor(path: string, cwd: string, sessionId: string | undefined): void {
   ensureTab()
   loadFile(path, cwd, sessionId)
   activateTab()
+}
+
+/** 在「差异」tab 展示一组文件的 diff 并切换过去（能力 2 的内核）。 */
+export function showDiffInTab(request: ShowDiffRequest): void {
+  ensureDiffTab()
+  setDiffState({ files: request.files, index: 0, sessionId: request.sessionId })
+  activateDiffTab()
+}
+
+/** 差异视图内推进（clamp 到 [0, files.length-1]）。 */
+function advanceDiff(delta: number): void {
+  const state = getDiffState()
+  if (state === null || state.files.length === 0) return
+  const index = Math.min(Math.max(state.index + delta, 0), state.files.length - 1)
+  setDiffState({ ...state, index })
 }
 
 /** 从宿主路由读取文件内容并发布到 store。 */
@@ -82,6 +128,7 @@ function loadFile(path: string, cwd: string, sessionId: string | undefined): voi
   setState({
     path, label: basename(path), content: '', loading: true, saving: false,
     binary: false, truncated: false, error: null, notice: null, cwd, sessionId,
+    dirty: false,
   })
   const url = `${READ_ROUTE}?path=${encodeURIComponent(path)}`
     + (cwd ? `&cwd=${encodeURIComponent(cwd)}` : '')
@@ -93,7 +140,7 @@ function loadFile(path: string, cwd: string, sessionId: string | undefined): voi
       setState({
         path: data.path || path, label: basename(path), content: data.content ?? '',
         loading: false, saving: false, binary: !!data.binary, truncated: !!data.truncated,
-        error: null, notice: null, cwd, sessionId,
+        error: null, notice: null, cwd, sessionId, dirty: false,
       })
     })
     .catch((error: unknown) => {
@@ -102,7 +149,7 @@ function loadFile(path: string, cwd: string, sessionId: string | undefined): voi
         path, label: basename(path), content: '', loading: false, saving: false,
         binary: false, truncated: false,
         error: error instanceof Error ? error.message : String(error),
-        notice: null, cwd, sessionId,
+        notice: null, cwd, sessionId, dirty: false,
       })
     })
 }
@@ -128,7 +175,7 @@ async function saveFile(state: FileState): Promise<void> {
     if (!data.ok) throw new Error(data.error || '保存失败')
     const next = getState()
     if (next === null) return
-    setState({ ...next, saving: false, notice: '已保存', error: null })
+    setState({ ...next, saving: false, notice: '已保存', error: null, dirty: false })
   } catch (error) {
     const next = getState()
     if (next === null) return
@@ -146,7 +193,21 @@ export function closeEditor(): void {
     registeredDisposer = null
   }
   setState(null)
-  // 标签消失后会话体回落到 Chat；点一下当前选中的标签把 store.view 写回 chat。
+  fallbackToChat()
+}
+
+/** 关闭差异视图：移除标签页并回到「对话」视图。 */
+export function closeDiff(): void {
+  if (diffRegisteredDisposer !== null) {
+    diffRegisteredDisposer()
+    diffRegisteredDisposer = null
+  }
+  setDiffState(null)
+  fallbackToChat()
+}
+
+/** 标签消失后会话体回落到 Chat；点一下当前选中的标签把 store.view 写回 chat。 */
+function fallbackToChat(): void {
   let attempts = 0
   const tryClick = (): void => {
     const tab = document.querySelector('[role="tablist"] [role="tab"][aria-selected="true"]')
@@ -162,6 +223,18 @@ function activateTab(): void {
   const tryClick = (): void => {
     // 通过我们自己注入的文字 span 定位（标签里含 ×，不能用 textContent 精确匹配）。
     const label = document.querySelector('.dsh-te-tab-label')
+    const tab = label instanceof HTMLElement ? label.closest('[role="tab"]') : null
+    if (tab instanceof HTMLElement) { tab.click(); return }
+    if (++attempts < 40) setTimeout(tryClick, 25)
+  }
+  tryClick()
+}
+
+/** 等标签栏重渲染后激活「差异」标签。 */
+function activateDiffTab(): void {
+  let attempts = 0
+  const tryClick = (): void => {
+    const label = document.querySelector('.dsh-te-diff-tab-label')
     const tab = label instanceof HTMLElement ? label.closest('[role="tab"]') : null
     if (tab instanceof HTMLElement) { tab.click(); return }
     if (++attempts < 40) setTimeout(tryClick, 25)

@@ -10,6 +10,8 @@ import { MONACO_BASE } from './routes.ts'
 export interface MonacoEditor {
   editor: {
     create(el: HTMLElement, options: Record<string, unknown>): MonacoEditorInstance
+    createDiffEditor(el: HTMLElement, options: Record<string, unknown>): MonacoDiffEditorInstance
+    createModel(value: string, languageId: string): MonacoTextModel
     setTheme(theme: string): void
     setModelLanguage(model: unknown, languageId: string): void
   }
@@ -25,6 +27,18 @@ export interface MonacoEditorInstance {
   onDidChangeModelContent(listener: () => void): { dispose(): void }
 }
 
+/** Monaco 文本模型的最小面。 */
+export interface MonacoTextModel {
+  dispose(): void
+}
+
+/** Monaco 双栏 diff 编辑器实例的最小面（能力 2 用）。 */
+export interface MonacoDiffEditorInstance {
+  dispose(): void
+  setModel(model: { original: MonacoTextModel; modified: MonacoTextModel }): void
+  getModel(): { original: MonacoTextModel; modified: MonacoTextModel } | null
+}
+
 /** window 上的 Monaco AMD 全局。 */
 interface MonacoWindow {
   monaco?: MonacoEditor
@@ -38,11 +52,14 @@ interface MonacoWindow {
 let monacoPromise: Promise<MonacoEditor> | null = null
 let activeMonaco: MonacoEditor | null = null
 let activeEditor: MonacoEditorInstance | null = null
+let activeDiffEditor: MonacoDiffEditorInstance | null = null
 
 export function getActiveMonaco(): MonacoEditor | null { return activeMonaco }
 export function setActiveMonaco(monaco: MonacoEditor | null): void { activeMonaco = monaco }
 export function getActiveEditor(): MonacoEditorInstance | null { return activeEditor }
 export function setActiveEditor(editor: MonacoEditorInstance | null): void { activeEditor = editor }
+export function getActiveDiffEditor(): MonacoDiffEditorInstance | null { return activeDiffEditor }
+export function setActiveDiffEditor(editor: MonacoDiffEditorInstance | null): void { activeDiffEditor = editor }
 
 function getMonacoWindow(): MonacoWindow {
   return window as unknown as MonacoWindow

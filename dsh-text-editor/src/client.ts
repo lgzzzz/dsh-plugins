@@ -2,20 +2,24 @@
  * dsh-text-editor — 浏览器半部入口（TypeScript 真源；由 scripts/build-client.mjs
  * 编译为 CommonJS 并打包成单文件 lib/client.js）。
  *
- * 本文件只做装配：声明 inject、注入样式、把 slots 交给 controller.bind()。
- * 功能实现按职责拆在 src/ 下的模块：
+ * 本文件只做装配：声明 inject、注入样式、把 slots 交给 controller.bind()、
+ * 用 ctx.provide 注册对外能力面（openFile / showDiff）。功能实现按职责拆在
+ * src/ 下的模块：
  *
- *   - controller.ts  编排层：标签生命周期 + 打开/读取/保存/关闭
- *   - ui.ts          视图层：标签、编辑器视图、Monaco 容器、文件链接点击拦截
- *   - monaco.ts      Monaco AMD 加载封装 + 编辑器实例单例
- *   - state.ts       文件状态 store
- *   - commands.ts    UI → 编排层的命令总线（打破组件与编排的环）
- *   - routes.ts      与宿主约定的 URL 常量与响应类型
- *   - path.ts        basename / 扩展名 → language id
- *   - css.ts         编辑器样式
+ *   - api.ts        对外能力契约（服务名 + 类型），供其他插件消费
+ *   - controller.ts 编排层：文件 tab 生命周期 + 差异 tab 生命周期
+ *   - ui.ts         视图层：文件标签/差异标签、编辑器视图、差异视图、Monaco 容器
+ *   - monaco.ts     Monaco AMD 加载封装 + 编辑器实例单例（含 diff 编辑器）
+ *   - state.ts      文件状态 store + 差异状态 store
+ *   - commands.ts   UI → 编排层的命令总线（打破组件与编排的环）
+ *   - routes.ts     与宿主约定的 URL 常量与响应类型
+ *   - path.ts       basename / 扩展名 → language id
+ *   - css.ts        编辑器与差异视图样式
  */
+import { TEXT_EDITOR_SERVICE } from './api.ts'
+import type { TextEditorService } from './api.ts'
 import { CSS } from './css.ts'
-import { bind } from './controller.ts'
+import { bind, openInEditor, showDiffInTab } from './controller.ts'
 import type { SlotsFace } from './controller.ts'
 
 /**
@@ -30,6 +34,7 @@ export const name = 'dsh-text-editor'
 interface ClientContext {
   get(name: string): unknown
   effect(callback: () => void | (() => void)): void
+  provide(name: string, value: unknown): () => void
 }
 
 function apply(ctx: ClientContext): void {
@@ -42,7 +47,14 @@ function apply(ctx: ClientContext): void {
     tag.textContent = CSS
     document.head.appendChild(tag)
     const unbind = bind(slots)
+    // 对外能力面：其他客户端插件 `inject: ['dsh-text-editor']` 后
+    // `ctx.get('dsh-text-editor')` 取用；卸载时 dispose 自动清理。
+    const stopProvide = ctx.provide(TEXT_EDITOR_SERVICE, {
+      openFile: (request) => openInEditor(request.path, request.cwd ?? '', request.sessionId),
+      showDiff: (request) => showDiffInTab(request),
+    } satisfies TextEditorService)
     return () => {
+      stopProvide()
       unbind()
       tag.remove()
     }
