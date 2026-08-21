@@ -10,9 +10,13 @@ DSH Web GUI 里的**应用内文本编辑器基础能力提供方**（Monaco，V
 
 1. **openFile**：把某个文件打开到 DSH 内的 **「文件」** 会话标签页（与「对话」
    「轨迹」并排），用 Monaco 显示、可编辑、可「保存」回磁盘（写入受会话沙箱策略
-   约束）。标签带关闭按钮 ×。
+   约束）。标签带关闭按钮 ×。**同一会话可同时打开多个文件（至多 5 个，
+   `MAX_EDITOR_TABS`），且编辑器 tab 是「会话作用域」的**：只出现在打开该文件的
+   会话的 tab 栏里；切换到其他会话时消失，切回时重现（每会话各自保留打开文件，
+   详见「会话作用域的标签」一节）。
 2. **showDiff**：把一组文件的前后状态（before/after 文本）在 **「差异」** 标签页
    里逐个显示 Monaco 双栏 diff；顶部「上一个 / 下一个」按钮手动推进（无自动定时）。
+   差异 tab 同样会话作用域。
 
 其他客户端插件在 `inject: ['dsh-text-editor']` 后 `ctx.get('dsh-text-editor')`
 取用这两个能力（详见下文「对外能力（服务契约）」）。
@@ -69,6 +73,28 @@ export function apply(ctx) {
   保存按 `sessionId` 对应的会话沙箱策略。
 - 想恢复「点击产物/工具链接自动打开」的功能：由**其他插件**自己挂 DOM 拦截器并调
   `openFile`，不要在本插件里加回（本插件定位是纯能力提供方）。
+
+## 会话作用域的标签（怎么做到「切走消失、切回重现」）
+
+DSH 的 `conversation.view` 槽注册是**全局**的（每个会话的 tab 栏都投影同一注册表），
+所以本插件**不能**静态注册一个「文件」标签让它出现在所有会话。做法：
+
+1. **按会话存状态**（`src/state.ts`）：`filesBySession: Map<sessionId, FileState[]>`、
+   `diffBySession`，每会话各自保留自己的打开文件（至多 `MAX_EDITOR_TABS = 5`）。
+2. **观察当前活动会话**（`src/controller.ts` `bind()`）：通过
+   `ctx.get('sessions').currentProvideInfo`（uSES store，`getSnapshot()` 返回
+   `{ sessionId, … }`）订阅变化 → `setActiveSessionId()` 写入 store。
+3. **只按当前活动会话注册标签**（`reconcile()`）：活动会话变化 / 文件列表变化 /
+   差异有无变化时，**先全部注销、再按当前活动会话的打开文件重注册**
+   `conversation.view` 标签。切到没有打开文件的会话 → 无标签；切回 → 重新注册，
+   且每个会话的 `view` 选中态（DSH 的 per-session chatStore）会按稳定 id
+   （`dsh-text-editor-<fileKey>`）自动还原到上次查看的文件。
+4. **内容跨切换保留**：切换 tab / 会话时视图卸载，`MonacoHost` 的清理回调把
+   `editor.getValue()` 回写 store（`commitFileContent`，保留脏标记），切回时按 store
+   内容重建 Monaco——未保存修改不丢。
+5. **高频变化不重建标签**：reconcile 只在「注册相关」签名变化时执行
+   （`registrationSignature()`：活动会话 id + 文件 key 列表 + 差异有无），
+   内容/脏标记等变化只触发 uSES 重渲染组件本身，不重挂载标签/不重载 Monaco。
 
 ## 构建 / 验证（每次改代码后的标准流程）
 
@@ -145,29 +171,37 @@ curl -s "http://127.0.0.1:3080/dsh-text-editor/read"         # 期望 400 missin
    声明 approval=never 就不要设置 sandbox_permissions。
 9. **Monaco 发行版**：`vendor/monaco/`（约 13MB）来自 monaco-editor 0.52.2
    npm tgz，本地托管保证离线；改动用 /tmp 里的原始下载（`/tmp/monaco-dl/`）重铺。
-10. **fire/mount 顺序**：客户端注册「文件」「差异」两个标签都是**惰性**的——
-    `openFile` 首次被调才 `ensureTab()` 注册并 `activateTab()` 点选；`showDiff`
-    首次被调才 `ensureDiffTab()` 注册并 `activateDiffTab()` 点选。关闭分别走
-    `closeEditor()` / `closeDiff()`（注销 + 点当前选中标签回落 chat）。两个标签
-    用不同 id（`dsh-text-editor` / `dsh-text-editor-diff`），**不能重复**。改这些
-    逻辑时保持 store（`fileState`/`listeners`/`loadSeq`、`diffState`/`diffListeners`）
-    的模块级单例模式。
+10. **fire/mount 顺序（会话作用域的标签）**：注册不是「惰性按动作」，而是由
+    `controller.ts` 的 `reconcile()` 统一驱动——它订阅 store，仅当「注册相关」状态
+    变化（活动会话 id / 文件 key 列表 / 差异有无，见 `registrationSignature()`）才
+    **先全部注销、再按当前活动会话重注册** conversation.view 标签。因此：
+    - 每个打开的**文件 = 一个标签**，id = `dsh-text-editor-<fileKey>`（fileKey 是
+      path 的稳定哈希，`state.hashKey`）；差异标签 id = `dsh-text-editor-diff`。
+    - 标签只在「打开它的会话」出现：`bind()` 订阅 `sessions` 服务的
+      `currentProvideInfo`，切会话时 `setActiveSessionId` → store emit → reconcile
+      重建；同 id 在同一时刻只注册一份（先 dispose 再 register），不会重复注册抛错。
+    - 容量上限 `MAX_EDITOR_TABS = 5`（`state.ts`）：满时驱逐「最近未用的非脏」tab，
+      全脏则拒绝打开（在活动 tab 提示）。已打开的同路径文件会选中而非重复开。
+    - store 的 `subscribe` 只驱动 reconcile 的**签名判断**，内容/脏标记等高频变化
+      不触发重注册（否则标签会反复重挂载、Monaco 反复重载）。
 11. **标签 label 是 React 元素，不是字符串**：DSH 渲染 tab 时用
     `resolveSlotLabel(entry.options.label)`（函数则调用、否则原样返回），返回值直接当
-    标签 `<button role="tab">` 的 children。`ensureTab()` 里 `label` 返回
-    `React.createElement(TabLabel, null)`——`TabLabel` 是真实 React 组件，用
-    `useSyncExternalStore(subscribe, getState)` 反应式显示**被打开文件的 basename**
-    （不再固定显示「文件」；无文件时回落「文件」），并带 × 关闭按钮。
-    `DiffTabLabel` 同理订阅 diffStore 显示「差异 · n」。注意：
+    标签 `<button role="tab">` 的 children。`reconcile()` 里每个文件标签的 `label` 返回
+    `React.createElement(TabLabel, { sessionId, fileKey })`——`TabLabel` 是真实 React
+    组件，用 `useSyncExternalStore(subscribe, () => getFileByKey(sessionId, fileKey))`
+    反应式显示该文件的 basename（脏时带 ● 标记），并带 × 关闭按钮。`DiffTabLabel`
+    同理订阅 `getDiffState()` 显示「差异 · n」。注意：
     - × 用 `<span role="button">` 而非 `<button>`（标签本身是 button，嵌套 button
       无效 HTML）；其 onClick 必须 `event.stopPropagation()`，否则冒泡触发外层 tab 的
       setView 切标签。
-    - 因此 `activateTab()` 不能用 `textContent === '文件'` 精确匹配，要用
-      `document.querySelector('.dsh-te-tab-label').closest('[role="tab"]')` 定位；
+    - `sessionId`/`fileKey` 由 `reconcile()` 注册时**闭包捕获**传给 TabLabel 与
+      FileView（FileView 也是 `() => React.createElement(FileView, { sessionId, fileKey })`，
+      不依赖 DSH 注入 props）。`activateTab(fileKey)` 用
+      `document.querySelector('[data-dsh-te-key="<fileKey>"]').closest('[role="tab"]')`
+      定位具体文件的标签（文件多时不能用 textContent 精确匹配）；
       `activateDiffTab()` 用独立类 `.dsh-te-diff-tab-label`（两类不能混，否则点选串 tab）。
-    - 用组件而非「重注册」来刷新标签：slots 的 `register` 对相同 `id` 重复注册会抛错，
-      且重注册有视图重挂载（Monaco 重载）风险。`TabLabel`/`DiffTabLabel` 订阅各自
-      store 后，内容变化只需 setState 触发 emit，标签文字自动更新，无需父级标签栏重渲染。
+    - 用组件而非「重注册」来刷新标签：`TabLabel`/`DiffTabLabel` 订阅 store 后，内容
+      变化只需 emit，标签文字自动更新，无需父级标签栏重渲染。
     - 工具栏里已**不再有**关闭按钮（2025-08：关闭交互只放标签上），别加回去。
 
 ## 常用文件地图

@@ -53,6 +53,8 @@ let monacoPromise: Promise<MonacoEditor> | null = null
 let activeMonaco: MonacoEditor | null = null
 let activeEditor: MonacoEditorInstance | null = null
 let activeDiffEditor: MonacoDiffEditorInstance | null = null
+/** 当前挂载的文件编辑器对应的文件 key（保存以它为准，避免用陈旧的活动索引）。 */
+let activeFileKey: string | null = null
 
 export function getActiveMonaco(): MonacoEditor | null { return activeMonaco }
 export function setActiveMonaco(monaco: MonacoEditor | null): void { activeMonaco = monaco }
@@ -60,6 +62,8 @@ export function getActiveEditor(): MonacoEditorInstance | null { return activeEd
 export function setActiveEditor(editor: MonacoEditorInstance | null): void { activeEditor = editor }
 export function getActiveDiffEditor(): MonacoDiffEditorInstance | null { return activeDiffEditor }
 export function setActiveDiffEditor(editor: MonacoDiffEditorInstance | null): void { activeDiffEditor = editor }
+export function getActiveFileKey(): string | null { return activeFileKey }
+export function setActiveFileKey(key: string | null): void { activeFileKey = key }
 
 function getMonacoWindow(): MonacoWindow {
   return window as unknown as MonacoWindow

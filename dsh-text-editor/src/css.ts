@@ -15,6 +15,7 @@ export const CSS = [
   '.dsh-te-save-dirty:hover{background:rgba(220,220,170,.25);}',
   '.dsh-te-tab{display:inline-flex;align-items:center;gap:6px;}',
   '.dsh-te-tab-label{white-space:nowrap;}',
+  '.dsh-te-tab-label.dsh-te-tab-dirty{color:#dcdcaa;}',
   '.dsh-te-diff-tab-label{white-space:nowrap;}',
   '.dsh-te-tab-close{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;font-size:13px;line-height:1;color:var(--dsw-alias-label-secondary,#9d9d9d);cursor:pointer;user-select:none;}',
   '.dsh-te-tab-close:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.25));color:var(--dsw-alias-label-primary,#fff);}',

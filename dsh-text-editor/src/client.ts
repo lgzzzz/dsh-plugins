@@ -20,7 +20,7 @@ import { TEXT_EDITOR_SERVICE } from './api.ts'
 import type { TextEditorService } from './api.ts'
 import { CSS } from './css.ts'
 import { bind, openInEditor, showDiffInTab } from './controller.ts'
-import type { SlotsFace } from './controller.ts'
+import type { SessionsFace, SlotsFace } from './controller.ts'
 
 /**
  * 依赖声明：插件在 `slots` 服务可用后才 apply（否则 apply 时
@@ -46,7 +46,9 @@ function apply(ctx: ClientContext): void {
     tag.dataset.plugin = 'dsh-text-editor'
     tag.textContent = CSS
     document.head.appendChild(tag)
-    const unbind = bind(slots)
+    // sessions：观察「当前活动会话」，用于编辑器 tab 的会话作用域（切走消失/切回重现）。
+    const sessions = ctx.get('sessions') as SessionsFace | undefined
+    const unbind = bind(slots, sessions)
     // 对外能力面：其他客户端插件 `inject: ['dsh-text-editor']` 后
     // `ctx.get('dsh-text-editor')` 取用；卸载时 dispose 自动清理。
     const stopProvide = ctx.provide(TEXT_EDITOR_SERVICE, {
