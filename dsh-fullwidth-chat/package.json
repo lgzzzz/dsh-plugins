@@ -4,7 +4,6 @@
   "private": true,
   "description": "Local persistent UI patch: tile the conversation/message column across the whole center column of the Web GUI.",
   "type": "module",
-  "main": "lib/index.js",
   "exports": {
     ".": {
       "default": "./lib/index.js"

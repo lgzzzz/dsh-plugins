@@ -4,7 +4,6 @@
   "private": true,
   "description": "Local persistent plugin: adds a /new slash command that creates a new blank session and jumps to it, exactly like the New Session button.",
   "type": "module",
-  "main": "lib/index.js",
   "exports": {
     ".": {
       "default": "./lib/index.js"

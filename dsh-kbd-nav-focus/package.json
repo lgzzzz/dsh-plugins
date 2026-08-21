@@ -4,7 +4,6 @@
   "private": true,
   "description": "本地持久化插件（浏览器半部）：Alt+Shift 进入自由移动焦点（已进入时重置光标到侧边栏选中会话行）、方向键移动、C 左键点击且焦点停留原地、S 触发会话选择后退出并回输入框；起点为侧边栏当前会话。",
   "type": "module",
-  "main": "lib/index.js",
   "exports": {
     ".": {
       "default": "./lib/index.js"
