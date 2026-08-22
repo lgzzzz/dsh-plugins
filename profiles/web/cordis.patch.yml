@@ -1,6 +1,9 @@
 - id: directory-picker
   disabled: true
 
+- id: ui-deliverables
+  disabled: true
+
 - insert:
     - id: directory-picker-browse
       name: '@deepseek-ai/dsh-host-directory-picker-browse'
