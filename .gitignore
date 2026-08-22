@@ -10,6 +10,9 @@
 !/dsh-new-session/
 !/dsh-kbd-nav-focus/
 !/dsh-text-editor/
+!/dsh-change-summary/
+/dsh-change-summary/node_modules/
+/dsh-change-summary/lib/
 !AGENTS.md
 !doc
 

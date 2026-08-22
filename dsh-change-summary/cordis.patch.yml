@@ -1,0 +1,10 @@
+# dsh-change-summary 的 web bundle 补丁。
+# 声明本插件的挂载行,通过 dsh.profile.bundles 自动挂载到 web profile:
+# 宿主半部按 <name>/package.json 解析（lib/index.js，监听 session/event 的
+# user/message 做 git add . 基线,并挂 /dsh-change-summary/diff 路由提供
+# 暂存区 vs 工作区 diff,需要 webServer + sessions 两个服务）；
+# 客户端半部由包内 dsh.client.platform=web + immediately 注册进浏览器 roster。
+- insert:
+    - id: dsh-change-summary
+      name: dsh-change-summary
+      inject: [webServer, sessions]
