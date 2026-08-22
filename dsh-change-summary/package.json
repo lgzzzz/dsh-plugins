@@ -1,0 +1,42 @@
+{
+  "name": "dsh-change-summary",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent plugin: after each agent turn ends (completed or user-stopped), list the files modified this turn under the last message, split into current-workspace and outside-workspace groups, styled like the stock ui-deliverables row; also restores clickable inline-code file mentions in closing prose.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "verify": "node scripts/verify.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/react": "~18.3.12",
+    "react": "^18.3.1",
+    "tsdown": "^0.22.14",
+    "typescript": "~5.9.3"
+  }
+}
