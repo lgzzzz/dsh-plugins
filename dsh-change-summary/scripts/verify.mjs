@@ -1,8 +1,8 @@
 /**
  * Offline smoke test for dsh-change-summary (no DSH service, no browser).
  *
- * Host half: imports lib/index.js, fakes a cordis ctx, simulates `write`/`edit`
- * `tools/result` events, and exercises the `/dsh-change-summary/diff` route.
+ * Host half: imports lib/index.js, fakes a cordis ctx, and exercises the
+ * `/dsh-change-summary/diff` and `/dsh-change-summary/exists` routes.
  * Client half: evaluates lib/client.js in a VM with a stubbed module loader and
  * a mocked cordis ctx, then drives the registered change-summary Definition,
  * the turn-tail slot selector, and the chatFileMentions provider end-to-end.
@@ -46,7 +46,6 @@ try {
 }
 
 const routes = []
-const listeners = new Map()
 const webServer = {
   register(registration) {
     routes.push(registration)
@@ -59,9 +58,8 @@ const sessions = {
   },
 }
 const ctx = {
-  on(event, fn) {
-    listeners.set(event, fn)
-    return () => listeners.delete(event)
+  on() {
+    return () => {}
   },
   effect(fn) {
     return fn()
@@ -73,19 +71,10 @@ const ctx = {
   },
 }
 apply(ctx)
-assert(listeners.has('session/event'), 'apply subscribed to session/event')
 const diffRoute = routes.find((r) => r.path === '/dsh-change-summary/diff')
 const existsRoute = routes.find((r) => r.path === '/dsh-change-summary/exists')
 assert(diffRoute !== undefined && diffRoute.kind === 'exact', 'apply registered the diff route')
 assert(existsRoute !== undefined && existsRoute.kind === 'exact', 'apply registered the exists route')
-
-// The session/event listener is soft: non-user events and cwd-less sessions
-// return without spawning git (the git branch is exercised manually).
-const onSessionEvent = listeners.get('session/event')
-onSessionEvent({ header: {} }, { type: 'turn/start', data: { turn: 1 } })
-onSessionEvent({ header: {} }, { type: 'user/message', data: { source: { kind: 'plugin' }, content: [] } })
-onSessionEvent({ header: {} }, { type: 'user/message', data: { source: { kind: 'user' }, content: [] } })
-assert(true, 'session/event listener ignores non-user / cwd-less events without throwing')
 
 async function request(route, query) {
   let captured = null

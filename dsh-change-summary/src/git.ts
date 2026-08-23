@@ -7,12 +7,11 @@
  * `null` instead of throwing — so the diff route can fall back to a normal
  * open without breaking the click.
  *
- * Two commands are the whole surface:
- * - `git add .` stages the current worktree the moment a direct human prompt is
- *   admitted, establishing the round baseline;
- * - clicking a changed file later reads the staged blob (`git show :<rel>`) as
- *   the `before` and the current worktree file as the `after` — i.e. the diff
- *   between the index and the working tree.
+ * One command is the whole surface: clicking a changed file reads the staged
+ * blob (`git show :<rel>`) as the `before` and the current worktree file as
+ * the `after` — i.e. the diff between the index and the working tree. The
+ * plugin never stages the worktree itself: whatever is already in the index
+ * (committed or manually staged) is the baseline.
  */
 import { execFile } from 'node:child_process'
 import { access, readFile } from 'node:fs/promises'
@@ -46,11 +45,6 @@ function gitText(cwd: string, args: readonly string[]): Promise<string | undefin
 export async function isInsideWorkTree(cwd: string): Promise<boolean> {
   const out = await gitText(cwd, ['rev-parse', '--is-inside-work-tree'])
   return out !== undefined && out.trim() === 'true'
-}
-
-/** Stage every change under `cwd` (`git add .`). Never throws. */
-export async function stageAll(cwd: string): Promise<void> {
-  await gitText(cwd, ['add', '.'])
 }
 
 /** The git work-tree root containing `cwd` (forward-slash absolute), or undefined. */

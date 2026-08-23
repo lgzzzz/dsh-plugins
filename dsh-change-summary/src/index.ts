@@ -1,28 +1,28 @@
 /**
  * Node half of the local `dsh-change-summary` patch row.
  *
- * Two jobs, both git-aware:
- * 1. Stage the worktree (`git add .`) the moment a direct human prompt is
- *    admitted for a session — keyed off the `session/event` firehose's
- *    `user/message` events whose `source.kind === 'user'` — so the baseline for
- *    "what did this round change" is the index right before the agent ran.
- * 2. Serve a staged-vs-worktree diff over one loopback route: clicking a
+ * Two jobs, git-aware:
+ *
+ * 1. `/dsh-change-summary/diff` — serve a staged-vs-worktree diff. Clicking a
  *    workspace-changed file opens a Monaco diff (via the `dsh-text-editor`
  *    `showDiff` capability) whose `before` is the index blob and `after` the
- *    current worktree file — exactly the agent round's changes.
+ *    current worktree file. The plugin never stages the worktree itself — the
+ *    index holds whatever state it was left in (committed or manually staged),
+ *    and the diff shows index vs working tree as-is. A tracked file deleted
+ *    from the worktree therefore diffs as before = full index content, after =
+ *    empty (everything deleted). Non-git workspaces have no diff: the route
+ *    answers `git: false` and the browser half opens the file normally.
  *
- * Non-git workspaces have no diff: the route answers `git: false` and the
- * browser half opens the file normally instead.
+ * 2. `/dsh-change-summary/exists` — report which produced paths still exist.
+ *    The browser half lists every produced path regardless (git workspace or
+ *    not) and uses this answer to mark the deleted ones with a deleted badge;
+ *    git decides only what a click does (see job 1), never whether a deleted
+ *    file is listed.
  *
  * The browser half (src/client) does the rendering and the click routing;
- * this half is purely the stage + serve side.
+ * this half is purely the serve side.
  */
 import type { Context } from '@deepseek-ai/cordis'
-// Declaration-merge triggers: importing a type from `@deepseek-ai/dsh-session`
-// loads its `Context.sessions` / `Events['session/event']` augmentations so
-// the members below are visible in the host program. Host-only — the client
-// program never compiles this file.
-import type { Session } from '@deepseek-ai/dsh-session'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import type { ServerResponse } from 'node:http'
 import {
@@ -31,7 +31,6 @@ import {
   isInsideWorkTree,
   pathExists,
   relativeTo,
-  stageAll,
   workTreeRoot,
 } from './git.js'
 
@@ -59,23 +58,11 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 }
 
 /**
- * Plugin body: stage on user messages, serve the staged-vs-worktree diff.
+ * Plugin body: serve the staged-vs-worktree diff (no auto-staging — the plugin
+ * never runs `git add` on user messages; the index is whatever state it holds).
  * @param ctx - host root context (webServer + sessions injected via the patch row).
  */
 export function apply(ctx: Context): void {
-  ctx.on('session/event', (session: Session, event) => {
-    if (event.type !== 'user/message') return
-    if (event.data.source?.kind !== 'user') return
-    const cwd = session.header.cwd
-    if (cwd === undefined || cwd === '') return
-    void stageAll(cwd).catch((error) => {
-      // Soft failure: the round baseline is just missing; clicks fall back to
-      // whatever the index held. Log for diagnostics.
-      const message = error instanceof Error ? error.message : String(error)
-      console.warn('[dsh-change-summary] git add . failed for', cwd, message)
-    })
-  })
-
   ctx.effect(() => {
     const webServer = ctx.get('webServer') as WebRouteHost | undefined
     if (webServer === undefined || typeof webServer.register !== 'function') return () => undefined
@@ -152,9 +139,11 @@ async function handleDiff(
 
 /**
  * Serve which of the requested produced paths still exist on disk, so the
- * browser half can hide files that were created and then deleted during a turn
- * from the workspace-changes list. Failures default to "exists" (show) — a
- * transient error must never hide a real file.
+ * browser half can mark the deleted ones with a deleted badge in the
+ * workspace-changes list (every produced path is listed, existing or deleted,
+ * git workspace or not; the git branch lives in the click, not the list).
+ * Failures default to "exists" (show) — a transient error must never hide a
+ * real file.
  */
 async function handleExists(
   ctx: Context,

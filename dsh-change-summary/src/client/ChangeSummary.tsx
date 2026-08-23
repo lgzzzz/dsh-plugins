@@ -14,8 +14,11 @@ const CSS = [
   '.dscBlock{flex-direction:column;gap:16px;margin-top:16px;display:flex}',
   '.dscLabel{color:var(--dsw-alias-label-tertiary)}',
   '.dscList{list-style:none;flex-direction:column;gap:2px;margin:0;padding:0;display:flex;min-width:0;width:100%}',
-  '.dscFile{text-overflow:ellipsis;white-space:nowrap;background:var(--dsw-alias-interactive-bg-hover);width:100%;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border:none;border-radius:6px;margin:0;padding:2px 8px;overflow:hidden;text-align:left}',
-  '.dscFile:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}',
+  '.dscFile{background:var(--dsw-alias-interactive-bg-hover);width:100%;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer;border:none;border-radius:6px;margin:0;padding:2px 8px;display:flex;align-items:center;gap:8px;min-width:0;text-align:left}',
+  '.dscName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+  '.dscFile:hover{color:var(--dsw-alias-label-primary)}',
+  '.dscFile:hover .dscName{text-decoration:underline}',
+  '.dscDeleted{flex:none;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:4px;padding:0 6px;font-size:12px;line-height:18px}',
   '.dscFile:focus-visible{box-shadow:inset 0 0 0 2px var(--dsw-alias-border-l3);outline:none}',
 ].join('')
 
@@ -34,6 +37,8 @@ const C = {
   label: 'dscLabel',
   list: 'dscList',
   file: 'dscFile',
+  name: 'dscName',
+  deleted: 'dscDeleted',
 } as const
 
 /* ── diff-then-open: try the host diff route, fall back to the Monaco file tab ── */
@@ -57,20 +62,27 @@ interface TextEditorCapability {
 
 /** The open strategy passed into the change rows. */
 export interface ChangeSummaryOpenDiff {
-  (sessionId: string | undefined, path: string, openFile: (path: string) => void): Promise<void>
+  (
+    sessionId: string | undefined,
+    path: string,
+    openFile: (path: string) => void,
+    deleted?: boolean,
+  ): Promise<void>
 }
 
 /**
  * Diff-then-open: in a git workspace the host answers with the staged-vs-worktree
  * diff (Monaco diff); in a non-git workspace — or when the diff is unavailable —
  * fall back to opening the file normally (the Monaco「文件」tab, 替代原来
- * host.openPath 的裸打开).
+ * host.openPath 的裸打开). A deleted file (`deleted: true`) has no worktree
+ * content to open, so when the git diff is unavailable it is a no-op instead.
  */
 export function openDiff(
   ctx: ClientContext,
   sessionId: string | undefined,
   path: string,
   openFile: (path: string) => void,
+  deleted = false,
 ): Promise<void> {
   const url = '/dsh-change-summary/diff?session=' + encodeURIComponent(sessionId ?? '') + '&path=' + encodeURIComponent(path)
   return fetch(url, { cache: 'no-store' })
@@ -84,6 +96,8 @@ export function openDiff(
       te.showDiff({ files: [{ path: body.path ?? path, before: body.before, after: body.after }], sessionId })
     })
     .catch(() => {
+      // 已删除的文件没有工作区内容可开;唯一的查看方式就是上面的 git diff。
+      if (deleted) return
       // 非 git 仓库（或无 diff）时回退到 Monaco「文件」标签页(替代原来 host.openPath 的裸打开)。
       const te = ctx.get('dsh-text-editor') as TextEditorCapability | undefined
       if (te && typeof te.openFile === 'function') {
@@ -95,7 +109,7 @@ export function openDiff(
     })
 }
 
-/* ── existence filtering: hide files created-then-deleted this turn ─────────── */
+/* ── existence: which rows are deleted (marked with a badge) ───────────────── */
 
 /** The JSON body served by the host `/dsh-change-summary/exists` route. */
 export interface ExistsResponse {
@@ -106,7 +120,8 @@ export interface ExistsResponse {
 /**
  * Resolve which of `paths` still exist on disk (host-side). A path is reported
  * existing (true) whenever the host cannot answer — a transient failure must
- * never hide a real file.
+ * never hide a real file. Every produced path is listed regardless of git; the
+ * non-existing ones are the deleted rows the component marks with a badge.
  */
 export function fetchExists(
   ctx: ClientContext,
@@ -134,6 +149,8 @@ export function fetchExists(
 interface ChangeRowProps {
   label: string
   paths: readonly string[]
+  /** Paths in `paths` that were deleted from disk (shown with a deleted marker). */
+  deleted: ReadonlySet<string>
   t: (key: string, params?: Record<string, string>) => string
   sessionId: string | undefined
   openFile: (path: string) => void
@@ -141,9 +158,9 @@ interface ChangeRowProps {
 }
 
 function ChangeRow(props: ChangeRowProps): JSX.Element {
-  const { label, paths, openFile, t, openDiff, sessionId } = props
+  const { label, paths, deleted, openFile, t, openDiff, sessionId } = props
   const activate = (path: string): void => {
-    void openDiff(sessionId, path, openFile)
+    void openDiff(sessionId, path, openFile, deleted.has(path))
   }
   return (
     <div className={C.root}>
@@ -155,10 +172,11 @@ function ChangeRow(props: ChangeRowProps): JSX.Element {
               type="button"
               className={C.file}
               title={path}
-              aria-label={t('change.open', { name: path })}
+              aria-label={deleted.has(path) ? t('change.openDeleted', { name: path }) : t('change.open', { name: path })}
               onClick={() => activate(path)}
             >
-              {basename(path)}
+              <span className={C.name}>{basename(path)}</span>
+              {deleted.has(path) ? <span className={C.deleted}>{t('change.deleted')}</span> : null}
             </button>
           </li>
         ))}
@@ -179,6 +197,8 @@ interface ChangeSummaryExists {
   (sessionId: string | undefined, paths: readonly string[]): Promise<ReadonlyMap<string, boolean>>
 }
 
+const EMPTY_SET: ReadonlySet<string> = new Set()
+
 interface ChangeSummaryProps {
   matched: readonly string[]
   openFile: (path: string) => void
@@ -195,37 +215,38 @@ export function ChangeSummary(props: ChangeSummaryProps): JSX.Element | null {
     const record = s.byId?.[sessionId ?? '']
     return record !== undefined ? record.cwd : undefined
   })
-  // Files created and then deleted during the turn are dropped from the list
-  // once the host confirms they no longer exist. While the answer is pending
-  // (null) everything is shown — the fetch is loopback-fast, and a host failure
-  // must never hide a real file.
+  // Every produced path is listed — existing or deleted, git workspace or not.
+  // The host existence answer only decides which rows carry the deleted badge:
+  // a path that no longer exists on disk is marked deleted. While the answer is
+  // pending (null) nothing is marked — the fetch is loopback-fast, and a host
+  // failure must never hide a real file.
   const matchedKey = matched.join('\u0000')
-  const [existing, setExisting] = useState<ReadonlySet<string> | null>(null)
+  const [deleted, setDeleted] = useState<ReadonlySet<string> | null>(null)
   useEffect(() => {
     if (matched.length === 0) {
-      setExisting(new Set())
+      setDeleted(new Set())
       return
     }
     let alive = true
     void exists(sessionId, matched).then((map) => {
       if (!alive) return
-      setExisting(new Set(matched.filter((p) => map.get(p) !== false)))
+      setDeleted(new Set(matched.filter((p) => map.get(p) === false)))
     })
     return () => {
       alive = false
     }
   }, [sessionId, exists, matchedKey]) // eslint-disable-line react-hooks/exhaustive-deps
-  const visible = (paths: readonly string[]): string[] =>
-    existing === null ? [...paths] : paths.filter((p) => existing.has(p))
+  const deletedRows = deleted ?? EMPTY_SET
   const split = splitByWorkspace(cwd, matched)
   const children: JSX.Element[] = []
-  const inside = visible(split.inside)
+  const inside = split.inside
   if (inside.length > 0) {
     children.push(
       <ChangeRow
         key="inside"
         label={t('change.workspace')}
         paths={inside}
+        deleted={deletedRows}
         openFile={openFile}
         t={t}
         openDiff={openDiff}
@@ -233,13 +254,14 @@ export function ChangeSummary(props: ChangeSummaryProps): JSX.Element | null {
       />,
     )
   }
-  const outside = visible(split.outside)
+  const outside = split.outside
   if (outside.length > 0) {
     children.push(
       <ChangeRow
         key="outside"
         label={t('change.outside')}
         paths={outside}
+        deleted={deletedRows}
         openFile={openFile}
         t={t}
         openDiff={openDiff}
