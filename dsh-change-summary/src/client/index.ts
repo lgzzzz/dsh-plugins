@@ -13,7 +13,7 @@ import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { NS, zh, en } from './locales.js'
 import { changeSummaryDefinition, producedFileMentions, selectChangeFiles } from './change-summary.js'
-import { ChangeSummary, fetchExists, installFileLinkInterception, openDiff } from './ChangeSummary.js'
+import { ChangeSummary, fetchExists, installFileLinkInterception, openDiff, openGroupDiffs } from './ChangeSummary.js'
 
 export const name = 'dsh-change-summary'
 
@@ -46,6 +46,13 @@ export function apply(ctx: ClientContext): void {
           hooks: { hostDescription: connection?.hostDescription },
           openDiff: (sessionId: string | undefined, path: string, openFile: (path: string) => void, deleted?: boolean) =>
             openDiff(ctx, sessionId, path, openFile, deleted),
+          openGroupDiff: (
+            sessionId: string | undefined,
+            paths: readonly string[],
+            clickedPath: string,
+            openFile: (path: string) => void,
+            deleted: ReadonlySet<string>,
+          ) => openGroupDiffs(ctx, sessionId, paths, clickedPath, openFile, deleted),
           exists: (sessionId: string | undefined, paths: readonly string[]) =>
             fetchExists(ctx, sessionId, paths),
         }),
