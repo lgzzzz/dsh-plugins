@@ -20,6 +20,7 @@ import {
   updateFileByKey,
 } from './state.ts'
 import {
+  consumePendingDiffReveal,
   currentTheme,
   ensureMonaco,
   getActiveDiffEditor,
@@ -34,6 +35,8 @@ import { basename, languageFor } from './path.ts'
 import {
   requestClose,
   requestDiffClose,
+  requestDiffHunkNext,
+  requestDiffHunkPrev,
   requestDiffNext,
   requestDiffPrev,
   requestSave,
@@ -261,6 +264,19 @@ export function DiffView(): React.ReactElement | null {
         onClick: () => { requestDiffNext() },
       }, '下一个'),
       React.createElement('span', { className: 'dsh-te-diff-counter' }, `${index + 1} / ${state.files.length}`),
+      React.createElement('span', { className: 'dsh-te-diff-divider' }),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dsh-te-diff-nav',
+        title: '上一处修改（第一处时跳到上一个文件的最后一处）',
+        onClick: () => { requestDiffHunkPrev() },
+      }, '上一处修改'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dsh-te-diff-nav',
+        title: '下一处修改（最后一处时跳到下一个文件的第一处）',
+        onClick: () => { requestDiffHunkNext() },
+      }, '下一处修改'),
       React.createElement('span', { className: 'dsh-te-path', title: label }, label),
     ),
     React.createElement('div', { className: 'dsh-te-body' },
@@ -330,6 +346,25 @@ function DiffHost({ file }: { file: DiffFile }): React.ReactElement {
       previous.original.dispose()
       previous.modified.dispose()
     }
+    // 跨文件跳转（上一处/下一处修改 越过文件边界）时，等本文件的 diff 计算完成后
+    // 定位到第一处/最后一处修改——意图由 controller.hunkJump 在切文件前写入。
+    let revealDisp: { dispose(): void } | null = null
+    const applyReveal = (): void => {
+      revealDisp?.dispose()
+      revealDisp = null
+      const intent = consumePendingDiffReveal()
+      if (intent === null) return
+      const changes = editor.getLineChanges()
+      if (changes === null || changes.length === 0) return
+      const target = intent === 'first' ? changes[0]! : changes[changes.length - 1]!
+      const m = editor.getModifiedEditor()
+      m.setPosition({ lineNumber: target.modifiedStartLineNumber, column: 1 })
+      m.revealLineInCenter(target.modifiedStartLineNumber)
+    }
+    revealDisp = editor.onDidUpdateDiff(applyReveal)
+    // 同步兜底：极小 diff 可能在订阅建立前就已同步计算完成（onDidUpdateDiff 不会再触发）。
+    if (editor.getLineChanges() !== null) applyReveal()
+    return () => { revealDisp?.dispose() }
   }, [file, ready])
 
   if (loadError !== null) {

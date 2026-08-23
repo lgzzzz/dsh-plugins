@@ -64,6 +64,7 @@ var CSS = [
   ".dsh-te-diff-nav:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}",
   ".dsh-te-diff-nav:disabled{opacity:.5;cursor:default;}",
   ".dsh-te-diff-counter{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;}",
+  ".dsh-te-diff-divider{width:1px;align-self:stretch;background:var(--dsw-alias-border-l1,rgba(128,128,128,.25));margin:0 2px;flex:none;}",
   ".dsh-te-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;}",
   ".dsh-te-monaco{flex:1;min-height:0;position:relative;}",
   ".dsh-te-monaco-host{position:absolute;inset:0;}",
@@ -351,6 +352,15 @@ function getActiveFileKey() {
 function setActiveFileKey(key) {
   activeFileKey = key;
 }
+var pendingDiffReveal = null;
+function setPendingDiffReveal(v) {
+  pendingDiffReveal = v;
+}
+function consumePendingDiffReveal() {
+  const v = pendingDiffReveal;
+  pendingDiffReveal = null;
+  return v;
+}
 function getMonacoWindow() {
   return window;
 }
@@ -390,6 +400,8 @@ var closeHandler = null;
 var diffNextHandler = null;
 var diffPrevHandler = null;
 var diffCloseHandler = null;
+var diffHunkNextHandler = null;
+var diffHunkPrevHandler = null;
 function setSaveHandler(fn) {
   saveHandler = fn;
 }
@@ -405,6 +417,12 @@ function setDiffPrevHandler(fn) {
 function setDiffCloseHandler(fn) {
   diffCloseHandler = fn;
 }
+function setDiffHunkNextHandler(fn) {
+  diffHunkNextHandler = fn;
+}
+function setDiffHunkPrevHandler(fn) {
+  diffHunkPrevHandler = fn;
+}
 function requestSave(key) {
   if (saveHandler !== null) saveHandler(key);
 }
@@ -419,6 +437,12 @@ function requestDiffPrev() {
 }
 function requestDiffClose() {
   if (diffCloseHandler !== null) diffCloseHandler();
+}
+function requestDiffHunkNext() {
+  if (diffHunkNextHandler !== null) diffHunkNextHandler();
+}
+function requestDiffHunkPrev() {
+  if (diffHunkPrevHandler !== null) diffHunkPrevHandler();
 }
 
 // src/ui.ts
@@ -639,6 +663,23 @@ function DiffView() {
         }
       }, "\u4E0B\u4E00\u4E2A"),
       React.createElement("span", { className: "dsh-te-diff-counter" }, `${index + 1} / ${state.files.length}`),
+      React.createElement("span", { className: "dsh-te-diff-divider" }),
+      React.createElement("button", {
+        type: "button",
+        className: "dsh-te-diff-nav",
+        title: "\u4E0A\u4E00\u5904\u4FEE\u6539\uFF08\u7B2C\u4E00\u5904\u65F6\u8DF3\u5230\u4E0A\u4E00\u4E2A\u6587\u4EF6\u7684\u6700\u540E\u4E00\u5904\uFF09",
+        onClick: () => {
+          requestDiffHunkPrev();
+        }
+      }, "\u4E0A\u4E00\u5904\u4FEE\u6539"),
+      React.createElement("button", {
+        type: "button",
+        className: "dsh-te-diff-nav",
+        title: "\u4E0B\u4E00\u5904\u4FEE\u6539\uFF08\u6700\u540E\u4E00\u5904\u65F6\u8DF3\u5230\u4E0B\u4E00\u4E2A\u6587\u4EF6\u7684\u7B2C\u4E00\u5904\uFF09",
+        onClick: () => {
+          requestDiffHunkNext();
+        }
+      }, "\u4E0B\u4E00\u5904\u4FEE\u6539"),
       React.createElement("span", { className: "dsh-te-path", title: label }, label)
     ),
     React.createElement(
@@ -702,6 +743,24 @@ function DiffHost({ file }) {
       previous.original.dispose();
       previous.modified.dispose();
     }
+    let revealDisp = null;
+    const applyReveal = () => {
+      revealDisp == null ? void 0 : revealDisp.dispose();
+      revealDisp = null;
+      const intent = consumePendingDiffReveal();
+      if (intent === null) return;
+      const changes = editor.getLineChanges();
+      if (changes === null || changes.length === 0) return;
+      const target = intent === "first" ? changes[0] : changes[changes.length - 1];
+      const m = editor.getModifiedEditor();
+      m.setPosition({ lineNumber: target.modifiedStartLineNumber, column: 1 });
+      m.revealLineInCenter(target.modifiedStartLineNumber);
+    };
+    revealDisp = editor.onDidUpdateDiff(applyReveal);
+    if (editor.getLineChanges() !== null) applyReveal();
+    return () => {
+      revealDisp == null ? void 0 : revealDisp.dispose();
+    };
   }, [file, ready]);
   if (loadError !== null) {
     return React.createElement(
@@ -737,6 +796,8 @@ function bind(slots, sessions) {
   setDiffNextHandler(() => advanceDiff(1));
   setDiffPrevHandler(() => advanceDiff(-1));
   setDiffCloseHandler(closeDiff);
+  setDiffHunkNextHandler(() => hunkJump(1));
+  setDiffHunkPrevHandler(() => hunkJump(-1));
   const onKeyDown = (event) => {
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key.toLowerCase() !== "s") return;
@@ -771,6 +832,8 @@ function bind(slots, sessions) {
     setDiffNextHandler(null);
     setDiffPrevHandler(null);
     setDiffCloseHandler(null);
+    setDiffHunkNextHandler(null);
+    setDiffHunkPrevHandler(null);
     disposeAllEntries();
     slotsRef = null;
   };
@@ -845,15 +908,75 @@ function showDiffInTab(request) {
   const count = request.files.length;
   const initial = count > 0 ? Math.min(Math.max((_b = request.initialIndex) != null ? _b : 0, 0), count - 1) : 0;
   setDiffStateForSession(sid, { files: request.files, index: initial, sessionId: sid });
+  setPendingDiffReveal(null);
   if (sid === getActiveSessionId()) activateDiffTab();
 }
-function advanceDiff(delta) {
+function advanceDiff(delta, reveal) {
   const state = getDiffState();
   if (state === null || state.files.length === 0) return;
   const sid = state.sessionId;
   if (sid === void 0) return;
   const index = Math.min(Math.max(state.index + delta, 0), state.files.length - 1);
+  if (index === state.index) {
+    if (reveal !== void 0) setPendingDiffReveal(null);
+    return;
+  }
+  if (reveal !== void 0) setPendingDiffReveal(reveal);
+  else setPendingDiffReveal(null);
   setDiffStateForSession(sid, { ...state, index });
+}
+function hunkJump(dir) {
+  const diff = getActiveDiffEditor();
+  if (diff === null) return;
+  const changes = diff.getLineChanges();
+  if (changes === null || changes.length === 0) return;
+  const modified = diff.getModifiedEditor();
+  const cursorLine = modified.getPosition().lineNumber;
+  let idx = -1;
+  for (let i = 0; i < changes.length; i++) {
+    const c = changes[i];
+    if (cursorLine >= c.modifiedStartLineNumber && cursorLine <= c.modifiedEndLineNumber) {
+      idx = i;
+      break;
+    }
+  }
+  const jumpTo = (i) => {
+    const c = changes[i];
+    modified.setPosition({ lineNumber: c.modifiedStartLineNumber, column: 1 });
+    modified.revealLineInCenter(c.modifiedStartLineNumber);
+  };
+  if (dir === 1) {
+    if (idx !== -1 && idx < changes.length - 1) {
+      jumpTo(idx + 1);
+      return;
+    }
+    if (idx === -1) {
+      const next = changes.findIndex((c) => c.modifiedStartLineNumber > cursorLine);
+      if (next !== -1) {
+        jumpTo(next);
+        return;
+      }
+    }
+    const state = getDiffState();
+    if (state !== null && state.index < state.files.length - 1) advanceDiff(1, "first");
+  } else {
+    if (idx > 0) {
+      jumpTo(idx - 1);
+      return;
+    }
+    if (idx === -1) {
+      let prev = -1;
+      for (let i = 0; i < changes.length; i++) {
+        if (changes[i].modifiedStartLineNumber < cursorLine) prev = i;
+      }
+      if (prev !== -1) {
+        jumpTo(prev);
+        return;
+      }
+    }
+    const state = getDiffState();
+    if (state !== null && state.index > 0) advanceDiff(-1, "last");
+  }
 }
 function loadFile(sessionId, key) {
   var _a;
@@ -944,6 +1067,7 @@ function closeEditor(key) {
 function closeDiff() {
   const sid = getActiveSessionId();
   if (sid !== void 0) clearDiff(sid);
+  setPendingDiffReveal(null);
   fallbackToChat();
 }
 function fallbackToChat() {

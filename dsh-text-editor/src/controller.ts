@@ -32,11 +32,13 @@ import {
 } from './state.ts'
 import { READ_ROUTE, WRITE_ROUTE } from './routes.ts'
 import type { ReadResult, WriteResult } from './routes.ts'
-import { getActiveEditor, getActiveFileKey } from './monaco.ts'
+import { getActiveDiffEditor, getActiveEditor, getActiveFileKey, setPendingDiffReveal } from './monaco.ts'
 import { basename } from './path.ts'
 import {
   setCloseHandler,
   setDiffCloseHandler,
+  setDiffHunkNextHandler,
+  setDiffHunkPrevHandler,
   setDiffNextHandler,
   setDiffPrevHandler,
   setSaveHandler,
@@ -82,6 +84,8 @@ export function bind(slots: SlotsFace, sessions: SessionsFace | undefined): () =
   setDiffNextHandler(() => advanceDiff(1))
   setDiffPrevHandler(() => advanceDiff(-1))
   setDiffCloseHandler(closeDiff)
+  setDiffHunkNextHandler(() => hunkJump(1))
+  setDiffHunkPrevHandler(() => hunkJump(-1))
 
   // Ctrl/Cmd+S 保存当前打开的文件（本会话有打开文件时才拦截，避免弹出浏览器保存对话框）。
   const onKeyDown = (event: KeyboardEvent): void => {
@@ -125,6 +129,8 @@ export function bind(slots: SlotsFace, sessions: SessionsFace | undefined): () =
     setDiffNextHandler(null)
     setDiffPrevHandler(null)
     setDiffCloseHandler(null)
+    setDiffHunkNextHandler(null)
+    setDiffHunkPrevHandler(null)
     disposeAllEntries()
     slotsRef = null
   }
@@ -216,17 +222,79 @@ export function showDiffInTab(request: ShowDiffRequest): void {
     ? Math.min(Math.max(request.initialIndex ?? 0, 0), count - 1)
     : 0
   setDiffStateForSession(sid, { files: request.files, index: initial, sessionId: sid })
+  // 新差异视图：丢弃任何残留的跨文件定位意图。
+  setPendingDiffReveal(null)
   if (sid === getActiveSessionId()) activateDiffTab()
 }
 
-/** 差异视图内推进（clamp 到 [0, files.length-1]）。 */
-function advanceDiff(delta: number): void {
+/**
+ * 差异视图内推进文件（clamp 到 [0, files.length-1]）。
+ * reveal 只在「上一处/下一处修改」跨文件时传入：切到新文件后由 DiffHost 定位到
+ * 第一处（'first'）或最后一处（'last'）修改；普通文件切换/关闭会清掉旧意图。
+ */
+function advanceDiff(delta: number, reveal?: 'first' | 'last'): void {
   const state = getDiffState()
   if (state === null || state.files.length === 0) return
   const sid = state.sessionId
   if (sid === undefined) return
   const index = Math.min(Math.max(state.index + delta, 0), state.files.length - 1)
+  if (index === state.index) {
+    // 已在边界、没有切到别的文件：本次不产生定位，丢弃意图（避免残留到下次打开）。
+    if (reveal !== undefined) setPendingDiffReveal(null)
+    return
+  }
+  if (reveal !== undefined) setPendingDiffReveal(reveal)
+  else setPendingDiffReveal(null)
   setDiffStateForSession(sid, { ...state, index })
+}
+
+/**
+ * 在当前文件的 diff 内按「修改块」跳转：下一处/上一处修改。
+ * 光标已在最后一处修改（或之后无修改）→ 切到下一个文件并定位其第一处修改；
+ * 光标已在第一处修改（或之前无修改）→ 切到上一个文件并定位其最后一处修改（对称）。
+ * 已在最前/最后文件、或本文件无修改、或 diff 尚未计算完成：不动。
+ */
+function hunkJump(dir: 1 | -1): void {
+  const diff = getActiveDiffEditor()
+  if (diff === null) return
+  const changes = diff.getLineChanges()
+  if (changes === null || changes.length === 0) return
+  const modified = diff.getModifiedEditor()
+  const cursorLine = modified.getPosition().lineNumber
+  // 光标落在第几处修改（按 modified 侧行号区间判断；不在任何修改块内为 -1）。
+  let idx = -1
+  for (let i = 0; i < changes.length; i++) {
+    const c = changes[i]!
+    if (cursorLine >= c.modifiedStartLineNumber && cursorLine <= c.modifiedEndLineNumber) { idx = i; break }
+  }
+  const jumpTo = (i: number): void => {
+    const c = changes[i]!
+    // 先落光标再滚动到居中，保证后续「下一处/上一处」以本次跳转处为基准。
+    modified.setPosition({ lineNumber: c.modifiedStartLineNumber, column: 1 })
+    modified.revealLineInCenter(c.modifiedStartLineNumber)
+  }
+  if (dir === 1) {
+    if (idx !== -1 && idx < changes.length - 1) { jumpTo(idx + 1); return }
+    if (idx === -1) {
+      // 光标在修改块之外：跳到光标之后的第一处修改。
+      const next = changes.findIndex((c) => c.modifiedStartLineNumber > cursorLine)
+      if (next !== -1) { jumpTo(next); return }
+    }
+    const state = getDiffState()
+    if (state !== null && state.index < state.files.length - 1) advanceDiff(1, 'first')
+  } else {
+    if (idx > 0) { jumpTo(idx - 1); return }
+    if (idx === -1) {
+      // 光标在修改块之外：跳到光标之前的最后一处修改。
+      let prev = -1
+      for (let i = 0; i < changes.length; i++) {
+        if (changes[i]!.modifiedStartLineNumber < cursorLine) prev = i
+      }
+      if (prev !== -1) { jumpTo(prev); return }
+    }
+    const state = getDiffState()
+    if (state !== null && state.index > 0) advanceDiff(-1, 'last')
+  }
 }
 
 /** 从宿主路由读取文件内容并发布到 store（按 key 定位，防过期覆盖）。 */
@@ -330,6 +398,7 @@ export function closeEditor(key?: string): void {
 export function closeDiff(): void {
   const sid = getActiveSessionId()
   if (sid !== undefined) clearDiff(sid)
+  setPendingDiffReveal(null)
   fallbackToChat()
 }
 

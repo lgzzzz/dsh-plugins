@@ -25,6 +25,15 @@ export interface MonacoEditorInstance {
   setValue(value: string): void
   getModel(): unknown
   onDidChangeModelContent(listener: () => void): { dispose(): void }
+  getPosition(): { lineNumber: number; column: number }
+  setPosition(position: { lineNumber: number; column: number }): void
+  revealLineInCenter(lineNumber: number): void
+}
+
+/** Monaco `ILineChange` 的最小面（修改块；只用 modified 侧行号区间做定位跳转）。 */
+export interface ILineChange {
+  modifiedStartLineNumber: number
+  modifiedEndLineNumber: number
 }
 
 /** Monaco 文本模型的最小面。 */
@@ -37,6 +46,10 @@ export interface MonacoDiffEditorInstance {
   dispose(): void
   setModel(model: { original: MonacoTextModel; modified: MonacoTextModel }): void
   getModel(): { original: MonacoTextModel; modified: MonacoTextModel } | null
+  /** 当前 diff 的修改块列表；diff 尚未计算完成时返回 null（与 Monaco 行为一致）。 */
+  getLineChanges(): ILineChange[] | null
+  getModifiedEditor(): MonacoEditorInstance
+  onDidUpdateDiff(listener: () => void): { dispose(): void }
 }
 
 /** window 上的 Monaco AMD 全局。 */
@@ -64,6 +77,20 @@ export function getActiveDiffEditor(): MonacoDiffEditorInstance | null { return 
 export function setActiveDiffEditor(editor: MonacoDiffEditorInstance | null): void { activeDiffEditor = editor }
 export function getActiveFileKey(): string | null { return activeFileKey }
 export function setActiveFileKey(key: string | null): void { activeFileKey = key }
+
+// ── 跨文件 diff 跳转的定位意图 ────────────────────────────────────────────────
+// 「上一处/下一处修改」在当前文件最后一处/第一处修改时跨文件：先写意图（'first'/'last'），
+// 再由新文件的 DiffHost 在 diff 计算完成后定位到第一处/最后一处修改。
+let pendingDiffReveal: 'first' | 'last' | null = null
+
+export function setPendingDiffReveal(v: 'first' | 'last' | null): void { pendingDiffReveal = v }
+
+/** 取出并清空意图（DiffHost 在 diff 计算完成后消费）。 */
+export function consumePendingDiffReveal(): 'first' | 'last' | null {
+  const v = pendingDiffReveal
+  pendingDiffReveal = null
+  return v
+}
 
 function getMonacoWindow(): MonacoWindow {
   return window as unknown as MonacoWindow

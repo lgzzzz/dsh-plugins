@@ -23,6 +23,7 @@ export const CSS = [
   '.dsh-te-diff-nav:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}',
   '.dsh-te-diff-nav:disabled{opacity:.5;cursor:default;}',
   '.dsh-te-diff-counter{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;}',
+  '.dsh-te-diff-divider{width:1px;align-self:stretch;background:var(--dsw-alias-border-l1,rgba(128,128,128,.25));margin:0 2px;flex:none;}',
   '.dsh-te-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;}',
   '.dsh-te-monaco{flex:1;min-height:0;position:relative;}',
   '.dsh-te-monaco-host{position:absolute;inset:0;}',
