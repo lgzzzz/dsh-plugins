@@ -8,32 +8,45 @@ restores clickable inline-code file mentions in closing prose.
 
 Clicking a listed file is git-aware:
 
-- **git workspace** — the host stages the worktree (`git add .`) the moment a
-  direct human prompt is admitted, so the index is the round baseline. Clicking
-  a changed file then opens a Monaco diff of **staged (index) vs working tree**:
-  exactly what the agent changed in that round.
+- **git workspace** — clicking a changed file opens a Monaco diff of
+  **staged (index) vs working tree**. The plugin never stages the worktree
+  itself: the baseline is whatever the index currently holds (last committed
+  or manually staged state), and the diff shows the change between that index
+  state and the current files.
 - **non-git workspace** — no diff; clicking just opens the file normally (the
   Monaco「文件」tab).
 
-The listed rows are also filtered by current on-disk existence: a file that was
-created and then deleted during a turn (e.g. a scratch file) no longer appears
-in the workspace-changes list.
+Every produced path is listed under the closing message — existing or deleted,
+git workspace or not. A file that no longer exists on disk (deleted during the
+turn) carries a **「已删除 / deleted」 marker** on its row. Clicking a deleted
+row is then git-aware:
+
+- **git workspace** — the index still holds the file's content, so clicking
+  opens the all-content-deleted diff (before = index blob, after = empty).
+- **non-git workspace** — nothing to diff against and no worktree file to
+  open; the click is a no-op.
+
+(One case still never appears in the list: a path the turn's tools never
+reported a location for — e.g. a file removed purely with a `bash rm` that was
+never written or edited this turn — since the accumulator is driven by tool
+follow-along `locations`, not by filesystem state.)
 
 ## Layout
 
 ```
 src/
-├── index.ts                  # host half: stage on user/message (session/event),
-│                             #   serve /dsh-change-summary/diff (index-vs-worktree)
-│                             #   and /dsh-change-summary/exists (row filtering)
-├── git.ts                    # host half: git helpers (isInsideWorkTree / stageAll /
-│                             #   workTreeRoot / readIndex / diffStagedVsWorktree,
-│                             #   pathExists)
+├── index.ts                  # host half: serve /dsh-change-summary/diff
+│                             #   (index-vs-worktree) and /dsh-change-summary/exists
+│                             #   (on-disk existence for deleted marking); no
+│                             #   auto-staging on user messages
+├── git.ts                    # host half: git helpers (isInsideWorkTree /
+│                             #   workTreeRoot / readIndex /
+│                             #   diffStagedVsWorktree, pathExists)
 └── client/
     ├── index.ts              # client plugin body (inject / apply)
     ├── change-summary.ts     # turn-scoped Conversation Definition + pure helpers
     ├── ChangeSummary.tsx     # ChangeRow / ChangeSummary components, diff-then-open,
-    │                         #   exists-filtered rows, file-link interception,
+    │                         #   deleted-marked rows, file-link interception,
     │                         #   inline CSS injection
     └── locales.ts            # change-summary namespace dictionaries (zh/en)
 

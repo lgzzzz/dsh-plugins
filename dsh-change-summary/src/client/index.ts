@@ -44,8 +44,8 @@ export function apply(ctx: ClientContext): void {
         inject: () => ({
           isLoopback: connection?.isLoopback ?? false,
           hooks: { hostDescription: connection?.hostDescription },
-          openDiff: (sessionId: string | undefined, path: string, openFile: (path: string) => void) =>
-            openDiff(ctx, sessionId, path, openFile),
+          openDiff: (sessionId: string | undefined, path: string, openFile: (path: string) => void, deleted?: boolean) =>
+            openDiff(ctx, sessionId, path, openFile, deleted),
           exists: (sessionId: string | undefined, paths: readonly string[]) =>
             fetchExists(ctx, sessionId, paths),
         }),
