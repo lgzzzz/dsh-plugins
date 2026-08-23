@@ -4,14 +4,19 @@
  * Two jobs, git-aware:
  *
  * 1. `/dsh-change-summary/diff` — serve a staged-vs-worktree diff. Clicking a
- *    workspace-changed file opens a Monaco diff (via the `dsh-text-editor`
- *    `showDiff` capability) whose `before` is the index blob and `after` the
- *    current worktree file. The plugin never stages the worktree itself — the
- *    index holds whatever state it was left in (committed or manually staged),
- *    and the diff shows index vs working tree as-is. A tracked file deleted
- *    from the worktree therefore diffs as before = full index content, after =
- *    empty (everything deleted). Non-git workspaces have no diff: the route
- *    answers `git: false` and the browser half opens the file normally.
+ *    listed file opens a Monaco diff (via the `dsh-text-editor` `showDiff`
+ *    capability) whose `before` is the index blob and `after` the current
+ *    worktree file. Git-ness is decided by the FILE's own directory, not the
+ *    session workspace: whenever the file's directory lies inside a git work
+ *    tree (workspace file or not), the click diffs index vs working tree as-is;
+ *    otherwise (non-git directory) the route answers `git: false` and the
+ *    browser half opens the file normally. The plugin never stages the worktree
+ *    itself — the index holds whatever state it was left in (committed or
+ *    manually staged), and the diff shows index vs working tree as-is. A
+ *    tracked file deleted from the worktree therefore diffs as before = full
+ *    index content, after = empty (everything deleted). Non-git directories
+ *    have no diff: the route answers `git: false` and the browser half opens
+ *    the file normally.
  *
  * 2. `/dsh-change-summary/exists` — report which produced paths still exist.
  *    The browser half lists every produced path regardless (git workspace or
@@ -28,10 +33,9 @@ import type { ServerResponse } from 'node:http'
 import {
   absolutePath,
   diffStagedVsWorktree,
-  isInsideWorkTree,
   pathExists,
   relativeTo,
-  workTreeRoot,
+  workTreeRootOfFile,
 } from './git.js'
 
 export const name = 'dsh-change-summary'
@@ -106,21 +110,21 @@ async function handleDiff(
       (ctx as { sessions?: SessionStoreFace }).sessions
     const cwd = store?.get(sessionId)?.header?.cwd
     if (cwd === undefined || cwd === '') {
-      // No workspace to diff against: browser falls back to a normal open.
+      // No workspace to resolve the path against: browser falls back to a normal open.
       json(res, 200, { ok: false, git: false, reason: 'no-cwd' })
       return
     }
-    if (!(await isInsideWorkTree(cwd))) {
-      // Non-git workspace: per the spec, open the file normally (no diff).
+    const abs = absolutePath(cwd, path)
+    // Git-ness is decided by the FILE's own directory (not the session cwd): a
+    // file outside the workspace still diffs when its directory is a git work
+    // tree, and a workspace file whose directory is not git never diffs.
+    const root = await workTreeRootOfFile(abs)
+    if (root === undefined) {
+      // The file's directory is not a git work tree: open the file normally.
       json(res, 200, { ok: false, git: false, reason: 'not-git' })
       return
     }
-    const root = await workTreeRoot(cwd)
-    if (root === undefined) {
-      json(res, 200, { ok: false, git: false, reason: 'no-root' })
-      return
-    }
-    const rel = relativeTo(root, absolutePath(cwd, path))
+    const rel = relativeTo(root, abs)
     if (rel === undefined) {
       json(res, 200, { ok: false, git: true, reason: 'outside-repo' })
       return
