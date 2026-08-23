@@ -6,25 +6,28 @@ files modified this turn under the last message — split into current-workspace
 and outside-workspace groups, styled like the stock `ui-deliverables` row — and
 restores clickable inline-code file mentions in closing prose.
 
-Clicking a listed file is git-aware:
+Clicking a listed file is git-aware, decided by the **file's own directory**
+(not the session workspace):
 
-- **git workspace** — clicking a changed file opens a Monaco diff of
-  **staged (index) vs working tree**. The plugin never stages the worktree
-  itself: the baseline is whatever the index currently holds (last committed
-  or manually staged state), and the diff shows the change between that index
-  state and the current files.
-- **non-git workspace** — no diff; clicking just opens the file normally (the
-  Monaco「文件」tab).
+- **file's directory inside a git work tree** (workspace file or not) —
+  clicking the file opens a Monaco diff of **staged (index) vs working tree**
+  for that file's repo. The plugin never stages the worktree itself: the
+  baseline is whatever the index currently holds (last committed or manually
+  staged state), and the diff shows the change between that index state and
+  the current files.
+- **file's directory not a git work tree** — no diff; clicking just opens the
+  file normally (the Monaco「文件」tab).
 
 Every produced path is listed under the closing message — existing or deleted,
 git workspace or not. A file that no longer exists on disk (deleted during the
 turn) carries a **「已删除 / deleted」 marker** on its row. Clicking a deleted
-row is then git-aware:
+row is then git-aware (again by the file's own directory):
 
-- **git workspace** — the index still holds the file's content, so clicking
-  opens the all-content-deleted diff (before = index blob, after = empty).
-- **non-git workspace** — nothing to diff against and no worktree file to
-  open; the click is a no-op.
+- **file's directory inside a git work tree** — the index still holds the
+  file's content, so clicking opens the all-content-deleted diff (before =
+  index blob, after = empty).
+- **file's directory not a git work tree** — nothing to diff against and no
+  worktree file to open; the click is a no-op.
 
 (One case still never appears in the list: a path the turn's tools never
 reported a location for — e.g. a file removed purely with a `bash rm` that was
@@ -36,9 +39,11 @@ follow-along `locations`, not by filesystem state.)
 ```
 src/
 ├── index.ts                  # host half: serve /dsh-change-summary/diff
-│                             #   (index-vs-worktree) and /dsh-change-summary/exists
-│                             #   (on-disk existence for deleted marking); no
-│                             #   auto-staging on user messages
+│                             #   (index-vs-worktree, git-ness decided by the
+│                             #   file's own directory) and
+│                             #   /dsh-change-summary/exists (on-disk existence
+│                             #   for deleted marking); no auto-staging on user
+│                             #   messages
 ├── git.ts                    # host half: git helpers (isInsideWorkTree /
 │                             #   workTreeRoot / readIndex /
 │                             #   diffStagedVsWorktree, pathExists)

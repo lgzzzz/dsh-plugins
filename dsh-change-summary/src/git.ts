@@ -55,6 +55,19 @@ export async function workTreeRoot(cwd: string): Promise<string | undefined> {
   return root === '' ? undefined : root
 }
 
+/**
+ * The git work-tree root containing the file at absolute `abs` (forward-slash),
+ * or undefined when the file's own directory is not inside any work tree.
+ *
+ * Git-ness is decided by the FILE's directory (`git -C <dirname> rev-parse
+ * --show-toplevel` walks up from the file's folder), never by a session cwd: a
+ * file outside the session workspace still diffs when its own directory is a
+ * git repo, and a workspace file whose directory is not git never diffs.
+ */
+export async function workTreeRootOfFile(abs: string): Promise<string | undefined> {
+  return workTreeRoot(posix.dirname(abs))
+}
+
 /** Content of repo-relative `rel` from the index (the staged blob), or undefined. */
 export async function readIndex(root: string, rel: string): Promise<string | undefined> {
   return gitText(root, ['show', ':' + rel])
