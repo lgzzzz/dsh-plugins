@@ -56,7 +56,11 @@ export interface DiffResponse {
 
 /** The `dsh-text-editor` capability surface this plugin consumes. */
 interface TextEditorCapability {
-  showDiff?(options: { files: readonly { path: string; before: string; after: string }[]; sessionId?: string | undefined }): void
+  showDiff?(options: {
+    files: readonly { path: string; before: string; after: string }[]
+    initialIndex?: number | undefined
+    sessionId?: string | undefined
+  }): void
   openFile?(options: { path: string; cwd?: string | undefined; sessionId?: string | undefined }): void
 }
 
@@ -67,6 +71,17 @@ export interface ChangeSummaryOpenDiff {
     path: string,
     openFile: (path: string) => void,
     deleted?: boolean,
+  ): Promise<void>
+}
+
+/** The workspace-group open strategy: show the whole group's diffs at once. */
+export interface ChangeSummaryOpenGroup {
+  (
+    sessionId: string | undefined,
+    paths: readonly string[],
+    clickedPath: string,
+    openFile: (path: string) => void,
+    deleted: ReadonlySet<string>,
   ): Promise<void>
 }
 
@@ -107,6 +122,70 @@ export function openDiff(
         openFile(path)
       }
     })
+}
+
+/**
+ * Workspace-group diff-then-open: fetch the staged-vs-worktree diff for EVERY
+ * file of the clicked workspace group concurrently (reusing the per-file host
+ * route) and show them all in one 差异 tab via the dsh-text-editor `showDiff`
+ * capability, positioned at the clicked file (`initialIndex`). The diff tab
+ * only opens when the CLICKED file itself has a diff; if it does not — no
+ * matter whether other files in the group do — fall back to opening the
+ * clicked file normally (a deleted file that cannot diff has nothing to open,
+ * so that click is a no-op). Files without a diff are skipped.
+ */
+export async function openGroupDiffs(
+  ctx: ClientContext,
+  sessionId: string | undefined,
+  paths: readonly string[],
+  clickedPath: string,
+  openFile: (path: string) => void,
+  deleted: ReadonlySet<string>,
+): Promise<void> {
+  if (paths.length === 0) return
+  const urlFor = (p: string): string =>
+    '/dsh-change-summary/diff?session=' + encodeURIComponent(sessionId ?? '') + '&path=' + encodeURIComponent(p)
+  const settled = await Promise.all(
+    paths.map(async (p) => {
+      try {
+        const res = await fetch(urlFor(p), { cache: 'no-store' })
+        return { path: p, body: (await res.json()) as DiffResponse }
+      } catch {
+        return { path: p, body: null }
+      }
+    }),
+  )
+  const files: { path: string; before: string; after: string }[] = []
+  for (const entry of settled) {
+    const body = entry.body
+    if (body === null) continue
+    if (body.ok !== true || body.git !== true) continue
+    if (typeof body.before !== 'string' || typeof body.after !== 'string') continue
+    files.push({ path: body.path ?? entry.path, before: body.before, after: body.after })
+  }
+  // 普通打开的兜底：被点击文件已删除时没有工作区内容可开，唯一查看方式就是 git diff。
+  const fallback = (): void => {
+    if (deleted.has(clickedPath)) return
+    const te = ctx.get('dsh-text-editor') as TextEditorCapability | undefined
+    if (te && typeof te.openFile === 'function') {
+      const s = currentSessionInfo(ctx.get('sessions'))
+      te.openFile({ path: clickedPath, cwd: s.cwd, sessionId: sessionId ?? s.sessionId })
+    } else {
+      openFile(clickedPath)
+    }
+  }
+  // 差异页只在被点击文件本身可 diff 时打开；其他文件的结果不改变这一判定。
+  if (!files.some((f) => f.path === clickedPath)) {
+    fallback()
+    return
+  }
+  const te = ctx.get('dsh-text-editor') as TextEditorCapability | undefined
+  if (!te || typeof te.showDiff !== 'function') {
+    fallback()
+    return
+  }
+  const initial = files.findIndex((f) => f.path === clickedPath)
+  te.showDiff({ files, initialIndex: initial === -1 ? 0 : initial, sessionId })
 }
 
 /* ── existence: which rows are deleted (marked with a badge) ───────────────── */
@@ -155,12 +234,17 @@ interface ChangeRowProps {
   sessionId: string | undefined
   openFile: (path: string) => void
   openDiff: ChangeSummaryOpenDiff
+  /** Workspace row: clicking any file opens the whole group's diffs at once. */
+  openGroupDiff: ChangeSummaryOpenGroup
+  /** Whether this row's click opens the group's diffs (workspace row only). */
+  group?: boolean | undefined
 }
 
 function ChangeRow(props: ChangeRowProps): JSX.Element {
-  const { label, paths, deleted, openFile, t, openDiff, sessionId } = props
+  const { label, paths, deleted, openFile, t, openDiff, openGroupDiff, sessionId, group } = props
   const activate = (path: string): void => {
-    void openDiff(sessionId, path, openFile, deleted.has(path))
+    if (group) void openGroupDiff(sessionId, paths, path, openFile, deleted)
+    else void openDiff(sessionId, path, openFile, deleted.has(path))
   }
   return (
     <div className={C.root}>
@@ -206,11 +290,12 @@ interface ChangeSummaryProps {
   sessionId: string | undefined
   t: (key: string, params?: Record<string, string>) => string
   openDiff: ChangeSummaryOpenDiff
+  openGroupDiff: ChangeSummaryOpenGroup
   exists: ChangeSummaryExists
 }
 
 export function ChangeSummary(props: ChangeSummaryProps): JSX.Element | null {
-  const { matched, openFile, useSessions, sessionId, t, openDiff, exists } = props
+  const { matched, openFile, useSessions, sessionId, t, openDiff, openGroupDiff, exists } = props
   const cwd = useSessions((s) => {
     const record = s.byId?.[sessionId ?? '']
     return record !== undefined ? record.cwd : undefined
@@ -250,6 +335,8 @@ export function ChangeSummary(props: ChangeSummaryProps): JSX.Element | null {
         openFile={openFile}
         t={t}
         openDiff={openDiff}
+        openGroupDiff={openGroupDiff}
+        group
         sessionId={sessionId}
       />,
     )
@@ -265,6 +352,7 @@ export function ChangeSummary(props: ChangeSummaryProps): JSX.Element | null {
         openFile={openFile}
         t={t}
         openDiff={openDiff}
+        openGroupDiff={openGroupDiff}
         sessionId={sessionId}
       />,
     )

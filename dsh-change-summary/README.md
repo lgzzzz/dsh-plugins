@@ -9,14 +9,22 @@ restores clickable inline-code file mentions in closing prose.
 Clicking a listed file is git-aware, decided by the **file's own directory**
 (not the session workspace):
 
-- **file's directory inside a git work tree** (workspace file or not) —
-  clicking the file opens a Monaco diff of **staged (index) vs working tree**
-  for that file's repo. The plugin never stages the worktree itself: the
-  baseline is whatever the index currently holds (last committed or manually
-  staged state), and the diff shows the change between that index state and
-  the current files.
-- **file's directory not a git work tree** — no diff; clicking just opens the
-  file normally (the Monaco「文件」tab).
+- **workspace-group file (工作区修改) whose own directory is inside a git work
+  tree** — clicking it fetches the **staged (index) vs working tree** diff for
+  EVERY file of that group at once (concurrent per-file route requests) and
+  shows them all in one 差异 tab via the dsh-text-editor `showDiff` capability,
+  positioned at the clicked file (`initialIndex`). Files without a diff
+  (non-git, unchanged, binary, oversized, failed fetch) are skipped. The
+  plugin never stages the worktree itself: the baseline is whatever the index
+  currently holds (last committed or manually staged state), and each diff
+  shows the change between that index state and the current file.
+- **workspace-group file without a diff of its own** — no 差异 tab opens, no
+  matter whether other group files have diffs; clicking just opens the clicked
+  file normally (the Monaco「文件」tab). A deleted file that cannot diff has
+  nothing to open, so that click is a no-op.
+- **outside-workspace file** — single-file behavior: inside a git work tree it
+  opens just that file's staged-vs-worktree Monaco diff; otherwise it opens the
+  file normally.
 
 Every produced path is listed under the closing message — existing or deleted,
 git workspace or not. A file that no longer exists on disk (deleted during the
@@ -24,8 +32,9 @@ turn) carries a **「已删除 / deleted」 marker** on its row. Clicking a dele
 row is then git-aware (again by the file's own directory):
 
 - **file's directory inside a git work tree** — the index still holds the
-  file's content, so clicking opens the all-content-deleted diff (before =
-  index blob, after = empty).
+  file's content, so the group diff includes it as all-content-deleted (before
+  = index blob, after = empty); clicking the deleted row itself also opens the
+  group diff.
 - **file's directory not a git work tree** — nothing to diff against and no
   worktree file to open; the click is a no-op.
 
@@ -51,6 +60,7 @@ src/
     ├── index.ts              # client plugin body (inject / apply)
     ├── change-summary.ts     # turn-scoped Conversation Definition + pure helpers
     ├── ChangeSummary.tsx     # ChangeRow / ChangeSummary components, diff-then-open,
+    │                         #   workspace-group multi-diff (showDiff all at once),
     │                         #   deleted-marked rows, file-link interception,
     │                         #   inline CSS injection
     └── locales.ts            # change-summary namespace dictionaries (zh/en)
