@@ -292,6 +292,9 @@ function DiffHost({ file }: { file: DiffFile }): React.ReactElement {
         scrollBeyondLastLine: false,
         renderSideBySide: true,
         enableSplitViewResizing: true,
+        // 只隐藏两侧文件的竖直滚动条；横向滚动条保留；diff 位置条（共享 overview ruler）保留。
+        scrollbar: { vertical: 'hidden' },
+        renderOverviewRuler: true,
       })
       setActiveDiffEditor(editor)
       setReady(true)

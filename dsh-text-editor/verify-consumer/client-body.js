@@ -34,7 +34,8 @@ return {
         cwd: undefined,
         sessionId: undefined,
       })
-      // 能力 2：顺序展示两个文件的 diff（顶部 上一个/下一个 手动推进）
+      // 能力 2：顺序展示两个文件的 diff（顶部 上一个/下一个 手动推进）；
+      // initialIndex: 1 → 初始直接展示第二个文件（0 起，越界自动 clamp，缺省 0 = 第一个）。
       te.showDiff({
         files: [
           sample,
@@ -45,6 +46,7 @@ return {
             after: 'const a = 2\nconsole.log("hello, world")\nconsole.log(a)\n',
           },
         ],
+        initialIndex: 1,
       })
       return () => {}
     })

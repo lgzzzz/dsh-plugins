@@ -47,7 +47,7 @@ DSH Web GUI 里的**应用内文本编辑器基础能力提供方**（Monaco，V
 ```ts
 interface TextEditorService {
   openFile(request: { path: string; cwd?: string; sessionId?: string }): void
-  showDiff(request: { files: { label?: string; path?: string; before: string; after: string }[]; sessionId?: string }): void
+  showDiff(request: { files: { label?: string; path?: string; before: string; after: string }[]; initialIndex?: number; sessionId?: string }): void
 }
 ```
 
@@ -69,6 +69,9 @@ export function apply(ctx) {
 要点：
 - `showDiff` 是**纯客户端渲染**：before/after 是调用方传入的内存文本，不读磁盘，
   不需要宿主新路由；`path` 仅用于语言高亮。
+- `showDiff` 的可选 `initialIndex` 指定多文件时初始展示第几个文件的 diff（0 起，
+  越界自动 clamp，缺省 0 = 第一个文件）；不影响重复调用的覆盖语义（每次调用都按
+  新 `initialIndex` 重置初始位置）。
 - `openFile` 走现有 `/read`、`/write` 宿主路由：`~` 展开、相对路径按 `cwd` 解析、
   保存按 `sessionId` 对应的会话沙箱策略。
 - 想恢复「点击产物/工具链接自动打开」的功能：由**其他插件**自己挂 DOM 拦截器并调

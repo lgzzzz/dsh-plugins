@@ -8,7 +8,7 @@
  *   apply(ctx) {
  *     const te = ctx.get('dsh-text-editor')   // 未就绪时返回 undefined，使用前请判空
  *     te?.openFile({ path, cwd, sessionId })  // 能力 1：打开文件到「文件」tab（可编辑/保存）
- *     te?.showDiff({ files })                 // 能力 2：在「差异」tab 顺序展示文件 diff
+ *     te?.showDiff({ files, initialIndex })   // 能力 2：在「差异」tab 顺序展示文件 diff（initialIndex 指定初始文件）
  *   }
  *
  * 提供方（本插件）在 apply 里用 ctx.provide(TEXT_EDITOR_SERVICE, api) 注册；
@@ -41,6 +41,8 @@ export interface DiffFile {
 /** 能力 2：在「差异」tab 顺序展示一组文件的 diff（手动 上一个/下一个 推进）。 */
 export interface ShowDiffRequest {
   files: DiffFile[]
+  /** 初始展示第几个文件的 diff（0 起；越界自动 clamp 到合法范围；缺省 0 = 第一个文件）。 */
+  initialIndex?: number
   /** 透传给视图，目前不参与渲染（预留）。 */
   sessionId?: string
 }

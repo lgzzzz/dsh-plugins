@@ -666,7 +666,10 @@ function DiffHost({ file }) {
         readOnly: true,
         scrollBeyondLastLine: false,
         renderSideBySide: true,
-        enableSplitViewResizing: true
+        enableSplitViewResizing: true,
+        // 只隐藏两侧文件的竖直滚动条；横向滚动条保留；diff 位置条（共享 overview ruler）保留。
+        scrollbar: { vertical: "hidden" },
+        renderOverviewRuler: true
       });
       setActiveDiffEditor(editor);
       setReady(true);
@@ -836,10 +839,12 @@ function openInEditor(path, cwd, sessionId) {
   if (isActive) activateTab(result.key);
 }
 function showDiffInTab(request) {
-  var _a;
+  var _a, _b;
   const sid = (_a = request.sessionId) != null ? _a : getActiveSessionId();
   if (sid === void 0) return;
-  setDiffStateForSession(sid, { files: request.files, index: 0, sessionId: sid });
+  const count = request.files.length;
+  const initial = count > 0 ? Math.min(Math.max((_b = request.initialIndex) != null ? _b : 0, 0), count - 1) : 0;
+  setDiffStateForSession(sid, { files: request.files, index: initial, sessionId: sid });
   if (sid === getActiveSessionId()) activateDiffTab();
 }
 function advanceDiff(delta) {

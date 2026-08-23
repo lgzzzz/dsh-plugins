@@ -210,7 +210,12 @@ export function openInEditor(path: string, cwd: string, sessionId: string | unde
 export function showDiffInTab(request: ShowDiffRequest): void {
   const sid = request.sessionId ?? getActiveSessionId()
   if (sid === undefined) return
-  setDiffStateForSession(sid, { files: request.files, index: 0, sessionId: sid })
+  const count = request.files.length
+  // 初始展示的下标：由调用方 initialIndex 指定（0 起）；越界/缺省时回落 0（第一个文件）。
+  const initial = count > 0
+    ? Math.min(Math.max(request.initialIndex ?? 0, 0), count - 1)
+    : 0
+  setDiffStateForSession(sid, { files: request.files, index: initial, sessionId: sid })
   if (sid === getActiveSessionId()) activateDiffTab()
 }
 
