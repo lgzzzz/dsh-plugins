@@ -31,7 +31,7 @@
     "check": "node --check lib/client.js && node --check index.ts && node --check host/read.ts && node --check host/write.ts && node --check host/monaco.ts && node --check host/http.ts && node --check host/types.ts"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis": "^4.0.2",
     "@types/node": "^24.13.3",
     "@types/react": "^18.3.31",
     "esbuild": "^0.28.2",
