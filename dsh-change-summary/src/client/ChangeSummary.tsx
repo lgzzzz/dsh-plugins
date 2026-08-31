@@ -5,8 +5,12 @@
  * interception that opens Monaco「文件」tabs.
  */
 import { useEffect, useState } from 'react'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { basename, currentSessionInfo, splitByWorkspace } from './change-summary.js'
+
+/** Minimal client-context face this module reads (dynamic service lookup only). */
+interface ClientContext {
+  get(name: string): unknown
+}
 
 /* ── styles (same visual language as the stock ui-deliverables row) ────────── */
 const CSS = [

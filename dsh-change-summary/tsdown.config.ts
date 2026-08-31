@@ -7,15 +7,14 @@
  *   3. `tsdown`                      → lib/client.js         (ModuleLoader bundle)
  *
  * The emitted artifact is the CJS closure-factory the browser loads:
- * `window.__ModuleLoader__.load({ id, factory })`. The three externals stay
+ * `window.__ModuleLoader__.load({ id, factory })`. The two externals stay
  * `require()` calls answered by the loader's module table (react/react-jsx are
- * shell-seeded; `@deepseek-ai/dsh-client-runtime/client` is a dynamic
- * module-table row). Everything else — the plugin's own modules — inlines.
+ * shell-seeded). Everything else — the plugin's own modules — inlines; all
+ * `@deepseek-ai/*` imports in the client source are type-only and erased.
  */
 const CLIENT_EXTERNALS = [
   'react',
   'react/jsx-runtime',
-  '@deepseek-ai/dsh-client-runtime/client',
 ]
 
 export default {

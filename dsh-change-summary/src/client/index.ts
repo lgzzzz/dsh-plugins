@@ -1,16 +1,17 @@
 /**
  * Client plugin body for `dsh-change-summary`.
  *
- * Registers the turn-scoped change-summary accumulator (via conversationEvents),
+ * Registers the turn-scoped change-summary accumulator (via `uiConversation.events`),
  * the two-group row under the closing message (via the `conversation.chat.turnTail`
  * chain slot), the clickable inline-code file mentions in closing prose (via
  * the `chatFileMentions` provide), and the Monaco file-link interception.
+ *
+ * The `dsh-client-ui-slots` / `dsh-client-ui-primitives` type packages are absent
+ * from the shipped bundle, so the consumed service faces (`slots`, `locale`,
+ * `uiConversation`) are declared structurally here, exactly as the `dsh-text-editor`
+ * consumer face is.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-// Declaration-merge triggers: load the client `Context.locale` member so
-// `ctx.locale.register/bind` are visible. Type-only, erased at compile time.
-import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { NS, zh, en } from './locales.js'
 import { changeSummaryDefinition, producedFileMentions, selectChangeFiles } from './change-summary.js'
 import { ChangeSummary, fetchExists, installFileLinkInterception, openDiff, openGroupDiffs } from './ChangeSummary.js'
@@ -18,17 +19,37 @@ import { ChangeSummary, fetchExists, installFileLinkInterception, openDiff, open
 export const name = 'dsh-change-summary'
 
 /** Required services for the tail-slot registration and its dictionaries. */
-export const inject = ['slots', 'locale', 'conversationEvents', 'connection', 'dsh-text-editor', 'sessions']
+export const inject = ['slots', 'locale', 'uiConversation', 'dsh-text-editor', 'sessions']
 
-/** Structural face of the `connection` service this plugin reads. */
-interface ConnectionFace {
-  isLoopback: boolean
-  hostDescription: unknown
+/** Structural slice of the `locale` service this plugin reads. */
+interface LocaleFace {
+  register(ns: string, dicts: Record<string, unknown>): () => void
+  bind(ns: string): (key: string, params?: Record<string, string>) => string
+}
+
+/** Structural slice of the `slots` service this plugin reads. */
+interface SlotsFace {
+  inject(slot: string, register: () => unknown): void
+  register(spec: Record<string, unknown>, component: unknown): unknown
+}
+
+/** Structural slice of the `uiConversation` service this plugin reads. */
+interface UiConversationFace {
+  events: { register(definition: unknown): () => void }
+}
+
+/** Client root context face consumed by this plugin body. */
+interface ClientContext {
+  get(name: string): unknown
+  effect(callback: () => void | (() => void), label?: string): void
+  provide(name: string, value: unknown): () => void
+  slots: SlotsFace
+  locale: LocaleFace
+  uiConversation: UiConversationFace
 }
 
 export function apply(ctx: ClientContext): void {
-  ctx.conversationEvents.register(changeSummaryDefinition)
-  const connection = ctx.get('connection') as ConnectionFace | undefined
+  ctx.uiConversation.events.register(changeSummaryDefinition)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'change-summary: dictionaries')
   // 承接原 dsh-te-file-link-opener 的能力:捕获文件链接点击 → Monaco「文件」标签打开。
   const disposeInterception = installFileLinkInterception(ctx)
@@ -42,8 +63,6 @@ export function apply(ctx: ClientContext): void {
         select: selectChangeFiles,
         locale: NS,
         inject: () => ({
-          isLoopback: connection?.isLoopback ?? false,
-          hooks: { hostDescription: connection?.hostDescription },
           openDiff: (sessionId: string | undefined, path: string, openFile: (path: string) => void, deleted?: boolean) =>
             openDiff(ctx, sessionId, path, openFile, deleted),
           openGroupDiff: (

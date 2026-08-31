@@ -13,11 +13,8 @@ const SELF = fileURLToPath(new URL('..', import.meta.url))
 const DEST = join(SELF, 'node_modules', '@deepseek-ai')
 
 const CLIENT_PACKAGES = [
-  'dsh-client-runtime',
+  'dsh-client-ui-chat',
   'dsh-client-ui-conversation',
-  'dsh-tools',
-  'dsh-session',
-  'dsh-client-locale',
 ]
 
 if (!existsSync(HARNESS_ROOT)) {
