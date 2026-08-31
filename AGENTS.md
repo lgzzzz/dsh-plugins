@@ -45,7 +45,8 @@
 - `sessions`：`list.getSnapshot().current`（当前会话 id）、`binding(id).session`（业务 Session 面）。
 - `session.getSnapshot()` → `{ running, subagent, queue, ... }`；`session.cancel()` 停止运行
   （普通会话走 `sessions.cancel`，可续子代理走 `subagents.interrupt`，one-shot 子代理不可取消）。
-- `workspaces.startSession(workspaceId?)` = "新建会话"按钮的精确行为。
+- `uiWorkspace.startSession(workspaceId?)` = "新建会话"按钮的精确行为（客户端服务 `uiWorkspace`，
+  由 `dsh-client-ui-workspace` 提供；`workspaces` 是纯 Workspace Controller，无 `startSession`）。
 - 注意：`sessions.scope(id)` 返回 Context 会被动态 guard 拒绝；一律用 `sessions.binding(id).session`。
 
 ### 动态客户端执行环境
@@ -57,5 +58,5 @@
 - 命令实现：`@deepseek-ai/dsh-command-goal`、`@deepseek-ai/dsh-command-compact`。
 - Client UI / Slot / 命令面：`@deepseek-ai/dsh-client-ui-*` 系列。
 - 本地包格式：`dsh-fullwidth-chat`（web 包）、`dsh-git-guard`（host 行）。
-- 完整 Hybrid 示例：`dsh-new-session-command`（Host 注册 `/new` 命令 + Client 响应跳转与 Esc 停止），
+- 完整 Hybrid 示例：`dsh-new-session`（Host 注册 `/new` 命令 + Client 响应跳转与 Esc 停止），
   细节见其 `README.md`。

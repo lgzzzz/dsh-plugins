@@ -7,7 +7,7 @@ var module = { exports: {} }; var exports = module.exports;
  * Two jobs:
  * 1. Listen for the browser-local `command/executed` acknowledgment (fired after
  *    this client admitted one Host command execution) and, for `/new`, run the
- *    exact New Session button path: `workspaces.startSession()` resolves the
+ *    exact New Session button path: `uiWorkspace.startSession()` resolves the
  *    target workspace (explicit -> current session's -> recent), reuses or
  *    creates its blank session, and opens it. No popup, no confirmation, no
  *    model message — the user just lands in the new blank session.
@@ -22,14 +22,14 @@ var module = { exports: {} }; var exports = module.exports;
  */
 module.exports = {
   name: 'dsh-new-session',
-  inject: ['slots'],
+  inject: ['slots', 'uiWorkspace', 'sessions'],
   apply: function (ctx) {
     if (!ctx || typeof ctx.on !== 'function') return;
     ctx.on('command/executed', function (sessionId, name, result) {
       if (name !== 'new') return;
-      var workspaces = ctx.get('workspaces');
-      if (!workspaces || typeof workspaces.startSession !== 'function') return;
-      workspaces.startSession();
+      var uiWorkspace = ctx.get('uiWorkspace');
+      if (!uiWorkspace || typeof uiWorkspace.startSession !== 'function') return;
+      uiWorkspace.startSession();
     });
     if (ctx.slots && typeof ctx.slots.inject === 'function' && typeof ctx.slots.register === 'function') {
       ctx.slots.inject('conversation.chat.commandview', function () {
