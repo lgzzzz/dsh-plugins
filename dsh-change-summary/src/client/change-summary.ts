@@ -1,20 +1,13 @@
 /**
  * Turn-scoped change-summary Definition and readers. Client-only and
- * model-free: the vocabulary is the mutation tools' own follow-along
- * `locations`, never the closing prose. Mirrors ui-deliverables, except that
- * the matched paths are split into current-workspace and outside-workspace
- * groups at render time (see `ChangeSummary.tsx`).
+ * model-free: the vocabulary is the mutation tools' successful calls
+ * (write / edit / str_replace_editor), never the closing prose. Mirrors
+ * ui-deliverables, except that the matched paths are split into
+ * current-workspace and outside-workspace groups at render time (see
+ * `ChangeSummary.tsx`).
  */
-import {
-  isAppendSurfaceEvent,
-  resolveWorkspacePath,
-  type ConversationMatchResult,
-  type ConversationNodeContext,
-  type ConversationNodeDefinition,
-} from '@deepseek-ai/dsh-client-runtime/client'
-import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ToolCallView } from '@deepseek-ai/dsh-tools/presentation'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 
 /** One produced-file fact: the path plus the tool/result seq that settled it. */
 interface ProducedPath {
@@ -27,7 +20,7 @@ export interface ChangeSummaryTurnData {
   readonly produced: readonly ProducedPath[]
 }
 
-declare module '@deepseek-ai/dsh-client-runtime/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface ConversationTurnDataMap {
     'change-summary': ChangeSummaryTurnData
   }
@@ -35,29 +28,104 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
 
 interface ChangeSummaryState extends ChangeSummaryTurnData {
   readonly turn: number
-  /** callId → the call's follow-along view (null when the call has none). */
-  readonly calls: ReadonlyMap<string, ToolCallView | null>
+  /** callId → the mutation path parsed from that call's arguments (null when the call is not a mutation). */
+  readonly calls: ReadonlyMap<string, string | null>
 }
 
-/**
- * Paths a call view reports having created or changed, by render intent rather
- * than tool name: a diff card, or a generic card whose `kind` is `edit` (the
- * shape `str_replace_editor`'s insert presents). Every other card produces
- * nothing to open — a read looked, a delete removed, a terminal ran.
- */
-export function producedPaths(view: ToolCallView | null): string[] {
-  if (view === null) return []
-  if (view.card === 'diff') return (view.locations ?? []).map((location) => location.path)
-  if (view.card === 'generic' && view.kind === 'edit') return (view.locations ?? []).map((location) => location.path)
-  return []
+/* ── runtime surface guard ───────────────────────────────────────────────────
+ * Inlined from `dsh-session`'s `surface.ts`: client bundles must not value-import
+ * across plugin boundaries, and the old `dsh-client-runtime` module is gone. */
+const SURFACE_EVENT_TYPES = new Set<string>(['user/message', 'assistant/message', 'tool/result'])
+
+function isSurfaceEvent(event: { type: string; surfaceOp?: unknown }): boolean {
+  if (!SURFACE_EVENT_TYPES.has(event.type)) return false
+  return event.surfaceOp !== undefined
+}
+
+function isAppendSurfaceEvent(event: { type: string; surfaceOp?: unknown }): boolean {
+  return isSurfaceEvent(event) && event.surfaceOp === 'append'
+}
+
+/* ── success-mutation argument parsing (mirrors ui-deliverables) ─────────────── */
+
+function pathValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function validEditArgs(args: Record<string, unknown>): boolean {
+  return (
+    typeof args.old_string === 'string' &&
+    args.old_string.length > 0 &&
+    typeof args.new_string === 'string' &&
+    args.old_string !== args.new_string &&
+    (args.replace_all === undefined || typeof args.replace_all === 'boolean')
+  )
+}
+
+function editorMutationPath(args: Record<string, unknown>): string | null {
+  const path = pathValue(args.path)
+  if (path === null) return null
+  switch (args.command) {
+    case 'create':
+      return typeof args.file_text === 'string' ? path : null
+    case 'str_replace':
+      return typeof args.old_str === 'string' &&
+        args.old_str.length > 0 &&
+        (args.new_str === undefined || typeof args.new_str === 'string')
+        ? path
+        : null
+    case 'insert':
+      return typeof args.insert_line === 'number' &&
+        Number.isInteger(args.insert_line) &&
+        args.insert_line >= 0 &&
+        typeof args.new_str === 'string'
+        ? path
+        : null
+    default:
+      return null
+  }
+}
+
+/** Extract the mutated path from a supported first-party mutation call. */
+function mutationPath(name: string, argsRaw: string): string | null {
+  let args: unknown
+  try {
+    args = JSON.parse(argsRaw)
+  } catch {
+    return null
+  }
+  if (!isRecord(args)) return null
+  switch (name) {
+    case 'write':
+      return typeof args.content === 'string' ? pathValue(args.file_path) : null
+    case 'edit':
+      return validEditArgs(args) ? pathValue(args.file_path) : null
+    case 'str_replace_editor':
+      return editorMutationPath(args)
+    default:
+      return null
+  }
+}
+
+/* ── workspace-path resolution ────────────────────────────────────────────────
+ * Inlined from `dsh-util-workspace-path` (browser-safe, pure). */
+function resolveWorkspacePath(cwd: string | undefined, path: string): string {
+  if (path.startsWith('/') || /^[A-Za-z]:[/\\]/.test(path) || path.startsWith('\\\\')) return path
+  if (cwd === undefined || cwd === '') return path
+  return `${cwd.replace(/[/\\]+$/, '')}/${path.replace(/^[/\\]+/, '')}`
 }
 
 /**
  * Files produced by one Turn data value.
  *
- * The source is the mutation tools' own follow-along `locations`, not the
- * closing prose. Paths keep first-seen order and appear once, so a file written
- * and then edited in the same turn is one entry.
+ * The source is the arguments of successful `write`, `edit`, and mutating
+ * `str_replace_editor` calls, not the closing prose. Paths keep first-seen
+ * order and appear once, so a file written and then edited in the same turn is
+ * one entry.
  * @param data - engine-published change-summary data for one Turn.
  * @param seq - closing Assistant seq; later Tool settlements are excluded.
  * @returns Produced paths in first-seen order; empty when the turn wrote nothing.
@@ -97,29 +165,23 @@ export const changeSummaryDefinition: ConversationNodeDefinition<ChangeSummarySt
     if (match.event.type !== 'turn/start') throw new Error('change-summary start requires turn/start')
     return {
       turn: match.event.data.turn,
-      calls: new Map<string, ToolCallView | null>(),
+      calls: new Map<string, string | null>(),
       produced: [],
     }
   },
   update: (context, match) => {
     if (match.event.type === 'tool/call') {
       const calls = new Map(context.state.calls)
-      calls.set(
-        String(match.event.data.callId),
-        match.view !== undefined && match.view.for === 'call' ? match.view.view : null,
-      )
+      calls.set(String(match.event.data.callId), mutationPath(match.event.data.name, match.event.data.arguments))
       return { ...context.state, calls }
     }
     if (match.event.type !== 'tool/result') return context.state
     if (match.event.data.message.content[0]?.isError === true) return context.state
     const callId = String(match.event.data.message.source.callId)
-    const additions = producedPaths(context.state.calls.get(callId) ?? null).map((path) => ({
-      seq: match.event.seq,
-      path,
-    }))
-    return additions.length === 0
+    const path = context.state.calls.get(callId)
+    return path === null || path === undefined
       ? context.state
-      : { ...context.state, produced: [...context.state.produced, ...additions] }
+      : { ...context.state, produced: [...context.state.produced, { seq: match.event.seq, path }] }
   },
   buildLocationData: (context, scope) =>
     scope !== 'turn' || context.state === undefined

@@ -113,10 +113,6 @@ let registration = null
 const required = new Map([
   ['react', { useState: () => [undefined, () => {}], useEffect: () => {} }],
   ['react/jsx-runtime', { jsx: () => null, jsxs: () => null, Fragment: Symbol('Fragment') }],
-  ['@deepseek-ai/dsh-client-runtime/client', {
-    isAppendSurfaceEvent: () => true,
-    resolveWorkspacePath: (_cwd, path) => path,
-  }],
 ])
 const sandbox = {
   window: { __ModuleLoader__: { load(reg) { registration = reg } } },
@@ -153,9 +149,11 @@ const provided = new Map()
 const registeredLocales = new Map()
 const boundLocale = () => (key, params) => `${key}:${params ? params.name ?? '' : ''}`
 const clientCtx = {
-  conversationEvents: {
-    register(def) {
-      definition = def
+  uiConversation: {
+    events: {
+      register(def) {
+        definition = def
+      },
     },
   },
   effect(fn) {
@@ -202,27 +200,26 @@ const startMatch = { ...definition.match(startEvent), event: startEvent, view: u
 const state = definition.start({}, startMatch, {})
 assert(typeof state.turn === 'number' && state.turn === 7, 'definition.start seeds the turn state')
 
-const callEvent = { type: 'tool/call', data: { turn: 7, callId: 'c1', name: 'edit', arguments: '{}' } }
+const callEvent = { type: 'tool/call', data: { turn: 7, callId: 'c1', name: 'write', arguments: JSON.stringify({ file_path: 'a.ts', content: 'x' }) } }
 const callMatch = {
   event: callEvent,
-  view: { for: 'call', view: { card: 'generic', kind: 'edit', locations: [{ path: 'a.ts' }, { path: 'b.ts' }] } },
   role: 'update',
   location: { kind: 'turn' },
 }
 const afterCall = definition.update({ state }, callMatch)
-assert(afterCall.calls.get('c1').card === 'generic', 'definition.update records the call view')
+assert(afterCall.calls.get('c1') === 'a.ts', 'definition.update parses the mutation path from the call arguments')
 
 const resultEvent = {
   type: 'tool/result',
   seq: 12,
   data: { turn: 7, message: { content: [{ type: 'tool-result', isError: false }], source: { callId: 'c1' } } },
 }
-const resultMatch = { event: resultEvent, view: undefined, role: 'update', location: { kind: 'turn' } }
+const resultMatch = { event: resultEvent, role: 'update', location: { kind: 'turn' } }
 const afterResult = definition.update({ state: afterCall }, resultMatch)
-assert(afterResult.produced.length === 2 && afterResult.produced[0].path === 'a.ts', 'definition.update accumulates produced paths from the call view')
+assert(afterResult.produced.length === 1 && afterResult.produced[0].path === 'a.ts', 'definition.update accumulates produced paths from successful mutations')
 
 const locationData = definition.buildLocationData({ state: afterResult }, 'turn')
-assert(locationData !== null && locationData.key === 'change-summary' && locationData.value.produced.length === 2, 'buildLocationData publishes the turn data under key change-summary')
+assert(locationData !== null && locationData.key === 'change-summary' && locationData.value.produced.length === 1, 'buildLocationData publishes the turn data under key change-summary')
 
 // 4) the turn-tail selector + prose mentions
 const slotSpec = registeredSlots.get('conversation.chat.turnTail')()
@@ -233,7 +230,7 @@ const owner = {
   openFile: (path) => `open:${path}`,
 }
 const matched = slotSpec.select(owner)
-assert(Array.isArray(matched) && matched.includes('a.ts') && matched.includes('b.ts'), 'select returns the produced paths')
+assert(Array.isArray(matched) && matched.includes('a.ts'), 'select returns the produced paths')
 
 const mentions = provided.get('chatFileMentions').forClosing(owner)
 assert(typeof mentions.resolve === 'function', 'chatFileMentions.forClosing returns a resolver')
