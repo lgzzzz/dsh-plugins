@@ -1,0 +1,25 @@
+{
+  "name": "dsh-code-card-fonts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web UI patch: force 14px font size on all code blocks and on tool/thinking/other conversation cards.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -12,6 +12,7 @@
 !/dsh-text-editor/
 !/dsh-change-summary/
 !/dsh-directory-picker-browse/
+!/dsh-code-card-fonts/
 /dsh-change-summary/node_modules/
 /dsh-change-summary/lib/
 !AGENTS.md
