@@ -11,14 +11,7 @@
 !/dsh-kbd-nav-focus/
 !/dsh-text-editor/
 !/dsh-change-summary/
+!/dsh-directory-picker-browse/
 /dsh-change-summary/node_modules/
 /dsh-change-summary/lib/
 !AGENTS.md
-!doc
-
-# 只纳管 profiles/web/cordis.patch.yml（git 需逐层放行父目录，再逐层忽略其它内容）
-!/profiles/                          # 放行 profiles 目录本身（否则无法进入）
-/profiles/*                          # 重新忽略 profiles 下的其它内容（node_modules 等）
-!/profiles/web/                      # 放行 web 目录本身
-/profiles/web/*                      # 重新忽略 web 下的其它内容（package.json 等）
-!/profiles/web/cordis.patch.yml      # 最后放行这一个文件

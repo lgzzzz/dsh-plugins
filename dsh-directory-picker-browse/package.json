@@ -1,0 +1,12 @@
+{
+  "name": "dsh-directory-picker-browse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent bundle patch: pin the in-app directory picker to browse mode (host `@deepseek-ai/dsh-host-directory-picker-browse` + client `@deepseek-ai/dsh-client-ui-directory-picker-browse`) and disable the ui-deliverables row.",
+  "type": "module",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

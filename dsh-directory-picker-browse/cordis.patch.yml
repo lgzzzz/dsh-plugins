@@ -1,0 +1,19 @@
+# dsh-directory-picker-browse 的 web bundle 补丁。
+# 通过 dsh.profile.bundles 自动挂载到 web profile，等价于原先写在
+# profiles/web/cordis.patch.yml 里的覆盖层：
+# - 关闭默认的 auto 目录选择器（directory-picker）与产物行（ui-deliverables）；
+# - 挂载 browse 交互：宿主半部 host-directory-picker-browse + 浏览器半部
+#   client-ui-directory-picker-browse（两个包均为随部署内置的 in-box 包，
+#   由安装锚点解析，无需在 profile 里再声明依赖）。
+- id: directory-picker
+  disabled: true
+
+- id: ui-deliverables
+  disabled: true
+
+- insert:
+    - id: directory-picker-browse
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
+
+    - id: directory-picker-browse-ui
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
