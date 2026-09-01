@@ -1,18 +1,14 @@
-# 默认忽略所有文件和目录
-/*
+# 系统 / 编辑器文件
+.DS_Store
+.idea/
 
-# 但保留 .gitignore 自身
-!/.gitignore
+# 包管理器缓存
+.pnpm-store/
+node_modules/
 
-# 只允许这些目录纳入 git 管理
-!/dsh-fullwidth-chat/
-!/dsh-git-guard/
-!/dsh-new-session/
-!/dsh-kbd-nav-focus/
-!/dsh-text-editor/
-!/dsh-change-summary/
-!/dsh-directory-picker-browse/
-!/dsh-code-card-fonts/
-/dsh-change-summary/node_modules/
-/dsh-change-summary/lib/
-!AGENTS.md
+# TypeScript 增量编译缓存
+*.tsbuildinfo
+
+# 构建产物
+# dsh-change-summary 的 lib/ 为构建产物，不入仓（其余插件的 lib/*.js 已入仓以便离线加载）
+dsh-change-summary/lib/
