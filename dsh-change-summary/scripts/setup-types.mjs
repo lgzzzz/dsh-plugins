@@ -6,7 +6,8 @@
  * `@deepseek-ai/dsh` install's `node_modules`. We locate that install WITHOUT
  * spawning `npm` (so it works under sandboxes that forbid capturing another
  * program's piped stdio): npm sets `npm_config_prefix` during install
- * lifecycle scripts, and we add well-known per-platform fallback roots.
+ * lifecycle scripts, and we add runtime-derived fallback roots (APPDATA,
+ * the running node binary's install prefix, HOME) — no hard-coded paths.
  *
  * On Windows we use directory junctions (no elevation required); elsewhere
  * symlinks. Idempotent: an existing link is left in place.
@@ -14,7 +15,7 @@
  * Called by the `postinstall` lifecycle so the links survive `npm install`.
  */
 import { symlinkSync, existsSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const SELF = fileURLToPath(new URL('..', import.meta.url))
@@ -28,7 +29,8 @@ const CLIENT_PACKAGES = [
 /**
  * Resolve the bundled `@deepseek-ai` scope shipped inside the global
  * `@deepseek-ai/dsh` install. Tries `npm_config_prefix` (set by npm during
- * install lifecycle scripts) first, then per-platform well-known roots.
+ * install lifecycle scripts) first, then runtime-derived roots (APPDATA,
+ * the running node binary's install prefix, HOME).
  * @returns {string | null} absolute path to the bundled scope, or null.
  */
 function resolveHarnessScope() {
@@ -45,9 +47,10 @@ function resolveHarnessScope() {
   const appdata = process.env.APPDATA || ''
   const home = process.env.HOME || process.env.USERPROFILE || ''
   if (appdata) candidates.push(join(appdata, 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai'))
-  candidates.push('/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai')
-  candidates.push('/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai')
-  candidates.push('/usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai')
+  // Unix 全局安装位于 <node 前缀>/lib/node_modules。从正在运行的 node 二进制
+  // 推导前缀，而非硬编码 /opt/homebrew、/usr/local 等根：brew、/usr/bin、
+  // /usr/local 与 nvm 布局（~/.nvm/versions/node/<v>/lib/node_modules）统一覆盖。
+  candidates.push(join(dirname(process.execPath), '..', 'lib', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai'))
   if (home) candidates.push(join(home, '.npm-global', 'lib', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai'))
   for (const candidate of candidates) {
     if (candidate && existsSync(candidate)) return candidate
