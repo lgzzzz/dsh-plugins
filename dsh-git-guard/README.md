@@ -11,6 +11,22 @@
 决定类型遵循 dsh-tools 的 `PreToolDecision`：`{kind:'allow'}` /
 `{kind:'deny', reason}` / `{kind:'ask', reason?}`。
 
+## 与模型的沟通
+
+插件通过两条路径把「推送必须由用户手动执行」的约束传达给大模型：
+
+1. **系统提示词注入（常驻、主动）**：启动时经 `ctx.systemPrompt.section()` 在
+   `TEAM_POLICY` 槽位注册 `git-guard:push-policy` 区段，每次组装系统提示词都会
+   带上。内容明确：禁止任何形式的 `git push`（含 `--force`、`git -C`、环境变量、
+   `sh -c` 包装等间接形式）；被拦截后不得重试或绕过（命令替换／别名／脚本包装等）；
+   推送由用户手动执行（GUI 或终端）。这样模型在发起推送之前就能看到该约束。
+2. **拦截回传（即时、被动）**：一旦仍检测到 `git push`，deny 的 `reason` 会作为
+   工具错误结果（`Error: <reason>`）原样回传给模型，再次给予同等指示。`commit`
+   的 ask 提示不受影响。
+
+若宿主未提供 `systemPrompt` 服务（极简组合），`ctx.inject` 不回调、无区段注入，
+但拦截逻辑不受影响。
+
 ## 实现说明
 
 - 纯 TypeScript 源码（`index.ts`），由 App 内置的 Node 22 Type Stripping
@@ -22,7 +38,9 @@
   （cordis 由宿主提供，`import type` 在 Type Stripping 下被擦除）。
 - `tools/pre-execute` 事件签名在 `index.ts` 内对 `@deepseek-ai/cordis`
   的 `Events` 做本地声明合并（DSH 插件惯用写法），因此无需依赖
-  dsh-tools 包即可通过类型检查。
+  dsh-tools 包即可通过类型检查；`ctx.systemPrompt` 同样以本地结构切片
+  （`SystemPromptService` + `Context` 声明合并）接入，不依赖
+  `@deepseek-ai/dsh-system-prompt` 包。
 - 命令按 `&&`、`||`、`;`、管道与换行切段逐段审查，因此
   `git add . && git commit` 等组合命令也会被拦截。
 - 识别时跳过前导环境变量赋值（含带引号的值，如
