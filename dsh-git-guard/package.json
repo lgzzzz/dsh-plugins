@@ -1,7 +1,7 @@
 {
   "name": "dsh-git-guard",
-  "version": "2.0.0",
-  "description": "Intercept git push (deny) and git commit (ask for user approval) issued via the bash tool, on the tools/pre-execute waterfall",
+  "version": "2.1.0",
+  "description": "Intercept git push (deny) and git commit (ask for user approval) issued via the bash tool, on the tools/pre-execute waterfall; injects a system-prompt section telling the model that pushes are performed by the user only",
   "type": "module",
   "main": "index.ts",
   "dsh": {
