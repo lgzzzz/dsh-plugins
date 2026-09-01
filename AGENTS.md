@@ -24,8 +24,11 @@
 Profile 的 `link:` 依赖挂载至运行中的应用。当前已挂载 7 个插件；`dsh-change-summary`
 代码与补丁均已完成但尚未挂载（见「挂载与激活」）。
 
-- 版本控制采用目录白名单：`.gitignore` 默认忽略全部内容，通过 `!/<package-name>/`
-  逐项放行。新增插件目录须先在 `.gitignore` 添加放行项，否则不受版本控制。
+- 版本控制采用黑名单：`.gitignore` 默认放行全部内容，仅忽略系统/编辑器文件
+  （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`node_modules/`）、
+  TypeScript 增量缓存（`*.tsbuildinfo`）与特定构建产物（`dsh-change-summary/lib/`）。
+  新增插件目录默认即受版本控制，无需额外配置；若其 `lib/` 为不入仓的构建产物，
+  需在 `.gitignore` 单独追加忽略项。
 - 优先查阅各插件的 `README.md` 获取加载与构建信息，本文档仅描述共性约定。
 
 ## 插件清单
@@ -100,7 +103,7 @@ JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-code-card-fonts`、`dsh-new-sess
 
 `~/.dsh/profiles/web/package.json` 当前配置：
 
-- `dependencies` 以 `link:/Users/lz/dsh-plugins/<name>` 指向仓库内各插件（当前 7 个：
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 7 个：
   code-card-fonts / directory-picker-browse / fullwidth-chat / git-guard /
   kbd-nav-focus / new-session / text-editor）；
 - `dsh.profile.bundles` 共 9 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
@@ -129,17 +132,15 @@ sessions]`）均已完成，但当前不在 Profile 的 `dependencies` / `bundle
 
 ## 变更生效机制
 
-1. 插件代码变更后需重启 App 生效：`bash ~/stop-dsh-web.sh && bash ~/start-dsh-web.sh`。
-   若代理自身运行于 dsh web 进程内，重启将终止当前会话，应使用分离延迟重启包装脚本
-   （`python3 -c "import os; os.setsid(); ..."`；macOS 无 `setsid` 命令）：先交付
-   说明，再触发重启。
+1. 插件代码变更后需重启 App 生效。若代理自身运行于 dsh web 进程内，重启将
+   终止当前会话，应先交付说明，再由用户触发重启（或使用脱离当前会话的
+   延迟重启方式）。
 2. 例外情形：`dsh-text-editor` 的浏览器 bundle 由 `/plugins/dsh-text-editor/client.js`
    路由实时读取磁盘——仅修改其 `src/` 并执行 `npm run build` 后，强制刷新页面
    （Cmd/Ctrl+Shift+R）即生效；其宿主部分（`index.ts` / `host/*.ts`）变更仍需重启。
-3. 状态验证：
+3. 状态验证（确认服务在监听、插件路由可访问）：
 
 ```bash
-cat ~/.dsh-web.pid
 curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
   http://127.0.0.1:3080/plugins/<name>/client.js
 ```
@@ -171,14 +172,16 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 
 ## 上游源码定位
 
-- DSH 实现 checkout：`/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/`
+- DSH 实现 checkout：位于全局 npm 安装目录下的 `@deepseek-ai/dsh`
+  （可用 `npm root -g` 或 `npm ls -g @deepseek-ai/dsh` 定位）。
 - 内置 UI / 服务包：`<dsh>/node_modules/@deepseek-ai/dsh-client-ui-*` 等——通过其
   `lib/client.js` 核实 DOM 结构与服务接口。编写选择器或接口前须以源码为准，不得凭
   经验臆断。
 
 ## 注意事项与常见问题
 
-1. 新增插件未在 `.gitignore` 添加白名单项 → 不受版本控制。
+1. 本仓库采用黑名单式 `.gitignore`，插件目录默认受版本控制；仅当某插件
+   `lib/` 为不入仓的构建产物时，才需在 `.gitignore` 单独追加忽略项。
 2. 插件变更未生效时应首先排查：浏览器半部是否已重新构建；宿主半部是否已重启。
 3. 浏览器半部未声明所需依赖（如 `slots`）即 apply → `ctx.get(...)` 返回 `undefined`，
    导致 Web 启动失败 / HARNESS 面板报 failed to apply loader entry；判空须使用
