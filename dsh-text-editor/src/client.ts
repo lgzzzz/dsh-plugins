@@ -26,8 +26,10 @@ import type { SessionsFace, SlotsFace } from './controller.ts'
  * 依赖声明：插件在 `slots` 服务可用后才 apply（否则 apply 时
  * `ctx.get('slots')` 返回 undefined，后续 `.inject(...)` 会抛错，导致
  * web 端启动失败）。与 ui-trajectory 等客户端插件保持一致。
+ * `sessions` 一并注入：apply 时该服务必已就绪，bind() 才能订阅当前
+ * 活动会话——标签的会话作用域依赖它，缺失时会静默失去会话跟踪。
  */
-export const inject = ['slots']
+export const inject = ['slots', 'sessions']
 
 export const name = 'dsh-text-editor'
 

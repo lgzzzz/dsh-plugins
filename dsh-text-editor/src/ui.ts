@@ -233,7 +233,7 @@ function MonacoHost({
 }
 
 // ── 差异视图 ────────────────────────────────────────────────────────────────
-/** 「差异」tab 视图：顶部 上一个/下一个 + 进度，正文 Monaco 双栏 diff。 */
+/** 「差异」tab 视图：顶部 上一处/下一处修改 + 文件名 + 上一个/下一个 + 进度，正文 Monaco 双栏 diff。 */
 export function DiffView(): React.ReactElement | null {
   const state = React.useSyncExternalStore(subscribe, getDiffState)
   if (state === null || state.files.length === 0) {
@@ -252,6 +252,20 @@ export function DiffView(): React.ReactElement | null {
       React.createElement('button', {
         type: 'button',
         className: 'dsh-te-diff-nav',
+        title: '上一处修改（第一处时跳到上一个文件的最后一处）',
+        onClick: () => { requestDiffHunkPrev() },
+      }, '上一处修改'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dsh-te-diff-nav',
+        title: '下一处修改（最后一处时跳到下一个文件的第一处）',
+        onClick: () => { requestDiffHunkNext() },
+      }, '下一处修改'),
+      React.createElement('span', { className: 'dsh-te-diff-divider' }),
+      React.createElement('span', { className: 'dsh-te-path', title: label }, label),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dsh-te-diff-nav',
         title: '上一个文件',
         disabled: !hasPrev,
         onClick: () => { requestDiffPrev() },
@@ -264,20 +278,6 @@ export function DiffView(): React.ReactElement | null {
         onClick: () => { requestDiffNext() },
       }, '下一个'),
       React.createElement('span', { className: 'dsh-te-diff-counter' }, `${index + 1} / ${state.files.length}`),
-      React.createElement('span', { className: 'dsh-te-diff-divider' }),
-      React.createElement('button', {
-        type: 'button',
-        className: 'dsh-te-diff-nav',
-        title: '上一处修改（第一处时跳到上一个文件的最后一处）',
-        onClick: () => { requestDiffHunkPrev() },
-      }, '上一处修改'),
-      React.createElement('button', {
-        type: 'button',
-        className: 'dsh-te-diff-nav',
-        title: '下一处修改（最后一处时跳到下一个文件的第一处）',
-        onClick: () => { requestDiffHunkNext() },
-      }, '下一处修改'),
-      React.createElement('span', { className: 'dsh-te-path', title: label }, label),
     ),
     React.createElement('div', { className: 'dsh-te-body' },
       file.before === '' && file.after === ''

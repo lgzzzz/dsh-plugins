@@ -15,8 +15,8 @@
 3. 在出现的**审批弹窗里批准**（approve）。
 4. 插件运行后：左侧/上方出现两个 tab —— 一个是已打开
    `C:/Users/LGZ/.dsh/dsh-text-editor/package.json` 的「文件」tab，另一个是激活中的
-   「差异 · 2」tab，展示两个示例文件的 Monaco 双栏 diff；顶部「上一个 / 下一个」
-   按钮手动切换。
+   「差异 · 2」tab，展示两个示例文件的 Monaco 双栏 diff；顶部左侧「上一处修改 / 下一处修改」、
+   文件名右侧「上一个 / 下一个」按钮手动切换。
 5. 验证完毕可让 agent 执行 `cordis_stop`（停止）与 `cordis_undefine`（移除），
    或在 HARNESS/Cordis 面板里点 stop / remove。
 

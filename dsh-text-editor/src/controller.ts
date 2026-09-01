@@ -54,9 +54,9 @@ export interface SlotsFace {
   register(options: Record<string, unknown>, component: unknown): () => void
 }
 
-/** sessions 服务的最小面（只用到 currentProvideInfo 观察当前活动会话）。 */
+/** sessions 服务的最小面（只用到 list 快照 store 观察当前活动会话）。 */
 export interface SessionsFace {
-  currentProvideInfo?: {
+  list?: {
     getSnapshot(): unknown
     subscribe(fn: () => void): () => void
   }
@@ -101,13 +101,15 @@ export function bind(slots: SlotsFace, sessions: SessionsFace | undefined): () =
   window.addEventListener('keydown', onKeyDown, true)
 
   // 观察当前活动会话：切会话时 activeSessionId 变化 → store emit → reconcile 重建标签。
+  // sessions.list 是当前版本 sessions 服务的快照 store：getSnapshot().current 即当前
+  // 会话 id（旧版的 currentProvideInfo 观察面已随 dsh 升级移除，勿再引用）。
   let unsubSessions: (() => void) | undefined
-  if (sessions !== undefined && sessions.currentProvideInfo !== undefined) {
+  if (sessions !== undefined && sessions.list !== undefined) {
     const syncActiveSession = (): void => {
-      const snap = sessions!.currentProvideInfo!.getSnapshot() as { sessionId?: string } | null | undefined
-      setActiveSessionId(snap === null || snap === undefined ? undefined : snap.sessionId)
+      const snap = sessions!.list!.getSnapshot() as { current?: string } | null | undefined
+      setActiveSessionId(snap === null || snap === undefined ? undefined : snap.current)
     }
-    unsubSessions = sessions.currentProvideInfo.subscribe(syncActiveSession)
+    unsubSessions = sessions.list.subscribe(syncActiveSession)
     syncActiveSession()
   }
 

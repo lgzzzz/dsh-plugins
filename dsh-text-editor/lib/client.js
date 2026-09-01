@@ -647,6 +647,24 @@ function DiffView() {
       React.createElement("button", {
         type: "button",
         className: "dsh-te-diff-nav",
+        title: "\u4E0A\u4E00\u5904\u4FEE\u6539\uFF08\u7B2C\u4E00\u5904\u65F6\u8DF3\u5230\u4E0A\u4E00\u4E2A\u6587\u4EF6\u7684\u6700\u540E\u4E00\u5904\uFF09",
+        onClick: () => {
+          requestDiffHunkPrev();
+        }
+      }, "\u4E0A\u4E00\u5904\u4FEE\u6539"),
+      React.createElement("button", {
+        type: "button",
+        className: "dsh-te-diff-nav",
+        title: "\u4E0B\u4E00\u5904\u4FEE\u6539\uFF08\u6700\u540E\u4E00\u5904\u65F6\u8DF3\u5230\u4E0B\u4E00\u4E2A\u6587\u4EF6\u7684\u7B2C\u4E00\u5904\uFF09",
+        onClick: () => {
+          requestDiffHunkNext();
+        }
+      }, "\u4E0B\u4E00\u5904\u4FEE\u6539"),
+      React.createElement("span", { className: "dsh-te-diff-divider" }),
+      React.createElement("span", { className: "dsh-te-path", title: label }, label),
+      React.createElement("button", {
+        type: "button",
+        className: "dsh-te-diff-nav",
         title: "\u4E0A\u4E00\u4E2A\u6587\u4EF6",
         disabled: !hasPrev,
         onClick: () => {
@@ -662,25 +680,7 @@ function DiffView() {
           requestDiffNext();
         }
       }, "\u4E0B\u4E00\u4E2A"),
-      React.createElement("span", { className: "dsh-te-diff-counter" }, `${index + 1} / ${state.files.length}`),
-      React.createElement("span", { className: "dsh-te-diff-divider" }),
-      React.createElement("button", {
-        type: "button",
-        className: "dsh-te-diff-nav",
-        title: "\u4E0A\u4E00\u5904\u4FEE\u6539\uFF08\u7B2C\u4E00\u5904\u65F6\u8DF3\u5230\u4E0A\u4E00\u4E2A\u6587\u4EF6\u7684\u6700\u540E\u4E00\u5904\uFF09",
-        onClick: () => {
-          requestDiffHunkPrev();
-        }
-      }, "\u4E0A\u4E00\u5904\u4FEE\u6539"),
-      React.createElement("button", {
-        type: "button",
-        className: "dsh-te-diff-nav",
-        title: "\u4E0B\u4E00\u5904\u4FEE\u6539\uFF08\u6700\u540E\u4E00\u5904\u65F6\u8DF3\u5230\u4E0B\u4E00\u4E2A\u6587\u4EF6\u7684\u7B2C\u4E00\u5904\uFF09",
-        onClick: () => {
-          requestDiffHunkNext();
-        }
-      }, "\u4E0B\u4E00\u5904\u4FEE\u6539"),
-      React.createElement("span", { className: "dsh-te-path", title: label }, label)
+      React.createElement("span", { className: "dsh-te-diff-counter" }, `${index + 1} / ${state.files.length}`)
     ),
     React.createElement(
       "div",
@@ -809,12 +809,12 @@ function bind(slots, sessions) {
   };
   window.addEventListener("keydown", onKeyDown, true);
   let unsubSessions;
-  if (sessions !== void 0 && sessions.currentProvideInfo !== void 0) {
+  if (sessions !== void 0 && sessions.list !== void 0) {
     const syncActiveSession = () => {
-      const snap = sessions.currentProvideInfo.getSnapshot();
-      setActiveSessionId(snap === null || snap === void 0 ? void 0 : snap.sessionId);
+      const snap = sessions.list.getSnapshot();
+      setActiveSessionId(snap === null || snap === void 0 ? void 0 : snap.current);
     };
-    unsubSessions = sessions.currentProvideInfo.subscribe(syncActiveSession);
+    unsubSessions = sessions.list.subscribe(syncActiveSession);
     syncActiveSession();
   }
   const unsubStore = subscribe(() => {
@@ -1110,7 +1110,7 @@ function activateDiffTab() {
 }
 
 // src/client.ts
-var inject = ["slots"];
+var inject = ["slots", "sessions"];
 var name = "dsh-text-editor";
 function apply(ctx) {
   const slots = ctx.get("slots");
