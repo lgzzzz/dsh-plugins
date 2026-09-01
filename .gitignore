@@ -4,6 +4,7 @@
 
 # 包管理器缓存
 .pnpm-store/
+.npm-cache/
 node_modules/
 
 # TypeScript 增量编译缓存
