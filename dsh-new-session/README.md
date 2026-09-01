@@ -23,29 +23,28 @@ dsh-new-session/
 
 ## 加载方式（由用户自行进行）
 
-### 依赖与 bundle 挂载
+本插件以本地 npm 包形式经 Web Profile 的 `link:` 依赖挂载（详见工作区
+`AGENTS.md`「挂载与激活」）。从插件目录执行：
 
-把本包加入 Web profile 的依赖并列入 `dsh.profile.bundles`（同 `dsh-fullwidth-chat` /
-`dsh-kbd-nav-focus` 的现有机制）。在 `~/.dsh/profiles/web/package.json` 中：
-
-```jsonc
-{
-  "dependencies": {
-    "dsh-new-session": "link:/Users/lz/dsh-plugins/dsh-new-session"
-    // ... 其余依赖
-  },
-  "dsh": {
-    "profile": {
-      "bundles": [
-        // ... 其余 bundle
-        "dsh-new-session"
-      ]
-    }
-  }
-}
+```sh
+dsh plugin --profile web add link:.
+# 重启 App 生效
 ```
 
-然后在 `~/.dsh/profiles/web` 下执行 `pnpm install` 建立软链，并重启 App 生效。
+`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会自动核对
+`dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
+无需手动改 `~/.dsh/profiles/web/package.json`。
+
+卸载：
+
+```sh
+dsh plugin --profile web remove dsh-new-session
+```
+
+> 加载属于用户操作：代理交付插件后不得自行执行 `dsh plugin add`、
+> `pnpm install` 或重启 App（强制规范第 1 条）。
+
+挂载后：
 
 - Host 半部（`lib/index.js`）经 bundle 行解析 `exports["."]` 注册 `/new` 命令。
 - 浏览器半部（`lib/client.js`）由包内 `dsh.client.platform: "web"` + `immediately: true`

@@ -57,14 +57,28 @@
 
 ## 加载配置
 
-各 agent preset（`.agent-presets/*/agent.cordis.yml`）中的条目：
+本插件以本地 npm 包形式经 Web Profile 的 `link:` 依赖挂载（详见工作区
+`AGENTS.md`「挂载与激活」）。从插件目录执行：
 
-```yaml
-- id: git-guard
-  name: /Users/lz/.dsh/dsh-git-guard/index.ts
+```sh
+dsh plugin --profile web add link:.
+# 重启 App 生效
 ```
 
-修改 `index.ts` 后需重启 App 生效（preset 组成为常驻挂载，不做热重载）。
+`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会自动核对
+`dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
+无需手动改 `~/.dsh/profiles/web/package.json`。
+
+卸载：
+
+```sh
+dsh plugin --profile web remove dsh-git-guard
+```
+
+> 加载属于用户操作：代理交付插件后不得自行执行 `dsh plugin add`、
+> `pnpm install` 或重启 App（强制规范第 1 条）。
+
+修改 `index.ts` 后需重启 App 生效（bundle 层为常驻挂载，不做热重载）。
 
 ## 本地验证
 

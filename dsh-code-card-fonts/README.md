@@ -19,10 +19,31 @@
 
 ## 加载说明
 
-按工作区 AGENTS.md 的本地 npm 包约定:
+本插件以本地 npm 包形式经 Web Profile 的 `link:` 依赖挂载（详见工作区
+`AGENTS.md`「挂载与激活」）。从插件目录执行：
+
+```sh
+dsh plugin --profile web add link:.
+# 重启 App 生效
+```
+
+`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会自动核对
+`dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
+无需手动改 `~/.dsh/profiles/web/package.json`。
+
+卸载：
+
+```sh
+dsh plugin --profile web remove dsh-code-card-fonts
+```
+
+> 加载属于用户操作：代理交付插件后不得自行执行 `dsh plugin add`、
+> `pnpm install` 或重启 App（强制规范第 1 条）。
+
+挂载后：
 
 1. 包结构:`package.json`(`dsh.client.platform=web` + `dsh.bundle.patch`)、`lib/index.js`(空 Host 半部)、`lib/client.js`(浏览器半部,`window.__ModuleLoader__.load(...)` 注入 `<style>`)、`cordis.patch.yml`(挂载行)。
-2. Web profile 挂载(已配置):在 `~/.dsh/profiles/web/package.json` 的 `dependencies` 与 `dsh.profile.bundles` 中登记,`node_modules` 用 `link:` 指向本目录。
+2. 浏览器半部由 `dsh.client.platform: "web"` + `immediately: true` 注册进浏览器 roster，随 Web 一起加载。
 3. 改动后需**重启 App** 生效(组成为常驻挂载,不做热重载)。
 
 ## 调整字号
