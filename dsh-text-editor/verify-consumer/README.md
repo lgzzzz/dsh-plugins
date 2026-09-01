@@ -27,8 +27,13 @@
 ## 如果动态流程不可用（备选）
 
 把本目录升级为一个正式插件挂到 web profile（需要重启一次 `dsh web`）：
-在 `C:/Users/LGZ/.dsh/profiles/web/package.json` 的 dependencies 与
-`dsh.profile.bundles` 里登记本插件路径，`pnpm install` 后重启。验证完再移除。
+
+```sh
+dsh plugin --profile web add link:<仓库根>/dsh-text-editor/verify-consumer
+```
+
+`dsh plugin` 会自动登记 `dependencies` 与 `dsh.profile.bundles`，重启后生效。
+验证完用 `dsh plugin --profile web remove <name>` 移除。
 
 ## 参考：dsh-text-editor 对外服务契约
 

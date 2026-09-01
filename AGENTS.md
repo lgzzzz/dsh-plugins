@@ -111,24 +111,31 @@ JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-code-card-fonts`、`dsh-new-sess
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
   （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
 
-挂载新插件或启用未挂载插件：
+挂载新插件或启用未挂载插件（`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会
+自动核对 `dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
+无需手动改 `package.json`）：
 
 ```sh
-# 在 ~/.dsh/profiles/web/package.json 添加 dependencies 的 link: 行，并将包名加入 bundles
-cd ~/.dsh/profiles/web && pnpm install
+# 方式一：从仓库内插件目录执行（相对 link: 由 pnpm 锚定到当前目录）
+cd <仓库根>/<name> && dsh plugin --profile web add link:.
+# 方式二：从任意目录用绝对路径
+dsh plugin --profile web add link:<仓库根>/<name>
 # 重启 App 生效
 ```
 
-> 上述步骤属于用户操作：依据强制规范第 1 条，代理交付插件后不得自行执行加载步骤
-> （修改 Profile、`pnpm install`、重启 App）；应将步骤写入插件 README 并告知用户。
+卸载：
 
-替代机制（仅宿主插件）：在 Agent Preset 的 `agent.cordis.yml` 中新增一行，`name`
-以绝对路径指向 `index.ts`（`dsh-git-guard` 的 README 记载；其现行挂载已改用 Web
-Profile bundle）。
+```sh
+dsh plugin --profile web remove <name>
+```
+
+> 上述步骤属于用户操作：依据强制规范第 1 条，代理交付插件后不得自行执行加载步骤
+> （`dsh plugin add`、`pnpm install`、重启 App）；应将步骤写入插件 README 并告知用户。
 
 说明：`dsh-change-summary` 的代码与 `cordis.patch.yml`（`inject: [webServer,
 sessions]`）均已完成，但当前不在 Profile 的 `dependencies` / `bundles` 中。启用时按
-上述流程加入。
+上述流程加入；其 `lib/` 不入仓，须先在插件目录内 `npm install && npm run build`
+生成 `lib/index.js` 与 `lib/client.js`，再执行 `dsh plugin --profile web add`。
 
 ## 变更生效机制
 

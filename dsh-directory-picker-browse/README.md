@@ -19,16 +19,26 @@
 
 ## 安装
 
+本插件以本地 npm 包形式经 Web Profile 的 `link:` 依赖挂载（详见工作区
+`AGENTS.md`「挂载与激活」）。
+
 ```sh
-dsh plugin --profile web add link:/Users/lz/dsh-plugins/dsh-directory-picker-browse
+dsh plugin --profile web add link:<仓库根>/dsh-directory-picker-browse
 ```
 
 （或从插件目录内执行 `dsh plugin --profile web add link:.`，pnpm 会把相对路径
 锚定到当前目录。）
 
+`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会自动核对
+`dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
+无需手动改 `~/.dsh/profiles/web/package.json`。
+
 安装完成后重启 App 生效。可在 profile 的
 `$HOME/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里看到新增的
 `dsh-directory-picker-browse`。
+
+> 加载属于用户操作：代理交付插件后不得自行执行 `dsh plugin add`、
+> `pnpm install` 或重启 App（强制规范第 1 条）。
 
 ## 卸载
 

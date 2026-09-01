@@ -82,6 +82,31 @@ npm run typecheck  # both tsc programs, --noEmit
 npm run verify     # offline smoke test of both halves
 ```
 
+## Loading
+
+This plugin is mounted via the Web Profile `link:` dependency (see the
+workspace `AGENTS.md` 「挂载与激活」). Its `lib/` is not committed, so build
+first, then add:
+
+```sh
+npm install && npm run build     # produces lib/index.js + lib/client.js
+dsh plugin --profile web add link:<repo-root>/dsh-change-summary
+# restart App to take effect
+```
+
+`dsh plugin` is a pnpm forwarder: it runs `pnpm add` and then auto-checks
+`dsh.profile.bundles` — deps declaring `dsh.bundle` are merged into the bundle
+list, no manual `~/.dsh/profiles/web/package.json` edit needed.
+
+Uninstall:
+
+```sh
+dsh plugin --profile web remove dsh-change-summary
+```
+
+> Loading is a user operation: after delivering a plugin, the agent must not run
+> `dsh plugin add`, `pnpm install`, or restart the App itself (强制规范第 1 条).
+
 ## Type resolution
 
 DSH's `@deepseek-ai/*` packages are pre-release and not installed from the
