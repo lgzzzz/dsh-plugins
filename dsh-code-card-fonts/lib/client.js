@@ -1,57 +1,25 @@
 window.__ModuleLoader__.load({ id: 'dsh-code-card-fonts', factory: (require) => {
 var module = { exports: {} }; var exports = module.exports;
 /**
- * Persistent Web UI font-size patch: 14px everywhere.
+ * Force a uniform font-size on code fences and every conversation card,
+ * overriding per-element explicit font-sizes. The size follows the Web UI
+ * "字号大小" setting via --dsh-content-font-size (not hardcoded); !important
+ * is retained only to win over inner elements' own font-size declarations
+ * (.summary/.ioText/.ioCard/...), so the *value* is delegated to the setting.
  *
- * Rendered code fences are `pre` (+ `pre code`). Conversation cards are
- * identified by stable data attributes that survive CSS-module hashing:
- *   - tool call cards: generic ToolRow root has `data-tool="<toolName>"`;
- *     the bash sample row uses `data-sample="bash"` instead;
- *   - thinking/reasoning rows: `data-variant="think"`;
- *   - other card nodes (command/compaction/retry/error/context/...):
- *     `data-chat-flow-kind="<kind>"` on the flow wrapper.
- *
- * Setting font-size on a card root alone does nothing for its text: most
- * inner elements (.summary, .ioText, .ioCard, ...) declare their own
- * font-size, which overrides the inherited value. So every card rule also
- * covers `*` (all descendants) to force the size on the actual text nodes.
+ * Selectors use stable data attributes (CSS-module-hash safe): each card
+ * rule covers root + all descendants because inner elements declare their own
+ * font-size, which would otherwise override inheritance.
  */
-var CSS = [
-  'pre,',
-  'pre code { font-size: 14px !important; }',
-  // Generic ToolRow covers read/edit/write/grep/glob/web/todo/ask cards.
-  '[data-tool],',
-  '[data-tool] *,',
-  // Bash-specific sample row.
-  '[data-sample],',
-  '[data-sample] *,',
-  // Thinking / reasoning rows.
-  '[data-variant="think"],',
-  '[data-variant="think"] *,',
-  // Other conversation card nodes.
-  '[data-chat-flow-kind="command"],',
-  '[data-chat-flow-kind="command"] *,',
-  '[data-chat-flow-kind="manual-compaction"],',
-  '[data-chat-flow-kind="manual-compaction"] *,',
-  '[data-chat-flow-kind="compaction"],',
-  '[data-chat-flow-kind="compaction"] *,',
-  '[data-chat-flow-kind="model-retry"],',
-  '[data-chat-flow-kind="model-retry"] *,',
-  '[data-chat-flow-kind="turn-error"],',
-  '[data-chat-flow-kind="turn-error"] *,',
-  '[data-chat-flow-kind="turn-max-tokens"],',
-  '[data-chat-flow-kind="turn-max-tokens"] *,',
-  '[data-chat-flow-kind="turn-process"],',
-  '[data-chat-flow-kind="turn-process"] *,',
-  '[data-chat-flow-kind="context"],',
-  '[data-chat-flow-kind="context"] *,',
-  '[data-chat-flow-kind="system-prompt"],',
-  '[data-chat-flow-kind="system-prompt"] *,',
-  '[data-chat-flow-kind="tool-call"],',
-  '[data-chat-flow-kind="tool-call"] *,',
-  '[data-chat-flow-kind="workflow-run"],',
-  '[data-chat-flow-kind="workflow-run"] * { font-size: 14px !important; }',
-].join('\n');
+var CSS = `
+pre, pre code,
+[data-tool], [data-tool] *,
+[data-sample], [data-sample] *,
+[data-variant="think"], [data-variant="think"] *,
+[data-chat-flow-kind], [data-chat-flow-kind] * {
+  font-size: var(--dsh-content-font-size, 14px) !important;
+}
+`;
 
 module.exports = {
   name: 'code-card-fonts',

@@ -1,6 +1,9 @@
 # dsh-code-card-fonts
 
-本地持久化 Web UI 补丁:强制**所有代码块**以及**所有对话卡片**(工具卡片、思考卡片、命令/压缩/重试/错误/上下文等卡片)的字号为 **14px**。
+本地持久化 Web UI 补丁:强制**所有代码块**以及**所有对话卡片**(工具卡片、思考卡片、命令/压缩/重试/错误/上下文等卡片)的字号统一,并跟随 Web UI 的「字号大小」设置项取值。
+
+- 字号**不写死**,而是引用 CSS 变量 `var(--dsh-content-font-size, 14px)`,与 Web UI「字号大小」设置项共用同一个变量。用户在设置面板调字号,代码块与卡片会同步变化。
+- 保留 `!important`:作用是压过卡片内部子元素自带的显式 `font-size`(`.summary`、`.ioText`、`.ioCard` 等),保证"全部后代统一字号"的核心效果;它压的是**级联来源**,而非取值。最终字号值由设置项决定。
 
 ## 解决的问题
 
@@ -15,7 +18,7 @@
 | 工具卡片(通用 ToolRow:read/edit/write/grep/glob/web/todo/ask) | `[data-tool]` |
 | bash 工具卡片(独立 BashRow sample) | `[data-sample]` |
 | 思考/推理卡片 | `[data-variant="think"]` |
-| 其他对话卡片 | `[data-chat-flow-kind="..."]`(command/manual-compaction/compaction/model-retry/turn-error/turn-max-tokens/turn-process/context/system-prompt/tool-call/workflow-run) |
+| 其他对话卡片 | `[data-chat-flow-kind]`(存在性选择器,覆盖 command/manual-compaction/compaction/model-retry/turn-error/turn-max-tokens/turn-process/context/system-prompt/tool-call/workflow-run 及未来新增的 kind) |
 
 ## 加载说明
 
@@ -48,4 +51,6 @@ dsh plugin --profile web remove dsh-code-card-fonts
 
 ## 调整字号
 
-编辑 `lib/client.js` 中的 `CSS` 数组,把所有 `14px` 换成目标值,重启 App 即可。
+字号已改为跟随 Web UI「字号大小」设置项,无需改代码:在设置面板调字号,代码块与卡片即同步变化(因 CSS 引用 `var(--dsh-content-font-size, 14px)`)。
+
+若要脱离设置项、写死固定字号,把 `lib/client.js` 中 `CSS` 数组里的 `var(--dsh-content-font-size, 14px)` 换成目标值(如 `14px`),重启 App 即可。
