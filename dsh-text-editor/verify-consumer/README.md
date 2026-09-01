@@ -14,13 +14,13 @@
    - `cordis_run`，参数：`pluginId` = 定义时生成的 id（通常是 `dsh-te-verify`）
 3. 在出现的**审批弹窗里批准**（approve）。
 4. 插件运行后：左侧/上方出现两个 tab —— 一个是已打开
-   `C:/Users/LGZ/.dsh/dsh-text-editor/package.json` 的「文件」tab，另一个是激活中的
+   `~/.dsh/profiles/web/package.json`（宿主端展开 `~`，任何机器都存在）的「文件」tab，另一个是激活中的
    「差异 · 2」tab，展示两个示例文件的 Monaco 双栏 diff；顶部左侧「上一处修改 / 下一处修改」、
    文件名右侧「上一个 / 下一个」按钮手动切换。
 5. 验证完毕可让 agent 执行 `cordis_stop`（停止）与 `cordis_undefine`（移除），
    或在 HARNESS/Cordis 面板里点 stop / remove。
 
-> 前置条件：先 `cd ~/.dsh/dsh-text-editor && npm run build`（本次已构建），
+> 前置条件：先 `cd <仓库根>/dsh-text-editor && npm run build`（本次已构建），
 > 并刷新页面加载新 bundle。若 `dsh-text-editor` 服务不可用，控制台会打印
 > `[dsh-te-verify] dsh-text-editor 服务不可用…`。
 

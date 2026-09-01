@@ -5,7 +5,7 @@
  * 然后 `cordis_run` 运行（需要你在审批弹窗里批准）。无需改 profile、无需重启。
  *
  * 运行后它会依次调用 dsh-text-editor 的两个能力：
- *   1. openFile  → 打开 C:/Users/LGZ/.dsh/dsh-text-editor/package.json 到「文件」tab
+ *   1. openFile  → 打开 ~/.dsh/profiles/web/package.json 到「文件」tab（宿主端展开 ~，任何机器都存在）
  *   2. showDiff  → 在「差异」tab 顺序展示两个文件的 before/after diff
  *
  * 注意：动态插件的浏览器半部是「async 函数体」，必须 `return` 一个插件
@@ -28,9 +28,11 @@ return {
         console.log('[dsh-te-verify] dsh-text-editor 服务不可用（未提供 openFile/showDiff）')
         return () => {}
       }
-      // 能力 1：打开一个真实存在的文件（可编辑、可保存）
+      // 能力 1：打开一个真实存在的文件（可编辑、可保存）。
+      // 路径用 `~/` 主目录形式：openFile 支持宿主端 ~ 展开，且 web profile
+      // 的 package.json 在任何挂载本插件的机器上都存在，无机器特有路径。
       te.openFile({
-        path: 'C:/Users/LGZ/.dsh/dsh-text-editor/package.json',
+        path: '~/.dsh/profiles/web/package.json',
         cwd: undefined,
         sessionId: undefined,
       })
