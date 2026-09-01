@@ -10,6 +10,17 @@ var module = { exports: {} }; var exports = module.exports;
  * Selectors use stable data attributes (CSS-module-hash safe): each card
  * rule covers root + all descendants because inner elements declare their own
  * font-size, which would otherwise override inheritance.
+ *
+ * Additionally sets the message-card spacing to 1/2 of the content font
+ * height: the chat column (dsh-client-ui-chat) spaces adjacent cards with
+ * `margin-top: var(--dsh-chat-flow-gap, 16px)` on each card, and nothing
+ * else defines that variable. --dsh-content-font-size is set as an inline
+ * style on <body> by the theme plugin, and a custom property resolves its
+ * inner var() at the element where it is declared — so the override must
+ * live on body (not :root) to resolve against the actual setting value.
+ * The compact answer card's own element-level rule
+ * `.flowItem[data-turn-process-answer]{--dsh-chat-flow-gap:8px}` still wins
+ * over the inherited value (declaration on the element beats inheritance).
  */
 var CSS = `
 pre, pre code,
@@ -18,6 +29,10 @@ pre, pre code,
 [data-variant="think"], [data-variant="think"] *,
 [data-chat-flow-kind], [data-chat-flow-kind] * {
   font-size: var(--dsh-content-font-size, 14px) !important;
+}
+
+body {
+  --dsh-chat-flow-gap: calc(var(--dsh-content-font-size, 14px) * 0.5);
 }
 `;
 
