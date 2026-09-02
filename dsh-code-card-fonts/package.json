@@ -1,12 +1,12 @@
 {
   "name": "dsh-code-card-fonts",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Local persistent Web UI patch: 15px conversation-card titles, 14px card content and code blocks, plus message-card spacing at half the content font height.",
+  "description": "Local persistent Web UI patch: 15px conversation-card titles, 14px card summaries/content/code, plus message-card spacing at half the content font height. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
   "type": "module",
   "exports": {
     ".": {
-      "default": "./lib/index.js"
+      "default": "./index.ts"
     },
     "./client": {
       "default": "./lib/client.js"
@@ -21,5 +21,14 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
   }
 }

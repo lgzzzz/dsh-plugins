@@ -1,0 +1,26 @@
+{
+  // 仅类型检查(npm run typecheck),不产出文件:index.ts 由 Node 22+ Type
+  // Stripping 直接加载;src/**/*.ts 由 scripts/build-client.mjs(esbuild)打包。
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["esnext", "dom", "dom.iterable"],
+
+    "noEmit": true,
+
+    // 相对 import 带显式 .ts 扩展名(Node Type Stripping 与 esbuild 均支持)
+    "allowImportingTsExtensions": true,
+
+    // 仅可擦除语法 + 显式 import type,与 Node Type Stripping 一致
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["index.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", "lib"]
+}
