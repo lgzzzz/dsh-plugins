@@ -2,7 +2,7 @@
   "name": "dsh-code-card-fonts",
   "version": "1.0.0",
   "private": true,
-  "description": "Local persistent Web UI patch: uniform setting-driven font size on code blocks and conversation cards, plus message-card spacing at half the font height.",
+  "description": "Local persistent Web UI patch: 15px conversation-card titles, 14px card content and code blocks, plus message-card spacing at half the content font height.",
   "type": "module",
   "exports": {
     ".": {
