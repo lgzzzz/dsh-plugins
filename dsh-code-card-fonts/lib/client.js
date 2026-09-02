@@ -23,16 +23,28 @@ var module = { exports: {} }; var exports = module.exports;
  * over the inherited value (declaration on the element beats inheritance).
  */
 var CSS = `
-pre, pre code,
-[data-tool], [data-tool] *,
-[data-sample], [data-sample] *,
-[data-variant="think"], [data-variant="think"] *,
 [data-chat-flow-kind], [data-chat-flow-kind] * {
-  font-size: var(--dsh-content-font-size, 14px) !important;
+  font-size: 14px !important;
+}
+
+[data-variant="think"], [data-variant="think"] * {
+  font-size: 14px !important;
+}
+
+[data-tool], [data-tool] * {
+  font-size: 14px !important;
+}
+
+[data-sample], [data-sample] * {
+  font-size: 14px !important;
+}
+
+pre, pre code {
+  font-size: 14px !important;
 }
 
 body {
-  --dsh-chat-flow-gap: calc(var(--dsh-content-font-size, 14px) * 0.5);
+  --dsh-chat-flow-gap: calc(14px * 0.5);
 }
 `;
 
