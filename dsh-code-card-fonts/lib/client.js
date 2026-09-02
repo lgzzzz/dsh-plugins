@@ -43,10 +43,6 @@ var CSS = `
   font-size: 14px !important;
 }
 
-pre, pre code {
-  font-size: 14px !important;
-}
-
 /* Inline code in Markdown is natively font-size: .875em !important
  * (class-scoped rule in the web app), which outranks the [data-*] * rules
  * above. Match its specificity (attribute + :not(pre) + code) and win by
@@ -55,6 +51,18 @@ pre, pre code {
 [data-variant="think"] :not(pre) > code,
 [data-tool] :not(pre) > code,
 [data-sample] :not(pre) > code {
+  font-size: 14px !important;
+}
+
+/* ---- System-prompt / context-injection expanded bodies: 14px ---- */
+/* Both cards keep their 15px titles (lifted by the title rules below), but
+ * their expanded body is the model-facing context text and should read at the
+ * 14px content size, not the 15px flow default. The body elements are stamped
+ * with stable data attributes by dsh-client-ui-chat (SystemPromptRow /
+ * ContextInjectionRow); ContextInjectionRow covers context injection and
+ * context recall alike. */
+[data-system-prompt-body], [data-system-prompt-body] *,
+[data-context-injection-body], [data-context-injection-body] * {
   font-size: 14px !important;
 }
 

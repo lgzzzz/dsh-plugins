@@ -29,6 +29,8 @@
 | 卡片标题(压缩标记) | `[data-chat-flow-kind="compaction"] button > span:nth-last-child(3)`、`[data-chat-flow-kind="manual-compaction"] button > span:nth-last-child(3)` |
 | 代码块 | `pre`, `pre code` |
 | 内联代码 | `[data-chat-flow-kind] :not(pre) > code`、`[data-variant="think"] :not(pre) > code`、`[data-tool] :not(pre) > code`、`[data-sample] :not(pre) > code` |
+| 系统提示词卡片展开正文 | `[data-system-prompt-body]` 及其后代 |
+| 上下文注入/召回卡片展开正文 | `[data-context-injection-body]` 及其后代 |
 | 工具卡片(通用 ToolRow:read/edit/write/grep/glob/web/todo/ask) | `[data-tool]` |
 | bash 工具卡片(独立 BashRow sample) | `[data-sample]` |
 | 思考/推理卡片 | `[data-variant="think"]` |
