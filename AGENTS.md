@@ -14,7 +14,7 @@
    （产出 `lib/client.js`）与 `typecheck` 脚本；`lib/*.js` 为构建产物，不得作为手写
    源文件。宿主半部为 TypeScript 源码 `index.ts`（由 Node 22 Type Stripping 直接加载，
    无需编译），但须提供 `typecheck` 脚本。现有纯 JavaScript 插件（`dsh-fullwidth-chat`、
-   `dsh-code-card-fonts`、`dsh-new-session`）为历史遗留，维持现状；新增或重构插件
+   `dsh-new-session`）为历史遗留，维持现状；新增或重构插件
    一律适用本条规范。
 
 ## 仓库概述
@@ -41,7 +41,7 @@ Profile 的 `link:` 依赖挂载至运行中的应用。当前已挂载 7 个插
 | `dsh-kbd-nav-focus` | Client only（TS） | — | `src/client.ts` → tsc CJS → `lib/client.js` | `npm run build / typecheck` | Alt+Shift 键盘焦点导航 |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + Esc 停止 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
-| `dsh-code-card-fonts` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入 14px 字号 `CSS` | 无 | 代码块与卡片字号补丁 |
+| `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
 
 ## 包结构与约定
@@ -81,7 +81,7 @@ Profile 的 `link:` 依赖挂载至运行中的应用。当前已挂载 7 个插
 `host/`），由 Node 22 Type Stripping 直接加载，无需编译；相对导入须携带 `.ts`
 扩展名；仅允许可擦除语法（不使用 enum、命名空间、参数属性），`tsconfig.json` 以
 `erasableSyntaxOnly` 强制约束。最小示例：`dsh-git-guard`（单文件）。遗留的纯
-JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-code-card-fonts`、`dsh-new-session`
+JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
 的 `lib/index.js`）维持现状，不要求迁移。
 
 浏览器半部：以 TypeScript 编写，`src/` 为源码（入口 `src/client.ts`），`scripts/`
@@ -91,7 +91,7 @@ JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-code-card-fonts`、`dsh-new-sess
 - `dsh-text-editor`：`src/` → esbuild 单文件 → `lib/client.js`（入仓）。
 - `dsh-kbd-nav-focus`：`src/client.ts` → tsc CommonJS → `lib/client.js`（入仓）。
 - `dsh-change-summary`：`src/` → tsc×2 + tsdown → `lib/`（不入仓，`.gitignore` 排除）。
-- 遗留纯 JavaScript 浏览器半部（`dsh-fullwidth-chat`、`dsh-code-card-fonts`、
+- 遗留纯 JavaScript 浏览器半部（`dsh-fullwidth-chat`、
   `dsh-new-session` 的 `lib/client.js`）维持现状，不要求迁移。
 - 浏览器运行时不支持 Type Stripping：`lib/client.js` 为构建产物、禁止手改；源码变更
   后必须重新构建，未重新构建是插件改动未生效的最常见原因。产物通常入仓
@@ -160,7 +160,8 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 | `dsh-kbd-nav-focus` | `npm run typecheck && npm run build` + `node --check lib/client.js` | tsc CJS → `lib/client.js` |
 | `dsh-change-summary` | `npm run build / typecheck / verify` | tsc（host + client）+ tsdown；`verify` 为离线冒烟测试 |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
-| 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、code-card-fonts、new-session、directory-picker-browse |
+| `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
+| 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
 
 `node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
 缓存目录（`npm_config_cache=<writable-dir>`）或使用仓库根的 `.pnpm-store`。
