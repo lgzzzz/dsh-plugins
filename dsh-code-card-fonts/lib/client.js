@@ -1,24 +1,20 @@
 window.__ModuleLoader__.load({ id: 'dsh-code-card-fonts', factory: (require) => {
 var module = { exports: {} }; var exports = module.exports;
 /**
- * Force a uniform font-size on code fences and every conversation card,
- * overriding per-element explicit font-sizes. The size follows the Web UI
- * "字号大小" setting via --dsh-content-font-size (not hardcoded); !important
+ * Force a uniform 14px font-size on code fences, inline code, and every
+ * conversation card, overriding per-element explicit font-sizes. !important
  * is retained only to win over inner elements' own font-size declarations
- * (.summary/.ioText/.ioCard/...), so the *value* is delegated to the setting.
+ * (.summary/.ioText/.ioCard/...), so the 14px value is enforced uniformly.
  *
  * Selectors use stable data attributes (CSS-module-hash safe): each card
  * rule covers root + all descendants because inner elements declare their own
  * font-size, which would otherwise override inheritance.
  *
- * Additionally sets the message-card spacing to 1/2 of the content font
- * height: the chat column (dsh-client-ui-chat) spaces adjacent cards with
+ * Additionally sets the message-card spacing to half the font height (14px ×
+ * 0.5 = 7px): the chat column (dsh-client-ui-chat) spaces adjacent cards with
  * `margin-top: var(--dsh-chat-flow-gap, 16px)` on each card, and nothing
- * else defines that variable. --dsh-content-font-size is set as an inline
- * style on <body> by the theme plugin, and a custom property resolves its
- * inner var() at the element where it is declared — so the override must
- * live on body (not :root) to resolve against the actual setting value.
- * The compact answer card's own element-level rule
+ * else defines that variable, so it is declared here on body. The compact
+ * answer card's own element-level rule
  * `.flowItem[data-turn-process-answer]{--dsh-chat-flow-gap:8px}` still wins
  * over the inherited value (declaration on the element beats inheritance).
  */
@@ -40,6 +36,17 @@ var CSS = `
 }
 
 pre, pre code {
+  font-size: 14px !important;
+}
+
+/* Inline code in Markdown is natively font-size: .875em !important
+ * (class-scoped rule in the web app), which outranks the [data-*] * rules
+ * above. Match its specificity (attribute + :not(pre) + code) and win by
+ * document order, since this style is injected after the app stylesheet. */
+[data-chat-flow-kind] :not(pre) > code,
+[data-variant="think"] :not(pre) > code,
+[data-tool] :not(pre) > code,
+[data-sample] :not(pre) > code {
   font-size: 14px !important;
 }
 
