@@ -5,6 +5,7 @@
  * `setTheme`、`setModelLanguage`），不是 `monaco.create`。
  */
 import { MONACO_BASE } from './routes.ts'
+import { defineIslandsDarkTheme, ISLANDS_DARK_THEME } from './islands-theme.ts'
 
 /** Monaco `monaco` 全局的最小面。 */
 export interface MonacoEditor {
@@ -12,6 +13,7 @@ export interface MonacoEditor {
     create(el: HTMLElement, options: Record<string, unknown>): MonacoEditorInstance
     createDiffEditor(el: HTMLElement, options: Record<string, unknown>): MonacoDiffEditorInstance
     createModel(value: string, languageId: string): MonacoTextModel
+    defineTheme(themeName: string, themeData: Record<string, unknown>): void
     setTheme(theme: string): void
     setModelLanguage(model: unknown, languageId: string): void
   }
@@ -115,7 +117,12 @@ export function ensureMonaco(): Promise<MonacoEditor> {
       amd(['vs/editor/editor.main'], () => {
         const monaco = getMonacoWindow().monaco
         if (monaco === undefined) reject(new Error('Monaco editor missing'))
-        else resolve(monaco)
+        else {
+          // 在首个 editor.create 之前把 islands_dark.json 注册为自定义主题，
+          // 保证 create({ theme }) 与之后的重绘都用该主题（幂等）。
+          defineIslandsDarkTheme(monaco)
+          resolve(monaco)
+        }
       })
     }
     script.onerror = () => reject(new Error('Monaco loader failed to load'))
@@ -124,7 +131,11 @@ export function ensureMonaco(): Promise<MonacoEditor> {
   return monacoPromise
 }
 
-/** 当前 DSH 主题 → Monaco 主题。 */
+/**
+ * 当前 DSH 主题 → Monaco 主题。深色用 islands_dark.json 注册的
+ * dsh-islands-dark（须已由 ensureMonaco 里的 defineIslandsDarkTheme 注册，
+ * 两个编辑器容器都先 await ensureMonaco 再 create，时序安全）；亮色保持内置 'vs'。
+ */
 export function currentTheme(): string {
-  return document.body.hasAttribute('data-ds-dark-theme') ? 'vs-dark' : 'vs'
+  return document.body.hasAttribute('data-ds-dark-theme') ? ISLANDS_DARK_THEME : 'vs'
 }

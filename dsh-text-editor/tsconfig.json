@@ -19,6 +19,10 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
 
+    // islands_dark.json 作为 JSON 模块导入（nodenext 下需配合
+    // `with { type: "json" }` 导入属性，见 src/islands-theme.ts）
+    "resolveJsonModule": true,
+
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true

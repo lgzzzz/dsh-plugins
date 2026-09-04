@@ -68,16 +68,27 @@ export function TabLabel({ sessionId, fileKey }: { sessionId: string; fileKey: s
 }
 
 // ── 差异视图标签 ────────────────────────────────────────────────────────────
-/** 「差异」tab 标签：文件数 + × 关闭按钮（反应式跟随当前会话的 diffState）。 */
+/** 差异文件的可读名：label 优先，其次 basename(path)，最后「文件 N」。 */
+function diffFileLabel(file: DiffFile, index: number): string {
+  if (file.label !== undefined && file.label !== '') return file.label
+  if (file.path !== undefined && file.path !== '') return basename(file.path)
+  return `文件 ${index + 1}`
+}
+
+/**
+ * 「差异」tab 标签：显示当前正在查看的 diff 文件的「文件名·diff」（随 上一个/下一个
+ * 实时更新），不显示「差异 · N」这类计数——文件总览与进度在视图内工具栏可见。
+ */
 export function DiffTabLabel(): React.ReactElement {
   const state = React.useSyncExternalStore(subscribe, getDiffState)
-  const count = state !== null ? state.files.length : 0
-  const label = count > 0 ? `差异 · ${count}` : '差异'
+  const index = state !== null ? Math.min(Math.max(state.index, 0), state.files.length - 1) : 0
+  const file = state !== null && state.files.length > 0 ? state.files[index]! : null
+  const text = file !== null ? `${diffFileLabel(file, index)}·diff` : 'diff'
+  const title = file !== null
+    ? (file.path !== undefined && file.path !== '' ? file.path : file.label)
+    : undefined
   return React.createElement('span', { className: 'dsh-te-tab' },
-    React.createElement('span', {
-      className: 'dsh-te-diff-tab-label',
-      title: state !== null ? `当前 ${state.index + 1} / ${count}` : undefined,
-    }, label),
+    React.createElement('span', { className: 'dsh-te-diff-tab-label', title }, text),
     React.createElement('span', {
       role: 'button',
       className: 'dsh-te-tab-close',
@@ -242,9 +253,7 @@ export function DiffView(): React.ReactElement | null {
   }
   const index = Math.min(Math.max(state.index, 0), state.files.length - 1)
   const file = state.files[index]!
-  const label = file.label !== undefined && file.label !== ''
-    ? file.label
-    : (file.path !== undefined && file.path !== '' ? basename(file.path) : `文件 ${index + 1}`)
+  const label = diffFileLabel(file, index)
   const hasNext = index < state.files.length - 1
   const hasPrev = index > 0
   return React.createElement('div', { className: 'dsh-te-root' },
