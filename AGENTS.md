@@ -21,8 +21,8 @@
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
 进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。当前已挂载 7 个插件；`dsh-change-summary`
-代码与补丁均已完成但尚未挂载（见「挂载与激活」）。
+Profile 的 `link:` 依赖挂载至运行中的应用。当前 7 个插件（含 `dsh-change-summary`）
+均已挂载；`dsh-kbd-nav-focus` 已从仓库移除（提交 6499dd9），仅存于历史。
 
 - 版本控制采用黑名单：`.gitignore` 默认放行全部内容，仅忽略系统/编辑器文件
   （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`node_modules/`）、
@@ -36,9 +36,8 @@ Profile 的 `link:` 依赖挂载至运行中的应用。当前已挂载 7 个插
 | 目录 | 形态 | 宿主半部 | 浏览器半部 | 构建 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `dsh-text-editor` | Host + Client（TS） | `index.ts`（Type Stripping）+ `host/`，三条路由 | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | Monaco 应用内编辑器；提供 `openFile`/`showDiff` 能力 |
-| `dsh-change-summary` | Host + Client（TS） | `src/index.ts`，`/diff` + `/exists` 路由 | `src/client/` → tsc×2 + tsdown → `lib/` | `npm run build / typecheck / verify` | 回合结束汇总改动文件与 git 差异。尚未挂载、`lib/` 不入仓 |
+| `dsh-change-summary` | Host + Client（TS） | `src/index.ts`，`/diff` + `/exists` 路由 | `src/client/` → tsc×2 + tsdown → `lib/` | `npm run build / typecheck / verify` | 回合结束汇总改动文件与 git 差异。`lib/` 不入仓（重装前须先构建） |
 | `dsh-git-guard` | Host only（TS） | `index.ts`，钩挂 `tools/pre-execute` | — | `npm run typecheck`；`node test.mjs` | 拦截 `git push`（deny）/ `git commit`（ask） |
-| `dsh-kbd-nav-focus` | Client only（TS） | — | `src/client.ts` → tsc CJS → `lib/client.js` | `npm run build / typecheck` | Alt+Shift 键盘焦点导航 |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + Esc 停止 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
@@ -89,7 +88,6 @@ JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
 `window.__ModuleLoader__.load({...})` 包装的 `lib/client.js`。可参照的工程模板：
 
 - `dsh-text-editor`：`src/` → esbuild 单文件 → `lib/client.js`（入仓）。
-- `dsh-kbd-nav-focus`：`src/client.ts` → tsc CommonJS → `lib/client.js`（入仓）。
 - `dsh-change-summary`：`src/` → tsc×2 + tsdown → `lib/`（不入仓，`.gitignore` 排除）。
 - 遗留纯 JavaScript 浏览器半部（`dsh-fullwidth-chat`、
   `dsh-new-session` 的 `lib/client.js`）维持现状，不要求迁移。
@@ -104,8 +102,8 @@ JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
 `~/.dsh/profiles/web/package.json` 当前配置：
 
 - `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 7 个：
-  code-card-fonts / directory-picker-browse / fullwidth-chat / git-guard /
-  kbd-nav-focus / new-session / text-editor）；
+  change-summary / code-card-fonts / directory-picker-browse / fullwidth-chat /
+  git-guard / new-session / text-editor）；
 - `dsh.profile.bundles` 共 9 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
   及上述 7 个本地插件；
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
@@ -132,10 +130,10 @@ dsh plugin --profile web remove <name>
 > 上述步骤属于用户操作：依据强制规范第 1 条，代理交付插件后不得自行执行加载步骤
 > （`dsh plugin add`、`pnpm install`、重启 App）；应将步骤写入插件 README 并告知用户。
 
-说明：`dsh-change-summary` 的代码与 `cordis.patch.yml`（`inject: [webServer,
-sessions]`）均已完成，但当前不在 Profile 的 `dependencies` / `bundles` 中。启用时按
-上述流程加入；其 `lib/` 不入仓，须先在插件目录内 `npm install && npm run build`
-生成 `lib/index.js` 与 `lib/client.js`，再执行 `dsh plugin --profile web add`。
+说明：`dsh-change-summary` 已挂载进 Profile 的 `dependencies` / `bundles`
+（`inject: [webServer, sessions]`）。其 `lib/` 不入仓，重装 / 迁移全局环境后须先在
+插件目录内 `npm install && npm run build` 生成 `lib/index.js` 与 `lib/client.js`，
+否则该插件加载失败。
 
 ## 变更生效机制
 
@@ -157,7 +155,6 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 | 插件 | 命令 | 说明 |
 | --- | --- | --- |
 | `dsh-text-editor` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`；`check` 对产物执行 `node --check` 并校验宿主语法 |
-| `dsh-kbd-nav-focus` | `npm run typecheck && npm run build` + `node --check lib/client.js` | tsc CJS → `lib/client.js` |
 | `dsh-change-summary` | `npm run build / typecheck / verify` | tsc（host + client）+ tsdown；`verify` 为离线冒烟测试 |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
@@ -209,4 +206,4 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 | 路径 | 内容 |
 | --- | --- |
 | `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项 |
-| 各插件 `README.md` | 功能说明、加载方式与构建说明 |
+| 各插件 `README.md` | 功能说明、加载方式与构建说明（`dsh-text-editor` 与 `dsh-fullwidth-chat` 暂无 README，功能见 `package.json` 的 `description` 与本文档插件清单） |
