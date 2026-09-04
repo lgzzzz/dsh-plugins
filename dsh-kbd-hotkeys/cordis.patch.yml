@@ -1,0 +1,7 @@
+# dsh-kbd-hotkeys 的 web bundle 补丁。
+# 声明本插件的挂载行,通过 dsh.profile.bundles 自动挂载到 web profile:
+# 宿主半部按 <name>/package.json 解析,客户端半部由包内
+# dsh.client.platform=web + immediately 注册进浏览器 roster。
+- insert:
+    - id: dsh-kbd-hotkeys
+      name: dsh-kbd-hotkeys
