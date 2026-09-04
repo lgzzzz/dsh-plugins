@@ -79,10 +79,20 @@ body {
 }
 
 /* ===== 工具/bash 卡片内容 — 14px(重指代码字体 token)=====
- * I/O 文本、终端、read/diff/search/web 正文消费这两个 token;在卡片根重指
- * token,仅内容文本变化,inspect 按钮(11px)等保持自身字号。 */
+ * I/O 文本、终端、read/diff/search/web 正文消费这两个 token(主题默认 11px,
+ * 过小);在卡片根重指 token,仅内容文本变化,inspect 按钮(11px)等保持自身字号。 */
 [data-tool],
 [data-sample] {
+  --dsw-font-markdown-code-block-small: 14px/16px var(--ds-font-family-code);
+  --dsw-font-markdown-code-block: 14px/19px var(--ds-font-family-code);
+}
+
+/* Bash 卡片(BashRow)结构特例:data-sample 只打在**表头行**上,展开后的正文
+ * (.bodyWrap,内含命令输入与执行结果的 ioCard / TerminalBlock)是表头的**相邻
+ * 兄弟节点**,不在 [data-sample] 内、也不是 [data-tool] 的后代——上一组 token
+ * 重指到不了它。故在表头的下一个兄弟(即正文容器)上再重指一次,命令与执行
+ * 结果文本随 token 变为 14px。 */
+[data-sample] + * {
   --dsw-font-markdown-code-block-small: 14px/16px var(--ds-font-family-code);
   --dsw-font-markdown-code-block: 14px/19px var(--ds-font-family-code);
 }
