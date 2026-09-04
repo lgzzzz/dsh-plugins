@@ -175,7 +175,7 @@ function MonacoHost({
         language: languageFor(path),
         theme: currentTheme(),
         automaticLayout: true,
-        fontSize: 13,
+        fontSize: 14,
         lineNumbers: 'on',
         minimap: { enabled: false },
         readOnly: false,
@@ -310,7 +310,7 @@ function DiffHost({ file }: { file: DiffFile }): React.ReactElement {
       const editor = monaco.editor.createDiffEditor(containerRef.current, {
         theme: currentTheme(),
         automaticLayout: true,
-        fontSize: 13,
+        fontSize: 14,
         lineNumbers: 'on',
         minimap: { enabled: false },
         readOnly: true,
