@@ -4236,7 +4236,9 @@ function MonacoHost({
         readOnly: false,
         scrollBeyondLastLine: false,
         wordWrap: "off",
-        tabSize: 2
+        tabSize: 2,
+        // 不框全角标点（（），等被判定为「易混淆字符」）；零宽字符继续框。
+        unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: true }
       });
       setActiveEditor(editor);
       setActiveFileKey(fileKey);
@@ -4380,7 +4382,9 @@ function DiffHost({ file }) {
         enableSplitViewResizing: true,
         // 只隐藏两侧文件的竖直滚动条；横向滚动条保留；diff 位置条（共享 overview ruler）保留。
         scrollbar: { vertical: "hidden" },
-        renderOverviewRuler: true
+        renderOverviewRuler: true,
+        // 不框全角标点（（），等被判定为「易混淆字符」）；零宽字符继续框。
+        unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: true }
       });
       setActiveDiffEditor(editor);
       setReady(true);
