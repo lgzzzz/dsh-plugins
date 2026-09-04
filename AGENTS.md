@@ -45,6 +45,7 @@ Profile 的 `link:` 依赖挂载至运行中的应用。当前 7 个插件（含
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发）：审批/问答键盘化、会话切换、对话滚动、复制、⌘K 命令面板与 ⌘/ 速查表；设计文档 `docs/dsh-hotkeys-proposal.md`（尚未挂载，加载见其 README） |
 
 ## 包结构与约定
 
@@ -171,6 +172,7 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 | `dsh-change-summary` | `npm run build / typecheck / verify` | tsc（host + client）+ tsdown；`verify` 为离线冒烟测试 |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
+| `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
 
 `node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
