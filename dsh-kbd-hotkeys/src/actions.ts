@@ -9,16 +9,10 @@
  * - 问答卡片:[data-question-key],选项为 [data-question-scroll] 内
  *   role=radio/checkbox 的按钮;提交为主按钮(卡片内不在滚动区的最后一个按钮);
  *   计划评审:[data-plan-review-key],不在滚动区的按钮依次为 确认/拒绝/去聊;
- * - 对话滚动容器:[data-conversation-scroll](独立 ChatView 回退 [data-chat-flow]
- *   的最近可滚动祖先);
- * - 用户消息行(跳转目标):[data-chat-flow-kind="user"];顶边对齐视口 +24px
- *   (对齐量同上游轮次导航 landOnRowRef);
  * - 输入框(Lexical 可编辑):[data-composer-input];
- * - 消息流条目:[data-chat-flow-kind](assistant / user / steering / command);
  * - 侧栏开关:layout 服务 toggleSidebar();设置触发:button[aria-haspopup="dialog"];
  * - 模型选择器:composer 卡片内 button[aria-haspopup="menu"];
  * - 会话切换:sessions.list 快照(ids/byId/current)+ sessions.open(id);
- * - 新建会话:uiWorkspace.startSession()(与 New Session 按钮同路径)。
  */
 import type { PendingInteractionLike, Services } from './types.ts'
 
@@ -33,138 +27,6 @@ export function isEditableTarget(target: EventTarget | null | undefined): boolea
   if (target.isContentEditable) return true
   const tag = target.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
-
-function conversationScroll(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[data-conversation-scroll]')
-}
-
-/** 滚动指定页数(正数向下)。 */
-export function scrollByPages(pages: number): void {
-  const el = conversationScroll()
-  if (el === null) return
-  el.scrollTop += el.clientHeight * 0.85 * pages
-}
-
-/** 跳到对话最旧 / 最新消息。 */
-export function scrollToEdge(edge: 'top' | 'bottom'): void {
-  const el = conversationScroll()
-  if (el === null) return
-  el.scrollTop = edge === 'top' ? 0 : el.scrollHeight
-}
-
-/** 行顶边相对滚动容器内容区的偏移(与视口滚动无关,按文档顺序单调)。 */
-function userRowOffset(row: HTMLElement, host: HTMLElement): number {
-  return row.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop
-}
-
-/** 已渲染的用户消息行(排除隐藏与零尺寸行),按文档顺序。 */
-function renderedUserRows(host: HTMLElement): HTMLElement[] {
-  const rows: HTMLElement[] = []
-  for (const row of host.querySelectorAll<HTMLElement>('[data-chat-flow-kind="user"]')) {
-    if (row.hasAttribute('hidden')) continue
-    const rect = row.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0) continue
-    rows.push(row)
-  }
-  return rows
-}
-
-/** 令目标行顶边对齐滚动容器顶部(留 24px 内边距,同上游轮次导航点击对齐量)。 */
-function alignUserRowTop(row: HTMLElement, host: HTMLElement): void {
-  host.scrollTop += row.getBoundingClientRect().top - host.getBoundingClientRect().top - 24
-}
-
-/**
- * 活动对话的滚动容器:优先 [data-conversation-scroll](嵌套 ChatView 的宿主
- * 滚动区);缺省回退到独立 ChatView 自身 — 首个 [data-chat-flow] 的最近可滚动祖先。
- */
-function userScrollHost(): HTMLElement | null {
-  const host = document.querySelector<HTMLElement>('[data-conversation-scroll]')
-  if (host !== null) return host
-  const flow = document.querySelector<HTMLElement>('[data-chat-flow]')
-  if (flow === null) return null
-  let ancestor = flow.parentElement
-  while (ancestor !== null && ancestor !== document.body) {
-    const overflowY = window.getComputedStyle(ancestor).overflowY
-    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') return ancestor
-    ancestor = ancestor.parentElement
-  }
-  return null
-}
-
-/**
- * 在上一条(-1)/下一条(+1)用户消息之间跳转(顶边对齐视口顶部)。
- * 视口上方已无更早用户消息时退化为跳最旧;下方已无更新的时退化为跳最新。
- * 与右侧轮次导航小横条(每轮一条、点击跳转)同义:逐轮在「你发送的消息」间移动。
- */
-export function scrollToUserMessage(direction: -1 | 1): boolean {
-  const host = userScrollHost()
-  if (host === null) return false
-  const rows = renderedUserRows(host)
-  if (rows.length === 0) return false
-  const top = host.scrollTop
-  if (direction < 0) {
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (userRowOffset(rows[i], host) < top) {
-        alignUserRowTop(rows[i], host)
-        return true
-      }
-    }
-    host.scrollTop = 0
-    return true
-  }
-  for (let i = 0; i < rows.length; i++) {
-    if (userRowOffset(rows[i], host) > top) {
-      alignUserRowTop(rows[i], host)
-      return true
-    }
-  }
-  host.scrollTop = host.scrollHeight
-  return true
-}
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (typeof navigator !== 'undefined' && navigator.clipboard !== undefined) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch {
-    // 走降级路径
-  }
-  try {
-    const area = document.createElement('textarea')
-    area.value = text
-    area.style.position = 'fixed'
-    area.style.opacity = '0'
-    document.body.appendChild(area)
-    area.select()
-    const ok = document.execCommand('copy')
-    area.remove()
-    return ok
-  } catch {
-    return false
-  }
-}
-
-/** 复制最后一条 assistant 回复(渲染文本;最后回复为空时提示)。 */
-export async function copyLastReply(): Promise<boolean> {
-  const items = document.querySelectorAll<HTMLElement>('[data-chat-flow-kind="assistant"]')
-  const last = items.length === 0 ? null : items[items.length - 1]
-  const text = last === null ? '' : (last.innerText ?? '').trim()
-  if (text === '') return false
-  return copyText(text)
-}
-
-/** 复制对话里最后一个代码块(渲染文本)。 */
-export async function copyLastCodeBlock(): Promise<boolean> {
-  const root = conversationScroll() ?? document
-  const blocks = root.querySelectorAll<HTMLElement>('pre')
-  const last = blocks.length === 0 ? null : blocks[blocks.length - 1]
-  const text = last === null ? '' : (last.innerText ?? '').trim()
-  if (text === '') return false
-  return copyText(text)
 }
 
 /** 聚焦输入框(Lexical contenteditable)。 */
@@ -199,14 +61,6 @@ export function toggleSidebar(services: Services): boolean {
   const layout = services.layout
   if (layout === null || layout === undefined || typeof layout.toggleSidebar !== 'function') return false
   layout.toggleSidebar()
-  return true
-}
-
-/** 新建会话(uiWorkspace.startSession,与 New Session 按钮同路径)。 */
-export function startNewSession(services: Services): boolean {
-  const uiWorkspace = services.uiWorkspace
-  if (uiWorkspace === null || uiWorkspace === undefined || typeof uiWorkspace.startSession !== 'function') return false
-  uiWorkspace.startSession()
   return true
 }
 

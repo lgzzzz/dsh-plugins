@@ -5,20 +5,16 @@
  * 功能:降低鼠标依赖的全局快捷键(键位设计见 docs/dsh-hotkeys-proposal.md):
  * - 态 A(审批 / ask_user_question / 计划评审卡片打开):⌘/Ctrl+Alt+Enter 允许、
  *   ⌘/Ctrl+Alt+Backspace 拒绝、数字键 1–9 选选项、Enter 确认提交;
- * - 全态:⌘⌥O 新建会话、⌘/ 速查表、⌘⌥C 复制最后回复、⌘⌥; 复制最后代码块、
- *   ⌘. 设置、⌘⌥M 模型选择器、⌘⌥←/→ 上/下一个会话;
- * - 态 C(输入框失焦):⌘B 开关侧栏、PageUp/PageDown 翻页、⌘↑/↓ 跳上一条/
- *   下一条你发送的消息(到头/尾退化为跳最旧/最新)、⌘⌥E 聚焦输入框。
+ * - 全态:⌘/ 速查表、⌘. 设置、⌘⌥M 模型选择器、⌘⌥←/→ 上/下一个会话;
+ * - 态 C(输入框失焦):⌘B 开关侧栏、⌘⌥E 聚焦输入框。
  *
  * 实现:document 捕获阶段单一 keydown 监听,按三态分发(态 A 卡片 → 态 B 输入框
- * → 态 C 浏览),消费 sessions / uiSession / uiWorkspace / layout 既有服务,
+ * → 态 C 浏览),消费 sessions / uiSession / layout 既有服务,
  * 审批优先走 uiSession.pendingSnapshot 服务级 answer(),DOM 结构仅作回退。
  * 不消费 react,无 external;Esc 中断回合由 dsh-new-session 插件继续承担。
  */
 import {
   answerApproval,
-  copyLastCodeBlock,
-  copyLastReply,
   detectStateA,
   focusComposer,
   isEditableTarget,
@@ -26,21 +22,17 @@ import {
   openModelSelector,
   openSettings,
   pickQuestionOption,
-  scrollByPages,
-  scrollToEdge,
-  scrollToUserMessage,
-  startNewSession,
   submitQuestion,
   toggleSidebar,
 } from './actions.ts'
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, saveConfig, type HotkeyConfig } from './config.ts'
-import { createOverlays, showToast, type OverlayHost } from './overlay.ts'
-import type { ClientContext, LayoutLike, SessionsLike, Services, UiSessionLike, UiWorkspaceLike } from './types.ts'
+import { createOverlays, type OverlayHost } from './overlay.ts'
+import type { ClientContext, LayoutLike, SessionsLike, Services, UiSessionLike } from './types.ts'
 
 export const name = 'dsh-kbd-hotkeys'
 
 /** 浏览器半部注入的服务(模块加载器读取)。 */
-export const inject = ['sessions', 'uiSession', 'uiWorkspace', 'layout']
+export const inject = ['sessions', 'uiSession', 'layout']
 
 /** null 与 undefined 双重判空后取服务(缺失时返回 undefined)。 */
 function getService(ctx: ClientContext, serviceName: string): unknown {
@@ -61,40 +53,12 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return false // 数字键走固定分发逻辑,不作为可执行动作
       case 'question.submit':
         return submitQuestion()
-      case 'session.new':
-        return startNewSession(services)
       case 'sidebar.toggle':
         return toggleSidebar(services)
       case 'session.prev':
         return openNeighborSession(services, -1)
       case 'session.next':
         return openNeighborSession(services, 1)
-      case 'scroll.pageup':
-        scrollByPages(-1)
-        return true
-      case 'scroll.pagedown':
-        scrollByPages(1)
-        return true
-      case 'scroll.top':
-        scrollToEdge('top')
-        return true
-      case 'scroll.bottom':
-        scrollToEdge('bottom')
-        return true
-      case 'scroll.prevUser':
-        return scrollToUserMessage(-1)
-      case 'scroll.nextUser':
-        return scrollToUserMessage(1)
-      case 'reply.copy':
-        void copyLastReply().then((ok) => {
-          showToast(ok ? '已复制最后回复' : '没有可复制的回复')
-        })
-        return true
-      case 'code.copy':
-        void copyLastCodeBlock().then((ok) => {
-          showToast(ok ? '已复制最后代码块' : '没有可复制的代码块')
-        })
-        return true
       case 'settings.open':
         return openSettings()
       case 'model.open':
@@ -126,7 +90,6 @@ export function apply(ctx: ClientContext): void {
   const services: Services = {
     sessions: getService(ctx, 'sessions') as SessionsLike | undefined,
     uiSession: getService(ctx, 'uiSession') as UiSessionLike | undefined,
-    uiWorkspace: getService(ctx, 'uiWorkspace') as UiWorkspaceLike | undefined,
     layout: getService(ctx, 'layout') as LayoutLike | undefined,
   }
 

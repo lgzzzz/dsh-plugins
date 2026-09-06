@@ -38,112 +38,6 @@ function isEditableTarget(target) {
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
-function conversationScroll() {
-  return document.querySelector("[data-conversation-scroll]");
-}
-function scrollByPages(pages) {
-  const el = conversationScroll();
-  if (el === null) return;
-  el.scrollTop += el.clientHeight * 0.85 * pages;
-}
-function scrollToEdge(edge) {
-  const el = conversationScroll();
-  if (el === null) return;
-  el.scrollTop = edge === "top" ? 0 : el.scrollHeight;
-}
-function userRowOffset(row, host) {
-  return row.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop;
-}
-function renderedUserRows(host) {
-  const rows = [];
-  for (const row of host.querySelectorAll('[data-chat-flow-kind="user"]')) {
-    if (row.hasAttribute("hidden")) continue;
-    const rect = row.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) continue;
-    rows.push(row);
-  }
-  return rows;
-}
-function alignUserRowTop(row, host) {
-  host.scrollTop += row.getBoundingClientRect().top - host.getBoundingClientRect().top - 24;
-}
-function userScrollHost() {
-  const host = document.querySelector("[data-conversation-scroll]");
-  if (host !== null) return host;
-  const flow = document.querySelector("[data-chat-flow]");
-  if (flow === null) return null;
-  let ancestor = flow.parentElement;
-  while (ancestor !== null && ancestor !== document.body) {
-    const overflowY = window.getComputedStyle(ancestor).overflowY;
-    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") return ancestor;
-    ancestor = ancestor.parentElement;
-  }
-  return null;
-}
-function scrollToUserMessage(direction) {
-  const host = userScrollHost();
-  if (host === null) return false;
-  const rows = renderedUserRows(host);
-  if (rows.length === 0) return false;
-  const top = host.scrollTop;
-  if (direction < 0) {
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (userRowOffset(rows[i], host) < top) {
-        alignUserRowTop(rows[i], host);
-        return true;
-      }
-    }
-    host.scrollTop = 0;
-    return true;
-  }
-  for (let i = 0; i < rows.length; i++) {
-    if (userRowOffset(rows[i], host) > top) {
-      alignUserRowTop(rows[i], host);
-      return true;
-    }
-  }
-  host.scrollTop = host.scrollHeight;
-  return true;
-}
-async function copyText(text) {
-  try {
-    if (typeof navigator !== "undefined" && navigator.clipboard !== void 0) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-  }
-  try {
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand("copy");
-    area.remove();
-    return ok;
-  } catch {
-    return false;
-  }
-}
-async function copyLastReply() {
-  var _a;
-  const items = document.querySelectorAll('[data-chat-flow-kind="assistant"]');
-  const last = items.length === 0 ? null : items[items.length - 1];
-  const text = last === null ? "" : ((_a = last.innerText) != null ? _a : "").trim();
-  if (text === "") return false;
-  return copyText(text);
-}
-async function copyLastCodeBlock() {
-  var _a, _b;
-  const root = (_a = conversationScroll()) != null ? _a : document;
-  const blocks = root.querySelectorAll("pre");
-  const last = blocks.length === 0 ? null : blocks[blocks.length - 1];
-  const text = last === null ? "" : ((_b = last.innerText) != null ? _b : "").trim();
-  if (text === "") return false;
-  return copyText(text);
-}
 function focusComposer() {
   const input = document.querySelector("[data-composer-input]");
   if (input === null) return false;
@@ -169,12 +63,6 @@ function toggleSidebar(services) {
   const layout = services.layout;
   if (layout === null || layout === void 0 || typeof layout.toggleSidebar !== "function") return false;
   layout.toggleSidebar();
-  return true;
-}
-function startNewSession(services) {
-  const uiWorkspace = services.uiWorkspace;
-  if (uiWorkspace === null || uiWorkspace === void 0 || typeof uiWorkspace.startSession !== "function") return false;
-  uiWorkspace.startSession();
   return true;
 }
 function openNeighborSession(services, delta) {
@@ -287,19 +175,10 @@ var ACTIONS = [
   { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279(P0)", states: ["A", "B", "C"] },
   { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["A"] },
   { id: "question.submit", label: "\u95EE\u9898:Enter \u786E\u8BA4 / \u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["A"] },
-  { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P0)", states: ["A", "B", "C"] },
   // P1 会话级
   { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD(P1)", states: ["C"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
-  { id: "scroll.pageup", label: "\u5BF9\u8BDD\u4E0A\u7FFB\u4E00\u9875", group: "\u6EDA\u52A8(P1)", states: ["C"] },
-  { id: "scroll.pagedown", label: "\u5BF9\u8BDD\u4E0B\u7FFB\u4E00\u9875", group: "\u6EDA\u52A8(P1)", states: ["C"] },
-  { id: "scroll.prevUser", label: "\u8DF3\u5230\u4E0A\u4E00\u6761\u4F60\u53D1\u9001\u7684\u6D88\u606F", group: "\u6EDA\u52A8(P1)", states: ["C"] },
-  { id: "scroll.nextUser", label: "\u8DF3\u5230\u4E0B\u4E00\u6761\u4F60\u53D1\u9001\u7684\u6D88\u606F", group: "\u6EDA\u52A8(P1)", states: ["C"] },
-  { id: "scroll.top", label: "\u8DF3\u5230\u6700\u65E7\u6D88\u606F", group: "\u6EDA\u52A8(P1)", states: ["C"] },
-  { id: "scroll.bottom", label: "\u8DF3\u5230\u6700\u65B0\u6D88\u606F", group: "\u6EDA\u52A8(P1)", states: ["C"] },
-  { id: "reply.copy", label: "\u590D\u5236\u6700\u540E\u56DE\u590D", group: "\u590D\u5236(P1)", states: ["A", "B", "C"] },
-  { id: "code.copy", label: "\u590D\u5236\u6700\u540E\u4EE3\u7801\u5757", group: "\u590D\u5236(P1)", states: ["A", "B", "C"] },
   { id: "settings.open", label: "\u6253\u5F00\u8BBE\u7F6E", group: "\u9762\u677F(P1)", states: ["A", "B", "C"] },
   { id: "model.open", label: "\u6253\u5F00\u6A21\u578B\u9009\u62E9\u5668", group: "\u9762\u677F(P1)", states: ["B", "C"] },
   { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u9762\u677F(P1)", states: ["C"] },
@@ -310,16 +189,9 @@ var ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 var DEFAULT_BINDINGS = {
   "approval.allow": "mod+alt+enter",
   "approval.reject": "mod+alt+backspace",
-  "session.new": "mod+alt+o",
   "sidebar.toggle": "mod+b",
   "session.prev": "mod+alt+arrowleft",
   "session.next": "mod+alt+arrowright",
-  "scroll.pageup": "pageup",
-  "scroll.pagedown": "pagedown",
-  "scroll.prevUser": "mod+arrowup",
-  "scroll.nextUser": "mod+arrowdown",
-  "reply.copy": "mod+alt+c",
-  "code.copy": "mod+alt+;",
   "settings.open": "mod+.",
   "model.open": "mod+alt+m",
   "composer.focus": "mod+alt+e",
@@ -762,7 +634,7 @@ function createOverlays(deps) {
 
 // src/client.ts
 var name = "dsh-kbd-hotkeys";
-var inject = ["sessions", "uiSession", "uiWorkspace", "layout"];
+var inject = ["sessions", "uiSession", "layout"];
 function getService(ctx, serviceName) {
   if (ctx.get === void 0 || ctx.get === null) return void 0;
   const value = ctx.get(serviceName);
@@ -780,40 +652,12 @@ function runAction(id, services, overlays) {
       // 数字键走固定分发逻辑,不作为可执行动作
       case "question.submit":
         return submitQuestion();
-      case "session.new":
-        return startNewSession(services);
       case "sidebar.toggle":
         return toggleSidebar(services);
       case "session.prev":
         return openNeighborSession(services, -1);
       case "session.next":
         return openNeighborSession(services, 1);
-      case "scroll.pageup":
-        scrollByPages(-1);
-        return true;
-      case "scroll.pagedown":
-        scrollByPages(1);
-        return true;
-      case "scroll.top":
-        scrollToEdge("top");
-        return true;
-      case "scroll.bottom":
-        scrollToEdge("bottom");
-        return true;
-      case "scroll.prevUser":
-        return scrollToUserMessage(-1);
-      case "scroll.nextUser":
-        return scrollToUserMessage(1);
-      case "reply.copy":
-        void copyLastReply().then((ok) => {
-          showToast(ok ? "\u5DF2\u590D\u5236\u6700\u540E\u56DE\u590D" : "\u6CA1\u6709\u53EF\u590D\u5236\u7684\u56DE\u590D");
-        });
-        return true;
-      case "code.copy":
-        void copyLastCodeBlock().then((ok) => {
-          showToast(ok ? "\u5DF2\u590D\u5236\u6700\u540E\u4EE3\u7801\u5757" : "\u6CA1\u6709\u53EF\u590D\u5236\u7684\u4EE3\u7801\u5757");
-        });
-        return true;
       case "settings.open":
         return openSettings();
       case "model.open":
@@ -839,7 +683,6 @@ function apply(ctx) {
   const services = {
     sessions: getService(ctx, "sessions"),
     uiSession: getService(ctx, "uiSession"),
-    uiWorkspace: getService(ctx, "uiWorkspace"),
     layout: getService(ctx, "layout")
   };
   let config = loadConfig();
