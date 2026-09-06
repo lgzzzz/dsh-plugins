@@ -33,19 +33,10 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'approval.reject', label: '审批:拒绝', group: '审批(P0)', states: ['A', 'B', 'C'] },
   { id: 'question.option', label: '问题:按 1–9 选择选项', group: '问答卡片(P0)', states: ['A'] },
   { id: 'question.submit', label: '问题:Enter 确认 / 提交', group: '问答卡片(P0)', states: ['A'] },
-  { id: 'session.new', label: '新建会话', group: '会话(P0)', states: ['A', 'B', 'C'] },
   // P1 会话级
   { id: 'sidebar.toggle', label: '开关侧栏', group: '会话(P1)', states: ['C'] },
   { id: 'session.prev', label: '上一个会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
   { id: 'session.next', label: '下一个会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
-  { id: 'scroll.pageup', label: '对话上翻一页', group: '滚动(P1)', states: ['C'] },
-  { id: 'scroll.pagedown', label: '对话下翻一页', group: '滚动(P1)', states: ['C'] },
-  { id: 'scroll.prevUser', label: '跳到上一条你发送的消息', group: '滚动(P1)', states: ['C'] },
-  { id: 'scroll.nextUser', label: '跳到下一条你发送的消息', group: '滚动(P1)', states: ['C'] },
-  { id: 'scroll.top', label: '跳到最旧消息', group: '滚动(P1)', states: ['C'] },
-  { id: 'scroll.bottom', label: '跳到最新消息', group: '滚动(P1)', states: ['C'] },
-  { id: 'reply.copy', label: '复制最后回复', group: '复制(P1)', states: ['A', 'B', 'C'] },
-  { id: 'code.copy', label: '复制最后代码块', group: '复制(P1)', states: ['A', 'B', 'C'] },
   { id: 'settings.open', label: '打开设置', group: '面板(P1)', states: ['A', 'B', 'C'] },
   { id: 'model.open', label: '打开模型选择器', group: '面板(P1)', states: ['B', 'C'] },
   { id: 'composer.focus', label: '聚焦输入框', group: '面板(P1)', states: ['C'] },
@@ -59,16 +50,9 @@ export const ACTION_BY_ID: ReadonlyMap<string, ActionDef> = new Map(ACTIONS.map(
 export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'approval.allow': 'mod+alt+enter',
   'approval.reject': 'mod+alt+backspace',
-  'session.new': 'mod+alt+o',
   'sidebar.toggle': 'mod+b',
   'session.prev': 'mod+alt+arrowleft',
   'session.next': 'mod+alt+arrowright',
-  'scroll.pageup': 'pageup',
-  'scroll.pagedown': 'pagedown',
-  'scroll.prevUser': 'mod+arrowup',
-  'scroll.nextUser': 'mod+arrowdown',
-  'reply.copy': 'mod+alt+c',
-  'code.copy': 'mod+alt+;',
   'settings.open': 'mod+.',
   'model.open': 'mod+alt+m',
   'composer.focus': 'mod+alt+e',
@@ -191,7 +175,7 @@ export function comboOf(event: KeyboardEvent): string {
   return parts.join('+')
 }
 
-/** 把用户配置里的组合键字符串归一化(如 "Cmd+Alt+O" → "mod+alt+o";旧配置中的 shift 也解析)。 */
+/** 把用户配置里的组合键字符串归一化(如 "Cmd+Alt+C" → "mod+alt+c";旧配置中的 shift 也解析)。 */
 export function normalizeComboString(combo: string): string {
   const key = combo.split('+').pop() ?? ''
   const parts: string[] = []

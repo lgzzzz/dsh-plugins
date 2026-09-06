@@ -50,11 +50,6 @@ export interface SessionsLike {
   open?(sessionId: string): void
 }
 
-/** uiWorkspace 服务消费面(新建会话走 New Session 按钮同路径)。 */
-export interface UiWorkspaceLike {
-  startSession?(workspaceId?: string): void
-}
-
 /** layout 服务消费面(ctx.reflect.provide("layout", …) 的 LayoutController)。 */
 export interface LayoutLike {
   toggleSidebar?(): void
@@ -66,6 +61,5 @@ export interface LayoutLike {
 export interface Services {
   sessions: SessionsLike | undefined
   uiSession: UiSessionLike | undefined
-  uiWorkspace: UiWorkspaceLike | undefined
   layout: LayoutLike | undefined
 }
