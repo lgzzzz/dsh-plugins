@@ -1,9 +1,6 @@
 # AGENTS.md — DSH 本地插件工作区
 
-仓库内每个插件均为独立、自包含的本地 npm 包；仓库根不再作为「一个插件」整体
-安装，而是随附两个安装脚本（`install.sh` / `install.ps1`，分别适配类 Unix 与
-Windows/PowerShell），运行后逐个把仓库内插件作为独立的 `link:` 依赖装入 Web Profile。
-本文档仅记录跨插件的共性约定
+仓库内每个插件均为独立、自包含的本地 npm 包。本文档仅记录跨插件的共性约定
 （包结构、挂载与激活、变更生效机制、构建与验证、注意事项）；各插件的功能说明
 见其 `README.md`。
 
@@ -16,21 +13,23 @@ Windows/PowerShell），运行后逐个把仓库内插件作为独立的 `link:`
    源码（`src/`，入口 `src/client.ts`）编写，`package.json` 须提供 `build` 脚本
    （产出 `lib/client.js`）与 `typecheck` 脚本；`lib/*.js` 为构建产物，不得作为手写
    源文件。宿主半部为 TypeScript 源码 `index.ts`（由 Node 22 Type Stripping 直接加载，
-   无需编译），但须提供 `typecheck` 脚本。现有纯 JavaScript 插件（`dsh-fullwidth-chat`、
+   无需编译），但须提供 `typecheck` 脚本。例外：`dsh-change-summary` 的宿主半部位于
+   `src/index.ts`，经 `tsc` 编译为 `lib/index.js` 后加载（非 Type Stripping 直载），
+   改动其宿主源码须重新 `npm run build`。现有纯 JavaScript 插件（`dsh-fullwidth-chat`、
    `dsh-new-session`）为历史遗留，维持现状；新增或重构插件
    一律适用本条规范。
 
 ## 仓库概述
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
-进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经仓库根
-安装脚本（`install.sh` / `install.ps1`）逐个以 Web Profile 的 `link:` 依赖挂载至
-运行中的应用。默认安装 6 个插件；`dsh-change-summary` 代码与补丁均已完成但默认不装
-（见「挂载与激活」）。
+进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
+Profile 的 `link:` 依赖挂载至运行中的应用。当前 7 个插件（含 `dsh-change-summary`）
+均已挂载；`dsh-kbd-nav-focus` 已从仓库移除（提交 6499dd9），仅存于历史。
 
 - 版本控制采用黑名单：`.gitignore` 默认放行全部内容，仅忽略系统/编辑器文件
-  （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`node_modules/`）、
-  TypeScript 增量缓存（`*.tsbuildinfo`）与特定构建产物（`dsh-change-summary/lib/`）。
+  （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`.npm-cache/`、
+  `node_modules/`）、TypeScript 增量缓存（`*.tsbuildinfo`）与特定构建产物
+  （`dsh-change-summary/lib/`）。
   新增插件目录默认即受版本控制，无需额外配置；若其 `lib/` 为不入仓的构建产物，
   需在 `.gitignore` 单独追加忽略项。
 - 优先查阅各插件的 `README.md` 获取加载与构建信息，本文档仅描述共性约定。
@@ -40,21 +39,15 @@ Windows/PowerShell），运行后逐个把仓库内插件作为独立的 `link:`
 | 目录 | 形态 | 宿主半部 | 浏览器半部 | 构建 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `dsh-text-editor` | Host + Client（TS） | `index.ts`（Type Stripping）+ `host/`，三条路由 | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | Monaco 应用内编辑器；提供 `openFile`/`showDiff` 能力 |
-| `dsh-change-summary` | Host + Client（TS） | `src/index.ts`，`/diff` + `/exists` 路由 | `src/client/` → tsc×2 + tsdown → `lib/` | `npm run build / typecheck / verify` | 回合结束汇总改动文件与 git 差异。默认不装（脚本 `--with-change-summary` 启用）、`lib/` 不入仓 |
+| `dsh-change-summary` | Host + Client（TS） | `src/index.ts`（经 tsc 编译为 `lib/index.js` 加载，非直载），`/diff` + `/exists` 路由 | `src/client/` → tsc×2 + tsdown → `lib/` | `npm run build / typecheck / verify` | 回合结束汇总改动文件与 git 差异。`lib/` 不入仓（重装前须先构建） |
 | `dsh-git-guard` | Host only（TS） | `index.ts`，钩挂 `tools/pre-execute` | — | `npm run typecheck`；`node test.mjs` | 拦截 `git push`（deny）/ `git commit`（ask） |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + Esc 停止 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发）：审批/问答键盘化、会话切换、对话滚动、复制、⌘K 命令面板与 ⌘/ 速查表；设计文档 `docs/dsh-hotkeys-proposal.md`（尚未挂载，加载见其 README） |
 
 ## 包结构与约定
-
-仓库根（不属于任何单个插件）：
-
-- `install.sh` / `install.ps1`：安装脚本（类 Unix / Windows（PowerShell）各一），
-  逐个把仓库内默认插件以 `link:` 装入 Web Profile（见「挂载与激活」）。**两脚本内的
-  插件目录列表必须保持一致**：新增 / 移除插件时同步编辑两处。
-- `README.md`：安装（脚本 / 手动）、迁移与卸载说明。
 
 标准插件结构：
 
@@ -84,14 +77,21 @@ Windows/PowerShell），运行后逐个把仓库内插件作为独立的 `link:`
 - 宿主半部依赖宿主服务时，在该行声明 `inject`，例如：
   - `dsh-text-editor`：`inject: [webServer, fs]`
   - `dsh-change-summary`：`inject: [webServer, sessions]`
-- 宿主 `index.ts` 不再 `export inject`（依赖注入由挂载行声明）；浏览器半部则必须
-  `export const inject = [...]`（由模块加载器读取）。
+- 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务改由挂载行 `inject`
+  声明（见上两例）；浏览器半部则按需 `export const inject = [...]`（由模块加载器
+  读取注入，如 `dsh-text-editor`：`['slots','sessions']`、`dsh-change-summary`：
+  `['slots','locale','uiConversation','dsh-text-editor','sessions']`），不消费服务的
+  客户端（纯样式补丁 `dsh-code-card-fonts`）无需声明。遗留纯 JS 宿主
+  （`dsh-new-session` 的 `lib/index.js`）维持现状：仍在代码中
+  `export inject = ['commands']`。
 
 宿主半部：以 TypeScript 编写 `index.ts`（可拆分多文件，如 `dsh-text-editor` 的
 `host/`），由 Node 22 Type Stripping 直接加载，无需编译；相对导入须携带 `.ts`
 扩展名；仅允许可擦除语法（不使用 enum、命名空间、参数属性），`tsconfig.json` 以
-`erasableSyntaxOnly` 强制约束。最小示例：`dsh-git-guard`（单文件）。遗留的纯
-JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
+`erasableSyntaxOnly` 强制约束。最小示例：`dsh-git-guard`（单文件）。例外：
+`dsh-change-summary` 的宿主半部位于 `src/`（`index.ts` + `git.ts`），经 `tsc`
+编译为 `lib/index.js` 后加载（其 `lib/` 不入仓，加载细节见「挂载与激活」说明）。
+遗留的纯 JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
 的 `lib/index.js`）维持现状，不要求迁移。
 
 浏览器半部：以 TypeScript 编写，`src/` 为源码（入口 `src/client.ts`），`scripts/`
@@ -105,50 +105,30 @@ JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
 - 浏览器运行时不支持 Type Stripping：`lib/client.js` 为构建产物、禁止手改；源码变更
   后必须重新构建，未重新构建是插件改动未生效的最常见原因。产物通常入仓
   （`dsh-change-summary` 除外），以保证离线可加载。
-- bundle 的 external 依赖（由框架注入，不打包进产物）：`react`、`react/jsx-runtime`、
-  `@deepseek-ai/dsh-client-runtime/client`；业务模块全部内联。
+- bundle 的 external 依赖按各插件实际 import 配置（由框架注入、不打包进产物）：
+  `dsh-text-editor` 仅 `react`（`package.json` 的 `dsh.client.external`）；
+  `dsh-change-summary` 为 `react` + `react/jsx-runtime`（tsdown `neverBundle`）；
+  `dsh-code-card-fonts` 无 external（不消费 react）。客户端源码中的
+  `@deepseek-ai/*` import 均为 type-only、编译时擦除；业务模块全部内联。
 
 ## 挂载与激活（Web Profile）
 
-**脚本安装（推荐）：** 仓库根 `install.sh`（类 Unix）/ `install.ps1`
-（Windows，PowerShell）把仓库内默认插件**逐个**安装为 Web Profile 中独立的
-`link:` 依赖，每个插件经自身 `cordis.patch.yml`（`dsh.bundle.patch`）独立挂载：
+`~/.dsh/profiles/web/package.json` 当前配置：
+
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 7 个：
+  change-summary / code-card-fonts / directory-picker-browse / fullwidth-chat /
+  git-guard / new-session / text-editor）；
+- `dsh.profile.bundles` 共 9 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
+  及上述 7 个本地插件；
+- `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
+  （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
+
+挂载新插件或启用未挂载插件（`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会
+自动核对 `dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
+无需手动改 `package.json`）：
 
 ```sh
-cd <仓库根>
-./install.sh        # 类 Unix（macOS / Linux / WSL）
-powershell -ExecutionPolicy Bypass -File .\install.ps1   # Windows（PowerShell）
-# 重启 App 生效
-```
-
-脚本执行内容：
-
-1. 前置检查 `dsh` / `pnpm`（`dsh plugin` 是 pnpm 转发器）与默认插件目录；
-2. 若 Profile 仍装有旧的根集合依赖 `dsh-plugins`，先
-   `dsh plugin --profile web remove dsh-plugins`（避免挂载行 id 重复）；
-3. 对默认插件目录逐个执行 `dsh plugin --profile web add link:<插件目录绝对路径>`；
-4. 打印清单并提示重启。浏览器半部无需在安装时声明：client-modules 服务按每个
-   插件的挂载行解析到插件包目录、读取包内 `dsh.client` 声明自动注册。
-
-脚本可重复执行（`link:` 已存在时为幂等 no-op）；`link:` 实时指向本仓库，修改代码后
-无需重跑脚本，只需重新 build 浏览器半部并重启 App。选项：
-
-- `--with-change-summary`（等价环境变量 `DSH_INSTALL_CHANGE_SUMMARY=1`）：额外安装
-  `dsh-change-summary`（默认不装，其 `lib/` 不入仓，须先构建，见下）；
-- `DSH_PROFILE=<name>`：装入其它 Profile（默认 `web`）。
-
-注意：挂载行 id 不得重复（脚本通过先卸载旧集合避免）。插件经
-`dsh.profile.bundles` 常驻挂载，不支持热重载 —— 安装 / 代码变更后须重启 App
-（Profile 自身的 `patchReload: live` 仅热重载 Profile 的 `cordis.patch.yml`，
-通常为 `[]`）。新增 / 移除插件时须同步更新 `install.sh` 与 `install.ps1` 内的
-插件目录列表（两处保持一致）。
-
-单插件挂载（单独调试或手动安装；`dsh plugin` 是 pnpm 转发器：执行
-`pnpm add` 后会自动核对 `dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖
-自动并入 bundle 列表，无需手动改 `package.json`）：
-
-```sh
-# 方式一：从仓库内插件目录执行（相对 link: 由 dsh 锚定到当前调用目录）
+# 方式一：从仓库内插件目录执行（相对 link: 由 pnpm 锚定到当前目录）
 cd <仓库根>/<name> && dsh plugin --profile web add link:.
 # 方式二：从任意目录用绝对路径
 dsh plugin --profile web add link:<仓库根>/<name>
@@ -164,11 +144,10 @@ dsh plugin --profile web remove <name>
 > 上述步骤属于用户操作：依据强制规范第 1 条，代理交付插件后不得自行执行加载步骤
 > （`dsh plugin add`、`pnpm install`、重启 App）；应将步骤写入插件 README 并告知用户。
 
-说明：`dsh-change-summary` 的代码与 `cordis.patch.yml`（`inject: [webServer,
-sessions]`）均已完成，但默认不装（其 `lib/` 为不入仓的构建产物）。启用：先在
+说明：`dsh-change-summary` 已挂载进 Profile 的 `dependencies` / `bundles`
+（`inject: [webServer, sessions]`）。其 `lib/` 不入仓，重装 / 迁移全局环境后须先在
 插件目录内 `npm install && npm run build` 生成 `lib/index.js` 与 `lib/client.js`，
-再运行仓库根脚本并加 `--with-change-summary`，或按上方「单插件挂载」流程单独
-`dsh plugin --profile web add`。
+否则该插件加载失败。
 
 ## 变更生效机制
 
@@ -193,6 +172,7 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 | `dsh-change-summary` | `npm run build / typecheck / verify` | tsc（host + client）+ tsdown；`verify` 为离线冒烟测试 |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
+| `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
 
 `node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
@@ -226,7 +206,8 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 3. 浏览器半部未声明所需依赖（如 `slots`）即 apply → `ctx.get(...)` 返回 `undefined`，
    导致 Web 启动失败 / HARNESS 面板报 failed to apply loader entry；判空须使用
    `=== null || === undefined` 双重判断。
-4. Node 宿主 TypeScript 仅使用可擦除语法（`erasableSyntaxOnly`）。
+4. Node 宿主 TypeScript（Type Stripping 直载者）仅使用可擦除语法
+   （`erasableSyntaxOnly`）；经 `tsc` 编译加载的宿主（`dsh-change-summary`）不受此限。
 5. 浏览器 bundle 仅将框架依赖（react 等）设为 external，业务模块全部内联。
 6. 向 `~/.dsh/` 写入文件需 danger-full-access 沙箱授权；系统提示声明
    approval=never 时不得设置 `sandbox_permissions`。
@@ -241,5 +222,4 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 | 路径 | 内容 |
 | --- | --- |
 | `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项 |
-| 根 `README.md` | 安装脚本（install.sh / install.ps1）与手动安装、迁移、卸载、dsh-change-summary 启用及插件增删流程 |
-| 各插件 `README.md` | 功能说明、加载方式与构建说明 |
+| 各插件 `README.md` | 功能说明、加载方式与构建说明（`dsh-text-editor` 与 `dsh-fullwidth-chat` 暂无 README，功能见 `package.json` 的 `description` 与本文档插件清单） |

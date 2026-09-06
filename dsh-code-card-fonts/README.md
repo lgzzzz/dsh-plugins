@@ -20,7 +20,8 @@
 - 内联代码(`` `...` ``)由 Markdown 渲染为 `code`,应用侧规则 `._markdown_* :not(pre)>code` 自带 `font-size: .875em !important`,特异性(0,1,2)高于一般属性选择器,因此用等特异性选择器 `[data-chat-flow-kind] :not(pre) > code` 覆盖(等特异性 + 本插件 `<style>` 后注入,靠文档顺序胜出)。
 - 卡片根元素设 font-size 无效:卡片内部的大多数文本元素(`.summary`、`.ioText`、`.ioCard` 等)自带显式 font-size,覆盖了继承值。因此按目标元素分别精确覆盖,而不是对根 + 全部后代(`*`)一刀切。
 - 标题 15px / 摘要 14px 是通过**更高特异性**的选择器覆盖内容规则实现的,不是调整继承。摘要行(而非摘要 + 全部后代)通过行内结构定位:DisclosureRow 表头里标题恒为第 2 个子元素,其后所有直属子元素即摘要行。
-- 工具/bash 卡片的内容文本(I/O 文本、终端、code/read/diff/search/web 正文)由 `--dsw-font-markdown-code-block-small` / `--dsw-font-markdown-code-block` 两个字体 token 驱动:在卡片根上重指这两个 token,只有消费它们的元素会变,inspect 按钮等次要文本不受影响。
+- 工具/bash 卡片的内容文本(I/O 文本、终端、code/read/diff/search/web 正文)由 `--dsw-font-markdown-code-block-small` / `--dsw-font-markdown-code-block` 两个字体 token 驱动(主题默认 **11px**,过小):在卡片根上重指这两个 token,只有消费它们的元素会变,inspect 按钮等次要文本不受影响。
+- Bash 卡片(BashRow)是结构特例:`data-sample` 只打在**表头行**上,展开后的正文 `.bodyWrap`(命令输入/执行结果的 ioCard、TerminalBlock)是表头的**相邻兄弟节点**,既不在 `[data-sample]` 内、也不是 `[data-tool]` 的后代,因此须在表头的下一个兄弟 `[data-sample] + *` 上重指 token,命令与执行结果文本才会从默认 11px 变为 14px。
 
 ## 选择器依据(稳定 data 属性,抗 CSS-module 哈希)
 
@@ -36,7 +37,7 @@
 | 内联代码 | `[data-chat-flow-kind] :not(pre) > code` |
 | 卡片展开正文(DisclosureRow 系:思考/命令/上下文/系统提示词/workflow-run 等) | `[data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row])` |
 | 卡片展开正文(压缩标记) | `[data-chat-flow-kind="compaction"] button[aria-expanded="true"] + div`、`[data-chat-flow-kind="manual-compaction"] button[aria-expanded="true"] + div` |
-| 工具/bash 卡片内容(I/O 文本、终端、read/diff/search/web 正文) | 在 `[data-tool]`、`[data-sample]` 上重指 `--dsw-font-markdown-code-block-small` 与 `--dsw-font-markdown-code-block` |
+| 工具/bash 卡片内容(I/O 文本、终端、read/diff/search/web 正文) | 在 `[data-tool]`、`[data-sample]` 上重指 `--dsw-font-markdown-code-block-small` 与 `--dsw-font-markdown-code-block`;Bash 卡片(BashRow)展开正文是表头 `[data-sample]` 的**相邻兄弟节点**,另在 `[data-sample] + *` 上重指 |
 
 说明:
 
