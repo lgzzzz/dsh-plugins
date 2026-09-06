@@ -1,6 +1,9 @@
 # AGENTS.md — DSH 本地插件工作区
 
-仓库内每个插件均为独立、自包含的本地 npm 包。本文档仅记录跨插件的共性约定
+仓库内每个插件均为独立、自包含的本地 npm 包；仓库根不再作为「一个插件」整体
+安装，而是随附两个安装脚本（`install.sh` / `install.ps1`，分别适配类 Unix 与
+Windows/PowerShell），运行后逐个把仓库内插件作为独立的 `link:` 依赖装入 Web Profile。
+本文档仅记录跨插件的共性约定
 （包结构、挂载与激活、变更生效机制、构建与验证、注意事项）；各插件的功能说明
 见其 `README.md`。
 
@@ -20,9 +23,10 @@
 ## 仓库概述
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
-进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。当前已挂载 7 个插件；`dsh-change-summary`
-代码与补丁均已完成但尚未挂载（见「挂载与激活」）。
+进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经仓库根
+安装脚本（`install.sh` / `install.ps1`）逐个以 Web Profile 的 `link:` 依赖挂载至
+运行中的应用。默认安装 6 个插件；`dsh-change-summary` 代码与补丁均已完成但默认不装
+（见「挂载与激活」）。
 
 - 版本控制采用黑名单：`.gitignore` 默认放行全部内容，仅忽略系统/编辑器文件
   （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`node_modules/`）、
@@ -36,15 +40,21 @@ Profile 的 `link:` 依赖挂载至运行中的应用。当前已挂载 7 个插
 | 目录 | 形态 | 宿主半部 | 浏览器半部 | 构建 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `dsh-text-editor` | Host + Client（TS） | `index.ts`（Type Stripping）+ `host/`，三条路由 | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | Monaco 应用内编辑器；提供 `openFile`/`showDiff` 能力 |
-| `dsh-change-summary` | Host + Client（TS） | `src/index.ts`，`/diff` + `/exists` 路由 | `src/client/` → tsc×2 + tsdown → `lib/` | `npm run build / typecheck / verify` | 回合结束汇总改动文件与 git 差异。尚未挂载、`lib/` 不入仓 |
+| `dsh-change-summary` | Host + Client（TS） | `src/index.ts`，`/diff` + `/exists` 路由 | `src/client/` → tsc×2 + tsdown → `lib/` | `npm run build / typecheck / verify` | 回合结束汇总改动文件与 git 差异。默认不装（脚本 `--with-change-summary` 启用）、`lib/` 不入仓 |
 | `dsh-git-guard` | Host only（TS） | `index.ts`，钩挂 `tools/pre-execute` | — | `npm run typecheck`；`node test.mjs` | 拦截 `git push`（deny）/ `git commit`（ask） |
-| `dsh-kbd-nav-focus` | Client only（TS） | — | `src/client.ts` → tsc CJS → `lib/client.js` | `npm run build / typecheck` | Alt+Shift 键盘焦点导航 |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + Esc 停止 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
 
 ## 包结构与约定
+
+仓库根（不属于任何单个插件）：
+
+- `install.sh` / `install.ps1`：安装脚本（类 Unix / Windows（PowerShell）各一），
+  逐个把仓库内默认插件以 `link:` 装入 Web Profile（见「挂载与激活」）。**两脚本内的
+  插件目录列表必须保持一致**：新增 / 移除插件时同步编辑两处。
+- `README.md`：安装（脚本 / 手动）、迁移与卸载说明。
 
 标准插件结构：
 
@@ -89,7 +99,6 @@ JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
 `window.__ModuleLoader__.load({...})` 包装的 `lib/client.js`。可参照的工程模板：
 
 - `dsh-text-editor`：`src/` → esbuild 单文件 → `lib/client.js`（入仓）。
-- `dsh-kbd-nav-focus`：`src/client.ts` → tsc CommonJS → `lib/client.js`（入仓）。
 - `dsh-change-summary`：`src/` → tsc×2 + tsdown → `lib/`（不入仓，`.gitignore` 排除）。
 - 遗留纯 JavaScript 浏览器半部（`dsh-fullwidth-chat`、
   `dsh-new-session` 的 `lib/client.js`）维持现状，不要求迁移。
@@ -101,22 +110,45 @@ JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
 
 ## 挂载与激活（Web Profile）
 
-`~/.dsh/profiles/web/package.json` 当前配置：
-
-- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 7 个：
-  code-card-fonts / directory-picker-browse / fullwidth-chat / git-guard /
-  kbd-nav-focus / new-session / text-editor）；
-- `dsh.profile.bundles` 共 9 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
-  及上述 7 个本地插件；
-- `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
-  （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
-
-挂载新插件或启用未挂载插件（`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会
-自动核对 `dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
-无需手动改 `package.json`）：
+**脚本安装（推荐）：** 仓库根 `install.sh`（类 Unix）/ `install.ps1`
+（Windows，PowerShell）把仓库内默认插件**逐个**安装为 Web Profile 中独立的
+`link:` 依赖，每个插件经自身 `cordis.patch.yml`（`dsh.bundle.patch`）独立挂载：
 
 ```sh
-# 方式一：从仓库内插件目录执行（相对 link: 由 pnpm 锚定到当前目录）
+cd <仓库根>
+./install.sh        # 类 Unix（macOS / Linux / WSL）
+powershell -ExecutionPolicy Bypass -File .\install.ps1   # Windows（PowerShell）
+# 重启 App 生效
+```
+
+脚本执行内容：
+
+1. 前置检查 `dsh` / `pnpm`（`dsh plugin` 是 pnpm 转发器）与默认插件目录；
+2. 若 Profile 仍装有旧的根集合依赖 `dsh-plugins`，先
+   `dsh plugin --profile web remove dsh-plugins`（避免挂载行 id 重复）；
+3. 对默认插件目录逐个执行 `dsh plugin --profile web add link:<插件目录绝对路径>`；
+4. 打印清单并提示重启。浏览器半部无需在安装时声明：client-modules 服务按每个
+   插件的挂载行解析到插件包目录、读取包内 `dsh.client` 声明自动注册。
+
+脚本可重复执行（`link:` 已存在时为幂等 no-op）；`link:` 实时指向本仓库，修改代码后
+无需重跑脚本，只需重新 build 浏览器半部并重启 App。选项：
+
+- `--with-change-summary`（等价环境变量 `DSH_INSTALL_CHANGE_SUMMARY=1`）：额外安装
+  `dsh-change-summary`（默认不装，其 `lib/` 不入仓，须先构建，见下）；
+- `DSH_PROFILE=<name>`：装入其它 Profile（默认 `web`）。
+
+注意：挂载行 id 不得重复（脚本通过先卸载旧集合避免）。插件经
+`dsh.profile.bundles` 常驻挂载，不支持热重载 —— 安装 / 代码变更后须重启 App
+（Profile 自身的 `patchReload: live` 仅热重载 Profile 的 `cordis.patch.yml`，
+通常为 `[]`）。新增 / 移除插件时须同步更新 `install.sh` 与 `install.ps1` 内的
+插件目录列表（两处保持一致）。
+
+单插件挂载（单独调试或手动安装；`dsh plugin` 是 pnpm 转发器：执行
+`pnpm add` 后会自动核对 `dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖
+自动并入 bundle 列表，无需手动改 `package.json`）：
+
+```sh
+# 方式一：从仓库内插件目录执行（相对 link: 由 dsh 锚定到当前调用目录）
 cd <仓库根>/<name> && dsh plugin --profile web add link:.
 # 方式二：从任意目录用绝对路径
 dsh plugin --profile web add link:<仓库根>/<name>
@@ -133,9 +165,10 @@ dsh plugin --profile web remove <name>
 > （`dsh plugin add`、`pnpm install`、重启 App）；应将步骤写入插件 README 并告知用户。
 
 说明：`dsh-change-summary` 的代码与 `cordis.patch.yml`（`inject: [webServer,
-sessions]`）均已完成，但当前不在 Profile 的 `dependencies` / `bundles` 中。启用时按
-上述流程加入；其 `lib/` 不入仓，须先在插件目录内 `npm install && npm run build`
-生成 `lib/index.js` 与 `lib/client.js`，再执行 `dsh plugin --profile web add`。
+sessions]`）均已完成，但默认不装（其 `lib/` 为不入仓的构建产物）。启用：先在
+插件目录内 `npm install && npm run build` 生成 `lib/index.js` 与 `lib/client.js`，
+再运行仓库根脚本并加 `--with-change-summary`，或按上方「单插件挂载」流程单独
+`dsh plugin --profile web add`。
 
 ## 变更生效机制
 
@@ -157,7 +190,6 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 | 插件 | 命令 | 说明 |
 | --- | --- | --- |
 | `dsh-text-editor` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`；`check` 对产物执行 `node --check` 并校验宿主语法 |
-| `dsh-kbd-nav-focus` | `npm run typecheck && npm run build` + `node --check lib/client.js` | tsc CJS → `lib/client.js` |
 | `dsh-change-summary` | `npm run build / typecheck / verify` | tsc（host + client）+ tsdown；`verify` 为离线冒烟测试 |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
@@ -209,4 +241,5 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 | 路径 | 内容 |
 | --- | --- |
 | `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项 |
+| 根 `README.md` | 安装脚本（install.sh / install.ps1）与手动安装、迁移、卸载、dsh-change-summary 启用及插件增删流程 |
 | 各插件 `README.md` | 功能说明、加载方式与构建说明 |
