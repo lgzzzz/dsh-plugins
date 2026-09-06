@@ -25,7 +25,10 @@ Profile 中独立的 `link:` 依赖，经其自身的 `cordis.patch.yml` 独立�
 | `dsh-fullwidth-chat` | 对话列全宽展示 | ✅ |
 | `dsh-new-session` | `/new` 新建会话命令 | ✅ |
 | `dsh-directory-picker-browse` | 目录选择器固定 browse 模式的覆盖层 | ✅ |
-| `dsh-change-summary` | 回合结束汇总改动文件与 git 差异（**可选**，见下文） | ❌ |
+| `dsh-change-summary` | 回合结束汇总改动文件与 git 差异（`lib/` 不入仓，装前须先构建，见下） | ✅ |
+| `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、滚动、复制、⌘K 面板等） | ✅ |
+
+> 两个安装脚本**默认安装仓库内全部 8 个插件**（不再有“可选插件”概念）。
 
 ## 安装（脚本，推荐）
 
@@ -35,7 +38,7 @@ Profile 中独立的 `link:` 依赖，经其自身的 `cordis.patch.yml` 独立�
 
 ```sh
 cd <仓库根>
-./install.sh          # 默认安装 6 个插件到 web Profile
+./install.sh          # 默认安装全部 8 个插件到 web Profile
 # 重启 App 生效
 ```
 
@@ -54,31 +57,27 @@ Windows PowerShell 5.1 上均可正常解析显示。结束后重启 App。
 
 ### 脚本做了什么
 
-1. 前置检查：`dsh`、`pnpm` 是否在 PATH，默认插件目录是否齐全；
+1. 前置检查：`dsh`、`pnpm` 是否在 PATH，全部插件目录是否齐全；
 2. 若 Profile 仍装有旧的根集合依赖 `dsh-plugins`，先执行
    `dsh plugin --profile web remove dsh-plugins` 卸载（避免挂载行 id 重复）；
-3. 对每个默认插件目录执行一次 `dsh plugin --profile web add link:<绝对路径>`；
+3. 对每个插件目录执行一次 `dsh plugin --profile web add link:<绝对路径>`；
 4. 打印已安装清单并提示重启。
 
 浏览器半部无需单独注册：client-modules 服务按每个插件的挂载行解析到插件包目录、
 读取包内 `dsh.client` 声明自动注册。
 
-### 安装可选插件 dsh-change-summary
+### dsh-change-summary 的构建要求
 
-默认不装（其 `lib/` 为不入仓的构建产物）。先构建：
+`dsh-change-summary` 是默认安装的一部分，但其 `lib/` 为不入仓的构建产物，全新
+克隆的仓库里并不存在。脚本检测到 `lib/index.js` / `lib/client.js` 缺失时会给出
+中文提示并退出，此时先构建再重跑脚本：
 
 ```sh
 cd dsh-change-summary
 npm install
 npm run build
 cd ..
-```
-
-再以开关安装（或设环境变量 `DSH_INSTALL_CHANGE_SUMMARY=1`）：
-
-```sh
-./install.sh --with-change-summary           # 类 Unix
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -WithChangeSummary   # Windows
+./install.sh   # 或 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 ### 装入其它 Profile
@@ -132,7 +131,7 @@ dsh plugin --profile web remove <name>
 移除全部插件（换行拼接为一条命令即可）：
 
 ```sh
-dsh plugin --profile web remove dsh-text-editor dsh-code-card-fonts dsh-git-guard dsh-fullwidth-chat dsh-new-session dsh-directory-picker-browse dsh-change-summary
+dsh plugin --profile web remove dsh-text-editor dsh-code-card-fonts dsh-git-guard dsh-fullwidth-chat dsh-new-session dsh-directory-picker-browse dsh-change-summary dsh-kbd-hotkeys
 ```
 
 卸载后重启 App 生效。
@@ -140,8 +139,8 @@ dsh plugin --profile web remove dsh-text-editor dsh-code-card-fonts dsh-git-guar
 ## 新增 / 移除插件时
 
 1. 按各插件 README 完成插件包本体（新插件须遵循 `AGENTS.md` 强制规范第 2 条）；
-2. 同步更新 `install.sh` 与 `install.ps1` 中的默认插件目录列表——**两处必须保持
-   一致**（新增/移除默认插件，或调整可选插件说明）；
+2. 同步更新 `install.sh` 与 `install.ps1` 中的插件目录列表——**两处必须保持
+   一致**（两个脚本均默认安装清单中的全部插件）；
 3. 需要手动单装验证时，构建后按上文「手动安装单个插件」执行。
 
 ## 验证

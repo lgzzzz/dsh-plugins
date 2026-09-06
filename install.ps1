@@ -2,21 +2,18 @@
 #  install.ps1 —— dsh-plugins Windows 安装脚本（PowerShell）
 #
 #  本仓库不再作为「一个插件」整体安装（不再有根 cordis.patch.yml /
-#  meta bundle）；本脚本把仓库内每个插件目录逐个以 link: 依赖装入
+#  meta bundle）；本脚本把仓库内**全部**插件目录逐个以 link: 依赖装入
 #  DSH Profile，每个插件经自身的 cordis.patch.yml 独立挂载。
 #  类 Unix（macOS / Linux / WSL）请运行同目录的 install.sh。
 #
 #  用法:
 #    powershell -ExecutionPolicy Bypass -File .\install.ps1
-#        默认把 6 个默认插件安装到 web Profile；结束后重启 App 生效。
-#    .\install.ps1 -WithChangeSummary
-#        额外安装 dsh-change-summary（需先在插件目录构建，见下）
+#        把仓库内全部插件安装到 web Profile；结束后重启 App 生效。
 #    .\install.ps1 -Help
 #
 #  参数 / 环境变量:
 #    -ProfileName <名称>          装入指定 Profile（默认 web）
 #    DSH_PROFILE=<名称>           同上（环境变量方式）
-#    DSH_INSTALL_CHANGE_SUMMARY=1 等价于 -WithChangeSummary
 #
 #  本脚本可重复执行：link: 依赖已存在时为幂等 no-op，且 link: 实时指向
 #  本仓库，之后修改插件代码无需重跑（浏览器半部改动需重新 build，宿主
@@ -33,7 +30,6 @@
 [CmdletBinding()]
 param(
     [string]$ProfileName = '',
-    [switch]$WithChangeSummary,
     [switch]$Help
 )
 
@@ -47,12 +43,10 @@ function Show-Usage {
 dsh-plugins 安装脚本（Windows / PowerShell）
 用法:
   powershell -ExecutionPolicy Bypass -File .\install.ps1
-  .\install.ps1 -WithChangeSummary      额外安装 dsh-change-summary（需先构建）
   .\install.ps1 -Help                   显示本帮助
 参数 / 环境变量:
-  -ProfileName <名称>                       装入指定 Profile（默认 web）
-  DSH_PROFILE=<名称>                        同上（环境变量方式）
-  DSH_INSTALL_CHANGE_SUMMARY=1              等价于 -WithChangeSummary
+  -ProfileName <名称>                   装入指定 Profile（默认 web）
+  DSH_PROFILE=<名称>                    同上（环境变量方式）
 '@
 }
 
@@ -74,20 +68,22 @@ $script:Root = $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($ProfileName)) {
     if ($env:DSH_PROFILE) { $ProfileName = $env:DSH_PROFILE } else { $ProfileName = 'web' }
 }
-$installChangeSummary = $WithChangeSummary -or ($env:DSH_INSTALL_CHANGE_SUMMARY -eq '1')
 
-# 默认安装的插件（与 install.sh 中的列表保持一致；新增 / 移除插件须同步两处）
-$defaultPlugins = @(
+# 仓库内全部插件目录（与 install.sh 中的列表保持一致；新增 / 移除插件须同步两处）
+$plugins = @(
     'dsh-text-editor'
     'dsh-code-card-fonts'
     'dsh-git-guard'
     'dsh-fullwidth-chat'
     'dsh-new-session'
     'dsh-directory-picker-browse'
+    'dsh-change-summary'
+    'dsh-kbd-hotkeys'
 )
 
 Write-Host "==> 仓库根: $script:Root"
 Write-Host "==> 目标 Profile: $ProfileName"
+Write-Host "==> 将安装全部 $($plugins.Count) 个插件"
 
 # ---- 前置检查 ------------------------------------------------------------
 # 注意：npm 全局安装的 dsh 会同时生成 dsh.ps1 与 dsh.cmd 两个 shim。这里
@@ -106,9 +102,22 @@ if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
     Write-Host '错误: 未找到 pnpm 命令（dsh plugin 依赖 pnpm 管理 Profile）。请先安装 pnpm 并确保其在 PATH。' -ForegroundColor Red
     exit 1
 }
-foreach ($dir in $defaultPlugins) {
+foreach ($dir in $plugins) {
     if (-not (Test-Path -LiteralPath (Join-Path $script:Root "$dir\package.json"))) {
         Write-Host "错误: 缺少插件目录或 package.json: $(Join-Path $script:Root $dir)" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# dsh-change-summary 的 lib/ 是不入仓的构建产物；缺失时给出构建指引
+foreach ($rel in @('lib\index.js', 'lib\client.js')) {
+    $entry = Join-Path $script:Root "dsh-change-summary\$rel"
+    if (-not (Test-Path -LiteralPath $entry)) {
+        Write-Host "错误: dsh-change-summary 缺少构建产物 $rel（其 lib/ 不入仓，未随仓库提供）。" -ForegroundColor Red
+        Write-Host '请先在 dsh-change-summary 目录执行:' -ForegroundColor Red
+        Write-Host '   npm install' -ForegroundColor Red
+        Write-Host '   npm run build' -ForegroundColor Red
+        Write-Host '然后重跑本脚本。' -ForegroundColor Red
         exit 1
     }
 }
@@ -123,38 +132,19 @@ if (Test-Path -LiteralPath $manifest) {
     }
 }
 
-# ---- 逐个安装默认插件 ----------------------------------------------------
-$total = $defaultPlugins.Count
+# ---- 逐个安装全部插件 ----------------------------------------------------
+$total = $plugins.Count
 for ($i = 0; $i -lt $total; $i++) {
-    $dir = $defaultPlugins[$i]
+    $dir = $plugins[$i]
     $link = 'link:' + (Join-Path $script:Root $dir).Replace('\', '/')
     Write-Host ("==> [{0}/{1}] 安装 {2} ..." -f ($i + 1), $total, $dir)
     Invoke-Dsh plugin --profile $ProfileName add $link
 }
 
-# ---- 可选插件：dsh-change-summary ----------------------------------------
-if ($installChangeSummary) {
-    foreach ($rel in @('lib\index.js', 'lib\client.js')) {
-        $entry = Join-Path $script:Root "dsh-change-summary\$rel"
-        if (-not (Test-Path -LiteralPath $entry)) {
-            Write-Host "错误: dsh-change-summary 缺少构建产物 $rel。" -ForegroundColor Red
-            Write-Host '请先在 dsh-change-summary 目录执行:' -ForegroundColor Red
-            Write-Host '   npm install' -ForegroundColor Red
-            Write-Host '   npm run build' -ForegroundColor Red
-            Write-Host '然后重跑本脚本。' -ForegroundColor Red
-            exit 1
-        }
-    }
-    Write-Host '==> 安装 dsh-change-summary ...'
-    $link = 'link:' + (Join-Path $script:Root 'dsh-change-summary').Replace('\', '/')
-    Invoke-Dsh plugin --profile $ProfileName add $link
-}
-
 # ---- 汇总 ------------------------------------------------------------------
 Write-Host ''
-Write-Host '完成。已安装的插件:'
-foreach ($dir in $defaultPlugins) { Write-Host "  - $dir" }
-if ($installChangeSummary) { Write-Host '  - dsh-change-summary' }
+Write-Host "完成。已安装全部 $total 个插件:"
+foreach ($dir in $plugins) { Write-Host "  - $dir" }
 Write-Host ''
 Write-Host '请重启 App（dsh web）使常驻挂载生效。'
 Write-Host 'link: 依赖实时指向本仓库：之后修改插件代码无需重跑本脚本，'

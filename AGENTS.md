@@ -23,8 +23,10 @@
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
 进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。当前 7 个插件（含 `dsh-change-summary`）
-均已挂载；`dsh-kbd-nav-focus` 已从仓库移除（提交 6499dd9），仅存于历史。
+Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 8 个插件目录（见下节插件清单）；
+web Profile 当前已挂载其中 7 个，`dsh-kbd-nav-focus` 已从仓库移除（提交 6499dd9），
+仅存于历史。仓库根提供 `install.sh` / `install.ps1` 安装脚本，默认把**全部** 8 个
+插件逐个装入 Profile（推荐入口，详见仓库根 README）。
 
 - 版本控制采用黑名单：`.gitignore` 默认放行全部内容，仅忽略系统/编辑器文件
   （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`.npm-cache/`、
@@ -45,7 +47,7 @@ Profile 的 `link:` 依赖挂载至运行中的应用。当前 7 个插件（含
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发）：审批/问答键盘化、会话切换、对话滚动、复制、⌘K 命令面板与 ⌘/ 速查表；设计文档 `docs/dsh-hotkeys-proposal.md`（尚未挂载，加载见其 README） |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发）：审批/问答键盘化、会话切换、对话滚动、复制、⌘K 命令面板与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
 
 ## 包结构与约定
 
