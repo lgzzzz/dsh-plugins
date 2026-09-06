@@ -51,6 +51,60 @@ function scrollToEdge(edge) {
   if (el === null) return;
   el.scrollTop = edge === "top" ? 0 : el.scrollHeight;
 }
+function userRowOffset(row, host) {
+  return row.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop;
+}
+function renderedUserRows(host) {
+  const rows = [];
+  for (const row of host.querySelectorAll('[data-chat-flow-kind="user"]')) {
+    if (row.hasAttribute("hidden")) continue;
+    const rect = row.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    rows.push(row);
+  }
+  return rows;
+}
+function alignUserRowTop(row, host) {
+  host.scrollTop += row.getBoundingClientRect().top - host.getBoundingClientRect().top - 24;
+}
+function userScrollHost() {
+  const host = document.querySelector("[data-conversation-scroll]");
+  if (host !== null) return host;
+  const flow = document.querySelector("[data-chat-flow]");
+  if (flow === null) return null;
+  let ancestor = flow.parentElement;
+  while (ancestor !== null && ancestor !== document.body) {
+    const overflowY = window.getComputedStyle(ancestor).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") return ancestor;
+    ancestor = ancestor.parentElement;
+  }
+  return null;
+}
+function scrollToUserMessage(direction) {
+  const host = userScrollHost();
+  if (host === null) return false;
+  const rows = renderedUserRows(host);
+  if (rows.length === 0) return false;
+  const top = host.scrollTop;
+  if (direction < 0) {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (userRowOffset(rows[i], host) < top) {
+        alignUserRowTop(rows[i], host);
+        return true;
+      }
+    }
+    host.scrollTop = 0;
+    return true;
+  }
+  for (let i = 0; i < rows.length; i++) {
+    if (userRowOffset(rows[i], host) > top) {
+      alignUserRowTop(rows[i], host);
+      return true;
+    }
+  }
+  host.scrollTop = host.scrollHeight;
+  return true;
+}
 async function copyText(text) {
   try {
     if (typeof navigator !== "undefined" && navigator.clipboard !== void 0) {
@@ -240,6 +294,8 @@ var ACTIONS = [
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
   { id: "scroll.pageup", label: "\u5BF9\u8BDD\u4E0A\u7FFB\u4E00\u9875", group: "\u6EDA\u52A8(P1)", states: ["C"] },
   { id: "scroll.pagedown", label: "\u5BF9\u8BDD\u4E0B\u7FFB\u4E00\u9875", group: "\u6EDA\u52A8(P1)", states: ["C"] },
+  { id: "scroll.prevUser", label: "\u8DF3\u5230\u4E0A\u4E00\u6761\u4F60\u53D1\u9001\u7684\u6D88\u606F", group: "\u6EDA\u52A8(P1)", states: ["C"] },
+  { id: "scroll.nextUser", label: "\u8DF3\u5230\u4E0B\u4E00\u6761\u4F60\u53D1\u9001\u7684\u6D88\u606F", group: "\u6EDA\u52A8(P1)", states: ["C"] },
   { id: "scroll.top", label: "\u8DF3\u5230\u6700\u65E7\u6D88\u606F", group: "\u6EDA\u52A8(P1)", states: ["C"] },
   { id: "scroll.bottom", label: "\u8DF3\u5230\u6700\u65B0\u6D88\u606F", group: "\u6EDA\u52A8(P1)", states: ["C"] },
   { id: "reply.copy", label: "\u590D\u5236\u6700\u540E\u56DE\u590D", group: "\u590D\u5236(P1)", states: ["A", "B", "C"] },
@@ -254,22 +310,30 @@ var ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 var DEFAULT_BINDINGS = {
   "approval.allow": "mod+alt+enter",
   "approval.reject": "mod+alt+backspace",
-  "session.new": "mod+shift+o",
+  "session.new": "mod+alt+o",
   "sidebar.toggle": "mod+b",
   "session.prev": "mod+alt+arrowleft",
   "session.next": "mod+alt+arrowright",
   "scroll.pageup": "pageup",
   "scroll.pagedown": "pagedown",
-  "scroll.top": "mod+arrowup",
-  "scroll.bottom": "mod+arrowdown",
-  "reply.copy": "mod+shift+c",
-  "code.copy": "mod+shift+;",
+  "scroll.prevUser": "mod+arrowup",
+  "scroll.nextUser": "mod+arrowdown",
+  "reply.copy": "mod+alt+c",
+  "code.copy": "mod+alt+;",
   "settings.open": "mod+.",
   "model.open": "mod+alt+m",
-  "composer.focus": "mod+shift+e",
-  "palette.toggle": "mod+k",
+  "composer.focus": "mod+alt+e",
+  // palette.toggle 不提供默认键位:原 Ctrl/Cmd+K 与浏览器地址栏快捷键冲突;
+  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: palette.toggle)。
   "help.toggle": "mod+/"
 };
+function comboActionMap(bindings) {
+  const map = /* @__PURE__ */ new Map();
+  for (const [id, combo] of Object.entries(bindings)) {
+    if (combo !== "") map.set(combo, id);
+  }
+  return map;
+}
 var STORAGE_KEY = "dsh-kbd-hotkeys:v1";
 function loadConfig() {
   const bindings = { ...DEFAULT_BINDINGS };
@@ -621,7 +685,7 @@ function createOverlays(deps) {
     hint.className = "dsh-kbd-helpRow";
     const hintLabel = document.createElement("span");
     hintLabel.className = "dsh-kbd-itemLabel";
-    hintLabel.textContent = "\u6B64\u5916:Esc \u4E2D\u65AD\u56DE\u5408(\u7531 dsh-new-session \u63D0\u4F9B);Shift+Esc \u805A\u7126\u8F93\u5165\u6846";
+    hintLabel.textContent = "\u6B64\u5916:Esc \u4E2D\u65AD\u56DE\u5408(\u7531 dsh-new-session \u63D0\u4F9B)";
     const hintKey = document.createElement("kbd");
     hintKey.textContent = "Esc";
     hint.appendChild(hintLabel);
@@ -736,6 +800,10 @@ function runAction(id, services, overlays) {
       case "scroll.bottom":
         scrollToEdge("bottom");
         return true;
+      case "scroll.prevUser":
+        return scrollToUserMessage(-1);
+      case "scroll.nextUser":
+        return scrollToUserMessage(1);
       case "reply.copy":
         void copyLastReply().then((ok) => {
           showToast(ok ? "\u5DF2\u590D\u5236\u6700\u540E\u56DE\u590D" : "\u6CA1\u6709\u53EF\u590D\u5236\u7684\u56DE\u590D");
@@ -775,12 +843,18 @@ function apply(ctx) {
     layout: getService(ctx, "layout")
   };
   let config = loadConfig();
+  let actionByCombo = comboActionMap(config.bindings);
+  const applyConfig = (next) => {
+    config = next;
+    actionByCombo = comboActionMap(next.bindings);
+  };
   const overlays = createOverlays({
     services,
     getConfig: () => config,
     setEnabled: (enabled) => {
-      config = { ...config, enabled };
-      saveConfig(config);
+      const next = { ...config, enabled };
+      applyConfig(next);
+      saveConfig(next);
     },
     runAction: (id) => runAction(id, services, overlays)
   });
@@ -820,11 +894,7 @@ function apply(ctx) {
         return;
       }
     }
-    if (combo === "shift+escape" && !editable && focusComposer()) {
-      swallow(event);
-      return;
-    }
-    const actionId = config.bindings[combo];
+    const actionId = actionByCombo.get(combo);
     if (actionId === void 0) return;
     const def = ACTION_BY_ID.get(actionId);
     if (def === void 0) return;

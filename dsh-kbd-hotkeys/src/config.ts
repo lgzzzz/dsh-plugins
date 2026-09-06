@@ -23,8 +23,8 @@ export interface ActionDef {
 }
 
 /**
- * 动作注册表。question.option(数字键)与 shift+escape 为固定行为,
- * 不进 bindings 映射(见 dispatcher),但仍在 ACTIONS 中展示说明。
+ * 动作注册表。question.option(数字键)为固定行为,不进 bindings 映射
+ * (见 dispatcher),但仍在 ACTIONS 中展示说明。
  */
 export const ACTIONS: readonly ActionDef[] = [
   // P0 回合级高频(审批动作放行任意态:服务级 pendingSnapshot 判定,
@@ -40,6 +40,8 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'session.next', label: '下一个会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
   { id: 'scroll.pageup', label: '对话上翻一页', group: '滚动(P1)', states: ['C'] },
   { id: 'scroll.pagedown', label: '对话下翻一页', group: '滚动(P1)', states: ['C'] },
+  { id: 'scroll.prevUser', label: '跳到上一条你发送的消息', group: '滚动(P1)', states: ['C'] },
+  { id: 'scroll.nextUser', label: '跳到下一条你发送的消息', group: '滚动(P1)', states: ['C'] },
   { id: 'scroll.top', label: '跳到最旧消息', group: '滚动(P1)', states: ['C'] },
   { id: 'scroll.bottom', label: '跳到最新消息', group: '滚动(P1)', states: ['C'] },
   { id: 'reply.copy', label: '复制最后回复', group: '复制(P1)', states: ['A', 'B', 'C'] },
@@ -57,21 +59,36 @@ export const ACTION_BY_ID: ReadonlyMap<string, ActionDef> = new Map(ACTIONS.map(
 export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'approval.allow': 'mod+alt+enter',
   'approval.reject': 'mod+alt+backspace',
-  'session.new': 'mod+shift+o',
+  'session.new': 'mod+alt+o',
   'sidebar.toggle': 'mod+b',
   'session.prev': 'mod+alt+arrowleft',
   'session.next': 'mod+alt+arrowright',
   'scroll.pageup': 'pageup',
   'scroll.pagedown': 'pagedown',
-  'scroll.top': 'mod+arrowup',
-  'scroll.bottom': 'mod+arrowdown',
-  'reply.copy': 'mod+shift+c',
-  'code.copy': 'mod+shift+;',
+  'scroll.prevUser': 'mod+arrowup',
+  'scroll.nextUser': 'mod+arrowdown',
+  'reply.copy': 'mod+alt+c',
+  'code.copy': 'mod+alt+;',
   'settings.open': 'mod+.',
   'model.open': 'mod+alt+m',
-  'composer.focus': 'mod+shift+e',
-  'palette.toggle': 'mod+k',
+  'composer.focus': 'mod+alt+e',
+  // palette.toggle 不提供默认键位:原 Ctrl/Cmd+K 与浏览器地址栏快捷键冲突;
+  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: palette.toggle)。
   'help.toggle': 'mod+/',
+}
+
+/**
+ * 反向索引:归一化组合键 → 动作 id。
+ * config.bindings 全表语义为「动作 id → 组合键」(overlay.ts 的速查表/面板均按
+ * 动作 id 取键位),按键分发需要按 combo 反查动作,故在此构建一次索引;
+ * bindings 变更(仅 localStorage 覆盖,刷新后经 loadConfig 重建)须同步重建。
+ */
+export function comboActionMap(bindings: Readonly<Record<string, string>>): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const [id, combo] of Object.entries(bindings)) {
+    if (combo !== '') map.set(combo, id)
+  }
+  return map
 }
 
 const STORAGE_KEY = 'dsh-kbd-hotkeys:v1'
@@ -174,7 +191,7 @@ export function comboOf(event: KeyboardEvent): string {
   return parts.join('+')
 }
 
-/** 把用户配置里的组合键字符串归一化(如 "Cmd+Shift+O" → "mod+shift+o")。 */
+/** 把用户配置里的组合键字符串归一化(如 "Cmd+Alt+O" → "mod+alt+o";旧配置中的 shift 也解析)。 */
 export function normalizeComboString(combo: string): string {
   const key = combo.split('+').pop() ?? ''
   const parts: string[] = []

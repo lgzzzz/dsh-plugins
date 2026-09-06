@@ -5,11 +5,10 @@
  * 功能:降低鼠标依赖的全局快捷键(键位设计见 docs/dsh-hotkeys-proposal.md):
  * - 态 A(审批 / ask_user_question / 计划评审卡片打开):⌘/Ctrl+Alt+Enter 允许、
  *   ⌘/Ctrl+Alt+Backspace 拒绝、数字键 1–9 选选项、Enter 确认提交;
- * - 全态:⌘⇧O 新建会话、⌘K 命令面板(搜索命令 / 切换会话)、⌘/ 速查表、
- *   ⌘⇧C 复制最后回复、⌘⇧; 复制最后代码块、⌘. 设置、⌘⌥M 模型选择器、
- *   ⌘⌥←/→ 上/下一个会话;
- * - 态 C(输入框失焦):⌘B 开关侧栏、PageUp/PageDown 翻页、⌘↑/↓ 跳最旧/最新、
- *   Shift+Esc / ⌘⇧E 聚焦输入框。
+ * - 全态:⌘⌥O 新建会话、⌘/ 速查表、⌘⌥C 复制最后回复、⌘⌥; 复制最后代码块、
+ *   ⌘. 设置、⌘⌥M 模型选择器、⌘⌥←/→ 上/下一个会话;
+ * - 态 C(输入框失焦):⌘B 开关侧栏、PageUp/PageDown 翻页、⌘↑/↓ 跳上一条/
+ *   下一条你发送的消息(到头/尾退化为跳最旧/最新)、⌘⌥E 聚焦输入框。
  *
  * 实现:document 捕获阶段单一 keydown 监听,按三态分发(态 A 卡片 → 态 B 输入框
  * → 态 C 浏览),消费 sessions / uiSession / uiWorkspace / layout 既有服务,
@@ -27,13 +26,14 @@ import {
   openModelSelector,
   openSettings,
   pickQuestionOption,
-  scrollToEdge,
   scrollByPages,
+  scrollToEdge,
+  scrollToUserMessage,
   startNewSession,
   submitQuestion,
   toggleSidebar,
 } from './actions.ts'
-import { ACTION_BY_ID, comboOf, loadConfig, saveConfig, type HotkeyConfig } from './config.ts'
+import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, saveConfig, type HotkeyConfig } from './config.ts'
 import { createOverlays, showToast, type OverlayHost } from './overlay.ts'
 import type { ClientContext, LayoutLike, SessionsLike, Services, UiSessionLike, UiWorkspaceLike } from './types.ts'
 
@@ -81,6 +81,10 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
       case 'scroll.bottom':
         scrollToEdge('bottom')
         return true
+      case 'scroll.prevUser':
+        return scrollToUserMessage(-1)
+      case 'scroll.nextUser':
+        return scrollToUserMessage(1)
       case 'reply.copy':
         void copyLastReply().then((ok) => {
           showToast(ok ? '已复制最后回复' : '没有可复制的回复')
@@ -127,12 +131,20 @@ export function apply(ctx: ClientContext): void {
   }
 
   let config: HotkeyConfig = loadConfig()
+  // 反向索引(combo → 动作 id):config.bindings 语义是「动作 id → 组合键」,
+  // 按键分发必须按 combo 反查动作;config 重建(总开关切换等)时同步重建。
+  let actionByCombo: Map<string, string> = comboActionMap(config.bindings)
+  const applyConfig = (next: HotkeyConfig): void => {
+    config = next
+    actionByCombo = comboActionMap(next.bindings)
+  }
   const overlays = createOverlays({
     services,
     getConfig: () => config,
     setEnabled: (enabled) => {
-      config = { ...config, enabled }
-      saveConfig(config)
+      const next = { ...config, enabled }
+      applyConfig(next)
+      saveConfig(next)
     },
     runAction: (id) => runAction(id, services, overlays),
   })
@@ -180,13 +192,7 @@ export function apply(ctx: ClientContext): void {
         return
       }
     }
-    // 固定行为:Shift+Esc 聚焦输入框(⌘⇧E 的备选,与 Open WebUI 一致)
-    if (combo === 'shift+escape' && !editable && focusComposer()) {
-      swallow(event)
-      return
-    }
-
-    const actionId = config.bindings[combo]
+    const actionId = actionByCombo.get(combo)
     if (actionId === undefined) return
     const def = ACTION_BY_ID.get(actionId)
     if (def === undefined) return
