@@ -1,5 +1,5 @@
 /**
- * dsh-kbd-hotkeys — 轻量浮层:命令面板(⌘K)、快捷键速查表(⌘/)与操作提示。
+ * dsh-kbd-hotkeys — 轻量浮层:命令面板(无默认键位,可自绑定)、快捷键速查表(⌘/)与操作提示。
  *
  * 纯 DOM 实现(不消费 react,与 dsh-code-card-fonts 同策略):样式走 <style>
  * 标签 + 主题变量(--dsw-*),卸载时随 ctx.effect disposer 一并回收。
@@ -298,7 +298,7 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
     hint.className = 'dsh-kbd-helpRow'
     const hintLabel = document.createElement('span')
     hintLabel.className = 'dsh-kbd-itemLabel'
-    hintLabel.textContent = '此外:Esc 中断回合(由 dsh-new-session 提供);Shift+Esc 聚焦输入框'
+    hintLabel.textContent = '此外:Esc 中断回合(由 dsh-new-session 提供)'
     const hintKey = document.createElement('kbd')
     hintKey.textContent = 'Esc'
     hint.appendChild(hintLabel)

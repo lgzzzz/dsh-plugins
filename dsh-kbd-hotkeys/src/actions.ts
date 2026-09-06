@@ -9,7 +9,10 @@
  * - 问答卡片:[data-question-key],选项为 [data-question-scroll] 内
  *   role=radio/checkbox 的按钮;提交为主按钮(卡片内不在滚动区的最后一个按钮);
  *   计划评审:[data-plan-review-key],不在滚动区的按钮依次为 确认/拒绝/去聊;
- * - 对话滚动容器:[data-conversation-scroll];
+ * - 对话滚动容器:[data-conversation-scroll](独立 ChatView 回退 [data-chat-flow]
+ *   的最近可滚动祖先);
+ * - 用户消息行(跳转目标):[data-chat-flow-kind="user"];顶边对齐视口 +24px
+ *   (对齐量同上游轮次导航 landOnRowRef);
  * - 输入框(Lexical 可编辑):[data-composer-input];
  * - 消息流条目:[data-chat-flow-kind](assistant / user / steering / command);
  * - 侧栏开关:layout 服务 toggleSidebar();设置触发:button[aria-haspopup="dialog"];
@@ -48,6 +51,77 @@ export function scrollToEdge(edge: 'top' | 'bottom'): void {
   const el = conversationScroll()
   if (el === null) return
   el.scrollTop = edge === 'top' ? 0 : el.scrollHeight
+}
+
+/** 行顶边相对滚动容器内容区的偏移(与视口滚动无关,按文档顺序单调)。 */
+function userRowOffset(row: HTMLElement, host: HTMLElement): number {
+  return row.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop
+}
+
+/** 已渲染的用户消息行(排除隐藏与零尺寸行),按文档顺序。 */
+function renderedUserRows(host: HTMLElement): HTMLElement[] {
+  const rows: HTMLElement[] = []
+  for (const row of host.querySelectorAll<HTMLElement>('[data-chat-flow-kind="user"]')) {
+    if (row.hasAttribute('hidden')) continue
+    const rect = row.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) continue
+    rows.push(row)
+  }
+  return rows
+}
+
+/** 令目标行顶边对齐滚动容器顶部(留 24px 内边距,同上游轮次导航点击对齐量)。 */
+function alignUserRowTop(row: HTMLElement, host: HTMLElement): void {
+  host.scrollTop += row.getBoundingClientRect().top - host.getBoundingClientRect().top - 24
+}
+
+/**
+ * 活动对话的滚动容器:优先 [data-conversation-scroll](嵌套 ChatView 的宿主
+ * 滚动区);缺省回退到独立 ChatView 自身 — 首个 [data-chat-flow] 的最近可滚动祖先。
+ */
+function userScrollHost(): HTMLElement | null {
+  const host = document.querySelector<HTMLElement>('[data-conversation-scroll]')
+  if (host !== null) return host
+  const flow = document.querySelector<HTMLElement>('[data-chat-flow]')
+  if (flow === null) return null
+  let ancestor = flow.parentElement
+  while (ancestor !== null && ancestor !== document.body) {
+    const overflowY = window.getComputedStyle(ancestor).overflowY
+    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') return ancestor
+    ancestor = ancestor.parentElement
+  }
+  return null
+}
+
+/**
+ * 在上一条(-1)/下一条(+1)用户消息之间跳转(顶边对齐视口顶部)。
+ * 视口上方已无更早用户消息时退化为跳最旧;下方已无更新的时退化为跳最新。
+ * 与右侧轮次导航小横条(每轮一条、点击跳转)同义:逐轮在「你发送的消息」间移动。
+ */
+export function scrollToUserMessage(direction: -1 | 1): boolean {
+  const host = userScrollHost()
+  if (host === null) return false
+  const rows = renderedUserRows(host)
+  if (rows.length === 0) return false
+  const top = host.scrollTop
+  if (direction < 0) {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (userRowOffset(rows[i], host) < top) {
+        alignUserRowTop(rows[i], host)
+        return true
+      }
+    }
+    host.scrollTop = 0
+    return true
+  }
+  for (let i = 0; i < rows.length; i++) {
+    if (userRowOffset(rows[i], host) > top) {
+      alignUserRowTop(rows[i], host)
+      return true
+    }
+  }
+  host.scrollTop = host.scrollHeight
+  return true
 }
 
 async function copyText(text: string): Promise<boolean> {
