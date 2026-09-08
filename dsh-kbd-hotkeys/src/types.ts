@@ -33,8 +33,34 @@ export interface SessionSummaryLike {
   displayTitle?: string
   title?: string
   running?: boolean
+  /** 已结束而未被查看(侧栏绿色「完成」提醒;缺席 = false)。 */
+  completed?: boolean
   blank?: boolean
   updatedAt?: number
+  /** 粗粒度持久来源(导航过滤用);普通会话缺省。 */
+  origin?: string
+}
+
+/** workspaces(workspace 控制器)快照里的工作区实体(见 dsh-api-workspace-controller workspaceView)。 */
+export interface WorkspaceItemLike {
+  workspaceId: string
+  path?: string
+  title?: string
+  /** 宿主记录的会话归属顺序(浏览器「按工作区」视图的组内默认顺序)。 */
+  sessionIds?: readonly string[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** workspaces 列表快照消费面(与 dsh-api-workspace-controller 的 RPC baseline 同构)。 */
+export interface WorkspaceSnapshotLike {
+  items?: readonly WorkspaceItemLike[]
+  archivedSessionIds?: readonly string[]
+}
+
+/** workspaces(workspace 控制器)服务消费面。 */
+export interface WorkspacesLike {
+  list?: { getSnapshot?(): WorkspaceSnapshotLike }
 }
 
 /** sessions.list 快照消费面。 */
@@ -62,4 +88,5 @@ export interface Services {
   sessions: SessionsLike | undefined
   uiSession: UiSessionLike | undefined
   layout: LayoutLike | undefined
+  workspaces: WorkspacesLike | undefined
 }

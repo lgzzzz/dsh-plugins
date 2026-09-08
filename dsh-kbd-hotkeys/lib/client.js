@@ -65,21 +65,94 @@ function toggleSidebar(services) {
   layout.toggleSidebar();
   return true;
 }
+function switchView(delta) {
+  const tablist = findSessionViewTablist();
+  if (tablist === null) return false;
+  const tabs = [...tablist.querySelectorAll('[role="tab"]')];
+  if (tabs.length === 0) return false;
+  const current = tabs.findIndex((el) => el.getAttribute("aria-selected") === "true");
+  const base = current < 0 ? delta > 0 ? -1 : tabs.length : current;
+  const nextIndex = (base + delta + tabs.length) % tabs.length;
+  const nextTab = tabs[nextIndex];
+  if (nextTab === void 0) return false;
+  nextTab.click();
+  return true;
+}
+function findSessionViewTablist() {
+  const tablists = document.querySelectorAll('[role="tablist"]');
+  for (const tablist of tablists) {
+    const tabs = tablist.querySelectorAll('[role="tab"]');
+    if (tabs.length === 0) continue;
+    let hasControls = false;
+    for (const tab of tabs) {
+      const controls = tab.getAttribute("aria-controls");
+      if (controls !== null && controls !== "") {
+        hasControls = true;
+        break;
+      }
+    }
+    if (!hasControls) return tablist;
+  }
+  return null;
+}
 function openNeighborSession(services, delta) {
   var _a, _b;
   const sessions = services.sessions;
   const snapshot = (_b = (_a = sessions == null ? void 0 : sessions.list) == null ? void 0 : _a.getSnapshot) == null ? void 0 : _b.call(_a);
   if (sessions === null || sessions === void 0 || snapshot === null || snapshot === void 0) return false;
-  const ids = snapshot.ids;
-  if (ids === void 0 || ids.length === 0 || typeof sessions.open !== "function") return false;
+  if (snapshot.ids === void 0 || snapshot.ids.length === 0 || snapshot.byId === void 0 || typeof sessions.open !== "function") {
+    return false;
+  }
+  const axis = visibleSessionsByRecency(snapshot, services);
+  if (axis.length === 0) return false;
   const current = snapshot.current;
-  const index = current === void 0 ? -1 : ids.indexOf(current);
-  const nextIndex = index < 0 ? delta > 0 ? 0 : ids.length - 1 : Math.min(ids.length - 1, Math.max(0, index + delta));
-  if (nextIndex === index) return false;
-  const target = ids[nextIndex];
-  if (target === void 0) return false;
-  sessions.open(target);
-  return true;
+  const anchor = current === void 0 ? -1 : axis.findIndex((row) => row.id === current);
+  if (anchor < 0) return false;
+  const active = activeSessionIds(snapshot, services);
+  for (let i = anchor + delta; i >= 0 && i < axis.length; i += delta) {
+    const row = axis[i];
+    if (row === void 0) continue;
+    if (active.has(row.id)) {
+      sessions.open(row.id);
+      return true;
+    }
+  }
+  return false;
+}
+function activeSessionIds(snapshot, services) {
+  var _a, _b, _c;
+  const pending = (_a = services.uiSession) == null ? void 0 : _a.pendingSnapshot;
+  const active = /* @__PURE__ */ new Set();
+  for (const id of (_b = snapshot.ids) != null ? _b : []) {
+    const summary = (_c = snapshot.byId) == null ? void 0 : _c[id];
+    if (summary === void 0) continue;
+    if (summary.running === true || summary.completed === true || pending !== void 0 && pending.has(id)) {
+      active.add(id);
+    }
+  }
+  return active;
+}
+function visibleSessionsByRecency(snapshot, services) {
+  var _a, _b, _c, _d, _e, _f, _g;
+  const archived = new Set((_e = (_d = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.archivedSessionIds) != null ? _e : []);
+  const rows = [];
+  for (const id of (_f = snapshot.ids) != null ? _f : []) {
+    const summary = (_g = snapshot.byId) == null ? void 0 : _g[id];
+    if (summary === void 0 || !sessionVisible(summary, snapshot.current, archived)) continue;
+    rows.push(summary);
+  }
+  rows.sort(byRecency);
+  return rows;
+}
+function byRecency(a, b) {
+  var _a, _b;
+  const aUpdated = (_a = a.updatedAt) != null ? _a : Number.NEGATIVE_INFINITY;
+  const bUpdated = (_b = b.updatedAt) != null ? _b : Number.NEGATIVE_INFINITY;
+  if (bUpdated !== aUpdated) return bUpdated - aUpdated;
+  return a.id < b.id ? -1 : 1;
+}
+function sessionVisible(summary, current, archived) {
+  return summary.origin !== "subagent" && !archived.has(summary.id) && (!summary.blank || summary.id === current);
 }
 function pendingInteraction(services) {
   var _a, _b, _c;
@@ -177,12 +250,13 @@ var ACTIONS = [
   { id: "question.submit", label: "\u95EE\u9898:Enter \u786E\u8BA4 / \u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["A"] },
   // P1 会话级
   { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD(P1)", states: ["C"] },
-  { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
-  { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
+  { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
+  { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
+  { id: "view.prev", label: "\u4E0A\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["A", "B", "C"] },
+  { id: "view.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["A", "B", "C"] },
   { id: "settings.open", label: "\u6253\u5F00\u8BBE\u7F6E", group: "\u9762\u677F(P1)", states: ["A", "B", "C"] },
   { id: "model.open", label: "\u6253\u5F00\u6A21\u578B\u9009\u62E9\u5668", group: "\u9762\u677F(P1)", states: ["B", "C"] },
   { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u9762\u677F(P1)", states: ["C"] },
-  { id: "palette.toggle", label: "\u547D\u4EE4\u9762\u677F:\u641C\u7D22\u547D\u4EE4 / \u5207\u6362\u4F1A\u8BDD", group: "\u9762\u677F(P1)", states: ["A", "B", "C"] },
   { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F(P1)", states: ["A", "B", "C"] }
 ];
 var ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
@@ -190,15 +264,23 @@ var DEFAULT_BINDINGS = {
   "approval.allow": "mod+alt+enter",
   "approval.reject": "mod+alt+backspace",
   "sidebar.toggle": "mod+b",
-  "session.prev": "mod+alt+arrowleft",
-  "session.next": "mod+alt+arrowright",
-  "settings.open": "mod+.",
-  "model.open": "mod+alt+m",
-  "composer.focus": "mod+alt+e",
-  // palette.toggle 不提供默认键位:原 Ctrl/Cmd+K 与浏览器地址栏快捷键冲突;
-  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: palette.toggle)。
+  "session.prev": "mod+alt+arrowup",
+  "session.next": "mod+alt+arrowdown",
+  "view.prev": "mod+alt+arrowleft",
+  "view.next": "mod+alt+arrowright",
+  // settings.open 不提供默认键位:原 Ctrl/Cmd+. 已移除;
+  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: settings.open)。
+  // model.open 不提供默认键位:原 Ctrl/Cmd+Alt+M 已移除;
+  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: model.open)。
+  // composer.focus 不提供默认键位:原 Ctrl/Cmd+Alt+E 已移除;
+  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: composer.focus)。
   "help.toggle": "mod+/"
 };
+var HIDDEN_FROM_HELP_WHEN_UNBOUND = /* @__PURE__ */ new Set([
+  "settings.open",
+  "model.open",
+  "composer.focus"
+]);
 function comboActionMap(bindings) {
   const map = /* @__PURE__ */ new Map();
   for (const [id, combo] of Object.entries(bindings)) {
@@ -209,14 +291,12 @@ function comboActionMap(bindings) {
 var STORAGE_KEY = "dsh-kbd-hotkeys:v1";
 function loadConfig() {
   const bindings = { ...DEFAULT_BINDINGS };
-  let enabled = true;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (typeof parsed === "object" && parsed !== null) {
         const obj = parsed;
-        if (typeof obj.enabled === "boolean") enabled = obj.enabled;
         if (typeof obj.bindings === "object" && obj.bindings !== null) {
           for (const [id, combo] of Object.entries(obj.bindings)) {
             if (typeof combo === "string" && combo !== "") bindings[id] = normalizeComboString(combo);
@@ -226,13 +306,7 @@ function loadConfig() {
     }
   } catch {
   }
-  return { enabled, bindings };
-}
-function saveConfig(config) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ enabled: config.enabled, bindings: config.bindings }));
-  } catch {
-  }
+  return { bindings };
 }
 function isMac() {
   var _a, _b;
@@ -327,40 +401,13 @@ var STYLE_ID = "dsh-kbd-hotkeys/style";
 var STYLE = [
   ".dsh-kbd-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;font-family:var(--dsw-font-family,system-ui,-apple-system,sans-serif)}",
   ".dsh-kbd-panel{width:min(560px,calc(100vw - 48px));max-height:64vh;background:var(--dsw-specific-menu,#fff);color:var(--dsw-alias-label-primary,#111);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.25));border-radius:14px;display:flex;flex-direction:column;overflow:hidden}",
-  ".dsh-kbd-input{border:none;outline:none;background:transparent;color:inherit;font:inherit;font-size:15px;padding:14px 18px;border-bottom:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.08))}",
-  ".dsh-kbd-input::placeholder{color:var(--dsw-alias-label-tertiary,#999)}",
-  ".dsh-kbd-list{margin:0;padding:6px;list-style:none;overflow-y:auto;flex:1;min-height:0}",
-  ".dsh-kbd-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;color:inherit;font:inherit;font-size:13px;line-height:20px;padding:9px 12px;border-radius:8px;cursor:pointer}",
-  '.dsh-kbd-item[data-active="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.06))}',
-  ".dsh-kbd-itemLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-  ".dsh-kbd-itemHint{flex:none;color:var(--dsw-alias-label-tertiary,#999);font-size:11px}",
-  ".dsh-kbd-item kbd,.dsh-kbd-help kbd{font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:11px;line-height:18px;padding:1px 6px;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.12));border-bottom-width:2px;border-radius:6px;background:var(--dsw-alias-bg-base,transparent)}",
-  ".dsh-kbd-foot{flex:none;padding:8px 16px;color:var(--dsw-alias-label-tertiary,#999);font-size:11px;border-top:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.08))}",
-  ".dsh-kbd-empty{padding:24px 16px;color:var(--dsw-alias-label-tertiary,#999);font-size:13px;text-align:center}",
   ".dsh-kbd-help{padding:14px 18px;overflow-y:auto}",
   ".dsh-kbd-help h3{margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-tertiary,#999)}",
   ".dsh-kbd-help h3:first-child{margin-top:0}",
   ".dsh-kbd-helpRow{display:flex;align-items:center;gap:12px;padding:5px 0;font-size:13px}",
   ".dsh-kbd-helpRow .dsh-kbd-itemLabel{flex:1}",
-  ".dsh-kbd-helpSwitch{display:flex;align-items:center;gap:8px;padding:10px 0 2px;font-size:13px;border-top:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.08));margin-top:12px}",
-  ".dsh-kbd-toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:2147483001;background:var(--dsw-alias-label-primary,#222);color:var(--dsw-alias-bg-base,#fff);font-size:12px;line-height:18px;padding:6px 14px;border-radius:999px;opacity:0;transition:opacity .15s;pointer-events:none}",
-  '.dsh-kbd-toast[data-show="true"]{opacity:.92}'
+  ".dsh-kbd-help kbd{font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:11px;line-height:18px;padding:1px 6px;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.12));border-bottom-width:2px;border-radius:6px;background:var(--dsw-alias-bg-base,transparent)}"
 ].join("\n");
-function showToast(message) {
-  const toast = document.createElement("div");
-  toast.className = "dsh-kbd-toast";
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  requestAnimationFrame(() => {
-    toast.dataset.show = "true";
-  });
-  window.setTimeout(() => {
-    toast.dataset.show = "false";
-    window.setTimeout(() => {
-      toast.remove();
-    }, 200);
-  }, 1400);
-}
 function ensureStyle() {
   if (document.getElementById(STYLE_ID) !== null) return;
   const tag = document.createElement("style");
@@ -368,21 +415,12 @@ function ensureStyle() {
   tag.textContent = STYLE;
   document.head.appendChild(tag);
 }
-function sessionLabel(summary, id) {
-  var _a;
-  const named = (_a = summary == null ? void 0 : summary.displayTitle) != null ? _a : summary == null ? void 0 : summary.title;
-  return named === void 0 || named === "" ? id : named;
-}
 function createOverlays(deps) {
   ensureStyle();
   let root = null;
-  let mode = null;
-  let input = null;
-  let list = null;
-  let items = [];
-  let activeIndex = 0;
+  let open = false;
   function isOpen() {
-    return mode !== null;
+    return open;
   }
   function contains(target) {
     return root !== null && target !== null && root.contains(target);
@@ -390,144 +428,23 @@ function createOverlays(deps) {
   function close() {
     if (root !== null) root.remove();
     root = null;
-    mode = null;
-    input = null;
-    list = null;
-    items = [];
+    open = false;
   }
-  function mount(nextMode) {
+  function mount() {
     close();
     ensureStyle();
     const backdrop = document.createElement("div");
     backdrop.className = "dsh-kbd-backdrop";
     const panel = document.createElement("div");
     panel.className = "dsh-kbd-panel";
+    panel.appendChild(renderHelp());
     backdrop.appendChild(panel);
-    if (nextMode === "palette") {
-      input = document.createElement("input");
-      input.className = "dsh-kbd-input";
-      input.placeholder = "\u641C\u7D22\u547D\u4EE4\u6216\u4F1A\u8BDD\u2026(\u2191\u2193 \u9009\u62E9,Enter \u786E\u8BA4)";
-      input.addEventListener("input", () => renderPalette());
-      panel.appendChild(input);
-      list = document.createElement("ul");
-      list.className = "dsh-kbd-list";
-      panel.appendChild(list);
-      const foot = document.createElement("div");
-      foot.className = "dsh-kbd-foot";
-      foot.textContent = "Enter \u786E\u8BA4 \xB7 \u2191\u2193 \u9009\u62E9 \xB7 Esc \u5173\u95ED";
-      panel.appendChild(foot);
-    } else {
-      panel.appendChild(renderHelp());
-    }
     backdrop.addEventListener("mousedown", (event) => {
       if (event.target === backdrop) close();
     });
     document.body.appendChild(backdrop);
     root = backdrop;
-    mode = nextMode;
-    if (nextMode === "palette") {
-      renderPalette();
-      input == null ? void 0 : input.focus();
-    }
-  }
-  function buildItems() {
-    var _a, _b, _c, _d, _e;
-    const result = [];
-    for (const action of ACTIONS) {
-      if (!action.states.includes("C")) continue;
-      if (action.id === "palette.toggle" || action.id === "help.toggle") continue;
-      const combo = deps.getConfig().bindings[action.id];
-      result.push({
-        kind: "action",
-        id: action.id,
-        label: action.label,
-        hint: combo === void 0 ? "" : prettyCombo(combo)
-      });
-    }
-    const snapshot = (_c = (_b = (_a = deps.services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
-    const ids = (_d = snapshot == null ? void 0 : snapshot.ids) != null ? _d : [];
-    const byId = (_e = snapshot == null ? void 0 : snapshot.byId) != null ? _e : {};
-    const current = snapshot == null ? void 0 : snapshot.current;
-    const summaries = ids.map((id) => byId[id]).filter((s) => s !== void 0).sort((left, right) => {
-      var _a2, _b2;
-      if (left.id === current) return -1;
-      if (right.id === current) return 1;
-      return ((_a2 = right.updatedAt) != null ? _a2 : 0) - ((_b2 = left.updatedAt) != null ? _b2 : 0);
-    }).slice(0, 40);
-    for (const summary of summaries) {
-      result.push({
-        kind: "session",
-        id: summary.id,
-        sessionId: summary.id,
-        label: sessionLabel(summary, summary.id),
-        hint: summary.id === current ? "\u5F53\u524D" : summary.running === true ? "\u8FD0\u884C\u4E2D" : ""
-      });
-    }
-    return result;
-  }
-  function renderPalette() {
-    var _a;
-    if (list === null) return;
-    const query = ((_a = input == null ? void 0 : input.value) != null ? _a : "").trim().toLowerCase();
-    items = buildItems().filter((item) => query === "" || item.label.toLowerCase().includes(query));
-    if (activeIndex >= items.length) activeIndex = 0;
-    list.textContent = "";
-    if (items.length === 0) {
-      const empty = document.createElement("li");
-      empty.className = "dsh-kbd-empty";
-      empty.textContent = "\u65E0\u5339\u914D\u547D\u4EE4\u6216\u4F1A\u8BDD";
-      list.appendChild(empty);
-      return;
-    }
-    items.forEach((item, index) => {
-      const li = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "dsh-kbd-item";
-      button.dataset.active = String(index === activeIndex);
-      const label = document.createElement("span");
-      label.className = "dsh-kbd-itemLabel";
-      label.textContent = item.label;
-      const hint = document.createElement("span");
-      hint.className = "dsh-kbd-itemHint";
-      hint.textContent = item.hint;
-      button.appendChild(label);
-      button.appendChild(hint);
-      button.addEventListener("click", () => {
-        activate(index);
-      });
-      button.addEventListener("mousemove", () => {
-        if (activeIndex !== index) {
-          activeIndex = index;
-          syncActive();
-        }
-      });
-      li.appendChild(button);
-      list == null ? void 0 : list.appendChild(li);
-    });
-  }
-  function syncActive() {
-    if (list === null) return;
-    const buttons = list.querySelectorAll(".dsh-kbd-item");
-    buttons.forEach((button, index) => {
-      button.dataset.active = String(index === activeIndex);
-      if (index === activeIndex) button.scrollIntoView({ block: "nearest" });
-    });
-  }
-  function activate(index) {
-    const item = items[index];
-    if (item === void 0) return;
-    if (item.kind === "action") {
-      const handled = deps.runAction(item.id);
-      if (!handled) return;
-      close();
-      return;
-    }
-    const sessions = deps.services.sessions;
-    if (sessions !== null && sessions !== void 0 && typeof sessions.open === "function" && item.sessionId !== void 0) {
-      sessions.open(item.sessionId);
-    }
-    close();
+    open = true;
   }
   function renderHelp() {
     const container = document.createElement("div");
@@ -535,6 +452,9 @@ function createOverlays(deps) {
     const config = deps.getConfig();
     let lastGroup = "";
     for (const action of ACTIONS) {
+      if (HIDDEN_FROM_HELP_WHEN_UNBOUND.has(action.id) && (config.bindings[action.id] === void 0 || config.bindings[action.id] === "")) {
+        continue;
+      }
       if (action.group !== lastGroup) {
         lastGroup = action.group;
         const heading = document.createElement("h3");
@@ -553,74 +473,22 @@ function createOverlays(deps) {
       row.appendChild(key);
       container.appendChild(row);
     }
-    const hint = document.createElement("div");
-    hint.className = "dsh-kbd-helpRow";
-    const hintLabel = document.createElement("span");
-    hintLabel.className = "dsh-kbd-itemLabel";
-    hintLabel.textContent = "\u6B64\u5916:Esc \u4E2D\u65AD\u56DE\u5408(\u7531 dsh-new-session \u63D0\u4F9B)";
-    const hintKey = document.createElement("kbd");
-    hintKey.textContent = "Esc";
-    hint.appendChild(hintLabel);
-    hint.appendChild(hintKey);
-    container.appendChild(hint);
-    const switchRow = document.createElement("label");
-    switchRow.className = "dsh-kbd-helpSwitch";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = config.enabled;
-    checkbox.addEventListener("change", () => {
-      deps.setEnabled(checkbox.checked);
-      showToast(checkbox.checked ? "\u5FEB\u6377\u952E\u5DF2\u542F\u7528" : "\u5FEB\u6377\u952E\u5DF2\u505C\u7528");
-    });
-    const switchLabel = document.createElement("span");
-    switchLabel.textContent = "\u542F\u7528\u5168\u90E8\u5FEB\u6377\u952E(\u603B\u5F00\u5173)";
-    switchRow.appendChild(checkbox);
-    switchRow.appendChild(switchLabel);
-    container.appendChild(switchRow);
-    const note = document.createElement("div");
-    note.className = "dsh-kbd-foot";
-    note.textContent = '\u81EA\u5B9A\u4E49\u952E\u4F4D:localStorage["dsh-kbd-hotkeys:v1"] \u7684 bindings \u5B57\u6BB5(\u89C1\u63D2\u4EF6 README)';
-    container.appendChild(note);
     return container;
   }
-  function togglePalette() {
-    if (mode === "palette") close();
-    else mount("palette");
-  }
   function toggleHelp() {
-    if (mode === "help") close();
-    else mount("help");
+    if (open) close();
+    else mount();
   }
   function handleKey(event) {
-    if (mode === null) return false;
-    const combo = `${event.ctrlKey || event.metaKey ? "mod+" : ""}${event.altKey ? "alt+" : ""}${event.shiftKey ? "shift+" : ""}${event.key.toLowerCase()}`;
+    if (!open) return false;
     if (event.key === "Escape") {
       close();
       return true;
     }
-    if (combo === "mod+k" || combo === "mod+/") {
+    const combo = `${event.ctrlKey || event.metaKey ? "mod+" : ""}${event.altKey ? "alt+" : ""}${event.shiftKey ? "shift+" : ""}${event.key.toLowerCase()}`;
+    if (combo === "mod+/") {
       close();
       return true;
-    }
-    if (mode === "palette") {
-      if (event.key === "ArrowDown") {
-        if (items.length > 0) {
-          activeIndex = (activeIndex + 1) % items.length;
-          syncActive();
-        }
-        return true;
-      }
-      if (event.key === "ArrowUp") {
-        if (items.length > 0) {
-          activeIndex = (activeIndex - 1 + items.length) % items.length;
-          syncActive();
-        }
-        return true;
-      }
-      if (event.key === "Enter") {
-        activate(activeIndex);
-        return true;
-      }
     }
     return false;
   }
@@ -629,12 +497,12 @@ function createOverlays(deps) {
     close();
     (_a = document.getElementById(STYLE_ID)) == null ? void 0 : _a.remove();
   }
-  return { isOpen, contains, handleKey, togglePalette, toggleHelp, destroy };
+  return { isOpen, contains, handleKey, toggleHelp, destroy };
 }
 
 // src/client.ts
 var name = "dsh-kbd-hotkeys";
-var inject = ["sessions", "uiSession", "layout"];
+var inject = ["sessions", "uiSession", "layout", "workspaces"];
 function getService(ctx, serviceName) {
   if (ctx.get === void 0 || ctx.get === null) return void 0;
   const value = ctx.get(serviceName);
@@ -658,15 +526,16 @@ function runAction(id, services, overlays) {
         return openNeighborSession(services, -1);
       case "session.next":
         return openNeighborSession(services, 1);
+      case "view.prev":
+        return switchView(-1);
+      case "view.next":
+        return switchView(1);
       case "settings.open":
         return openSettings();
       case "model.open":
         return openModelSelector();
       case "composer.focus":
         return focusComposer();
-      case "palette.toggle":
-        overlays.togglePalette();
-        return true;
       case "help.toggle":
         overlays.toggleHelp();
         return true;
@@ -683,23 +552,13 @@ function apply(ctx) {
   const services = {
     sessions: getService(ctx, "sessions"),
     uiSession: getService(ctx, "uiSession"),
-    layout: getService(ctx, "layout")
+    layout: getService(ctx, "layout"),
+    workspaces: getService(ctx, "workspaces")
   };
-  let config = loadConfig();
-  let actionByCombo = comboActionMap(config.bindings);
-  const applyConfig = (next) => {
-    config = next;
-    actionByCombo = comboActionMap(next.bindings);
-  };
+  const config = loadConfig();
+  const actionByCombo = comboActionMap(config.bindings);
   const overlays = createOverlays({
-    services,
-    getConfig: () => config,
-    setEnabled: (enabled) => {
-      const next = { ...config, enabled };
-      applyConfig(next);
-      saveConfig(next);
-    },
-    runAction: (id) => runAction(id, services, overlays)
+    getConfig: () => config
   });
   const swallow = (event) => {
     event.preventDefault();
@@ -707,7 +566,6 @@ function apply(ctx) {
   };
   const onKeyDown = (event) => {
     if (event.repeat && event.key === "Escape") return;
-    if (!config.enabled) return;
     if (overlays.isOpen()) {
       const handled = overlays.handleKey(event);
       if (handled) {
