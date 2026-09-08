@@ -1,6 +1,6 @@
 {
   "name": "dsh-git-guard",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Intercept git push and git commit issued via the bash tool (ask for user approval) on the tools/pre-execute waterfall; injects a Chinese system-prompt section telling the model that commits and pushes require user permission and must not be retried if declined",
   "type": "module",
   "main": "index.ts",
