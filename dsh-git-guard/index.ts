@@ -1,17 +1,18 @@
 /**
- * dsh-git-guard — 拦截经由 bash 工具发起的 git 写远端／提交操作。
+ * dsh-git-guard — 拦截经由 bash 工具发起的 git 提交／推送操作。
  *
- * - `git push`   → deny（直接阻断，请通过 GUI 或其他渠道推送）
+ * - `git push`   → ask（交给用户审批，批准后才会执行）
  * - `git commit` → ask（交给用户审批，批准后才会执行）
  *
  * 运行于 `tools/pre-execute` 瀑布钩子，返回 {@link PreToolDecision}：
  * `{kind:'allow'}` | `{kind:'deny', reason}` | `{kind:'ask', reason?}`。
  *
  * 除拦截外，本插件还会（通过 `ctx.systemPrompt`）向系统提示词注入一条
- * 「Git Guard 推送策略」区段，预先告知大模型：禁止任何形式的 `git push`，
- * 推送必须由用户手动执行；模型只负责分析，不得修改任何文件或仓库状态。
- * 这样模型在发起推送之前就能看到该约束；即便它仍然尝试，deny 的 reason
- * 也会作为工具错误结果原样回传给模型（`Error: <reason>`），再次给出同等指示。
+ * 「Git Guard 提交推送策略」区段，预先告知大模型：`git commit` 与
+ * `git push` 均须获得用户许可后才能执行；若用户拒绝了某次提交或推送，
+ * 不得再次尝试提交或推送，也不得改换间接形式绕过。这样模型在发起操作
+ * 之前就能看到该约束；即便它仍然尝试，ask 的 reason 也会原样回传给模型，
+ * 再次给出同等指示。
  *
  * 本文件由 Node 22 内置的 Type Stripping 直接加载（可擦除语法，无 enum/
  * 命名空间/参数属性），无需编译步骤；package.json 需保持 `"type": "module"`。
@@ -52,8 +53,12 @@ interface SystemPromptService {
   getSectionOrder(name: string): number
 }
 
-/** 注入系统提示词的「Git Guard 推送策略」区段内容（预先告知模型推送由用户执行）。 */
-const PUSH_POLICY_TEXT = `禁止执行任何形式的 \`git push\`, 推送必须由用户手动执行.`
+/** 注入系统提示词的「Git Guard 提交推送策略」区段内容（预先告知模型提交/推送均需用户许可）。 */
+const PUSH_POLICY_TEXT =
+  '`git commit` 与 `git push` 均须获得用户许可后才能执行. ' +
+  '若用户拒绝了某次代码提交或代码推送, 请停止, 不得再次尝试提交或推送; ' +
+  '也不要以命令替换、别名、脚本包装等任何间接形式绕过. ' +
+  '如需继续, 请等待用户的明确指示.'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -82,13 +87,12 @@ const GIT_FLAGS_WITH_VALUE = new Set(['-C', '--git-dir', '--work-tree', '-c'])
 /** 子命令 → 决定的策略表。 */
 const POLICY: Record<string, (subcommand: string) => PreToolDecision> = {
   push: () => ({
-    kind: 'deny',
-    reason:
-      'git push 已被 Git Guard 拦截. 不要重试或绕过拦截, 推送必须由用户手动执行.',
+    kind: 'ask',
+    reason: 'git push 需要你的许可。请审核后批准或拒绝.',
   }),
   commit: () => ({
     kind: 'ask',
-    reason: 'git commit 需要你的授权。请审核后批准或拒绝.',
+    reason: 'git commit 需要你的许可。请审核后批准或拒绝.',
   }),
 }
 
