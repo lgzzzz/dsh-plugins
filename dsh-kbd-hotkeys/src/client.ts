@@ -5,11 +5,13 @@
  * 功能:降低鼠标依赖的全局快捷键(键位设计见 docs/dsh-hotkeys-proposal.md):
  * - 态 A(审批 / ask_user_question / 计划评审卡片打开):⌘/Ctrl+Alt+Enter 允许、
  *   ⌘/Ctrl+Alt+Backspace 拒绝、数字键 1–9 选选项、Enter 确认提交;
- * - 全态:⌘/ 速查表、⌘. 设置、⌘⌥M 模型选择器、⌘⌥←/→ 上/下一个会话;
- * - 态 C(输入框失焦):⌘B 开关侧栏、⌘⌥E 聚焦输入框。
+ * - 全态:⌘/ 速查表、⌘⌥↑/↓ 在活跃会话间跳转(活跃 = 运行中 ∪ 有待回应 ∪
+ *   刚完成未查看,按最近活动时间定位)、⌘⌥←/→ 在会话视图标签间切换;
+ * - 态 C(输入框失焦):⌘B 开关侧栏。
  *
  * 实现:document 捕获阶段单一 keydown 监听,按三态分发(态 A 卡片 → 态 B 输入框
- * → 态 C 浏览),消费 sessions / uiSession / layout 既有服务,
+ * → 态 C 浏览),消费 sessions / uiSession / layout / workspaces 既有服务,
+ * 会话跳转 = 活跃会话扫描(running ∪ pending 交互 ∪ completed,锚点定向跳跃);
  * 审批优先走 uiSession.pendingSnapshot 服务级 answer(),DOM 结构仅作回退。
  * 不消费 react,无 external;Esc 中断回合由 dsh-new-session 插件继续承担。
  */
@@ -23,16 +25,17 @@ import {
   openSettings,
   pickQuestionOption,
   submitQuestion,
+  switchView,
   toggleSidebar,
 } from './actions.ts'
-import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, saveConfig, type HotkeyConfig } from './config.ts'
+import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
-import type { ClientContext, LayoutLike, SessionsLike, Services, UiSessionLike } from './types.ts'
+import type { ClientContext, LayoutLike, SessionsLike, Services, UiSessionLike, WorkspacesLike } from './types.ts'
 
 export const name = 'dsh-kbd-hotkeys'
 
-/** 浏览器半部注入的服务(模块加载器读取)。 */
-export const inject = ['sessions', 'uiSession', 'layout']
+/** 浏览器半部注入的服务(模块加载器读取)。workspaces 供会话切换复刻侧栏顺序。 */
+export const inject = ['sessions', 'uiSession', 'layout', 'workspaces']
 
 /** null 与 undefined 双重判空后取服务(缺失时返回 undefined)。 */
 function getService(ctx: ClientContext, serviceName: string): unknown {
@@ -41,7 +44,7 @@ function getService(ctx: ClientContext, serviceName: string): unknown {
   return value === null || value === undefined ? undefined : value
 }
 
-/** 集中动作执行:键位分发与命令面板共用;返回是否实际处理。 */
+/** 集中动作执行:键位分发共用;返回是否实际处理。 */
 function runAction(id: string, services: Services, overlays: OverlayHost): boolean {
   try {
     switch (id) {
@@ -59,15 +62,16 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return openNeighborSession(services, -1)
       case 'session.next':
         return openNeighborSession(services, 1)
+      case 'view.prev':
+        return switchView(-1)
+      case 'view.next':
+        return switchView(1)
       case 'settings.open':
         return openSettings()
       case 'model.open':
         return openModelSelector()
       case 'composer.focus':
         return focusComposer()
-      case 'palette.toggle':
-        overlays.togglePalette()
-        return true
       case 'help.toggle':
         overlays.toggleHelp()
         return true
@@ -91,25 +95,16 @@ export function apply(ctx: ClientContext): void {
     sessions: getService(ctx, 'sessions') as SessionsLike | undefined,
     uiSession: getService(ctx, 'uiSession') as UiSessionLike | undefined,
     layout: getService(ctx, 'layout') as LayoutLike | undefined,
+    workspaces: getService(ctx, 'workspaces') as WorkspacesLike | undefined,
   }
 
-  let config: HotkeyConfig = loadConfig()
+  const config: HotkeyConfig = loadConfig()
   // 反向索引(combo → 动作 id):config.bindings 语义是「动作 id → 组合键」,
-  // 按键分发必须按 combo 反查动作;config 重建(总开关切换等)时同步重建。
-  let actionByCombo: Map<string, string> = comboActionMap(config.bindings)
-  const applyConfig = (next: HotkeyConfig): void => {
-    config = next
-    actionByCombo = comboActionMap(next.bindings)
-  }
+  // 按键分发必须按 combo 反查动作;config 加载后不变(自定义键位在 localStorage,
+  // 刷新后重载)。
+  const actionByCombo: Map<string, string> = comboActionMap(config.bindings)
   const overlays = createOverlays({
-    services,
     getConfig: () => config,
-    setEnabled: (enabled) => {
-      const next = { ...config, enabled }
-      applyConfig(next)
-      saveConfig(next)
-    },
-    runAction: (id) => runAction(id, services, overlays),
   })
 
   const swallow = (event: KeyboardEvent): void => {
@@ -119,7 +114,6 @@ export function apply(ctx: ClientContext): void {
 
   const onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat && event.key === 'Escape') return
-    if (!config.enabled) return
 
     // 浮层打开:模态分发,面板输入框自身的普通输入放行
     if (overlays.isOpen()) {

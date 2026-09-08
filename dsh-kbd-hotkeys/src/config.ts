@@ -14,7 +14,7 @@ export type StateName = 'A' | 'B' | 'C'
 /** 单个动作定义。 */
 export interface ActionDef {
   id: string
-  /** 展示名(速查表 / 命令面板用)。 */
+  /** 展示名(速查表用)。 */
   label: string
   /** 速查表分组。 */
   group: string
@@ -35,12 +35,13 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'question.submit', label: '问题:Enter 确认 / 提交', group: '问答卡片(P0)', states: ['A'] },
   // P1 会话级
   { id: 'sidebar.toggle', label: '开关侧栏', group: '会话(P1)', states: ['C'] },
-  { id: 'session.prev', label: '上一个会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
-  { id: 'session.next', label: '下一个会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
+  { id: 'session.prev', label: '上一个活跃会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
+  { id: 'session.next', label: '下一个活跃会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
+  { id: 'view.prev', label: '上一个会话视图标签', group: '会话视图(P1)', states: ['A', 'B', 'C'] },
+  { id: 'view.next', label: '下一个会话视图标签', group: '会话视图(P1)', states: ['A', 'B', 'C'] },
   { id: 'settings.open', label: '打开设置', group: '面板(P1)', states: ['A', 'B', 'C'] },
   { id: 'model.open', label: '打开模型选择器', group: '面板(P1)', states: ['B', 'C'] },
   { id: 'composer.focus', label: '聚焦输入框', group: '面板(P1)', states: ['C'] },
-  { id: 'palette.toggle', label: '命令面板:搜索命令 / 切换会话', group: '面板(P1)', states: ['A', 'B', 'C'] },
   { id: 'help.toggle', label: '快捷键速查表', group: '面板(P1)', states: ['A', 'B', 'C'] },
 ]
 
@@ -51,19 +52,33 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'approval.allow': 'mod+alt+enter',
   'approval.reject': 'mod+alt+backspace',
   'sidebar.toggle': 'mod+b',
-  'session.prev': 'mod+alt+arrowleft',
-  'session.next': 'mod+alt+arrowright',
-  'settings.open': 'mod+.',
-  'model.open': 'mod+alt+m',
-  'composer.focus': 'mod+alt+e',
-  // palette.toggle 不提供默认键位:原 Ctrl/Cmd+K 与浏览器地址栏快捷键冲突;
-  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: palette.toggle)。
+  'session.prev': 'mod+alt+arrowup',
+  'session.next': 'mod+alt+arrowdown',
+  'view.prev': 'mod+alt+arrowleft',
+  'view.next': 'mod+alt+arrowright',
+  // settings.open 不提供默认键位:原 Ctrl/Cmd+. 已移除;
+  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: settings.open)。
+  // model.open 不提供默认键位:原 Ctrl/Cmd+Alt+M 已移除;
+  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: model.open)。
+  // composer.focus 不提供默认键位:原 Ctrl/Cmd+Alt+E 已移除;
+  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: composer.focus)。
   'help.toggle': 'mod+/',
 }
 
 /**
+ * 未绑定时不在速查表(⌘/)展示的动作。
+ * 与 DEFAULT_BINDINGS 中「已移除默认键位」的条目一一对应:这些动作仍可经
+ * localStorage 自绑定,但未绑定时不占用速查表行;自绑定后自动恢复展示。
+ */
+export const HIDDEN_FROM_HELP_WHEN_UNBOUND: ReadonlySet<string> = new Set([
+  'settings.open',
+  'model.open',
+  'composer.focus',
+])
+
+/**
  * 反向索引:归一化组合键 → 动作 id。
- * config.bindings 全表语义为「动作 id → 组合键」(overlay.ts 的速查表/面板均按
+ * config.bindings 全表语义为「动作 id → 组合键」(overlay.ts 的速查表按
  * 动作 id 取键位),按键分发需要按 combo 反查动作,故在此构建一次索引;
  * bindings 变更(仅 localStorage 覆盖,刷新后经 loadConfig 重建)须同步重建。
  */
@@ -77,23 +92,20 @@ export function comboActionMap(bindings: Readonly<Record<string, string>>): Map<
 
 const STORAGE_KEY = 'dsh-kbd-hotkeys:v1'
 
-/** 解析后的用户配置。 */
+/** 解析后的用户配置(快捷键默认启用,无总开关;bindings 可经 localStorage 覆盖)。 */
 export interface HotkeyConfig {
-  enabled: boolean
   bindings: Record<string, string>
 }
 
 /** 读取 localStorage 用户配置并与默认值合并(坏数据一律回退默认)。 */
 export function loadConfig(): HotkeyConfig {
   const bindings: Record<string, string> = { ...DEFAULT_BINDINGS }
-  let enabled = true
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw !== null) {
       const parsed: unknown = JSON.parse(raw)
       if (typeof parsed === 'object' && parsed !== null) {
         const obj = parsed as Record<string, unknown>
-        if (typeof obj.enabled === 'boolean') enabled = obj.enabled
         if (typeof obj.bindings === 'object' && obj.bindings !== null) {
           for (const [id, combo] of Object.entries(obj.bindings as Record<string, unknown>)) {
             if (typeof combo === 'string' && combo !== '') bindings[id] = normalizeComboString(combo)
@@ -104,16 +116,7 @@ export function loadConfig(): HotkeyConfig {
   } catch {
     // 配置损坏时静默回退默认键位
   }
-  return { enabled, bindings }
-}
-
-/** 写回用户配置(总开关 / 单键位覆盖共用)。 */
-export function saveConfig(config: HotkeyConfig): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ enabled: config.enabled, bindings: config.bindings }))
-  } catch {
-    // 隐私模式等写入失败可忽略(仅影响持久化)
-  }
+  return { bindings }
 }
 
 /** macOS 判定(⌘ 与 Ctrl 的选择)。 */
