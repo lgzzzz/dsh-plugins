@@ -52,39 +52,84 @@ assert.equal(policySection.order, 600, '区段位于 TEAM_POLICY 槽位')
 assert.match(policySection.text, /git push/, '区段提及 git push')
 assert.match(policySection.text, /git commit/, '区段提及 git commit')
 assert.match(policySection.text, /用户许可/, '区段声明需要用户许可')
-assert.doesNotMatch(policySection.text, /不要修改/, '区段不再包含「不要修改」的分析限制')
+assert.match(policySection.text, /git push --force|rebase/, '区段提及破坏性操作被禁止')
 
 // 模拟流水线：next() 落到链尾的默认 allow。
-function decide(command, toolName = 'bash') {
+// 门禁与工具名解耦：命令经由任何 shell 工具（bash / pwsh / cmd …）都应被审查。
+function decide(command, toolName = 'pwsh') {
   return hook({ name: toolName, arguments: { command } }, async () => ({ kind: 'allow' }))
 }
 
-// --- ask：git push 及其各种包装（均需用户许可）---
+// --- ask：git commit / git push（非 force）---
+for (const command of [
+  'git commit -m x',
+  'git add . && git commit',
+  'git add .; git commit -m "msg"',
+  // 本次实际漏拦截的命令（经 pwsh 工具）：
+  'git add dsh-git-guard; git commit -m "refactor(dsh-git-guard): git push 由 deny 改为 ask"',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(commit): ${command}`)
+  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知提交需用户许可')
+}
+
 for (const command of [
   'git push',
   'git push origin main',
   'GIT_SSH_COMMAND="ssh -i k" git push',
-  "bash -c 'git push'",
   'git -C /repo push',
-  'git add . && git push',
+  'git -C "C:/some path with space/my repo" push',
+  '& git push',
+  'VAR="a b" git push',
+  'sudo git push',
+  'sudo -u user git push',
+  'env git push',
+  'command git push',
+  'bash -c \'git push\'',
+  'bash -c "git push"',
+  'cmd /c git push',
+  'pwsh -Command "git push"',
+  '( git push )',
 ]) {
   const decision = await decide(command)
-  assert.equal(decision?.kind, 'ask', `ask: ${command}`)
+  assert.equal(decision?.kind, 'ask', `ask(push): ${command}`)
   assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知推送需用户许可')
 }
 
-// --- ask：git commit ---
-for (const command of ['git commit -m x', 'git add . && git commit']) {
+// --- deny：破坏性 / 历史改写操作 ---
+for (const command of [
+  'git push --force',
+  'git push -f',
+  'git push --force-with-lease',
+  'git rebase',
+  'git rebase -i HEAD~3',
+  'git merge feature',
+  'git cherry-pick abc123',
+  'git reset --hard HEAD~1',
+  'git reset --keep',
+  'git revert abc123',
+  'git filter-branch -- --all',
+]) {
   const decision = await decide(command)
-  assert.equal(decision?.kind, 'ask', `ask: ${command}`)
-  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知提交需用户许可')
+  assert.equal(decision?.kind, 'deny', `deny: ${command}`)
+  assert.equal(typeof decision?.reason, 'string', 'deny 附禁止原因')
 }
 
-// --- 放行：其他命令走 next() ---
-assert.equal((await decide('git status'))?.kind, 'allow')
-assert.equal((await decide('ls -la'))?.kind, 'allow')
-assert.equal((await decide('git log && echo done'))?.kind, 'allow')
-// 非 bash 工具不拦截
-assert.equal((await decide('git push', 'read'))?.kind, 'allow')
+// --- 放行：安全 git 子命令与非 git 命令 ---
+for (const command of [
+  'git status',
+  'git log && echo done',
+  'git add .',
+  'git reset HEAD~1', // 普通 mixed/smooth 重置放行
+  'ls -la',
+  'Get-ChildItem',
+  'echo git commit', // git 不在命令位 → 不应误拦截
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'allow', `allow: ${command}`)
+}
+
+// --- 非 shell 工具（无 command 字段）不拦截 ---
+assert.equal((await hook({ name: 'read', arguments: { file: 'x' } }, async () => ({ kind: 'allow' })))?.kind, 'allow')
 
 console.log('all behavioral checks passed')
