@@ -44,13 +44,14 @@ guard.apply(ctx)
 const hook = listeners.get('tools/pre-execute')
 assert.ok(hook, 'tools/pre-execute hook registered')
 
-// --- 系统提示词注入：推送策略区段 ---
+// --- 系统提示词注入：提交推送策略区段 ---
 assert.equal(sections.length, 1, '恰注册一个系统提示词区段')
 const [policySection] = sections
 assert.equal(policySection.name, 'git-guard:push-policy')
 assert.equal(policySection.order, 600, '区段位于 TEAM_POLICY 槽位')
 assert.match(policySection.text, /git push/, '区段提及 git push')
-assert.match(policySection.text, /用户手动/, '区段声明推送由用户手动执行')
+assert.match(policySection.text, /git commit/, '区段提及 git commit')
+assert.match(policySection.text, /用户许可/, '区段声明需要用户许可')
 assert.doesNotMatch(policySection.text, /不要修改/, '区段不再包含「不要修改」的分析限制')
 
 // 模拟流水线：next() 落到链尾的默认 allow。
@@ -58,7 +59,7 @@ function decide(command, toolName = 'bash') {
   return hook({ name: toolName, arguments: { command } }, async () => ({ kind: 'allow' }))
 }
 
-// --- deny：git push 及其各种包装 ---
+// --- ask：git push 及其各种包装（均需用户许可）---
 for (const command of [
   'git push',
   'git push origin main',
@@ -68,14 +69,16 @@ for (const command of [
   'git add . && git push',
 ]) {
   const decision = await decide(command)
-  assert.equal(decision?.kind, 'deny', `deny: ${command}`)
-  assert.match(decision?.reason ?? '', /用户手动/, 'deny reason 告知推送由用户手动执行')
-  assert.match(decision?.reason ?? '', /不要/, 'deny reason 指示不要重试/绕过/修改')
+  assert.equal(decision?.kind, 'ask', `ask: ${command}`)
+  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知推送需用户许可')
 }
 
 // --- ask：git commit ---
-assert.equal((await decide('git commit -m x'))?.kind, 'ask')
-assert.equal((await decide('git add . && git commit'))?.kind, 'ask')
+for (const command of ['git commit -m x', 'git add . && git commit']) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask: ${command}`)
+  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知提交需用户许可')
+}
 
 // --- 放行：其他命令走 next() ---
 assert.equal((await decide('git status'))?.kind, 'allow')
