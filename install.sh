@@ -53,7 +53,7 @@ for arg in "$@"; do
 done
 
 # 仓库内全部插件目录（与 install.ps1 中的列表保持一致；新增 / 移除插件须同步两处）
-PLUGINS="dsh-text-editor dsh-code-card-fonts dsh-git-guard dsh-fullwidth-chat dsh-new-session dsh-directory-picker-browse dsh-change-summary dsh-kbd-hotkeys"
+PLUGINS="dsh-code-card-fonts dsh-git-guard dsh-fullwidth-chat dsh-new-session dsh-directory-picker-browse dsh-kbd-hotkeys dsh-no-right-sidebar"
 TOTAL=$(echo "$PLUGINS" | wc -w | tr -d ' ')
 
 echo "==> 仓库根: $ROOT"
@@ -75,13 +75,6 @@ for dir in $PLUGINS; do
 		exit 1
 	}
 done
-
-# dsh-change-summary 的 lib/ 是不入仓的构建产物；缺失时给出构建指引
-if [ ! -f "$ROOT/dsh-change-summary/lib/index.js" ] || [ ! -f "$ROOT/dsh-change-summary/lib/client.js" ]; then
-	echo "错误: dsh-change-summary 缺少构建产物 lib/（其 lib/ 不入仓，未随仓库提供）。" >&2
-	echo "      请先在 dsh-change-summary 目录执行: npm install && npm run build，再重跑本脚本。" >&2
-	exit 1
-fi
 
 # --- 迁移：卸载旧的仓库根集合依赖（若存在） -----------------------------------
 MANIFEST="$HOME/.dsh/profiles/$PROFILE/package.json"

@@ -1,4 +1,4 @@
-﻿# =============================================================
+# =============================================================
 #  install.ps1 —— dsh-plugins Windows 安装脚本（PowerShell）
 #
 #  本仓库不再作为「一个插件」整体安装（不再有根 cordis.patch.yml /
@@ -71,14 +71,13 @@ if ([string]::IsNullOrWhiteSpace($ProfileName)) {
 
 # 仓库内全部插件目录（与 install.sh 中的列表保持一致；新增 / 移除插件须同步两处）
 $plugins = @(
-    'dsh-text-editor'
     'dsh-code-card-fonts'
     'dsh-git-guard'
     'dsh-fullwidth-chat'
     'dsh-new-session'
     'dsh-directory-picker-browse'
-    'dsh-change-summary'
     'dsh-kbd-hotkeys'
+    'dsh-no-right-sidebar'
 )
 
 Write-Host "==> 仓库根: $script:Root"
@@ -105,19 +104,6 @@ if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
 foreach ($dir in $plugins) {
     if (-not (Test-Path -LiteralPath (Join-Path $script:Root "$dir\package.json"))) {
         Write-Host "错误: 缺少插件目录或 package.json: $(Join-Path $script:Root $dir)" -ForegroundColor Red
-        exit 1
-    }
-}
-
-# dsh-change-summary 的 lib/ 是不入仓的构建产物；缺失时给出构建指引
-foreach ($rel in @('lib\index.js', 'lib\client.js')) {
-    $entry = Join-Path $script:Root "dsh-change-summary\$rel"
-    if (-not (Test-Path -LiteralPath $entry)) {
-        Write-Host "错误: dsh-change-summary 缺少构建产物 $rel（其 lib/ 不入仓，未随仓库提供）。" -ForegroundColor Red
-        Write-Host '请先在 dsh-change-summary 目录执行:' -ForegroundColor Red
-        Write-Host '   npm install' -ForegroundColor Red
-        Write-Host '   npm run build' -ForegroundColor Red
-        Write-Host '然后重跑本脚本。' -ForegroundColor Red
         exit 1
     }
 }

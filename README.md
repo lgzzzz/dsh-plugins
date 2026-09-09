@@ -19,16 +19,16 @@ Profile 中独立的 `link:` 依赖，经其自身的 `cordis.patch.yml` 独立�
 
 | 目录 | 说明 | 默认安装 |
 | --- | --- | --- |
-| `dsh-text-editor` | Monaco 应用内编辑器；提供 `openFile`/`showDiff` 能力 | ✅ |
 | `dsh-code-card-fonts` | 卡片标题/摘要行/展开内容与代码块字号补丁 | ✅ |
 | `dsh-git-guard` | 拦截 `git push`（deny）/ `git commit`（ask） | ✅ |
 | `dsh-fullwidth-chat` | 对话列全宽展示 | ✅ |
 | `dsh-new-session` | `/new` 新建会话命令 | ✅ |
 | `dsh-directory-picker-browse` | 目录选择器固定 browse 模式的覆盖层 | ✅ |
-| `dsh-change-summary` | 回合结束汇总改动文件与 git 差异（`lib/` 不入仓，装前须先构建，见下） | ✅ |
 | `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、滚动、复制、⌘K 面板等） | ✅ |
+| `dsh-no-right-sidebar` | 关闭右侧边栏：停用右栏三行插件的加载，并提供 `sidebarRight` 桩保住 ui-chat | ✅ |
 
-> 两个安装脚本**默认安装仓库内全部 8 个插件**（不再有“可选插件”概念）。
+> 两个安装脚本**默认安装仓库内全部 7 个插件**（不再有“可选插件”概念）。
+> `dsh-text-editor` 与 `dsh-change-summary` 已从仓库移除，仅存于 git 历史。
 
 ## 安装（脚本，推荐）
 
@@ -38,7 +38,7 @@ Profile 中独立的 `link:` 依赖，经其自身的 `cordis.patch.yml` 独立�
 
 ```sh
 cd <仓库根>
-./install.sh          # 默认安装全部 8 个插件到 web Profile
+./install.sh          # 默认安装全部 7 个插件到 web Profile
 # 重启 App 生效
 ```
 
@@ -65,20 +65,6 @@ Windows PowerShell 5.1 上均可正常解析显示。结束后重启 App。
 
 浏览器半部无需单独注册：client-modules 服务按每个插件的挂载行解析到插件包目录、
 读取包内 `dsh.client` 声明自动注册。
-
-### dsh-change-summary 的构建要求
-
-`dsh-change-summary` 是默认安装的一部分，但其 `lib/` 为不入仓的构建产物，全新
-克隆的仓库里并不存在。脚本检测到 `lib/index.js` / `lib/client.js` 缺失时会给出
-中文提示并退出，此时先构建再重跑脚本：
-
-```sh
-cd dsh-change-summary
-npm install
-npm run build
-cd ..
-./install.sh   # 或 powershell -ExecutionPolicy Bypass -File .\install.ps1
-```
 
 ### 装入其它 Profile
 
@@ -131,7 +117,7 @@ dsh plugin --profile web remove <name>
 移除全部插件（换行拼接为一条命令即可）：
 
 ```sh
-dsh plugin --profile web remove dsh-text-editor dsh-code-card-fonts dsh-git-guard dsh-fullwidth-chat dsh-new-session dsh-directory-picker-browse dsh-change-summary dsh-kbd-hotkeys
+dsh plugin --profile web remove dsh-code-card-fonts dsh-git-guard dsh-fullwidth-chat dsh-new-session dsh-directory-picker-browse dsh-kbd-hotkeys dsh-no-right-sidebar
 ```
 
 卸载后重启 App 生效。
@@ -146,5 +132,4 @@ dsh plugin --profile web remove dsh-text-editor dsh-code-card-fonts dsh-git-guar
 ## 验证
 
 仓库级无独立校验命令。各插件按其目录内说明自检（例如 `dsh-git-guard` 的
-`node test.mjs`、`dsh-change-summary` 的 `npm run verify`），构建与验证命令总表见
-`AGENTS.md`「构建与验证」。
+`node test.mjs`），构建与验证命令总表见 `AGENTS.md`「构建与验证」。
