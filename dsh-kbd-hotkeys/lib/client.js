@@ -28,6 +28,119 @@ __export(client_exports, {
 });
 module.exports = __toCommonJS(client_exports);
 
+// src/question-drafts.ts
+var COMPOSER_SLOT = "conversation.composer";
+function questionDraftStore(services, pending, sessionId) {
+  const slots = services.slots;
+  const uiSession = services.uiSession;
+  if (slots === null || slots === void 0 || uiSession === null || uiSession === void 0) return void 0;
+  if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
+  const binding = resolveBinding(uiSession, sessionId);
+  if (binding === void 0) return void 0;
+  for (const entry of entriesOf(slots)) {
+    const handle = entry == null ? void 0 : entry.store;
+    if (handle === void 0 || handle === null) continue;
+    if (!entryOwnsPending(entry, pending, sessionId)) continue;
+    let instance;
+    try {
+      instance = slots.resolveStore(handle, binding);
+    } catch {
+      return void 0;
+    }
+    return asDraftStore(instance);
+  }
+  return void 0;
+}
+function entryOwnsPending(entry, pending, sessionId) {
+  const select = entry.select;
+  if (typeof select !== "function") return false;
+  try {
+    const matched = select({ sessionId, pendingInteraction: pending });
+    return matched !== null && matched !== void 0;
+  } catch {
+    return false;
+  }
+}
+function entriesOf(slots) {
+  var _a;
+  try {
+    const entries = (_a = slots.entries) == null ? void 0 : _a.call(slots, COMPOSER_SLOT);
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+function resolveBinding(uiSession, sessionId) {
+  const resolve = uiSession.resolve;
+  if (typeof resolve !== "function") return void 0;
+  let binding;
+  try {
+    binding = resolve.call(uiSession, sessionId);
+  } catch {
+    return void 0;
+  }
+  if (typeof binding !== "object" || binding === null) return void 0;
+  const key = binding.key;
+  return typeof key === "string" && key !== "" ? binding : void 0;
+}
+function asDraftStore(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const candidate = value;
+  if (typeof candidate.getSnapshot !== "function") return void 0;
+  const actions = candidate.actions;
+  if (typeof actions !== "object" || actions === null) return void 0;
+  if (typeof actions.replace !== "function") return void 0;
+  return candidate;
+}
+function freshProgress(questions) {
+  return { index: 0, drafts: questions.map(() => ({ selected: [], custom: "", skipped: false })) };
+}
+function readProgress(store, requestKey, questions) {
+  var _a;
+  const snapshot = asSnapshot((_a = store.getSnapshot) == null ? void 0 : _a.call(store));
+  if (snapshot === void 0 || snapshot.requestKey !== requestKey) return freshProgress(questions);
+  const progress = snapshot.progress;
+  if (progress === void 0) return freshProgress(questions);
+  const drafts = progress.drafts;
+  if (!Array.isArray(drafts) || drafts.length !== questions.length) return freshProgress(questions);
+  const index = progress.index;
+  return {
+    index: typeof index === "number" && Number.isInteger(index) && index >= 0 && index < questions.length ? index : 0,
+    drafts: drafts.map(cloneDraft)
+  };
+}
+function asSnapshot(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  return value;
+}
+function cloneDraft(draft) {
+  return {
+    selected: Array.isArray(draft == null ? void 0 : draft.selected) ? [...draft.selected] : [],
+    custom: typeof (draft == null ? void 0 : draft.custom) === "string" ? draft.custom : "",
+    skipped: (draft == null ? void 0 : draft.skipped) === true
+  };
+}
+function writeProgress(store, requestKey, progress) {
+  var _a;
+  const replace = (_a = store.actions) == null ? void 0 : _a.replace;
+  if (typeof replace !== "function") return false;
+  try {
+    replace.call(store.actions, requestKey, progress);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function clearProgress(store, requestKey) {
+  var _a;
+  const clear = (_a = store.actions) == null ? void 0 : _a.clear;
+  if (typeof clear !== "function") return;
+  try {
+    clear.call(store.actions, requestKey);
+  } catch {
+  }
+}
+
 // src/sidebar-order.ts
 var FLAT_ORDER_KEY = "__flat_session_order__";
 var UNGROUPED_KEY = "";
@@ -78,7 +191,7 @@ function readSidebarViewState(services) {
   const slots = services.slots;
   if (slots === null || slots === void 0) return void 0;
   if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
-  for (const entry of entriesOf(slots)) {
+  for (const entry of entriesOf2(slots)) {
     const handle = entry == null ? void 0 : entry.store;
     if (handle === void 0 || handle === null) continue;
     const instance = liveInstance(slots, handle);
@@ -87,7 +200,7 @@ function readSidebarViewState(services) {
   }
   return void 0;
 }
-function entriesOf(slots) {
+function entriesOf2(slots) {
   var _a;
   try {
     const entries = (_a = slots.entries) == null ? void 0 : _a.call(slots, WORKSPACE_SLOT);
@@ -208,34 +321,20 @@ function answerApproval(services, outcome) {
     return (_a = pending.answer) == null ? void 0 : _a.call(pending, outcome);
   });
 }
-var questionMirrors = /* @__PURE__ */ new Map();
-function mirrorFor(key, questions) {
-  const existing = questionMirrors.get(key);
-  if (existing !== void 0 && existing.drafts.length === questions.length) return existing;
-  const fresh = {
-    index: 0,
-    drafts: questions.map(() => ({ selected: [], custom: "", skipped: false }))
-  };
-  questionMirrors.set(key, fresh);
-  return fresh;
-}
-function pruneMirrors(map) {
-  if (map === void 0) {
-    questionMirrors.clear();
-    return;
-  }
-  const live = /* @__PURE__ */ new Set();
-  for (const pending of map.values()) live.add(mirrorKeyOf(pending));
-  for (const key of [...questionMirrors.keys()]) {
-    if (!live.has(key)) questionMirrors.delete(key);
-  }
-}
 function answered(draft) {
   return draft.selected.length > 0 || draft.custom.trim() !== "";
 }
-function mirrorKeyOf(pending) {
-  var _a, _b;
-  return (_b = pending.key) != null ? _b : `${(_a = pending.sessionId) != null ? _a : ""}#question`;
+function completed(draft) {
+  return answered(draft) || draft.skipped;
+}
+function requestKeyOf(pending) {
+  const key = pending.key;
+  return typeof key === "string" && key !== "" ? key : void 0;
+}
+function draftStoreOf(services, pending) {
+  const sessionId = pending.sessionId;
+  if (typeof sessionId !== "string" || sessionId === "") return void 0;
+  return questionDraftStore(services, pending, sessionId);
 }
 function planReviewLabels(pending) {
   var _a, _b, _c;
@@ -254,29 +353,24 @@ function planReviewLabels(pending) {
 function answerPlanReview(pending, decision) {
   if (decision === "discuss") {
     if (typeof pending.cancel !== "function") return false;
-    const settled2 = fireAndForget(() => {
+    return fireAndForget(() => {
       var _a;
       return (_a = pending.cancel) == null ? void 0 : _a.call(pending);
     });
-    if (settled2) questionMirrors.delete(mirrorKeyOf(pending));
-    return settled2;
   }
   const labels = planReviewLabels(pending);
   if (labels === void 0 || typeof pending.answer !== "function") return false;
   const label = decision === "approve" ? labels.approve : labels.decline;
   if (label === void 0) return false;
-  const settled = fireAndForget(() => {
+  return fireAndForget(() => {
     var _a;
     return (_a = pending.answer) == null ? void 0 : _a.call(pending, { answers: [{ id: labels.id, selected: [label] }] });
   });
-  if (settled) questionMirrors.delete(mirrorKeyOf(pending));
-  return settled;
 }
 function pickQuestionOption(services, n) {
   var _a, _b;
   const pending = pendingQuestion(services);
   if (pending === void 0) return false;
-  pruneMirrors(pendingMap(services));
   if (pending.kind === "plan-review") {
     if (n === 1) return answerPlanReview(pending, "approve");
     if (n === 2) return answerPlanReview(pending, "decline");
@@ -285,9 +379,13 @@ function pickQuestionOption(services, n) {
   }
   const questions = (_a = pending.questions) != null ? _a : [];
   if (questions.length === 0) return false;
-  const mirror = mirrorFor(mirrorKeyOf(pending), questions);
-  const question = questions[mirror.index];
-  const draft = mirror.drafts[mirror.index];
+  const requestKey = requestKeyOf(pending);
+  if (requestKey === void 0) return false;
+  const store = draftStoreOf(services, pending);
+  if (store === void 0) return false;
+  const progress = readProgress(store, requestKey, questions);
+  const question = questions[progress.index];
+  const draft = progress.drafts[progress.index];
   if (question === void 0 || draft === void 0) return false;
   const option = ((_b = question.options) != null ? _b : [])[n - 1];
   if (option === void 0) return false;
@@ -296,36 +394,49 @@ function pickQuestionOption(services, n) {
   } else {
     draft.selected = [option.label];
     draft.custom = "";
-    if (mirror.index < questions.length - 1) mirror.index += 1;
   }
   draft.skipped = false;
-  return true;
+  return writeProgress(store, requestKey, progress);
+}
+function moveQuestion(services, delta) {
+  var _a;
+  const pending = pendingQuestion(services);
+  if (pending === void 0 || pending.kind === "plan-review") return false;
+  const questions = (_a = pending.questions) != null ? _a : [];
+  if (questions.length === 0) return false;
+  const requestKey = requestKeyOf(pending);
+  if (requestKey === void 0) return false;
+  const store = draftStoreOf(services, pending);
+  if (store === void 0) return false;
+  const progress = readProgress(store, requestKey, questions);
+  const next = progress.index + delta;
+  if (next < 0 || next >= questions.length) return false;
+  progress.index = next;
+  return writeProgress(store, requestKey, progress);
 }
 function submitQuestion(services) {
   var _a;
   const pending = pendingQuestion(services);
   if (pending === void 0) return false;
-  pruneMirrors(pendingMap(services));
   if (pending.kind === "plan-review") return answerPlanReview(pending, "approve");
   const questions = (_a = pending.questions) != null ? _a : [];
   if (questions.length === 0) return false;
-  const key = mirrorKeyOf(pending);
-  const mirror = mirrorFor(key, questions);
-  const draft = mirror.drafts[mirror.index];
+  const requestKey = requestKeyOf(pending);
+  if (requestKey === void 0) return false;
+  const store = draftStoreOf(services, pending);
+  if (store === void 0) return false;
+  const progress = readProgress(store, requestKey, questions);
+  const draft = progress.drafts[progress.index];
   if (draft === void 0 || !answered(draft)) return false;
-  if (mirror.index < questions.length - 1) {
-    mirror.index += 1;
-    return true;
+  if (progress.index < questions.length - 1) {
+    progress.index += 1;
+    return writeProgress(store, requestKey, progress);
   }
-  const incomplete = mirror.drafts.findIndex((item) => !item.skipped && !answered(item));
-  if (incomplete >= 0) {
-    mirror.index = incomplete;
-    return false;
-  }
+  if (progress.drafts.some((item) => !completed(item))) return false;
   if (typeof pending.answer !== "function") return false;
   const answers = questions.map((item, index) => {
     var _a2;
-    const value = (_a2 = mirror.drafts[index]) != null ? _a2 : { selected: [], custom: "", skipped: false };
+    const value = (_a2 = progress.drafts[index]) != null ? _a2 : { selected: [], custom: "", skipped: false };
     if (value.skipped) return { id: item.id, selected: [] };
     const custom = value.custom.trim();
     return {
@@ -338,7 +449,7 @@ function submitQuestion(services) {
     var _a2;
     return (_a2 = pending.answer) == null ? void 0 : _a2.call(pending, { answers });
   });
-  if (settled) questionMirrors.delete(key);
+  if (settled) clearProgress(store, requestKey);
   return settled;
 }
 function isEditableTarget(target) {
@@ -468,11 +579,14 @@ function activeSessionIds(snapshot, services) {
 // src/config.ts
 var ACTIONS = [
   // P0 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
-  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;数字键/Enter 由分发器固定分发。
+  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;数字键/方向键/Enter
+  // 由分发器固定分发(单键不参与 bindings 覆盖,避免与输入框光标移动冲突)。
   { id: "approval.allow", label: "\u5BA1\u6279:\u5141\u8BB8\u4E00\u6B21", group: "\u5BA1\u6279(P0)", states: ["card", "editing", "browse"] },
   { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279(P0)", states: ["card", "editing", "browse"] },
-  { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
-  { id: "question.submit", label: "\u95EE\u9898:Enter \u786E\u8BA4 / \u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
+  { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879(\u4E0D\u7FFB\u9898)", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
+  { id: "question.prev", label: "\u95EE\u9898:\u2190 \u4E0A\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
+  { id: "question.next", label: "\u95EE\u9898:\u2192 \u4E0B\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
+  { id: "question.submit", label: "\u95EE\u9898:Enter \u4E0B\u4E00\u9898 / \u672B\u9898\u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
   // P1 会话级
   // sidebar.toggle 额外放行 editing:⌘/Ctrl+B 在输入框聚焦时同样开关侧栏
   // (带修饰键的组合不干扰文本编辑,与 `editing` 态「只保留带修饰键的全局组合」一致)。
@@ -615,6 +729,12 @@ function prettyCombo(combo) {
 
 // src/overlay.ts
 var STYLE_ID = "dsh-kbd-hotkeys/style";
+var FIXED_KEYS = {
+  "question.option": "1\u20139",
+  "question.prev": "\u2190",
+  "question.next": "\u2192",
+  "question.submit": "Enter"
+};
 var STYLE = [
   ".dsh-kbd-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;font-family:var(--dsw-font-family,system-ui,-apple-system,sans-serif)}",
   ".dsh-kbd-panel{width:min(560px,calc(100vw - 48px));max-height:64vh;background:var(--dsw-specific-menu,#fff);color:var(--dsw-alias-label-primary,#111);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.25));border-radius:14px;display:flex;flex-direction:column;overflow:hidden}",
@@ -681,8 +801,9 @@ function createOverlays(deps) {
       label.className = "dsh-kbd-itemLabel";
       label.textContent = action.label;
       const key = document.createElement("kbd");
+      const fixed = FIXED_KEYS[action.id];
       const combo = config.bindings[action.id];
-      key.textContent = action.id === "question.option" || action.id === "question.submit" ? action.id === "question.option" ? "1\u20139" : "Enter" : combo === void 0 ? "\u672A\u7ED1\u5B9A" : prettyCombo(combo);
+      key.textContent = fixed != null ? fixed : combo === void 0 ? "\u672A\u7ED1\u5B9A" : prettyCombo(combo);
       row.appendChild(label);
       row.appendChild(key);
       container.appendChild(row);
@@ -799,6 +920,14 @@ function apply(ctx) {
     const state = cardState ? "card" : editable ? "editing" : "browse";
     if (state === "card" && !editable) {
       if (/^[1-9]$/.test(combo) && pickQuestionOption(services, Number(combo))) {
+        swallow(event);
+        return;
+      }
+      if (combo === "arrowleft" && moveQuestion(services, -1)) {
+        swallow(event);
+        return;
+      }
+      if (combo === "arrowright" && moveQuestion(services, 1)) {
         swallow(event);
         return;
       }

@@ -29,16 +29,19 @@ export interface ActionDef {
 }
 
 /**
- * 动作注册表。question.option(数字键)为固定行为,不进 bindings 映射
- * (见 dispatcher),但仍在 ACTIONS 中展示说明。
+ * 动作注册表。问答卡片的四个动作(数字键 / 方向键 / Enter)为固定行为,
+ * 不进 bindings 映射(见 dispatcher),但仍在 ACTIONS 中展示说明。
  */
 export const ACTIONS: readonly ActionDef[] = [
   // P0 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
-  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;数字键/Enter 由分发器固定分发。
+  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;数字键/方向键/Enter
+  // 由分发器固定分发(单键不参与 bindings 覆盖,避免与输入框光标移动冲突)。
   { id: 'approval.allow', label: '审批:允许一次', group: '审批(P0)', states: ['card', 'editing', 'browse'] },
   { id: 'approval.reject', label: '审批:拒绝', group: '审批(P0)', states: ['card', 'editing', 'browse'] },
-  { id: 'question.option', label: '问题:按 1–9 选择选项', group: '问答卡片(P0)', states: ['card'] },
-  { id: 'question.submit', label: '问题:Enter 确认 / 提交', group: '问答卡片(P0)', states: ['card'] },
+  { id: 'question.option', label: '问题:按 1–9 选择选项(不翻题)', group: '问答卡片(P0)', states: ['card'] },
+  { id: 'question.prev', label: '问题:← 上一题', group: '问答卡片(P0)', states: ['card'] },
+  { id: 'question.next', label: '问题:→ 下一题', group: '问答卡片(P0)', states: ['card'] },
+  { id: 'question.submit', label: '问题:Enter 下一题 / 末题提交', group: '问答卡片(P0)', states: ['card'] },
   // P1 会话级
   // sidebar.toggle 额外放行 editing:⌘/Ctrl+B 在输入框聚焦时同样开关侧栏
   // (带修饰键的组合不干扰文本编辑,与 `editing` 态「只保留带修饰键的全局组合」一致)。

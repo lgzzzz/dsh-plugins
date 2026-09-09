@@ -7,7 +7,12 @@
  * - 审批:uiSession 待处理交互 → PendingApproval.answer('allowed-once' | 'rejected');
  * - 问答/计划评审:uiSession 待处理交互 → PendingQuestion.answer({answers}) / cancel();
  *   计划评审 1=确认执行(intent.approve 标签)、2=拒绝(另一标签)、3=去聊天里说(cancel)、
- *   Enter=确认执行;通用问答由本插件镜像草稿后成批提交(上游卡片状态在 slot store 内,不可读);
+ *   Enter=确认执行;通用问答直接读写**卡片自己的 Session 级 slot store**
+ *   (`conversation.composer` 注册项上的 createQuestionDraftStore,见 question-drafts.ts),
+ *   数字键 = 上游 choose() 的选中语义(单选覆盖、多选切换),**但不自动翻题**;
+ *   ←/→ = 上游 pager 的 nav.prev / nav.next 语义(仅改题号、草稿原样保留、首末题
+ *   不循环);Enter = 保留上游 continueFlow 的推进语义(当前题已作答且非末题 →
+ *   翻到下一题),末题仅在全部题目完成后按 store 的草稿成批结算(不跳回未完成题);
  * - 侧栏:layout.toggleSidebar();
  * - 会话跳转:sessions 快照 + slots 里的侧栏视图 store(顺序)+ sessions.open(id);
  * - Esc 停止:sessions.binding(id).session.cancel();
@@ -22,6 +27,10 @@
  * - PendingApproval:kind==='approval',answer('allowed-once' | 'rejected');
  * - PendingQuestion:kind==='question' | 'plan-review',questions 携带
  *   options/multiSelect/intent,answer({answers:[{id,selected,custom?}]})、cancel();
+ * - 通用问答的选中态在 Session 级 slot store 内:注册项 store handle
+ *   + uiSession.resolve(sessionId) 作用域绑定 + slots.resolveStore(handle, binding)
+ *   取活实例,动作面 actions.replace/clear(dsh-client-ui-renderer 的 resolveStore、
+ *   dsh-web-frontend 的 defineStore);
  * - 计划评审卡片的 DOM 底部按钮顺序实为 去聊天里说 / 拒绝 / 确认执行,故键位语义
  *   改为按 intent.approve 标签判定,不再依赖按钮顺序;
  * - 会话视图 tablist:tabs.length>1 时渲染 role=tab 的 button(全应用仅此一个
@@ -29,12 +38,14 @@
  */
 import type {
   PendingInteractionLike,
-  PendingQuestionItemLike,
+  QuestionDraftLike,
+  QuestionDraftStoreLike,
   Services,
   SessionFaceLike,
   SessionListSnapshotLike,
   SessionsLike,
 } from './types.ts'
+import { clearProgress, questionDraftStore, readProgress, writeProgress } from './question-drafts.ts'
 import { sidebarOrderedSessionIds } from './sidebar-order.ts'
 
 /* ------------------------------------------------------------------ *
@@ -123,62 +134,30 @@ export function answerApproval(services: Services, outcome: 'allowed-once' | 're
  * 问答 / 计划评审(P0,`card` 态)
  * ------------------------------------------------------------------ */
 
-/** 通用问答的服务侧草稿镜像(上游卡片状态在 slot store 内,不可读)。 */
-interface QuestionDraftMirror {
-  selected: string[]
-  custom: string
-  skipped: boolean
-}
-
-/** 一次问答请求的镜像进度(题号 + 每题草稿),按载体 key 缓存。 */
-interface QuestionMirrorState {
-  index: number
-  drafts: QuestionDraftMirror[]
-}
-
-/**
- * 镜像缓存:载体 key → 进度。
- * 上游卡片把选中态放在 Session 级 Slot store 里(外部不可达),故热键侧自持一份;
- * 键随请求唯一(`question:<n>`),请求结算后由 pruneMirrors 回收。
- */
-const questionMirrors = new Map<string, QuestionMirrorState>()
-
-/** 取(或按题目数量重建)某次请求的镜像进度。 */
-function mirrorFor(key: string, questions: readonly PendingQuestionItemLike[]): QuestionMirrorState {
-  const existing = questionMirrors.get(key)
-  if (existing !== undefined && existing.drafts.length === questions.length) return existing
-  const fresh: QuestionMirrorState = {
-    index: 0,
-    drafts: questions.map(() => ({ selected: [], custom: '', skipped: false })),
-  }
-  questionMirrors.set(key, fresh)
-  return fresh
-}
-
-/**
- * 回收已不在待处理表中的镜像(请求已应答/取消/作用域销毁)。
- * 注意:待处理表按 sessionId 索引,而镜像按载体 key 索引,故先投影出在册载体 key。
- */
-function pruneMirrors(map: ReadonlyMap<string, PendingInteractionLike> | undefined): void {
-  if (map === undefined) {
-    questionMirrors.clear()
-    return
-  }
-  const live = new Set<string>()
-  for (const pending of map.values()) live.add(mirrorKeyOf(pending))
-  for (const key of [...questionMirrors.keys()]) {
-    if (!live.has(key)) questionMirrors.delete(key)
-  }
-}
-
-/** 单题是否已作答(选中过选项或填过自定义文本)。 */
-function answered(draft: QuestionDraftMirror): boolean {
+/** 单题是否已作答(选中过选项或填过自定义文本)——上游 QuestionFlow.answered 同语义。 */
+function answered(draft: QuestionDraftLike): boolean {
   return draft.selected.length > 0 || draft.custom.trim() !== ''
 }
 
-/** 镜像键(载体 key 缺失时以 sessionId 兜底,保证同一请求内稳定)。 */
-function mirrorKeyOf(pending: PendingInteractionLike): string {
-  return pending.key ?? `${pending.sessionId ?? ''}#question`
+/** 单题是否已完成(已作答或显式跳过)——上游 QuestionFlow.completed 同语义。 */
+function completed(draft: QuestionDraftLike): boolean {
+  return answered(draft) || draft.skipped
+}
+
+/** 请求键(卡片 store 的 requestKey 必须与之一致,否则卡片不会读这份进度)。 */
+function requestKeyOf(pending: PendingInteractionLike): string | undefined {
+  const key = pending.key
+  return typeof key === 'string' && key !== '' ? key : undefined
+}
+
+/**
+ * 取承载当前问答的卡片草稿 store(唯一真源)。
+ * 无降级:会话 id / 请求键 / store 任一不可解析即返回 undefined,调用方 no-op。
+ */
+function draftStoreOf(services: Services, pending: PendingInteractionLike): QuestionDraftStoreLike | undefined {
+  const sessionId = pending.sessionId
+  if (typeof sessionId !== 'string' || sessionId === '') return undefined
+  return questionDraftStore(services, pending, sessionId)
 }
 
 /**
@@ -205,33 +184,31 @@ function planReviewLabels(
  * 计划评审决策:
  * - approve / decline → answer({answers:[{id, selected:[标签]}]});
  * - discuss → cancel()(「去聊天里说」)。
+ * 计划评审卡片不使用草稿 store(一次决策),故无需清理。
  */
 function answerPlanReview(pending: PendingInteractionLike, decision: 'approve' | 'decline' | 'discuss'): boolean {
   if (decision === 'discuss') {
     if (typeof pending.cancel !== 'function') return false
-    const settled = fireAndForget(() => pending.cancel?.())
-    if (settled) questionMirrors.delete(mirrorKeyOf(pending))
-    return settled
+    return fireAndForget(() => pending.cancel?.())
   }
   const labels = planReviewLabels(pending)
   if (labels === undefined || typeof pending.answer !== 'function') return false
   const label = decision === 'approve' ? labels.approve : labels.decline
   if (label === undefined) return false
-  const settled = fireAndForget(() => pending.answer?.({ answers: [{ id: labels.id, selected: [label] }] }))
-  if (settled) questionMirrors.delete(mirrorKeyOf(pending))
-  return settled
+  return fireAndForget(() => pending.answer?.({ answers: [{ id: labels.id, selected: [label] }] }))
 }
 
 /**
  * 数字键:选择当前题第 n 个选项(1 起)。
  * - 计划评审:1=确认执行、2=拒绝、3=去聊天里说(直接结算,无中间态);
- * - 通用问答:单选覆盖选中并自动翻到下一题(镜像态),多选切换该项,
- *   最终由 Enter(submitQuestion)成批提交。
+ * - 通用问答:单选覆盖选中并清空自定义文本、多选切换该项;**只改选中态,不改题号**
+ *   (与上游 QuestionFlow.choose() 的唯一差异:上游单选会顺手翻到下一题,这里不翻,
+ *   切题完全交给 ← / →)。写回**卡片自己的 store**,卡片实时高亮,与鼠标点选共用
+ *   同一份状态;最终由 Enter(submitQuestion)成批提交。
  */
 export function pickQuestionOption(services: Services, n: number): boolean {
   const pending = pendingQuestion(services)
   if (pending === undefined) return false
-  pruneMirrors(pendingMap(services))
 
   if (pending.kind === 'plan-review') {
     if (n === 1) return answerPlanReview(pending, 'approve')
@@ -242,9 +219,14 @@ export function pickQuestionOption(services: Services, n: number): boolean {
 
   const questions = pending.questions ?? []
   if (questions.length === 0) return false
-  const mirror = mirrorFor(mirrorKeyOf(pending), questions)
-  const question = questions[mirror.index]
-  const draft = mirror.drafts[mirror.index]
+  const requestKey = requestKeyOf(pending)
+  if (requestKey === undefined) return false
+  const store = draftStoreOf(services, pending)
+  if (store === undefined) return false
+
+  const progress = readProgress(store, requestKey, questions)
+  const question = questions[progress.index]
+  const draft = progress.drafts[progress.index]
   if (question === undefined || draft === undefined) return false
   const option = (question.options ?? [])[n - 1]
   if (option === undefined) return false
@@ -256,49 +238,82 @@ export function pickQuestionOption(services: Services, n: number): boolean {
   } else {
     draft.selected = [option.label]
     draft.custom = ''
-    if (mirror.index < questions.length - 1) mirror.index += 1
   }
   draft.skipped = false
-  return true
+  return writeProgress(store, requestKey, progress)
 }
 
 /**
- * Enter:通用问答推进/提交(镜像态),计划评审 = 确认执行。
+ * 左右方向键:在题目之间切换(上一题 / 下一题)。
  *
- * 语义对齐上游 QuestionFlow.continueFlow / submitDrafts:
- * - 当前题未作答 → 不吞键(焦点在自定义文本框等场景交回卡片自身处理);
- * - 非最后一题 → 翻到下一题;
- * - 最后一题 → 按 answers 批量结算(单选且带 custom 时丢弃 selected,多选保留)。
+ * 语义对齐上游 QuestionFlow 底部 pager 的两个按钮(aria-label 为 nav.prev /
+ * nav.next):两者都只做 `replaceProgress(index ± 1, drafts)`——**草稿原样保留**,
+ * 仅改当前题号;边界处上游把按钮置为 `disabled`(index===0 / index===末题),
+ * 故这里同样**不循环**:已在首题按 ←、已在末题按 → 均返回 false(不吞键,
+ * 页面默认行为照常)。
+ *
+ * 仅通用问答有题目列表;计划评审是「单题一次决策」,两端都越界,天然 no-op。
+ * 取数路径与数字键完全相同(卡片自己的草稿 store,无降级):会话 id / 请求键 /
+ * store 任一不可解析即返回 false。
+ *
+ * @param delta - 方向:-1 = 上一题,1 = 下一题。
+ */
+export function moveQuestion(services: Services, delta: number): boolean {
+  const pending = pendingQuestion(services)
+  if (pending === undefined || pending.kind === 'plan-review') return false
+
+  const questions = pending.questions ?? []
+  if (questions.length === 0) return false
+  const requestKey = requestKeyOf(pending)
+  if (requestKey === undefined) return false
+  const store = draftStoreOf(services, pending)
+  if (store === undefined) return false
+
+  const progress = readProgress(store, requestKey, questions)
+  const next = progress.index + delta
+  if (next < 0 || next >= questions.length) return false
+  progress.index = next
+  return writeProgress(store, requestKey, progress)
+}
+
+/**
+ * Enter:通用问答推进 / 结算,计划评审 = 确认执行。
+ *
+ * 保留上游 `continueFlow()` 的**推进**语义,但去掉它的「跳回未完成题」跳转
+ * (跳转只由 ← / → 负责):
+ * - 当前题未作答 → 不吞键(上游在此提示「请选择一个选项或填写自定义答案」);
+ * - 当前题已作答且非末题 → 翻到下一题;
+ * - 末题 → 仍有未完成题时 no-op(不结算、**不跳回**该题);全部完成后按 answers
+ *   批量结算(结算形态对齐上游 submitDrafts:单选且带 custom 时丢弃 selected,
+ *   多选保留),并清理本次草稿。
  */
 export function submitQuestion(services: Services): boolean {
   const pending = pendingQuestion(services)
   if (pending === undefined) return false
-  pruneMirrors(pendingMap(services))
 
   if (pending.kind === 'plan-review') return answerPlanReview(pending, 'approve')
 
   const questions = pending.questions ?? []
   if (questions.length === 0) return false
-  const key = mirrorKeyOf(pending)
-  const mirror = mirrorFor(key, questions)
-  const draft = mirror.drafts[mirror.index]
+  const requestKey = requestKeyOf(pending)
+  if (requestKey === undefined) return false
+  const store = draftStoreOf(services, pending)
+  if (store === undefined) return false
+
+  const progress = readProgress(store, requestKey, questions)
+  const draft = progress.drafts[progress.index]
   if (draft === undefined || !answered(draft)) return false
 
-  if (mirror.index < questions.length - 1) {
-    mirror.index += 1
-    return true
+  if (progress.index < questions.length - 1) {
+    progress.index += 1
+    return writeProgress(store, requestKey, progress)
   }
 
-  // 理论上不可达(仅在作答后才前进),保留为防御:跳回未完成题且不吞键。
-  const incomplete = mirror.drafts.findIndex((item) => !item.skipped && !answered(item))
-  if (incomplete >= 0) {
-    mirror.index = incomplete
-    return false
-  }
+  if (progress.drafts.some((item) => !completed(item))) return false
 
   if (typeof pending.answer !== 'function') return false
   const answers = questions.map((item, index) => {
-    const value = mirror.drafts[index] ?? { selected: [], custom: '', skipped: false }
+    const value = progress.drafts[index] ?? { selected: [], custom: '', skipped: false }
     if (value.skipped) return { id: item.id, selected: [] }
     const custom = value.custom.trim()
     return {
@@ -308,7 +323,7 @@ export function submitQuestion(services: Services): boolean {
     }
   })
   const settled = fireAndForget(() => pending.answer?.({ answers }))
-  if (settled) questionMirrors.delete(key)
+  if (settled) clearProgress(store, requestKey)
   return settled
 }
 

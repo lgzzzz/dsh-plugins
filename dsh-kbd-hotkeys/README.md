@@ -16,8 +16,9 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 | --- | --- | --- |
 | `⌘/Ctrl+Alt+Enter` | 审批：允许一次 | 任意 |
 | `⌘/Ctrl+Alt+Backspace` | 审批：拒绝 | 任意 |
-| `1`–`9` | 问答卡片：选择第 N 个选项（计划评审：确认/拒绝/去聊） | `card` |
-| `Enter` | 问答卡片：确认提交 / 计划评审：确认执行 | `card` |
+| `1`–`9` | 问答卡片：选择第 N 个选项（**只改选中态，不翻题**；计划评审：确认/拒绝/去聊） | `card` |
+| `←` / `→` | 问答卡片：上一题 / 下一题（只切题号，草稿保留；首题按 `←`、末题按 `→` 不循环且不吞键） | `card` |
+| `Enter` | 问答卡片：下一题（非末题且当前题已作答）/ 末题提交（全部题目完成后）/ 计划评审：确认执行 | `card` |
 | `⌘/Ctrl+/` | 快捷键速查表（含总开关） | 任意 |
 | `⌘/Ctrl+B` | 开关侧栏（走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
@@ -50,10 +51,25 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
     `cancel()` 对应「去聊天里说」。**不再依赖 DOM 按钮顺序**：上游计划评审卡片的
     DOM 底部顺序实为 *去聊天里说 / 拒绝 / 确认执行*，与旧实现的假设相反（旧实现里
     `Enter` 实际点到了「去聊天里说」、数字键顺序也颠倒）。
-  - **通用问答**：插件镜像一份草稿进度（题号 + 每题 `selected`/`custom`/`skipped`；
-    上游卡片状态存在 Session 级 slot store 内、外部不可读）。数字键选中 / 切换选项
-    （单选自动翻到下一题），`Enter` 推进并在最后一题按
-    `answer({ answers: [{ id, selected, custom? }] })` 成批结算。
+  - **通用问答**：直接读写**卡片自己的 Session 级 slot store**
+    （`dsh-client-ui-user-questions` 的 `createQuestionDraftStore`，挂在
+    `conversation.composer` 链式 slot 的注册项上）——数字键 = 上游
+    `QuestionFlow.choose()` 的**选中**语义（单选覆盖选中并清空自定义文本；多选切换
+    该项），**但不再顺手翻题**（这是与上游的唯一差异：上游 `choose()` 单选会
+    `index+1`，本插件把「选完自动跳」去掉，翻题改由 `←` / `→` 或 `Enter` 触发）；
+    `←` / `→` = 上游卡片底部 pager 的 `nav.prev` / `nav.next` 语义
+    （`replaceProgress(index ± 1, drafts)`：**只改题号、草稿原样保留**；上游在
+    `index===0` / `index===末题` 时把按钮置为 `disabled`，故热键同样**不循环**，
+    越界即 no-op 且不吞键）；`Enter` = 保留上游 `continueFlow()` 的**推进**语义
+    （当前题未作答 → 不吞键；已作答且非末题 → 翻到下一题），末题则**仅在全部题目
+    完成（已作答或显式跳过）后**按 store 里的草稿
+    `answer({ answers: [{ id, selected, custom? }] })` 成批结算并 `clear()` 本次草稿；
+    末题仍有未完成题时 no-op（不结算、不吞键，且**不跳回**未完成题——回跳请用 `←`）。
+    因此**卡片会实时高亮 / 翻题，鼠标点选与键盘操作共用同一份状态**（旧实现的插件
+    私有镜像已删除）。取数路径见 `src/question-drafts.ts`：
+    `slots.entries('conversation.composer')` 注册项（用注册项自带的 `select` 确认它是
+    承载当前待处理交互的那一个）→ `uiSession.resolve(sessionId)` 作用域绑定 →
+    `slots.resolveStore(handle, binding)` 活实例；任一环不可用即 no-op（无降级）。
 - `card` 态判定：当前会话是否命中待处理交互表（服务级），不再用
   `[data-approval-key]` 等 DOM 查询，故不受卡片渲染时序影响。
 - 侧栏开关：`layout.toggleSidebar()`。
@@ -103,17 +119,23 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 
 ## 服务化后的已知限制
 
-- **通用问答的选中态由插件镜像维护，卡片不会实时高亮**：按键后卡片外观不变，
-  直到 `Enter` 结算后卡片消失。计划评审与审批是一次性决策，无此问题。
-- **通用问答请勿在同一请求内混用鼠标点选与数字键**：镜像只在按键时更新，鼠标
-  点选不会同步；混用可能导致提交内容与卡片显示不一致。焦点在卡片自定义文本框时
-  数字键 / `Enter` 交回卡片自身处理（不吞键），行为正常。
+- **通用问答的焦点在卡片自定义文本框时不接管**：焦点在该输入框（无选项题会自动聚焦、
+  有选项题点一下内联输入框也会聚焦）时，数字键 / `←` `→` / `Enter` 交回卡片自身处理
+  （不吞键）——`←` `→` 此时用于移动光标，这是为了不干扰文本输入；请先把焦点移出输入框
+  （`Esc` 或点击卡片空白处）再用热键切题。
+- **通用问答的 `←` / `→` 不循环**：与上游 pager 按钮一致，首题按 `←`、末题按 `→`
+  为 no-op（不吞键，页面默认行为照常）。计划评审是单题一次决策，方向键恒为 no-op。
+- **通用问答的翻题入口是 `←` / `→` 与 `Enter`**：数字键选中后停在当前题（上游
+  `choose()` 的单选自动 `index+1` 被刻意去掉）；`Enter` 仍可推进（当前题已作答且非
+  末题 → 下一题），但末题时只负责结算——仍有未完成题则 no-op（不结算、不吞键、
+  **不跳回**该题，回跳请用 `←`）。因此连按数字键不会「跳着答题」。
+- 通用问答的草稿以卡片 store 为**唯一真源**，热键与鼠标点选可自由混用；`requestKey`
+  不属于当前请求（上一次请求残留）时按上游 `initialProgress` 语义重建空进度。
 - 计划评审键位语义以请求数据为准（`1`/`2`/`3` = 确认 / 拒绝 / 去聊天里说）；
   请求未提供「拒绝」选项时 `2` 为空操作。
-- 镜像按载体 key 缓存，请求结算（应答 / 取消 / 作用域销毁）后自动回收。
 
 服务注入：`['sessions', 'uiSession', 'layout', 'workspaces', 'slots']`（全部判空后才消费；
-`slots` 仅用于读侧栏视图 store，取会话跳转顺序）。
+`slots` 用于读侧栏视图 store（会话跳转顺序）与问答草稿 store）。
 无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表为纯 DOM 浮层）。
 
 ## 自定义键位
@@ -154,7 +176,8 @@ npm run check       # node --check 产物与宿主
 诊断脚本（非插件产物，纯 Node + 最小 DOM 桩，无需浏览器）：
 
 ```sh
-node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/card 态判定（DOM 桩不提供任何卡片）
+node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/card 态判定（DOM 桩不提供任何卡片；
+                         # 问答断言直接落在卡片草稿 store 上——数字键必须写入 store、Enter 必须取自 store）
 node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序跳转（分组 / flat / 来源不可用 no-op）
 ```
 
@@ -163,9 +186,17 @@ node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序�
 ```sh
 cd /Users/lz/dsh-plugins/dsh-kbd-hotkeys
 dsh plugin --profile web add link:.
-# 重启 App 生效（常驻挂载不支持热重载）
+# 首次挂载（组合变更）需重启 App 生效
 ```
 
 卸载：`dsh plugin --profile web remove dsh-kbd-hotkeys`。
 
-生效验证：`curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3080/plugins/dsh-kbd-hotkeys/client.js`
+生效验证（读取宿主**当前公告**的插件图；单个 `/plugins/<id>/client.js` 不在公告组合内会 404）：
+
+```sh
+curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 1500   # 首帧 graph 里找 dsh-kbd-hotkeys 的 rev
+```
+
+> 首次挂载（改 Profile / 组合）需重启 App；此后**只改浏览器半部**时，`npm run build`
+> 落地新产物后由 `dsh-client-hmr`（每 500ms 轮询 mtime/size）自动推给已打开的页面，
+> **无需重启、无需刷新**；宿主半部 `index.ts` 的改动仍需重启。
