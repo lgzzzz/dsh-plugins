@@ -4,7 +4,8 @@
  *
  * 功能:降低鼠标依赖的全局快捷键(键位设计见 docs/dsh-hotkeys-proposal.md):
  * - `card` 卡片态(审批 / ask_user_question / 计划评审卡片打开):⌘/Ctrl+Alt+Enter 允许、
- *   ⌘/Ctrl+Alt+Backspace 拒绝、数字键 1–9 选选项、Enter 确认提交;
+ *   ⌘/Ctrl+Alt+Backspace 拒绝、数字键 1–9 选选项(只选不翻题)、←/→ 上一题/下一题、
+ *   Enter 推进(非末题翻到下一题)/ 末题结算(全部题目完成后);
  * - 全态:⌘/ 速查表、⌘⌥↑/↓ 在活跃会话间跳转(活跃 = 运行中 ∪ 有待回应 ∪
  *   刚完成未查看,按**侧栏可见顺序**定位)、⌘⌥←/→ 在会话视图标签间切换、
  *   Esc 停止当前会话的整棵运行中交互树(自身 + 直系子代理,one-shot 跳过);
@@ -16,7 +17,9 @@
  * 跳跃),导航轴为侧栏顺序(工作区分组 + slots 中 workspace 视图 store 的本地
  * 会话顺序,每次按键重新取数);
  * 审批与问答/计划评审全部走 uiSession 待处理交互的服务级 answer()/cancel(),
- * `card` 态亦由该表判定(不依赖卡片渲染与 DOM 结构);
+ * 通用问答的选项/切题/提交直接读写**卡片自己的 Session 级 slot store**
+ * (`conversation.composer` 注册项,见 question-drafts.ts),卡片实时高亮并翻题;
+ * `card` 态由该待处理交互表判定(不依赖卡片渲染与 DOM 结构);
  * Esc 停止当前会话交互树(sessions.binding(id).session.cancel(),含直系子代理,
  * 无运行中会话时不吞键)。不消费 react,无 external。
  */
@@ -24,6 +27,7 @@ import {
   answerApproval,
   hasPendingCard,
   isEditableTarget,
+  moveQuestion,
   openNeighborSession,
   pickQuestionOption,
   submitQuestion,
@@ -144,10 +148,19 @@ export function apply(ctx: ClientContext): void {
     const cardState = hasPendingCard(services)
     const state = cardState ? 'card' : editable ? 'editing' : 'browse'
 
-    // 固定行为:问答/计划评审卡片的数字键与 Enter(仅 card 态且焦点不在编辑框)。
-    // card 态由 uiSession 待处理交互表判定,动作本身为服务级应答。
+    // 固定行为:问答/计划评审卡片的数字键、方向键与 Enter(仅 card 态且焦点不在
+    // 编辑框)。card 态由 uiSession 待处理交互表判定;数字键只写选中态(不翻题)、
+    // ←/→ 只改题号、Enter 非末题推进/末题结算,动作均为服务级。
     if (state === 'card' && !editable) {
       if (/^[1-9]$/.test(combo) && pickQuestionOption(services, Number(combo))) {
+        swallow(event)
+        return
+      }
+      if (combo === 'arrowleft' && moveQuestion(services, -1)) {
+        swallow(event)
+        return
+      }
+      if (combo === 'arrowright' && moveQuestion(services, 1)) {
         swallow(event)
         return
       }

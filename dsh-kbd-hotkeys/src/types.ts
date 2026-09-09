@@ -57,11 +57,21 @@ export interface PendingInteractionsLike {
 /**
  * UiSession 服务实例消费面:
  * - `pendingInteractions` 为公开面(sessionId → interaction);
- * - `pendingSnapshot` 为同一份数据的私有字段,仅作兼容回退。
+ * - `pendingSnapshot` 为同一份数据的私有字段,仅作兼容回退;
+ * - `resolve(sessionId)` 取该会话**已物化的作用域绑定**(`{ key, ctx, hooks, … }`,
+ *   与 UiSession 内部 bindStoreScope 用的是同一个对象),供 slots.resolveStore
+ *   解析 session 级 store。
  */
 export interface UiSessionLike {
   pendingInteractions?: PendingInteractionsLike
   pendingSnapshot?: ReadonlyMap<string, PendingInteractionLike>
+  resolve?(sessionId: string): unknown
+}
+
+/** 作用域绑定最小面(store 解析入参:`key` = 会话 id,`ctx` = 该作用域的 Cordis 上下文)。 */
+export interface ScopeBindingLike {
+  key?: string
+  ctx?: unknown
 }
 
 /** 会话摘要行消费面(见 dsh-api-session-controller …/sessions/service.d.ts)。 */
@@ -139,6 +149,45 @@ export interface StoreHandleLike {
 /** slots 注册项:workspace 浏览器把视图 store handle 挂在注册项上。 */
 export interface SlotEntryLike {
   store?: StoreHandleLike
+  /**
+   * chain slot 的路由选择器(注册项自带;注册时必须提供)。用于确认该注册项就是
+   * 承载当前待处理交互的那一个——即卡片真正使用的那份 store。
+   */
+  select?(owner: unknown): unknown
+}
+
+/**
+ * 通用问答卡片草稿的**唯一真源**(dsh-client-ui-user-questions 的
+ * createQuestionDraftStore,挂在 `conversation.composer` 注册项上):
+ * 快照 `{ requestKey?, progress: { index, drafts } }`,动作面 replace / clear。
+ */
+export interface QuestionDraftLike {
+  selected: string[]
+  custom: string
+  skipped: boolean
+}
+
+/** 一次问答请求的草稿进度:当前题号 + 每题草稿(上游 QuestionFlow.progress 同形)。 */
+export interface QuestionProgressLike {
+  index: number
+  drafts: QuestionDraftLike[]
+}
+
+/** 草稿 store 快照(`requestKey` 标记这份进度属于哪一次请求)。 */
+export interface QuestionDraftSnapshotLike {
+  requestKey?: string
+  progress?: QuestionProgressLike
+}
+
+/** defineStore 产出的动作面(仅本插件用到的两个)。 */
+export interface QuestionDraftActionsLike {
+  replace?(requestKey: string, progress: QuestionProgressLike): void
+  clear?(requestKey: string): void
+}
+
+/** 草稿 store 活实例(resolveStore 产物)。 */
+export interface QuestionDraftStoreLike extends StoreInstanceLike {
+  actions?: QuestionDraftActionsLike
 }
 
 /**

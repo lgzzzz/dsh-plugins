@@ -25,6 +25,17 @@ export interface OverlayHost {
 
 const STYLE_ID = 'dsh-kbd-hotkeys/style'
 
+/**
+ * 固定分发的键位(不进 bindings 映射,见 config.ts 的 ACTIONS 注释;
+ * 速查表按动作 id 直接展示这些字面键位)。
+ */
+const FIXED_KEYS: Readonly<Record<string, string>> = {
+  'question.option': '1–9',
+  'question.prev': '←',
+  'question.next': '→',
+  'question.submit': 'Enter',
+}
+
 const STYLE = [
   '.dsh-kbd-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;font-family:var(--dsw-font-family,system-ui,-apple-system,sans-serif)}',
   '.dsh-kbd-panel{width:min(560px,calc(100vw - 48px));max-height:64vh;background:var(--dsw-specific-menu,#fff);color:var(--dsw-alias-label-primary,#111);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.25));border-radius:14px;display:flex;flex-direction:column;overflow:hidden}',
@@ -100,15 +111,9 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
       label.className = 'dsh-kbd-itemLabel'
       label.textContent = action.label
       const key = document.createElement('kbd')
+      const fixed = FIXED_KEYS[action.id]
       const combo = config.bindings[action.id]
-      key.textContent =
-        action.id === 'question.option' || action.id === 'question.submit'
-          ? action.id === 'question.option'
-            ? '1–9'
-            : 'Enter'
-          : combo === undefined
-            ? '未绑定'
-            : prettyCombo(combo)
+      key.textContent = fixed ?? (combo === undefined ? '未绑定' : prettyCombo(combo))
       row.appendChild(label)
       row.appendChild(key)
       container.appendChild(row)

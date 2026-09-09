@@ -44,7 +44,7 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
 | `dsh-no-right-sidebar` | Host + Client（TS） | `index.ts`（空宿主） | `src/client.ts` → esbuild → `lib/client.js`：no-op `sidebarRight` 桩服务 | `npm run typecheck && npm run build && npm run check` | 停用右侧边栏三行（ui-sidebar-right / ui-sidebar-textpreview / ui-sidebar-files）；桩服务保住 inject `sidebarRight` 的 ui-chat 不被 cordis 停摆（随仓库根安装脚本默认安装） |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
@@ -56,8 +56,9 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 | --- | --- | --- | --- |
 | `approval.allow` / `approval.reject` | ⌘/Ctrl+Alt+Enter / ⌘/Ctrl+Alt+Backspace | **服务** | `uiSession.pendingInteractions` → `PendingApproval.answer('allowed-once' \| 'rejected')` |
 | `question.option` / `question.submit`（计划评审） | `1`–`3` / `Enter` | **服务** | 同上 → `PendingQuestion.answer({answers})`；`3` = `cancel()`；确认/拒绝标签取自 `questions[0].intent.approve` |
-| `question.option` / `question.submit`（通用问答） | `1`–`9` / `Enter` | **服务** | 同上 + 插件侧草稿镜像（题号 / 选中 / 多选）→ `answer({answers:[{id,selected,custom?}]})` |
-| `card` 态判定（数字键 / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
+| `question.option` / `question.submit`（通用问答） | `1`–`9` / `Enter` | **服务** | 同上 → 卡片自身的 slot 草稿 store（`slots.entries('conversation.composer')` 注册项 + `uiSession.resolve(sessionId)` + `slots.resolveStore`）写入 `{index, drafts}`：数字键只改选中态（**不翻题**）；Enter 保留上游 `continueFlow` 推进（当前题已作答且非末题 → 翻到下一题），末题仅在**全部题目完成后**结算 `answer({answers:[{id,selected,custom?}]})`（未完成即 no-op，不跳回未完成题）；卡片实时高亮，与鼠标点选共用同一状态 |
+| `question.prev` / `question.next`（通用问答） | `←` / `→` | **服务** | 同一草稿 store 写入 `{index ± 1, drafts}`（草稿原样保留）；对齐上游 pager `nav.prev`/`nav.next` 的 disabled 语义，首题/末题越界 no-op 且不吞键 |
+| `card` 态判定（数字键 / `←` `→` / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
 | `sidebar.toggle` | ⌘/Ctrl+B | **服务** | `layout.toggleSidebar()`（`browse` + `editing`） |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
 | `session.stop` | `Esc` | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
@@ -70,11 +71,17 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
   （活跃视图存于 ui-conversation 的 per-session slot store，外部不可读）。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
-`pendingSnapshot` 为同源私有字段，仅作兼容回退）；通用问答的选中态由插件镜像维护，
-卡片不实时高亮，且勿与鼠标点选混用——详见 `dsh-kbd-hotkeys/README.md`
-「服务化后的已知限制」。验证：`node test-services.mjs`（最小 DOM 桩不提供任何卡片，
-断言服务路径）与 `node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，覆盖分组 /
-flat / 权威来源不可用时 no-op——**无降级**）。
+`pendingSnapshot` 为同源私有字段，仅作兼容回退）；通用问答的草稿以**卡片自身的 slot
+store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slots.resolveStore`），
+卡片实时高亮、与鼠标点选可自由混用，**翻题入口是 `←`/`→` 与 `Enter`**（数字键选中后
+不跳题；`Enter` 保留非末题推进、末题仅在全部题目完成后结算，未完成即 no-op 且不跳回），
+焦点在卡片自定义输入框时
+数字键 / `←` `→` / `Enter` 不接管（交回卡片，`←` `→` 用于移动光标）——详见
+`dsh-kbd-hotkeys/README.md`「服务化后的已知限制」与 `src/question-drafts.ts`。
+验证：`node test-services.mjs`（最小 DOM 桩不提供任何卡片，断言服务路径与草稿 store
+写入，含数字键不翻题、`←`/`→` 只改题号、首末题不循环、Enter 非末题推进 / 末题未完成不结算）与
+`node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，
+覆盖分组 / flat / 权威来源不可用时 no-op——**无降级**）。
 
 ## 包结构与约定
 
@@ -108,7 +115,7 @@ flat / 权威来源不可用时 no-op——**无降级**）。
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务改由挂载行 `inject`
   声明；浏览器半部则按需 `export const inject = [...]`（由模块加载器读取注入，如
   `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','workspaces','slots']`——`slots`
-  只用于读侧栏视图 store 的会话顺序），不消费服务的
+  用于读侧栏视图 store 的会话顺序与问答卡片草稿 store），不消费服务的
   客户端（纯样式补丁 `dsh-code-card-fonts`）无需声明。遗留纯 JS 宿主
   （`dsh-new-session` 的 `lib/index.js`）维持现状：仍在代码中
   `export inject = ['commands']`。
@@ -170,14 +177,21 @@ dsh plugin --profile web remove <name>
 
 ## 变更生效机制
 
-1. 插件代码变更后需重启 App 生效。若代理自身运行于 dsh web 进程内，重启将
-   终止当前会话，应先交付说明，再由用户触发重启（或使用脱离当前会话的
-   延迟重启方式）。
-2. 状态验证（确认服务在监听、插件路由可访问）：
+1. **浏览器半部（`lib/client.js`）重新构建后自动热加载**：`dsh-client-hmr` 行在 Web 组合里
+   **无条件挂载**（`dsh-web-app/cordis.patch.yml` 的 `client-hmr`），其 node 半部每 500ms
+   stat 轮询每个插件产物的 mtime/size，变化即 `clientModuleHost.rebuilt(id)` 重新哈希、
+   重发图并沿 `/plugins/events` SSE 广播 `rebuilt` 帧，浏览器半部做 fiber 替换——
+   **无需重启、无需刷新**（只要页面处于打开状态）。因此「改了插件看不到效果」首先要
+   确认 `npm run build` 是否真的跑过、产物是否已落盘，而不是先怀疑没重启。
+2. **宿主半部（`index.ts` / 组合变更）仍需重启 App**：宿主行由 Loader 常驻挂载，
+   `dsh.profile.patchReload: live` 只热重载 Profile 自身的 `cordis.patch.yml`。
+   若代理自身运行于 dsh web 进程内，重启会终止当前会话，应先交付说明、再由用户触发。
+3. 状态验证（读取宿主**当前公告**的插件图与产物字节；`/plugins/events` 为公开 SSE 端点，
+   单个 `/plugins/<name>/client.js` 不在公告组合内会 404）：
 
 ```bash
-curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
-  http://127.0.0.1:3080/plugins/<name>/client.js
+curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 首帧含 graph(各行 id/rev/url)
+# 再按公告 url 取字节：curl -s "http://127.0.0.1:3080/plugins/??<id>/client.js&rev=<rev>" | wc -c
 ```
 
 ## 构建与验证
@@ -226,7 +240,9 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" \
 5. 浏览器 bundle 仅将框架依赖（react 等）设为 external，业务模块全部内联。
 6. 向 `~/.dsh/` 写入文件需 danger-full-access 沙箱授权；系统提示声明
    approval=never 时不得设置 `sandbox_permissions`。
-7. 常驻挂载不支持热重载，查看效果须重启 App。
+7. 插件改动未生效时按此顺序排查：①浏览器半部是否已 `npm run build`（产物 mtime 变化后
+   client-hmr 会在 500ms 内热推送，页面无需重启/刷新）；②宿主半部（`index.ts`）改动是否
+   重启了 App；③产物是否被手改覆盖（`lib/client.js` 禁手改）。
 8. 交付后自行加载插件（修改 Profile、`pnpm install`、重启 App）违反强制规范第 1 条；
    加载由用户执行，代理仅交付代码与加载说明。
 9. 新插件浏览器半部采用手写 JavaScript、未提供 `build` 脚本，违反强制规范第 2 条；
