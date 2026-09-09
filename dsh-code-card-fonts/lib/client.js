@@ -35,21 +35,21 @@ body {
   --dsh-chat-flow-gap: calc(14px * 0.5);
 }
 
-/* ===== \u5361\u7247\u6807\u9898 \u2014 15px(\u5199\u6B7B,\u4E0E\u5B57\u53F7\u8BBE\u7F6E\u65E0\u5173)===== */
+/* ===== \u5361\u7247\u6807\u9898 \u2014 14px(\u5199\u6B7B,\u4E0E\u5B57\u53F7\u8BBE\u7F6E\u65E0\u5173)===== */
 /* DisclosureRow \u7CFB\u5361\u7247:\u8868\u5934\u884C\u7B2C 2 \u4E2A\u76F4\u5C5E\u5B50\u5143\u7D20\u6052\u4E3A\u6807\u9898\u3002 */
 [data-chat-flow-kind] [data-disclosure-row] > span:nth-child(2) {
-  font-size: 15px !important;
+  font-size: 14px !important;
 }
 
 /* Bash \u5361\u7247([data-sample],\u4E0D\u8D70 DisclosureRow):\u6807\u9898\u4E3A\u8868\u5934\u5012\u6570\u7B2C 3 \u4E2A span\u3002 */
 [data-sample] > span:nth-last-child(3) {
-  font-size: 15px !important;
+  font-size: 14px !important;
 }
 
 /* \u538B\u7F29\u6807\u8BB0(auto/manual):\u6807\u9898\u4F4D\u4E8E\u8868\u5934 <button> \u5185,\u5012\u6570\u7B2C 3 \u4E2A span\u3002 */
 [data-chat-flow-kind="compaction"] button > span:nth-last-child(3),
 [data-chat-flow-kind="manual-compaction"] button > span:nth-last-child(3) {
-  font-size: 15px !important;
+  font-size: 14px !important;
 }
 
 /* ===== \u5361\u7247\u8868\u5934\u6458\u8981\u884C \u2014 14px ===== */
