@@ -2,7 +2,7 @@
   "name": "dsh-code-card-fonts",
   "version": "1.1.0",
   "private": true,
-  "description": "Local persistent Web UI patch: 15px conversation-card titles, 14px card summaries/content/code, plus message-card spacing at half the content font height. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "description": "Local persistent Web UI patch: 14px conversation-card titles, summaries, content and code, plus message-card spacing at half the content font height. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
   "type": "module",
   "exports": {
     ".": {

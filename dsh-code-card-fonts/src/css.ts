@@ -1,7 +1,7 @@
 /**
  * 卡片字号补丁的样式真源(经 scripts/build-client.mjs 打包进浏览器半部)。
  *
- * 功能:卡片标题 15px;摘要行、展开正文、代码块、内联代码 14px;消息卡片间距
+ * 功能:卡片标题、摘要行、展开正文、代码块、内联代码统一 14px;消息卡片间距
  * = 内容字号一半(14px × 0.5)。选择器均基于稳定 data 属性精确命中,不使用
  * `[data-x], [data-x] *` 全量覆盖,避免压扁卡内元信息字号的例外(如 inspect
  * 按钮 11px)。
@@ -18,21 +18,21 @@ body {
   --dsh-chat-flow-gap: calc(14px * 0.5);
 }
 
-/* ===== 卡片标题 — 15px(写死,与字号设置无关)===== */
+/* ===== 卡片标题 — 14px(写死,与字号设置无关)===== */
 /* DisclosureRow 系卡片:表头行第 2 个直属子元素恒为标题。 */
 [data-chat-flow-kind] [data-disclosure-row] > span:nth-child(2) {
-  font-size: 15px !important;
+  font-size: 14px !important;
 }
 
 /* Bash 卡片([data-sample],不走 DisclosureRow):标题为表头倒数第 3 个 span。 */
 [data-sample] > span:nth-last-child(3) {
-  font-size: 15px !important;
+  font-size: 14px !important;
 }
 
 /* 压缩标记(auto/manual):标题位于表头 <button> 内,倒数第 3 个 span。 */
 [data-chat-flow-kind="compaction"] button > span:nth-last-child(3),
 [data-chat-flow-kind="manual-compaction"] button > span:nth-last-child(3) {
-  font-size: 15px !important;
+  font-size: 14px !important;
 }
 
 /* ===== 卡片表头摘要行 — 14px ===== */
