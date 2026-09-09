@@ -44,7 +44,7 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化、活跃会话切换、会话视图标签切换、Esc 停止当前会话交互树、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
 | `dsh-no-right-sidebar` | Host + Client（TS） | `index.ts`（空宿主） | `src/client.ts` → esbuild → `lib/client.js`：no-op `sidebarRight` 桩服务 | `npm run typecheck && npm run build && npm run check` | 停用右侧边栏三行（ui-sidebar-right / ui-sidebar-textpreview / ui-sidebar-files）；桩服务保住 inject `sidebarRight` 的 ui-chat 不被 cordis 停摆（随仓库根安装脚本默认安装） |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
@@ -59,7 +59,7 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 | `question.option` / `question.submit`（通用问答） | `1`–`9` / `Enter` | **服务** | 同上 + 插件侧草稿镜像（题号 / 选中 / 多选）→ `answer({answers:[{id,selected,custom?}]})` |
 | `card` 态判定（数字键 / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
 | `sidebar.toggle` | ⌘/Ctrl+B | **服务** | `layout.toggleSidebar()` |
-| `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `sessions.open(id)` |
+| `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
 | `session.stop` | `Esc` | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
 | `view.prev` / `view.next` | ⌘/Ctrl+Alt+←/→ | DOM | `[role="tablist"]` 中 `role="tab"` 按钮 `.click()` |
 | `settings.open` | 无默认键位 | DOM | `button[aria-haspopup="dialog"]`（取最后一个匹配） |
@@ -80,7 +80,8 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 `pendingSnapshot` 为同源私有字段，仅作兼容回退）；通用问答的选中态由插件镜像维护，
 卡片不实时高亮，且勿与鼠标点选混用——详见 `dsh-kbd-hotkeys/README.md`
 「服务化后的已知限制」。验证：`node test-services.mjs`（最小 DOM 桩不提供任何卡片，
-断言服务路径）与 `node test-dispatch.mjs`（会话跳转分发）。
+断言服务路径）与 `node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，覆盖分组 /
+flat / 权威来源不可用时 no-op——**无降级**）。
 
 ## 包结构与约定
 
@@ -113,7 +114,8 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
   不消费宿主服务，挂载行均未声明 `inject`）。
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务改由挂载行 `inject`
   声明；浏览器半部则按需 `export const inject = [...]`（由模块加载器读取注入，如
-  `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','workspaces']`），不消费服务的
+  `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','workspaces','slots']`——`slots`
+  只用于读侧栏视图 store 的会话顺序），不消费服务的
   客户端（纯样式补丁 `dsh-code-card-fonts`）无需声明。遗留纯 JS 宿主
   （`dsh-new-session` 的 `lib/index.js`）维持现状：仍在代码中
   `export inject = ['commands']`。

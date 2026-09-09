@@ -9,7 +9,7 @@
  *   计划评审 1=确认执行(intent.approve 标签)、2=拒绝(另一标签)、3=去聊天里说(cancel)、
  *   Enter=确认执行;通用问答由本插件镜像草稿后成批提交(上游卡片状态在 slot store 内,不可读);
  * - 侧栏:layout.toggleSidebar();
- * - 会话跳转:sessions 快照 + sessions.open(id);
+ * - 会话跳转:sessions 快照 + slots 里的侧栏视图 store(顺序)+ sessions.open(id);
  * - Esc 停止:sessions.binding(id).session.cancel();
  * - `card` 态判定:当前会话在 uiSession 待处理交互表中命中(不依赖卡片是否已渲染)。
  *
@@ -40,8 +40,8 @@ import type {
   SessionFaceLike,
   SessionListSnapshotLike,
   SessionsLike,
-  SessionSummaryLike,
 } from './types.ts'
+import { sidebarOrderedSessionIds } from './sidebar-order.ts'
 
 /* ------------------------------------------------------------------ *
  * 服务级:待处理交互读取(`card` 态判定 + 审批/问答载体)
@@ -489,16 +489,18 @@ function findSessionViewTablist(): HTMLElement | null {
  * 会话切换:在「活跃会话」之间跳转,取方向上最近的活跃会话并打开。
  *
  * 活跃定义(用户确认):正在运行(running=true)∪ 有待处理交互
- * (uiSession.pendingSnapshot 命中)∪ 刚完成未查看(completed=true)。
+ * (uiSession.pendingInteractions 命中)∪ 刚完成未查看(completed=true)。
  *
  * 算法:
- * 1. 基础轴 = 可见会话(复刻 dsh-client-ui-workspace 的 sessionVisible:
- *    剔除子代理/归档/非当前空白行),按 byRecency(updatedAt 新→旧,id 升序决胜)
- *    排序——即「最近活动时间」轴,与活跃语义同源。
+ * 1. 导航轴 = **侧栏(workspace 浏览器)里看到的顺序**,由 sidebar-order.ts
+ *    逐条复刻上游派生规则(工作区分组 + 视图 store 的本地会话顺序账号 +
+ *    sessionVisible 可见性过滤);**每次调用都重新取快照与视图 store**,不缓存。
  * 2. 以当前会话在轴上的位置为锚,向 delta 方向逐格扫描,落在**第一个**活跃
  *    会话上并 open();当前会话本身不活跃时同样可跳(锚点仍在轴上),落点即
  *    方向上最近的活跃会话;方向尽头无活跃会话则 no-op。
- * 3. 锚点不在可见轴(掩码间隙/选中了被过滤行)时 no-op,避免突跳。
+ * 3. 锚点不在轴上(当前会话被可见性过滤/选中了子代理行)时 no-op,避免突跳。
+ * 4. **无降级**:侧栏视图 store 或 workspaces 快照不可读 → 空轴 → no-op,
+ *    绝不按猜测的顺序跳转。
  */
 export function openNeighborSession(services: Services, delta: number): boolean {
   const sessions = services.sessions
@@ -512,24 +514,24 @@ export function openNeighborSession(services: Services, delta: number): boolean 
   ) {
     return false
   }
-  const axis = visibleSessionsByRecency(snapshot, services)
+  const axis = sidebarOrderedSessionIds(snapshot, services)
   if (axis.length === 0) return false
   const current = snapshot.current
-  const anchor = current === undefined ? -1 : axis.findIndex((row) => row.id === current)
+  const anchor = current === undefined ? -1 : axis.indexOf(current)
   if (anchor < 0) return false
   const active = activeSessionIds(snapshot, services)
   for (let i = anchor + delta; i >= 0 && i < axis.length; i += delta) {
-    const row = axis[i]
-    if (row === undefined) continue
-    if (active.has(row.id)) {
-      sessions.open(row.id)
+    const id = axis[i]
+    if (id === undefined) continue
+    if (active.has(id)) {
+      sessions.open(id)
       return true
     }
   }
   return false
 }
 
-/** 活跃会话 id 集合:running ∪ pendingSnapshot 命中 ∪ completed。 */
+/** 活跃会话 id 集合:running ∪ pending 交互命中 ∪ completed。 */
 function activeSessionIds(snapshot: SessionListSnapshotLike, services: Services): ReadonlySet<string> {
   const pending = pendingMap(services)
   const active = new Set<string>()
@@ -541,39 +543,4 @@ function activeSessionIds(snapshot: SessionListSnapshotLike, services: Services)
     }
   }
   return active
-}
-
-/**
- * 可见会话按活跃度排序的导航轴(复刻 workspace 浏览器 sessionVisible +
- * byRecency;workspaces 缺失时无法过滤归档,其余判定不变)。
- */
-function visibleSessionsByRecency(snapshot: SessionListSnapshotLike, services: Services): SessionSummaryLike[] {
-  const archived = new Set<string>(services.workspaces?.list?.getSnapshot?.()?.archivedSessionIds ?? [])
-  const rows: SessionSummaryLike[] = []
-  for (const id of snapshot.ids ?? []) {
-    const summary = snapshot.byId?.[id]
-    if (summary === undefined || !sessionVisible(summary, snapshot.current, archived)) continue
-    rows.push(summary)
-  }
-  rows.sort(byRecency)
-  return rows
-}
-
-/**
- * 构建快捷键导航轴:可见会话按活跃度排序(复刻 workspace 浏览器
- * byRecency:updatedAt 新→旧;相同时按会话 id 升序决胜,确定性,保证连续按键轴稳定)。
- */
-function byRecency(a: SessionSummaryLike, b: SessionSummaryLike): number {
-  const aUpdated = a.updatedAt ?? Number.NEGATIVE_INFINITY
-  const bUpdated = b.updatedAt ?? Number.NEGATIVE_INFINITY
-  if (bUpdated !== aUpdated) return bUpdated - aUpdated
-  return a.id < b.id ? -1 : 1
-}
-
-/**
- * 可见性判定,逐字复刻 workspace 浏览器 sessionVisible:
- * 子代理行(origin==='subagent')、归档行、非当前 blank 行均不可见。
- */
-function sessionVisible(summary: SessionSummaryLike, current: string | undefined, archived: ReadonlySet<string>): boolean {
-  return summary.origin !== 'subagent' && !archived.has(summary.id) && (!summary.blank || summary.id === current)
 }

@@ -6,13 +6,15 @@
  * - `card` 卡片态(审批 / ask_user_question / 计划评审卡片打开):⌘/Ctrl+Alt+Enter 允许、
  *   ⌘/Ctrl+Alt+Backspace 拒绝、数字键 1–9 选选项、Enter 确认提交;
  * - 全态:⌘/ 速查表、⌘⌥↑/↓ 在活跃会话间跳转(活跃 = 运行中 ∪ 有待回应 ∪
- *   刚完成未查看,按最近活动时间定位)、⌘⌥←/→ 在会话视图标签间切换、
+ *   刚完成未查看,按**侧栏可见顺序**定位)、⌘⌥←/→ 在会话视图标签间切换、
  *   Esc 停止当前会话的整棵运行中交互树(自身 + 直系子代理,one-shot 跳过);
  * - `browse` 浏览态(输入框失焦):⌘B 开关侧栏。
  *
  * 实现:document 捕获阶段单一 keydown 监听,按三态分发(`card` 卡片 → `editing`
- * 输入框 → `browse` 浏览),消费 sessions / uiSession / layout / workspaces 既有服务,
- * 会话跳转 = 活跃会话扫描(running ∪ pending 交互 ∪ completed,锚点定向跳跃);
+ * 输入框 → `browse` 浏览),消费 sessions / uiSession / layout / workspaces / slots
+ * 既有服务,会话跳转 = 活跃会话扫描(running ∪ pending 交互 ∪ completed,锚点定向
+ * 跳跃),导航轴为侧栏顺序(工作区分组 + slots 中 workspace 视图 store 的本地
+ * 会话顺序,每次按键重新取数);
  * 审批与问答/计划评审全部走 uiSession 待处理交互的服务级 answer()/cancel(),
  * `card` 态亦由该表判定(不依赖卡片渲染与 DOM 结构);
  * Esc 停止当前会话交互树(sessions.binding(id).session.cancel(),含直系子代理,
@@ -34,12 +36,15 @@ import {
 } from './actions.ts'
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
-import type { ClientContext, LayoutLike, SessionsLike, Services, UiSessionLike, WorkspacesLike } from './types.ts'
+import type { ClientContext, LayoutLike, Services, SessionsLike, SlotsLike, UiSessionLike, WorkspacesLike } from './types.ts'
 
 export const name = 'dsh-kbd-hotkeys'
 
-/** 浏览器半部注入的服务(模块加载器读取)。workspaces 供会话切换复刻侧栏顺序。 */
-export const inject = ['sessions', 'uiSession', 'layout', 'workspaces']
+/**
+ * 浏览器半部注入的服务(模块加载器读取)。
+ * workspaces 供会话切换复刻侧栏分组,slots 供读取侧栏视图 store(会话顺序)。
+ */
+export const inject = ['sessions', 'uiSession', 'layout', 'workspaces', 'slots']
 
 /** null 与 undefined 双重判空后取服务(缺失时返回 undefined)。 */
 function getService(ctx: ClientContext, serviceName: string): unknown {
@@ -105,6 +110,7 @@ export function apply(ctx: ClientContext): void {
     uiSession: getService(ctx, 'uiSession') as UiSessionLike | undefined,
     layout: getService(ctx, 'layout') as LayoutLike | undefined,
     workspaces: getService(ctx, 'workspaces') as WorkspacesLike | undefined,
+    slots: getService(ctx, 'slots') as SlotsLike | undefined,
   }
 
   const config: HotkeyConfig = loadConfig()
