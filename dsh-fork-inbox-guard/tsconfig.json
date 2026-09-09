@@ -1,0 +1,29 @@
+{
+  // 本项目没有编译步骤：index.ts 由 App 内置的 Node 22 Type Stripping 直接加载。
+  // 该配置只服务于 TypeScript 语言服务器（tsserver）与 `npm run typecheck`。
+  "compilerOptions": {
+    // 与宿主运行时（Node 22+，package.json "type": "module"）一致的 ESM 语义
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["esnext"],
+
+    // 只类型检查，不产出任何文件
+    "noEmit": true,
+    // 允许 .ts 相对导入（Type Stripping 运行时同样支持），需配合 noEmit
+    "allowImportingTsExtensions": true,
+
+    // 强制可擦除语法：禁止 enum / namespace / 参数属性等需要代码生成的写法，
+    // 与 Node Type Stripping 的运行时约束保持一致
+    "erasableSyntaxOnly": true,
+    // 类型导入必须显式 `import type`，保证导入在运行时可被安全擦除
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", ".npm-cache"]
+}
