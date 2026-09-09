@@ -21,12 +21,12 @@
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
 进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 7 个插件目录（见下节插件清单），
-web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待用户安装挂载）。
-`dsh-text-editor`、`dsh-change-summary`（以及更早的
-`dsh-kbd-nav-focus`，提交 6499dd9）已从仓库移除，仅存于 git 历史。仓库根提供
-`install.sh` / `install.ps1` 安装脚本与 `uninstall.sh` / `uninstall.ps1` 卸载脚本，
-默认对**全部** 7 个插件逐个装入 / 卸载（推荐入口，详见仓库根 README）。
+Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 9 个插件目录（见下节插件清单），
+web Profile 当前已挂载其中 8 个（`dsh-text-editor` 未挂载）。
+`dsh-change-summary`、`dsh-kbd-nav-focus`（提交 6499dd9）已从仓库移除，仅存于
+git 历史。仓库根不提供集合
+安装 / 卸载脚本：每个插件由用户逐个执行
+`dsh plugin --profile web add link:<目录>`（详见仓库根 README「安装」）。
 
 - 版本控制采用黑名单：`.gitignore` 默认放行全部内容，仅忽略系统/编辑器文件
   （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`.npm-cache/`、
@@ -40,12 +40,14 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 | 目录 | 形态 | 宿主半部 | 浏览器半部 | 构建 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `dsh-git-guard` | Host only（TS） | `index.ts`，钩挂 `tools/pre-execute` | — | `npm run typecheck`；`node test.mjs` | 拦截 `git push`（deny）/ `git commit`（ask） |
+| `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`，监听 `agent/created` | — | `npm run typecheck`；`node test.mjs` | 分叉子会话不继承源会话「已入队未认领」的输入：折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，移除仍 pending 的继承消息 |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树（无审批卡片时）、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
-| `dsh-no-right-sidebar` | Host + Client（TS） | `index.ts`（空宿主） | `src/client.ts` → esbuild → `lib/client.js`：no-op `sidebarRight` 桩服务 | `npm run typecheck && npm run build && npm run check` | 停用右侧边栏三行（ui-sidebar-right / ui-sidebar-textpreview / ui-sidebar-files）；桩服务保住 inject `sidebarRight` 的 ui-chat 不被 cordis 停摆（随仓库根安装脚本默认安装） |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树（无审批卡片时）、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md` |
+| `dsh-no-right-sidebar` | Host + Client（TS） | `index.ts`（空宿主） | `src/client.ts` → esbuild → `lib/client.js`：no-op `sidebarRight` 桩服务 | `npm run typecheck && npm run build && npm run check` | 停用右侧边栏三行（ui-sidebar-right / ui-sidebar-textpreview / ui-sidebar-files）；桩服务保住 inject `sidebarRight` 的 ui-chat 不被 cordis 停摆 |
+| `dsh-text-editor` | Host + Client（TS） | `index.ts` + `host/*.ts`（注册 read/write/monaco 路由；挂载行 `inject: [webServer, fs]`） | `src/client.ts` → esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 应用内 Monaco 文本编辑器能力提供者：经 `ctx.provide('dsh-text-editor')` 暴露 `openFile`（文件 tab，可编辑保存）与 `showDiff`（差异 tab，手动推进）；构建依赖 `monaco-editor`（Monaco 复制到不入仓的 `vendor/monaco/`）；暂无 README |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
@@ -112,8 +114,8 @@ store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slot
 
 - 每个插件均须声明挂载行 `- insert: [{id, name}]`；纯补丁插件直接以 `disabled` /
   `insert` 修改组合（参见 `dsh-directory-picker-browse`）。
-- 宿主半部依赖宿主服务时，在该行声明 `inject`（当前各插件的宿主半部为空宿主或
-  不消费宿主服务，挂载行均未声明 `inject`）。
+- 宿主半部依赖宿主服务时，在该行声明 `inject`（当前仅 `dsh-text-editor`
+  声明 `inject: [webServer, fs]`；其余插件的宿主半部为空宿主或不消费宿主服务）。
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务改由挂载行 `inject`
   声明；浏览器半部则按需 `export const inject = [...]`（由模块加载器读取注入，如
   `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','workspaces','slots']`——`slots`
@@ -140,19 +142,21 @@ store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slot
   后必须重新构建，未重新构建是插件改动未生效的最常见原因。产物一律入仓，
   以保证离线可加载。
 - bundle 的 external 依赖按各插件实际 import 配置（由框架注入、不打包进产物）：
-  当前所有插件的浏览器半部均不消费 react 等 external，业务模块全部内联
-  （`dsh-kbd-hotkeys`、`dsh-code-card-fonts`）。客户端源码中的
-  `@deepseek-ai/*` import 均为 type-only、编译时擦除。
+  `dsh-kbd-hotkeys`、`dsh-code-card-fonts` 的浏览器半部不消费 react 等 external
+  （业务模块全部内联）；`dsh-text-editor` 把 `react` 声明为 external，由
+  ModuleLoader 的模块表提供。客户端源码中的 `@deepseek-ai/*` import 均为
+  type-only、编译时擦除。
 
 ## 挂载与激活（Web Profile）
 
 `~/.dsh/profiles/web/package.json` 当前配置：
 
-- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 6 个：
-  code-card-fonts / directory-picker-browse / fullwidth-chat / git-guard /
-  kbd-hotkeys / new-session；`dsh-no-right-sidebar` 交付后由用户挂载，届时 7 个）；
-- `dsh.profile.bundles` 共 8 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
-  及上述 6 个本地插件（用户挂载 `dsh-no-right-sidebar` 后 9 项）；
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 8 个：
+  code-card-fonts / directory-picker-browse / fork-inbox-guard / fullwidth-chat /
+  git-guard / kbd-hotkeys / new-session / no-right-sidebar；`dsh-text-editor`
+  未挂载）；
+- `dsh.profile.bundles` 共 10 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
+  及上述 8 个本地插件；
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
   （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
 
@@ -201,9 +205,11 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | 插件 | 命令 | 说明 |
 | --- | --- | --- |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
+| `dsh-fork-inbox-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以真实 `@deepseek-ai/dsh-session` 构造 seeded 会话，验证前缀折叠、只移除继承 pending、幂等与异常兜底 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-no-right-sidebar` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
+| `dsh-text-editor` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`；构建依赖 `monaco-editor`（复制到不入仓的 `vendor/monaco/`） |
 | 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
 
 `node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
@@ -255,4 +261,4 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | 路径 | 内容 |
 | --- | --- |
 | `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项 |
-| 各插件 `README.md` | 功能说明、加载方式与构建说明（仅 `dsh-fullwidth-chat` 暂无 README，功能见 `package.json` 的 `description` 与本文档插件清单） |
+| 各插件 `README.md` | 功能说明、加载方式与构建说明（`dsh-fullwidth-chat`、`dsh-text-editor` 暂无 README，功能见其 `package.json` 的 `description` 与本文档插件清单） |
