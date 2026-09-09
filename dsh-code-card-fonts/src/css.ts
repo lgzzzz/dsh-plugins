@@ -1,8 +1,9 @@
 /**
  * 卡片字号补丁的样式真源(经 scripts/build-client.mjs 打包进浏览器半部)。
  *
- * 功能:卡片标题、摘要行、展开正文、代码块、内联代码统一 14px;消息卡片间距
- * = 内容字号一半(14px × 0.5)。选择器均基于稳定 data 属性精确命中,不使用
+ * 功能:把内容字号轴 --dsh-content-font-size 钉死在 14px(与「字号大小」设置
+ * 无关),并让卡片标题、摘要行、展开正文、代码块、内联代码统一 14px;消息卡片
+ * 间距 = 内容字号一半(14px × 0.5)。选择器均基于稳定 data 属性精确命中,不使用
  * `[data-x], [data-x] *` 全量覆盖,避免压扁卡内元信息字号的例外(如 inspect
  * 按钮 11px)。
  *
@@ -12,6 +13,17 @@
  */
 
 export const CSS = `
+/* ===== 内容字号轴恒定 14px(与「字号大小」设置无关)=====
+ * 布局服务(ui-layout 的 ThemePresenter)用 body.style.setProperty 把
+ * --dsh-content-font-size 写成**内联样式**,普通样式表声明压不过内联样式,故
+ * 必须加 !important 才能钉死;首屏 boot 脚本写入的同一变量同样被覆盖。
+ * 正文、卡片、代码行高与 --dsh-content-font-delta / -secondary 等派生变量都在
+ * body 上从该变量求值,故一处钉死即全局生效。
+ * 设置行本身(显示值与持久化值)由 src/client.ts 侧归一到 14 并拦截 +/-。 */
+body {
+  --dsh-content-font-size: 14px !important;
+}
+
 /* 间距 = 内容字号一半。声明在 body 而非 :root:--dsh-content-font-size 由主题
    以内联样式设在 body 上,放 :root 会取不到实际值、恒用回退 14px。 */
 body {
