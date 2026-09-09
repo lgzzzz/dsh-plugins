@@ -579,10 +579,11 @@ function activeSessionIds(snapshot, services) {
 // src/config.ts
 var ACTIONS = [
   // P0 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
-  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;数字键/方向键/Enter
-  // 由分发器固定分发(单键不参与 bindings 覆盖,避免与输入框光标移动冲突)。
-  { id: "approval.allow", label: "\u5BA1\u6279:\u5141\u8BB8\u4E00\u6B21", group: "\u5BA1\u6279(P0)", states: ["card", "editing", "browse"] },
-  { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279(P0)", states: ["card", "editing", "browse"] },
+  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;审批 Enter/Esc 与问答的
+  // 数字键/方向键/Enter 由分发器固定分发(单键不参与 bindings 覆盖,避免与输入框
+  // 光标移动 / 发送消息冲突)。
+  { id: "approval.allow", label: "\u5BA1\u6279:\u5141\u8BB8\u4E00\u6B21", group: "\u5BA1\u6279(P0)", states: ["card"] },
+  { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279(P0)", states: ["card"] },
   { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879(\u4E0D\u7FFB\u9898)", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
   { id: "question.prev", label: "\u95EE\u9898:\u2190 \u4E0A\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
   { id: "question.next", label: "\u95EE\u9898:\u2192 \u4E0B\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
@@ -593,15 +594,21 @@ var ACTIONS = [
   { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD(P1)", states: ["browse", "editing"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
-  { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
+  { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u65E0\u5BA1\u6279\u5361\u7247\u65F6;\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
   { id: "view.prev", label: "\u4E0A\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["card", "editing", "browse"] },
   { id: "view.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["card", "editing", "browse"] },
   { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F(P1)", states: ["card", "editing", "browse"] }
 ];
 var ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
+var FIXED_KEYS = {
+  "approval.allow": "Enter",
+  "approval.reject": "Esc",
+  "question.option": "1\u20139",
+  "question.prev": "\u2190",
+  "question.next": "\u2192",
+  "question.submit": "Enter"
+};
 var DEFAULT_BINDINGS = {
-  "approval.allow": "mod+alt+enter",
-  "approval.reject": "mod+alt+backspace",
   "sidebar.toggle": "mod+b",
   "session.prev": "mod+alt+arrowup",
   "session.next": "mod+alt+arrowdown",
@@ -637,6 +644,7 @@ function loadConfig() {
     }
   } catch {
   }
+  for (const id of Object.keys(FIXED_KEYS)) delete bindings[id];
   return { bindings };
 }
 function isMac() {
@@ -729,12 +737,6 @@ function prettyCombo(combo) {
 
 // src/overlay.ts
 var STYLE_ID = "dsh-kbd-hotkeys/style";
-var FIXED_KEYS = {
-  "question.option": "1\u20139",
-  "question.prev": "\u2190",
-  "question.next": "\u2192",
-  "question.submit": "Enter"
-};
 var STYLE = [
   ".dsh-kbd-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;font-family:var(--dsw-font-family,system-ui,-apple-system,sans-serif)}",
   ".dsh-kbd-panel{width:min(560px,calc(100vw - 48px));max-height:64vh;background:var(--dsw-specific-menu,#fff);color:var(--dsw-alias-label-primary,#111);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.25));border-radius:14px;display:flex;flex-direction:column;overflow:hidden}",
@@ -846,10 +848,6 @@ function getService(ctx, serviceName) {
 function runAction(id, services, overlays) {
   try {
     switch (id) {
-      case "approval.allow":
-        return answerApproval(services, "allowed-once");
-      case "approval.reject":
-        return answerApproval(services, "rejected");
       case "question.option":
         return false;
       // 数字键走固定分发逻辑,不作为可执行动作
@@ -918,6 +916,16 @@ function apply(ctx) {
     const editable = isEditableTarget(event.target);
     const cardState = hasPendingCard(services);
     const state = cardState ? "card" : editable ? "editing" : "browse";
+    if (state === "card") {
+      if (combo === "enter" && answerApproval(services, "allowed-once")) {
+        swallow(event);
+        return;
+      }
+      if (combo === "escape" && answerApproval(services, "rejected")) {
+        swallow(event);
+        return;
+      }
+    }
     if (state === "card" && !editable) {
       if (/^[1-9]$/.test(combo) && pickQuestionOption(services, Number(combo))) {
         swallow(event);

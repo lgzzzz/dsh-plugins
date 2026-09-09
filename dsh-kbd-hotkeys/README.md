@@ -14,20 +14,26 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 
 | 按键 | 功能 | 态 |
 | --- | --- | --- |
-| `⌘/Ctrl+Alt+Enter` | 审批：允许一次 | 任意 |
-| `⌘/Ctrl+Alt+Backspace` | 审批：拒绝 | 任意 |
+| `Enter` | 审批卡片：允许一次；问答卡片：下一题（非末题且当前题已作答）/ 末题提交（全部题目完成后）；计划评审：确认执行 | `card` |
+| `Esc` | 审批卡片：拒绝；其余情况：停止当前会话的整棵运行中交互树（自身 + 运行中的直系子代理后代；one-shot 子代理跳过） | 任意 |
 | `1`–`9` | 问答卡片：选择第 N 个选项（**只改选中态，不翻题**；计划评审：确认/拒绝/去聊） | `card` |
 | `←` / `→` | 问答卡片：上一题 / 下一题（只切题号，草稿保留；首题按 `←`、末题按 `→` 不循环且不吞键） | `card` |
-| `Enter` | 问答卡片：下一题（非末题且当前题已作答）/ 末题提交（全部题目完成后）/ 计划评审：确认执行 | `card` |
 | `⌘/Ctrl+/` | 快捷键速查表（含总开关） | 任意 |
 | `⌘/Ctrl+B` | 开关侧栏（走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
 | `⌘/Ctrl+Alt+←` / `→` | 上一个 / 下一个**会话视图标签**（同一会话内的 tab 页，如 chat / 计划 / 轨迹） | 任意 |
-| `Esc` | 停止当前会话的整棵运行中交互树（自身 + 运行中的直系子代理后代；one-shot 子代理跳过） | 任意 |
 
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
 > `⌘/Ctrl+B` 为 `['browse','editing']`：输入框聚焦时同样开关侧栏（带修饰键的组合不
 > 干扰文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）。
+>
+> 审批与问答的 `Enter` / `Esc` / 数字键 / 方向键是**固定分发的单键**，不参与
+> `bindings` 自定义（见「自定义键位」）。旧的审批组合键
+> `⌘/Ctrl+Alt+Enter`（允许）与 `⌘/Ctrl+Alt+Backspace`（拒绝）**已移除**，
+> 残留的旧配置也会被忽略。
+> 审批卡片的 `Enter` / `Esc` 只要当前会话有审批卡片就生效，**不受焦点位置影响**
+> （审批卡片自身没有输入框）；问答卡片的单键在焦点位于输入框时交回输入框。
+> 没有审批卡片时 `Esc` 保持原行为：停止当前会话树且不吞键。
 
 活跃会话的定义：**正在运行（`running`）∪ 有待处理交互（`uiSession.pendingInteractions` 命中，即审批/问答/计划评审卡）∪ 刚完成未查看（`completed`，侧栏绿色「完成」提醒）**。
 跳转沿**左侧侧栏里看到的顺序**（工作区分组 + 组内会话顺序）逐格扫描，落点是方向上
@@ -35,16 +41,20 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 每次按键都重新取一次会话快照与侧栏顺序，不缓存；侧栏顺序读不到时**不跳转**
 （无降级，不猜顺序）。
 
-`Esc` 与迁移前（`dsh-new-session`）行为一致：只停止运行中的会话树，**不吞键**，
-页面默认 `Esc` 行为（关弹层 / 退出编辑态）照常执行；速查表浮层打开时由浮层优先关闭。
+`Esc` 是双职责键：当前会话有待审批卡片时 = 拒绝（吞键）；否则与迁移前
+（`dsh-new-session`）行为一致——只停止运行中的会话树，**不吞键**，页面默认 `Esc`
+行为（关弹层 / 退出编辑态）照常执行；速查表浮层打开时由浮层优先关闭。
 
 ## 实现要点（源码核实结论）
 
 **服务级（不触碰 DOM）**
 
 - 审批：`uiSession.pendingInteractions.getSnapshot()`（公开观察面；同源的私有字段
-  `pendingSnapshot` 仅作兼容回退）取 `kind==='approval'` 载体，调
-  `answer('allowed-once' | 'rejected')`；**不再回退 DOM 点击**。
+  `pendingSnapshot` 仅作兼容回退）取当前会话的 `kind==='approval'` 载体，
+  **`Enter` = 允许一次、`Esc` = 拒绝**，调 `answer('allowed-once' | 'rejected')`；
+  单键固定分发（不再走 `bindings`），**不再回退 DOM 点击**。`card` 态判定与动作
+  同源：只有当前会话命中审批载体时才吞键，无审批载体时 `Enter` / `Esc` 放行
+  （`Esc` 继续走 `session.stop`）。
 - 问答 / 计划评审：同一待处理表取 `PendingQuestion`（`kind==='question' | 'plan-review'`）：
   - **计划评审**：`1` = 确认执行、`2` = 拒绝、`3` = 去聊天里说、`Enter` = 确认执行。
     标签取自请求数据——`questions[0].intent.approve` 是确认标签、其余选项是拒绝标签，
@@ -97,7 +107,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
   > 只取**顺序**、不按分组折叠态（`groupExpansion`）与每组 5 行的折叠上限
   > （`COLLAPSED_SESSION_LIMIT`）裁剪：折叠组 / 超限行里的会话仍有确定的顺序位置，
   > 若一并裁掉就会变成「跳不到」。
-- `Esc` 停止会话（动作 `session.stop`，自 `dsh-new-session` 迁移）：起点 =
+- `Esc` 停止会话（动作 `session.stop`，自 `dsh-new-session` 迁移）：**仅在当前会话
+  没有待审批卡片时生效**（有审批卡片时 `Esc` 已被审批拒绝占用并吞键）；起点 =
   `sessions.list.getSnapshot().current`，沿 `subagentsByParent[id].entries` 递归
   `kind==='child'` 的直系子代理（visited 去重），对每个节点 `sessions.binding(id)`
   → `session.getSnapshot().running === true` 时 `session.cancel()`；`subagent.address
@@ -119,6 +130,10 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 
 ## 服务化后的已知限制
 
+- **审批卡片的 `Enter` / `Esc` 会抢占输入框**：当前会话有审批卡片时，即使焦点在
+  对话输入框里，`Enter` 也是「允许一次」、`Esc` 也是「拒绝」（审批卡片自身没有
+  输入框，这样「直接按 Enter 同意」才成立）；此时 `Enter` 不会发送消息，需要正常
+  发消息时请先处理掉审批卡片（或点卡片按钮）。
 - **通用问答的焦点在卡片自定义文本框时不接管**：焦点在该输入框（无选项题会自动聚焦、
   有选项题点一下内联输入框也会聚焦）时，数字键 / `←` `→` / `Enter` 交回卡片自身处理
   （不吞键）——`←` `→` 此时用于移动光标，这是为了不干扰文本输入；请先把焦点移出输入框
@@ -156,6 +171,11 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
   > 已移除的动作（新建会话 / 对话滚动 / 复制 / 打开设置 / 打开模型选择器 /
   > 聚焦输入框等）即使残留在旧 `bindings` 里也不会触发（分发前先查动作注册表，
   > 未注册即忽略），无需清理。
+- **固定分发动作不可自定义**：`approval.allow` / `approval.reject` /
+  `question.option` / `question.prev` / `question.next` / `question.submit`
+  （见 `src/config.ts` 的 `FIXED_KEYS`）由分发器按卡片类型固定分发，`bindings`
+  里的同名键位（含旧的 `"approval.allow": "mod+alt+enter"`）会被 `loadConfig`
+  剔除——旧的审批组合键已清除，改不回来，也不需要手动清理。
 - 组合键写法：`mod`（⌘/Ctrl）+ `alt` + 键名（字母/数字/`enter`/
   `backspace`/`escape`/`arrow*`/`pageup`/`pagedown`/`;` 等），如 `"Cmd+Alt+M"`；
   默认键位一律不使用 `shift` 作为修饰键（解析器仍兼容旧自定义配置里的 `shift`，仅作过渡）；
