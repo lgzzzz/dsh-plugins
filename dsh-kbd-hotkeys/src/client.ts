@@ -22,12 +22,9 @@
  */
 import {
   answerApproval,
-  focusComposer,
   hasPendingCard,
   isEditableTarget,
   openNeighborSession,
-  openModelSelector,
-  openSettings,
   pickQuestionOption,
   submitQuestion,
   switchView,
@@ -80,12 +77,6 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return switchView(-1)
       case 'view.next':
         return switchView(1)
-      case 'settings.open':
-        return openSettings()
-      case 'model.open':
-        return openModelSelector()
-      case 'composer.focus':
-        return focusComposer()
       case 'help.toggle':
         overlays.toggleHelp()
         return true

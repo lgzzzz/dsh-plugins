@@ -50,7 +50,7 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
 上游存在可用服务面的动作**全部改为服务触发**（不触碰 DOM）；无服务面的动作维持 DOM
-点击 / 聚焦。逐项源码依据见该插件 `README.md`「实现要点」与 `src/actions.ts` 头部注释。
+点击。逐项源码依据见该插件 `README.md`「实现要点」与 `src/actions.ts` 头部注释。
 
 | 动作 | 键位（默认） | 触发路径 | 服务接口 / DOM 选择器 |
 | --- | --- | --- | --- |
@@ -58,23 +58,16 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 | `question.option` / `question.submit`（计划评审） | `1`–`3` / `Enter` | **服务** | 同上 → `PendingQuestion.answer({answers})`；`3` = `cancel()`；确认/拒绝标签取自 `questions[0].intent.approve` |
 | `question.option` / `question.submit`（通用问答） | `1`–`9` / `Enter` | **服务** | 同上 + 插件侧草稿镜像（题号 / 选中 / 多选）→ `answer({answers:[{id,selected,custom?}]})` |
 | `card` 态判定（数字键 / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
-| `sidebar.toggle` | ⌘/Ctrl+B | **服务** | `layout.toggleSidebar()` |
+| `sidebar.toggle` | ⌘/Ctrl+B | **服务** | `layout.toggleSidebar()`（`browse` + `editing`） |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
 | `session.stop` | `Esc` | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
 | `view.prev` / `view.next` | ⌘/Ctrl+Alt+←/→ | DOM | `[role="tablist"]` 中 `role="tab"` 按钮 `.click()` |
-| `settings.open` | 无默认键位 | DOM | `button[aria-haspopup="dialog"]`（取最后一个匹配） |
-| `model.open` | 无默认键位 | DOM | `[data-composer-card]` 内 `button[aria-haspopup="menu"]` |
-| `composer.focus` | 无默认键位 | DOM | `[data-composer-input]` → `.focus()` |
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
 维持 DOM 的原因（内置包 0.1.5-alpha.1 源码核实）：
 
 - **会话视图标签**：`selectView` / `openView` 是 slot 注入的 React 回调，无跨插件服务面
   （活跃视图存于 ui-conversation 的 per-session slot store，外部不可读）。
-- **打开设置**：打开状态是 ui-settings-general 组件内 `useState`（无 store、无命令、无服务）。
-- **打开模型选择器**：下拉展开是 ui-model-selection 组件内 `useState`。
-- **聚焦输入框**：`commandUi.bindComposerFocus` 在 0.1.5-alpha.1 无任何调用点，
-  `popupFor(actx).dismiss({ focusComposer: true })` 实际为 no-op。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
 `pendingSnapshot` 为同源私有字段，仅作兼容回退）；通用问答的选中态由插件镜像维护，

@@ -40,15 +40,14 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'question.option', label: '问题:按 1–9 选择选项', group: '问答卡片(P0)', states: ['card'] },
   { id: 'question.submit', label: '问题:Enter 确认 / 提交', group: '问答卡片(P0)', states: ['card'] },
   // P1 会话级
-  { id: 'sidebar.toggle', label: '开关侧栏', group: '会话(P1)', states: ['browse'] },
+  // sidebar.toggle 额外放行 editing:⌘/Ctrl+B 在输入框聚焦时同样开关侧栏
+  // (带修饰键的组合不干扰文本编辑,与 `editing` 态「只保留带修饰键的全局组合」一致)。
+  { id: 'sidebar.toggle', label: '开关侧栏', group: '会话(P1)', states: ['browse', 'editing'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
   { id: 'session.next', label: '下一个活跃会话', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
   { id: 'session.stop', label: '停止当前会话(含运行中子代理)', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
   { id: 'view.prev', label: '上一个会话视图标签', group: '会话视图(P1)', states: ['card', 'editing', 'browse'] },
   { id: 'view.next', label: '下一个会话视图标签', group: '会话视图(P1)', states: ['card', 'editing', 'browse'] },
-  { id: 'settings.open', label: '打开设置', group: '面板(P1)', states: ['card', 'editing', 'browse'] },
-  { id: 'model.open', label: '打开模型选择器', group: '面板(P1)', states: ['editing', 'browse'] },
-  { id: 'composer.focus', label: '聚焦输入框', group: '面板(P1)', states: ['browse'] },
   { id: 'help.toggle', label: '快捷键速查表', group: '面板(P1)', states: ['card', 'editing', 'browse'] },
 ]
 
@@ -66,25 +65,8 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'session.stop': 'escape',
   'view.prev': 'mod+alt+arrowleft',
   'view.next': 'mod+alt+arrowright',
-  // settings.open 不提供默认键位:原 Ctrl/Cmd+. 已移除;
-  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: settings.open)。
-  // model.open 不提供默认键位:原 Ctrl/Cmd+Alt+M 已移除;
-  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: model.open)。
-  // composer.focus 不提供默认键位:原 Ctrl/Cmd+Alt+E 已移除;
-  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: composer.focus)。
   'help.toggle': 'mod+/',
 }
-
-/**
- * 未绑定时不在速查表(⌘/)展示的动作。
- * 与 DEFAULT_BINDINGS 中「已移除默认键位」的条目一一对应:这些动作仍可经
- * localStorage 自绑定,但未绑定时不占用速查表行;自绑定后自动恢复展示。
- */
-export const HIDDEN_FROM_HELP_WHEN_UNBOUND: ReadonlySet<string> = new Set([
-  'settings.open',
-  'model.open',
-  'composer.focus',
-])
 
 /**
  * 反向索引:归一化组合键 → 动作 id。

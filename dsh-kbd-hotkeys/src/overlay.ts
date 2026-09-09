@@ -6,7 +6,7 @@
  * 浮层打开时进入模态分发:按键先交给 handleKey(),未处理且焦点在浮层内的
  * 交给浮层自身,其余吞掉,避免误触发页面快捷键。
  */
-import { ACTIONS, HIDDEN_FROM_HELP_WHEN_UNBOUND, prettyCombo, type HotkeyConfig } from './config.ts'
+import { ACTIONS, prettyCombo, type HotkeyConfig } from './config.ts'
 
 /** 浮层依赖。 */
 export interface OverlayDeps {
@@ -88,13 +88,6 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
     const config = deps.getConfig()
     let lastGroup = ''
     for (const action of ACTIONS) {
-      // 已移除默认键位且未自绑定的动作不展示(自绑定后恢复展示)
-      if (
-        HIDDEN_FROM_HELP_WHEN_UNBOUND.has(action.id) &&
-        (config.bindings[action.id] === undefined || config.bindings[action.id] === '')
-      ) {
-        continue
-      }
       if (action.group !== lastGroup) {
         lastGroup = action.group
         const heading = document.createElement('h3')

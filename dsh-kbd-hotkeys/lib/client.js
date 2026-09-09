@@ -347,27 +347,6 @@ function isEditableTarget(target) {
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
-function focusComposer() {
-  const input = document.querySelector("[data-composer-input]");
-  if (input === null) return false;
-  input.focus({ preventScroll: true });
-  return true;
-}
-function openModelSelector() {
-  const card = document.querySelector("[data-composer-card]");
-  const trigger = (card != null ? card : document).querySelector('button[aria-haspopup="menu"]');
-  if (trigger === null) return false;
-  trigger.click();
-  return true;
-}
-function openSettings() {
-  const triggers = document.querySelectorAll('button[aria-haspopup="dialog"]');
-  if (triggers.length === 0) return false;
-  const trigger = triggers[triggers.length - 1];
-  if (trigger.disabled) return false;
-  trigger.click();
-  return true;
-}
 function toggleSidebar(services) {
   const layout = services.layout;
   if (layout === null || layout === void 0 || typeof layout.toggleSidebar !== "function") return false;
@@ -495,15 +474,14 @@ var ACTIONS = [
   { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
   { id: "question.submit", label: "\u95EE\u9898:Enter \u786E\u8BA4 / \u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
   // P1 会话级
-  { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD(P1)", states: ["browse"] },
+  // sidebar.toggle 额外放行 editing:⌘/Ctrl+B 在输入框聚焦时同样开关侧栏
+  // (带修饰键的组合不干扰文本编辑,与 `editing` 态「只保留带修饰键的全局组合」一致)。
+  { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD(P1)", states: ["browse", "editing"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
   { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
   { id: "view.prev", label: "\u4E0A\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["card", "editing", "browse"] },
   { id: "view.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["card", "editing", "browse"] },
-  { id: "settings.open", label: "\u6253\u5F00\u8BBE\u7F6E", group: "\u9762\u677F(P1)", states: ["card", "editing", "browse"] },
-  { id: "model.open", label: "\u6253\u5F00\u6A21\u578B\u9009\u62E9\u5668", group: "\u9762\u677F(P1)", states: ["editing", "browse"] },
-  { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u9762\u677F(P1)", states: ["browse"] },
   { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F(P1)", states: ["card", "editing", "browse"] }
 ];
 var ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
@@ -518,19 +496,8 @@ var DEFAULT_BINDINGS = {
   "session.stop": "escape",
   "view.prev": "mod+alt+arrowleft",
   "view.next": "mod+alt+arrowright",
-  // settings.open 不提供默认键位:原 Ctrl/Cmd+. 已移除;
-  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: settings.open)。
-  // model.open 不提供默认键位:原 Ctrl/Cmd+Alt+M 已移除;
-  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: model.open)。
-  // composer.focus 不提供默认键位:原 Ctrl/Cmd+Alt+E 已移除;
-  // 需要时经 localStorage["dsh-kbd-hotkeys:v1"].bindings 自绑定(动作 id: composer.focus)。
   "help.toggle": "mod+/"
 };
-var HIDDEN_FROM_HELP_WHEN_UNBOUND = /* @__PURE__ */ new Set([
-  "settings.open",
-  "model.open",
-  "composer.focus"
-]);
 function comboActionMap(bindings) {
   const map = /* @__PURE__ */ new Map();
   for (const [id, combo] of Object.entries(bindings)) {
@@ -702,9 +669,6 @@ function createOverlays(deps) {
     const config = deps.getConfig();
     let lastGroup = "";
     for (const action of ACTIONS) {
-      if (HIDDEN_FROM_HELP_WHEN_UNBOUND.has(action.id) && (config.bindings[action.id] === void 0 || config.bindings[action.id] === "")) {
-        continue;
-      }
       if (action.group !== lastGroup) {
         lastGroup = action.group;
         const heading = document.createElement("h3");
@@ -783,12 +747,6 @@ function runAction(id, services, overlays) {
         return switchView(-1);
       case "view.next":
         return switchView(1);
-      case "settings.open":
-        return openSettings();
-      case "model.open":
-        return openModelSelector();
-      case "composer.focus":
-        return focusComposer();
       case "help.toggle":
         overlays.toggleHelp();
         return true;

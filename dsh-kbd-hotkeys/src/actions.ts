@@ -13,11 +13,8 @@
  * - Esc 停止:sessions.binding(id).session.cancel();
  * - `card` 态判定:当前会话在 uiSession 待处理交互表中命中(不依赖卡片是否已渲染)。
  *
- * DOM 级(上游无可用服务面,维持点击/聚焦):
- * - 会话视图标签切换(switchView):selectView 是 slot 注入的 React 回调,无服务面;
- * - 打开设置(openSettings):打开状态是 ui-settings-general 组件内 useState,无服务面;
- * - 打开模型选择器(openModelSelector):下拉是 ui-model-selection 组件内 useState;
- * - 聚焦输入框(focusComposer):[data-composer-input]。
+ * DOM 级(上游无可用服务面,维持点击):
+ * - 会话视图标签切换(switchView):selectView 是 slot 注入的 React 回调,无服务面。
  *
  * 源码事实依据(以 <dsh>/node_modules/@deepseek-ai 各包 lib/client.js 为准):
  * - uiSession.pendingInteractions.getSnapshot():sessionId → 待处理交互(公开面;
@@ -28,10 +25,7 @@
  * - 计划评审卡片的 DOM 底部按钮顺序实为 去聊天里说 / 拒绝 / 确认执行,故键位语义
  *   改为按 intent.approve 标签判定,不再依赖按钮顺序;
  * - 会话视图 tablist:tabs.length>1 时渲染 role=tab 的 button(全应用仅此一个
- *   tablist 的 tab 不带 aria-controls);
- * - 设置触发:侧栏 button[aria-haspopup="dialog"];
- * - 模型选择器:composer 卡片内 button[aria-haspopup="menu"];
- * - 输入框:[data-composer-input]。
+ *   tablist 的 tab 不带 aria-controls)。
  */
 import type {
   PendingInteractionLike,
@@ -328,33 +322,6 @@ export function isEditableTarget(target: EventTarget | null | undefined): boolea
   if (target.isContentEditable) return true
   const tag = target.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
-
-/** 聚焦输入框(Lexical contenteditable)。 */
-export function focusComposer(): boolean {
-  const input = document.querySelector<HTMLElement>('[data-composer-input]')
-  if (input === null) return false
-  input.focus({ preventScroll: true })
-  return true
-}
-
-/** 打开模型选择器(composer 卡片内的 menu 触发按钮)。 */
-export function openModelSelector(): boolean {
-  const card = document.querySelector('[data-composer-card]')
-  const trigger = (card ?? document).querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')
-  if (trigger === null) return false
-  trigger.click()
-  return true
-}
-
-/** 打开设置(侧栏 footer 的 dialog 触发按钮;取最后一个匹配以避开其它 dialog)。 */
-export function openSettings(): boolean {
-  const triggers = document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]')
-  if (triggers.length === 0) return false
-  const trigger = triggers[triggers.length - 1]
-  if (trigger.disabled) return false
-  trigger.click()
-  return true
 }
 
 /** 开关侧栏(layout 服务)。 */
