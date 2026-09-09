@@ -1,0 +1,22 @@
+{
+  "name": "dsh-fork-inbox-guard",
+  "version": "1.0.0",
+  "description": "分叉会话不继承源会话已入队未认领的输入：监听 agent/created，折叠继承前缀的 agent/inbox/spliced，移除仍 pending 的继承消息",
+  "type": "module",
+  "main": "index.ts",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node test.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}
