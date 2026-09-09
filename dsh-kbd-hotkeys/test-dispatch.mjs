@@ -106,8 +106,14 @@ function boot(services) {
   if (handler === undefined) throw new Error('no keydown listener installed')
   return {
     opened,
-    press: (key) => {
-      const event = new FakeKeyboardEvent({ key, code: key, ctrlKey: true, altKey: true })
+    press: (key, extra = {}) => {
+      const event = new FakeKeyboardEvent({
+        key,
+        code: key,
+        ctrlKey: true,
+        altKey: true,
+        ...extra,
+      })
       handler(event)
       return event
     },
@@ -250,6 +256,29 @@ function check(label, actual, expected) {
     env.press('ArrowDown')
     check(`${label} → no-op`, env.opened, [])
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * 场景 4:⌘/Ctrl+B 在 editing 态(输入框聚焦)也开关侧栏
+ * ------------------------------------------------------------------ */
+{
+  console.log('\n--- 场景 4:⌘/Ctrl+B 的态闸门 ---')
+  const snapshot = snapshotOf('s-1', [{ id: 's-1', running: false, completed: false, updatedAt: 1 }])
+  let toggles = 0
+  const env = boot({
+    sessions: { list: { getSnapshot: () => snapshot } },
+    uiSession: pending,
+    layout: { toggleSidebar: () => { toggles += 1 } },
+    workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    slots: undefined,
+  })
+  const editable = new FakeHTMLElement('DIV')
+  editable.isContentEditable = true
+
+  const browseEvent = env.press('b', { altKey: false })
+  check('browse 态 ⌘/Ctrl+B → toggleSidebar + 吞键', [toggles, browseEvent.propagationStopped], [1, true])
+  const editingEvent = env.press('b', { altKey: false, target: editable })
+  check('editing 态 ⌘/Ctrl+B → toggleSidebar + 吞键', [toggles, editingEvent.propagationStopped], [2, true])
 }
 
 console.log(failures === 0 ? '\nall dispatch probes passed' : `\n${failures} probe(s) FAILED`)

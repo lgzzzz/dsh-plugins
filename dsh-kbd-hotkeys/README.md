@@ -19,12 +19,14 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 | `1`–`9` | 问答卡片：选择第 N 个选项（计划评审：确认/拒绝/去聊） | `card` |
 | `Enter` | 问答卡片：确认提交 / 计划评审：确认执行 | `card` |
 | `⌘/Ctrl+/` | 快捷键速查表（含总开关） | 任意 |
-| `⌘/Ctrl+B` | 开关侧栏（走 `layout.toggleSidebar`） | `browse` |
+| `⌘/Ctrl+B` | 开关侧栏（走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
 | `⌘/Ctrl+Alt+←` / `→` | 上一个 / 下一个**会话视图标签**（同一会话内的 tab 页，如 chat / 计划 / 轨迹） | 任意 |
 | `Esc` | 停止当前会话的整棵运行中交互树（自身 + 运行中的直系子代理后代；one-shot 子代理跳过） | 任意 |
 
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
+> `⌘/Ctrl+B` 为 `['browse','editing']`：输入框聚焦时同样开关侧栏（带修饰键的组合不
+> 干扰文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）。
 
 活跃会话的定义：**正在运行（`running`）∪ 有待处理交互（`uiSession.pendingInteractions` 命中，即审批/问答/计划评审卡）∪ 刚完成未查看（`completed`，侧栏绿色「完成」提醒）**。
 跳转沿**左侧侧栏里看到的顺序**（工作区分组 + 组内会话顺序）逐格扫描，落点是方向上
@@ -98,15 +100,6 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
   模运算回绕；未选中时按方向落到第一个 / 最后一个）；不依赖
   `data-phase`/`header` 的 DOM 层级，兼容 slot 引擎对头部内容的任意渲染。
   原因：`selectView` / `openView` 是 slot 注入的 React 回调，上游没有可调用的服务面。
-- 打开设置（动作 `settings.open`，无默认键位）：侧栏
-  `button[aria-haspopup="dialog"]`（取最后一个匹配）。原因：打开状态是
-  ui-settings-general 组件内 `useState`，无 store、无命令、无服务。
-- 打开模型选择器（动作 `model.open`，无默认键位）：composer 卡片内
-  `button[aria-haspopup="menu"]`。原因：下拉展开是 ui-model-selection 组件内
-  `useState`。
-- 聚焦输入框（动作 `composer.focus`，无默认键位）：`[data-composer-input]`。
-  原因：上游 `commandUi.bindComposerFocus` 在当前版本无任何调用点，
-  `popupFor(actx).dismiss({ focusComposer: true })` 实际为 no-op。
 
 ## 服务化后的已知限制
 
@@ -131,15 +124,16 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 {
   "bindings": {
     "sidebar.toggle": "mod+alt+s",
-    "model.open": "mod+alt+m"
+    "view.next": "mod+alt+n"
   }
 }
 ```
 
 - `bindings` 与默认表**浅合并**：只写想覆盖的动作 id（动作 id 见
   `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；
-  > 已移除的动作（新建会话 / 对话滚动 / 复制等）即使残留在旧 `bindings` 里也不会
-  > 触发（分发前先查动作注册表，未注册即忽略），无需清理。
+  > 已移除的动作（新建会话 / 对话滚动 / 复制 / 打开设置 / 打开模型选择器 /
+  > 聚焦输入框等）即使残留在旧 `bindings` 里也不会触发（分发前先查动作注册表，
+  > 未注册即忽略），无需清理。
 - 组合键写法：`mod`（⌘/Ctrl）+ `alt` + 键名（字母/数字/`enter`/
   `backspace`/`escape`/`arrow*`/`pageup`/`pagedown`/`;` 等），如 `"Cmd+Alt+M"`；
   默认键位一律不使用 `shift` 作为修饰键（解析器仍兼容旧自定义配置里的 `shift`，仅作过渡）；
