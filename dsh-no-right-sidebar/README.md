@@ -44,10 +44,7 @@ textpreview / files 两行;模块加载器对缺失的包级 inject 依赖容忍
 ## 加载(用户操作)
 
 ```sh
-# 方式一:仓库根安装脚本(会安装全部插件,含本插件)
-./install.sh        # 或 Windows: powershell -ExecutionPolicy Bypass -File .\install.ps1
-
-# 方式二:单独安装
+# 仓库根不提供集合安装脚本,逐个插件安装:
 cd <仓库根>/dsh-no-right-sidebar && dsh plugin --profile web add link:.
 
 # 重启 App 生效(bundle 层为常驻挂载,不支持热重载)
