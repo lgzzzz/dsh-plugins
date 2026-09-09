@@ -44,7 +44,7 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树（无审批卡片时）、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
 | `dsh-no-right-sidebar` | Host + Client（TS） | `index.ts`（空宿主） | `src/client.ts` → esbuild → `lib/client.js`：no-op `sidebarRight` 桩服务 | `npm run typecheck && npm run build && npm run check` | 停用右侧边栏三行（ui-sidebar-right / ui-sidebar-textpreview / ui-sidebar-files）；桩服务保住 inject `sidebarRight` 的 ui-chat 不被 cordis 停摆（随仓库根安装脚本默认安装） |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
@@ -54,14 +54,14 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 
 | 动作 | 键位（默认） | 触发路径 | 服务接口 / DOM 选择器 |
 | --- | --- | --- | --- |
-| `approval.allow` / `approval.reject` | ⌘/Ctrl+Alt+Enter / ⌘/Ctrl+Alt+Backspace | **服务** | `uiSession.pendingInteractions` → `PendingApproval.answer('allowed-once' \| 'rejected')` |
+| `approval.allow` / `approval.reject` | `Enter` / `Esc`（固定单键，当前会话有待审批卡片时） | **服务** | `uiSession.pendingInteractions` → `PendingApproval.answer('allowed-once' \| 'rejected')`；旧组合键 ⌘/Ctrl+Alt+Enter、⌘/Ctrl+Alt+Backspace 已移除 |
 | `question.option` / `question.submit`（计划评审） | `1`–`3` / `Enter` | **服务** | 同上 → `PendingQuestion.answer({answers})`；`3` = `cancel()`；确认/拒绝标签取自 `questions[0].intent.approve` |
 | `question.option` / `question.submit`（通用问答） | `1`–`9` / `Enter` | **服务** | 同上 → 卡片自身的 slot 草稿 store（`slots.entries('conversation.composer')` 注册项 + `uiSession.resolve(sessionId)` + `slots.resolveStore`）写入 `{index, drafts}`：数字键只改选中态（**不翻题**）；Enter 保留上游 `continueFlow` 推进（当前题已作答且非末题 → 翻到下一题），末题仅在**全部题目完成后**结算 `answer({answers:[{id,selected,custom?}]})`（未完成即 no-op，不跳回未完成题）；卡片实时高亮，与鼠标点选共用同一状态 |
 | `question.prev` / `question.next`（通用问答） | `←` / `→` | **服务** | 同一草稿 store 写入 `{index ± 1, drafts}`（草稿原样保留）；对齐上游 pager `nav.prev`/`nav.next` 的 disabled 语义，首题/末题越界 no-op 且不吞键 |
 | `card` 态判定（数字键 / `←` `→` / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
 | `sidebar.toggle` | ⌘/Ctrl+B | **服务** | `layout.toggleSidebar()`（`browse` + `editing`） |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
-| `session.stop` | `Esc` | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
+| `session.stop` | `Esc`（仅当前会话无待审批卡片时） | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
 | `view.prev` / `view.next` | ⌘/Ctrl+Alt+←/→ | DOM | `[role="tablist"]` 中 `role="tab"` 按钮 `.click()` |
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
@@ -71,7 +71,9 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
   （活跃视图存于 ui-conversation 的 per-session slot store，外部不可读）。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
-`pendingSnapshot` 为同源私有字段，仅作兼容回退）；通用问答的草稿以**卡片自身的 slot
+`pendingSnapshot` 为同源私有字段，仅作兼容回退）；审批为**固定单键** `Enter`（允许）/
+`Esc`（拒绝），当前会话有待审批卡片时不受焦点位置影响（审批卡片自身无输入框），
+无审批卡片时 `Esc` 继续走 `session.stop`；通用问答的草稿以**卡片自身的 slot
 store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slots.resolveStore`），
 卡片实时高亮、与鼠标点选可自由混用，**翻题入口是 `←`/`→` 与 `Enter`**（数字键选中后
 不跳题；`Enter` 保留非末题推进、末题仅在全部题目完成后结算，未完成即 no-op 且不跳回），

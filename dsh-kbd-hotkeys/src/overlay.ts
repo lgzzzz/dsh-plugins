@@ -6,7 +6,7 @@
  * 浮层打开时进入模态分发:按键先交给 handleKey(),未处理且焦点在浮层内的
  * 交给浮层自身,其余吞掉,避免误触发页面快捷键。
  */
-import { ACTIONS, prettyCombo, type HotkeyConfig } from './config.ts'
+import { ACTIONS, FIXED_KEYS, prettyCombo, type HotkeyConfig } from './config.ts'
 
 /** 浮层依赖。 */
 export interface OverlayDeps {
@@ -24,17 +24,6 @@ export interface OverlayHost {
 }
 
 const STYLE_ID = 'dsh-kbd-hotkeys/style'
-
-/**
- * 固定分发的键位(不进 bindings 映射,见 config.ts 的 ACTIONS 注释;
- * 速查表按动作 id 直接展示这些字面键位)。
- */
-const FIXED_KEYS: Readonly<Record<string, string>> = {
-  'question.option': '1–9',
-  'question.prev': '←',
-  'question.next': '→',
-  'question.submit': 'Enter',
-}
 
 const STYLE = [
   '.dsh-kbd-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;font-family:var(--dsw-font-family,system-ui,-apple-system,sans-serif)}',

@@ -29,15 +29,17 @@ export interface ActionDef {
 }
 
 /**
- * 动作注册表。问答卡片的四个动作(数字键 / 方向键 / Enter)为固定行为,
- * 不进 bindings 映射(见 dispatcher),但仍在 ACTIONS 中展示说明。
+ * 动作注册表。审批卡片的 Enter/Esc 与问答卡片的四个动作(数字键 / 方向键 / Enter)
+ * 为固定行为,不进 bindings 映射(见 FIXED_KEYS 与 dispatcher),但仍在 ACTIONS 中
+ * 展示说明。
  */
 export const ACTIONS: readonly ActionDef[] = [
   // P0 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
-  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;数字键/方向键/Enter
-  // 由分发器固定分发(单键不参与 bindings 覆盖,避免与输入框光标移动冲突)。
-  { id: 'approval.allow', label: '审批:允许一次', group: '审批(P0)', states: ['card', 'editing', 'browse'] },
-  { id: 'approval.reject', label: '审批:拒绝', group: '审批(P0)', states: ['card', 'editing', 'browse'] },
+  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;审批 Enter/Esc 与问答的
+  // 数字键/方向键/Enter 由分发器固定分发(单键不参与 bindings 覆盖,避免与输入框
+  // 光标移动 / 发送消息冲突)。
+  { id: 'approval.allow', label: '审批:允许一次', group: '审批(P0)', states: ['card'] },
+  { id: 'approval.reject', label: '审批:拒绝', group: '审批(P0)', states: ['card'] },
   { id: 'question.option', label: '问题:按 1–9 选择选项(不翻题)', group: '问答卡片(P0)', states: ['card'] },
   { id: 'question.prev', label: '问题:← 上一题', group: '问答卡片(P0)', states: ['card'] },
   { id: 'question.next', label: '问题:→ 下一题', group: '问答卡片(P0)', states: ['card'] },
@@ -48,7 +50,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'sidebar.toggle', label: '开关侧栏', group: '会话(P1)', states: ['browse', 'editing'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
   { id: 'session.next', label: '下一个活跃会话', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
-  { id: 'session.stop', label: '停止当前会话(含运行中子代理)', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
+  { id: 'session.stop', label: '停止当前会话(无审批卡片时;含运行中子代理)', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
   { id: 'view.prev', label: '上一个会话视图标签', group: '会话视图(P1)', states: ['card', 'editing', 'browse'] },
   { id: 'view.next', label: '下一个会话视图标签', group: '会话视图(P1)', states: ['card', 'editing', 'browse'] },
   { id: 'help.toggle', label: '快捷键速查表', group: '面板(P1)', states: ['card', 'editing', 'browse'] },
@@ -56,10 +58,23 @@ export const ACTIONS: readonly ActionDef[] = [
 
 export const ACTION_BY_ID: ReadonlyMap<string, ActionDef> = new Map(ACTIONS.map((a) => [a.id, a]))
 
-/** 默认键位(动作 id → 归一化组合键)。 */
+/**
+ * 固定分发的键位(单键,不进 bindings 映射,不可经 localStorage 覆盖):
+ * 审批卡片 Enter = 允许一次、Esc = 拒绝;问答卡片 1–9 / ← / → / Enter。
+ * 速查表按动作 id 展示这里的字面键位;loadConfig 亦按这些 id 剔除残留的旧自定义
+ * 键位——旧的 ⌘/Ctrl+Alt+Enter、⌘/Ctrl+Alt+Backspace 审批组合键已移除。
+ */
+export const FIXED_KEYS: Readonly<Record<string, string>> = {
+  'approval.allow': 'Enter',
+  'approval.reject': 'Esc',
+  'question.option': '1–9',
+  'question.prev': '←',
+  'question.next': '→',
+  'question.submit': 'Enter',
+}
+
+/** 默认键位(动作 id → 归一化组合键);固定分发的动作(见 FIXED_KEYS)不在此表。 */
 export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
-  'approval.allow': 'mod+alt+enter',
-  'approval.reject': 'mod+alt+backspace',
   'sidebar.toggle': 'mod+b',
   'session.prev': 'mod+alt+arrowup',
   'session.next': 'mod+alt+arrowdown',
@@ -111,6 +126,9 @@ export function loadConfig(): HotkeyConfig {
   } catch {
     // 配置损坏时静默回退默认键位
   }
+  // 固定分发动作不参与 bindings:剔除旧配置里残留的审批键位(已移除)等,
+  // 避免已清除的快捷键被旧 localStorage 配置复活。
+  for (const id of Object.keys(FIXED_KEYS)) delete bindings[id]
   return { bindings }
 }
 

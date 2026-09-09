@@ -5,6 +5,10 @@
  * 关键点:DOM 桩的 querySelector/querySelectorAll 一律返回空——若问答/审批
  * 仍依赖卡片 DOM,断言必然失败。
  *
+ * 审批为固定单键:当前会话有待审批卡片时 Enter = 允许一次、Esc = 拒绝(不受焦点
+ * 位置影响),旧的 ⌘/Ctrl+Alt+Enter、⌘/Ctrl+Alt+Backspace 已移除且残留配置被剔除;
+ * 无审批卡片时 Esc 仍走 session.stop。
+ *
  * 通用问答的断言对象是**卡片自己的草稿 store**(conversation.composer 注册项
  * 上的 store handle → uiSession.resolve(sessionId) → slots.resolveStore):
  * 数字键必须写进这份 store(卡片才会高亮,且不翻题)、←/→ 必须只改题号(草稿原样保留)、
@@ -197,16 +201,72 @@ function mount(interaction) {
   return log
 }
 
-console.log('--- 审批(服务级) ---')
+console.log('--- 审批(服务级:Enter 同意 / Esc 拒绝) ---')
 {
   let log = mount({ kind: 'approval', key: 'approval:1' })
-  let event = press({ key: 'Enter', code: 'Enter', ctrlKey: true, altKey: true })
-  check('Ctrl+Alt+Enter → answer(allowed-once)', same(log.answer, ['allowed-once']), JSON.stringify(log.answer))
-  check('Ctrl+Alt+Enter 被吞', event.propagationStopped === true)
+  let event = press({ key: 'Enter', code: 'Enter' })
+  check('Enter → answer(allowed-once)', same(log.answer, ['allowed-once']), JSON.stringify(log.answer))
+  check('Enter 被吞', event.propagationStopped === true)
+
   log = mount({ kind: 'approval', key: 'approval:2' })
+  event = press({ key: 'Escape', code: 'Escape' })
+  check('Esc → answer(rejected)', same(log.answer, ['rejected']), JSON.stringify(log.answer))
+  check('Esc 被吞', event.propagationStopped === true)
+
+  // 旧审批组合键已清除:不应答、不吞键
+  log = mount({ kind: 'approval', key: 'approval:3' })
+  event = press({ key: 'Enter', code: 'Enter', ctrlKey: true, altKey: true })
+  check('Ctrl+Alt+Enter 不再应答(旧键位已清除)', log.answer.length === 0, JSON.stringify(log.answer))
+  check('Ctrl+Alt+Enter 不吞键', event.propagationStopped !== true)
   event = press({ key: 'Backspace', code: 'Backspace', ctrlKey: true, altKey: true })
-  check('Ctrl+Alt+Backspace → answer(rejected)', same(log.answer, ['rejected']), JSON.stringify(log.answer))
-  check('Ctrl+Alt+Backspace 被吞', event.propagationStopped === true)
+  check('Ctrl+Alt+Backspace 不再应答(旧键位已清除)', log.answer.length === 0, JSON.stringify(log.answer))
+  check('Ctrl+Alt+Backspace 不吞键', event.propagationStopped !== true)
+  pending.delete('sess-b')
+
+  // 审批卡片自身没有输入框:焦点在对话输入框时同样应答(不受焦点位置影响)
+  log = mount({ kind: 'approval', key: 'approval:4' })
+  event = press({ key: 'Enter', code: 'Enter', target: new FakeHTMLElement('TEXTAREA') })
+  check('焦点在输入框时 Enter 仍同意', same(log.answer, ['allowed-once']), JSON.stringify(log.answer))
+  check('焦点在输入框时 Enter 被吞', event.propagationStopped === true)
+
+  log = mount({ kind: 'approval', key: 'approval:5' })
+  event = press({ key: 'Escape', code: 'Escape', target: new FakeHTMLElement('TEXTAREA') })
+  check('焦点在输入框时 Esc 仍拒绝', same(log.answer, ['rejected']), JSON.stringify(log.answer))
+  check('焦点在输入框时 Esc 被吞', event.propagationStopped === true)
+}
+
+console.log('\n--- 无审批卡片时 Esc 仍停止当前会话(不吞键) ---')
+{
+  pending.delete('sess-b')
+  const cancelled = []
+  const stopSessions = {
+    list: { getSnapshot: () => snapshot },
+    open() {},
+    binding: (id) => ({
+      session: {
+        getSnapshot: () => ({ running: id === 'sess-b' }),
+        cancel: () => { cancelled.push(id) },
+      },
+    }),
+  }
+  const pressStop = loadPlugin({ ...services, sessions: stopSessions })
+  const event = pressStop({ key: 'Escape', code: 'Escape' })
+  check('无审批卡片时 Esc → cancel(sess-b)', same(cancelled, ['sess-b']), JSON.stringify(cancelled))
+  check('无审批卡片时 Esc 不吞键', event.propagationStopped !== true)
+}
+
+console.log('\n--- 旧审批键位清除:残留 localStorage 配置不生效 ---')
+{
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({
+    bindings: { 'approval.allow': 'mod+alt+enter', 'approval.reject': 'mod+alt+backspace' },
+  }))
+  const pressStale = loadPlugin(services)
+  const log = mount({ kind: 'approval', key: 'approval:6' })
+  let event = pressStale({ key: 'Enter', code: 'Enter', ctrlKey: true, altKey: true })
+  check('残留配置下 Ctrl+Alt+Enter 不应答', log.answer.length === 0 && event.propagationStopped !== true, JSON.stringify(log.answer))
+  event = pressStale({ key: 'Enter', code: 'Enter' })
+  check('残留配置下普通 Enter 仍同意', same(log.answer, ['allowed-once']), JSON.stringify(log.answer))
+  storage.delete('dsh-kbd-hotkeys:v1')
 }
 
 const planQuestions = [{
@@ -424,8 +484,10 @@ console.log('\n--- 未作答 / 无待处理时的放行 ---')
   check('未作答 Enter 不结算', log.answer.length === 0)
   check('未作答 Enter 不吞键', event.propagationStopped !== true)
   pending.delete('sess-b')
-  const idle = press({ key: 'Enter', code: 'Enter', ctrlKey: true, altKey: true })
-  check('无待处理审批时不吞键', idle.propagationStopped !== true)
+  const idle = press({ key: 'Enter', code: 'Enter' })
+  check('无待处理审批时 Enter 不吞键', idle.propagationStopped !== true)
+  const idleEsc = press({ key: 'Escape', code: 'Escape' })
+  check('无待处理审批时 Esc 不吞键', idleEsc.propagationStopped !== true)
   const digit = press({ key: '1', code: 'Digit1' })
   check('无待处理问答时不吞键', digit.propagationStopped !== true)
 }
@@ -496,7 +558,7 @@ console.log('\n--- 兼容回退:仅 pendingSnapshot ---')
     key: 'approval:9',
     answer: (payload) => { log.answer.push(payload); legacy.delete('sess-b') },
   })
-  const event = pressLegacy({ key: 'Enter', code: 'Enter', ctrlKey: true, altKey: true })
+  const event = pressLegacy({ key: 'Enter', code: 'Enter' })
   check('pendingSnapshot 回退仍可应答', same(log.answer, ['allowed-once']), JSON.stringify(log.answer))
   check('回退路径吞键', event.propagationStopped === true)
 }

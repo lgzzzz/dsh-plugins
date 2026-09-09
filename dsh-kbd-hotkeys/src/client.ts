@@ -3,8 +3,9 @@
  * 用 esbuild 打包为 lib/client.js)。
  *
  * 功能:降低鼠标依赖的全局快捷键(键位设计见 docs/dsh-hotkeys-proposal.md):
- * - `card` 卡片态(审批 / ask_user_question / 计划评审卡片打开):⌘/Ctrl+Alt+Enter 允许、
- *   ⌘/Ctrl+Alt+Backspace 拒绝、数字键 1–9 选选项(只选不翻题)、←/→ 上一题/下一题、
+ * - `card` 卡片态(审批 / ask_user_question / 计划评审卡片打开):审批卡片
+ *   Enter 允许一次、Esc 拒绝(当前会话有审批卡片时不受焦点位置影响——审批卡片
+ *   自身没有输入框);问答卡片数字键 1–9 选选项(只选不翻题)、←/→ 上一题/下一题、
  *   Enter 推进(非末题翻到下一题)/ 末题结算(全部题目完成后);
  * - 全态:⌘/ 速查表、⌘⌥↑/↓ 在活跃会话间跳转(活跃 = 运行中 ∪ 有待回应 ∪
  *   刚完成未查看,按**侧栏可见顺序**定位)、⌘⌥←/→ 在会话视图标签间切换、
@@ -58,10 +59,6 @@ function getService(ctx: ClientContext, serviceName: string): unknown {
 function runAction(id: string, services: Services, overlays: OverlayHost): boolean {
   try {
     switch (id) {
-      case 'approval.allow':
-        return answerApproval(services, 'allowed-once')
-      case 'approval.reject':
-        return answerApproval(services, 'rejected')
       case 'question.option':
         return false // 数字键走固定分发逻辑,不作为可执行动作
       case 'question.submit':
@@ -148,9 +145,22 @@ export function apply(ctx: ClientContext): void {
     const cardState = hasPendingCard(services)
     const state = cardState ? 'card' : editable ? 'editing' : 'browse'
 
-    // 固定行为:问答/计划评审卡片的数字键、方向键与 Enter(仅 card 态且焦点不在
-    // 编辑框)。card 态由 uiSession 待处理交互表判定;数字键只写选中态(不翻题)、
-    // ←/→ 只改题号、Enter 非末题推进/末题结算,动作均为服务级。
+    // 固定行为:card 态由 uiSession 待处理交互表判定。
+    // 审批卡片(当前会话待处理交互 kind==='approval'):Enter = 允许一次、Esc = 拒绝;
+    // 卡片自身没有输入框,故不受焦点位置影响(焦点在对话输入框时同样应答)。
+    if (state === 'card') {
+      if (combo === 'enter' && answerApproval(services, 'allowed-once')) {
+        swallow(event)
+        return
+      }
+      if (combo === 'escape' && answerApproval(services, 'rejected')) {
+        swallow(event)
+        return
+      }
+    }
+
+    // 问答/计划评审卡片:数字键只写选中态(不翻题)、←/→ 只改题号、Enter 非末题推进 /
+    // 末题结算,动作均为服务级。焦点在编辑框时交回输入框(光标移动 / 文本输入)。
     if (state === 'card' && !editable) {
       if (/^[1-9]$/.test(combo) && pickQuestionOption(services, Number(combo))) {
         swallow(event)
