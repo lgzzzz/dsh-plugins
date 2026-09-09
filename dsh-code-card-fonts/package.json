@@ -1,8 +1,8 @@
 {
   "name": "dsh-code-card-fonts",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "private": true,
-  "description": "Local persistent Web UI patch: pins the content font-size axis to 14px (the ui-theme font-size setting is locked at 14 and its persisted value is normalized), 14px conversation-card titles, summaries, content and code, plus message-card spacing at half the content font height. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "description": "Local persistent Web UI patch: 14px conversation-card titles, summaries, content, code and markdown table cells, plus message-card spacing of calc(14px * 0.5) = 7px. The content font-size axis (the ui-theme font-size setting) is no longer overridden, so body text and line heights stay user-adjustable. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
   "type": "module",
   "exports": {
     ".": {
