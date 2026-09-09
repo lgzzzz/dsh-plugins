@@ -1,11 +1,23 @@
 # dsh-code-card-fonts
 
-本地持久化 Web UI 补丁:把**消息显示区域所有卡片的标题**、**卡片表头的摘要行**、**卡片展开后的内容**、**代码块**与**内联代码**统一为 **14px**;同时把**消息卡片之间的间距**设为内容字号的一半(14px × 0.5 = 7px)。
+本地持久化 Web UI 补丁:把**内容字号**(`--dsh-content-font-size`,即设置里的「字号大小」)钉死在 **14px**,并把**消息显示区域所有卡片的标题**、**卡片表头的摘要行**、**卡片展开后的内容**、**代码块**与**内联代码**统一为 **14px**;同时把**消息卡片之间的间距**设为内容字号的一半(14px × 0.5 = 7px)。
 
 - 卡片标题 14px,与「字号大小」设置项无关,统一写死。
 - 卡片表头摘要(标题右侧的单行预览:工具结果摘要、思考首行、命令/上下文摘要等)与卡片展开后的内容(工具输入/输出、思考正文、命令正文、上下文/系统提示词正文、代码块、内联代码等)统一为 14px。
 - **不再使用 `[data-x], [data-x] * { ... }` 这类全量覆盖选择器**:每条规则都精确命中目标元素;摘要行以外的元信息(inspect 按钮 11px、时间戳、卡片内其他小字)以及用户/助手正文,都保持组件自身的字号,不再被压成同一档。
 - 保留 `!important`:作用是压过卡片内部子元素自带的显式 `font-size`(`.summary`、`.ioText`、`.ioCard`、`font:` 简写、内联代码的 `.875em !important` 等),保证"标题、摘要与内容统一 14px"的核心效果。
+
+## 内容字号钉死 14px(设置项也锁死)
+
+设置里的「字号大小」由 `dsh-client-ui-theme` 持有(schema 范围 12..17,默认 14),布局服务 `dsh-client-ui-layout` 的 `ThemePresenter` 把它写成 `<body>` 的**内联样式** `--dsh-content-font-size`;正文、卡片、代码行高以及 `--dsh-content-font-delta`、`--dsh-content-font-size-secondary` 等派生变量都在 `body` 上从该变量求值。本插件分两层钉死:
+
+1. **渲染层**(`src/css.ts`):`body { --dsh-content-font-size: 14px !important; }`。普通样式表声明压不过内联样式,必须 `!important`;它同时覆盖首屏 boot 脚本写入的同一变量,因此**从第一帧起**就是 14px,也不会因设置变化而闪动。
+2. **设置行层**(`src/client.ts`):通过 `ctx.get('theme')`(未就绪时 `ctx.inject(['theme'], …)` 等待)拿到 theme 服务,做三件事——① 归一架上的持久化值(此前若是 12/13/15/16/17,写回 14,仅此一次);② 改写实例上的 `setFontSize` 使设置行 `+/-` 成为空操作(值已是 14 时服务自身提前返回,无写入、无重渲染);③ 监听 `theme/change`,在设置被 Host 侧外部改动(`adopt`)时重新归一。插件卸载时还原实例方法。
+
+结果:设置行始终显示 **14**,点 `+/-` 无反应,持久化设置也保持 14,页面内容恒为 14px。
+
+- 服务缺席不影响补丁:本插件**不声明 `inject`**,样式注入无条件执行;`theme` 未就绪时才按需等待。
+- 若要去掉这把锁、恢复设置可调:删除 `src/css.ts` 的 `body { --dsh-content-font-size: 14px !important }` 与 `src/client.ts` 的 `installFontSizePin(ctx)` 调用,`npm run build` 后重启 App。
 
 ## 消息卡片间距(内容字号的一半)
 
@@ -83,7 +95,7 @@ dsh plugin --profile web remove dsh-code-card-fonts
 
 ## 工程结构(TypeScript)
 
-- 浏览器半部为 TypeScript:`src/client.ts`(入口,注入 `<style>`)+ `src/css.ts`(样式真源);
+- 浏览器半部为 TypeScript:`src/client.ts`(入口:注入 `<style>` + 锁定「字号大小」设置)+ `src/css.ts`(样式真源);
   `npm run build`(`scripts/build-client.mjs`,esbuild)把 `src/` 打包成经
   `window.__ModuleLoader__.load({...})` 包装的单文件 `lib/client.js`。
   `lib/client.js` 为**构建产物、禁止手改**,已入仓以便离线加载。
@@ -94,6 +106,6 @@ dsh plugin --profile web remove dsh-code-card-fonts
 
 ## 调整字号
 
-- 标题、摘要行与内容(卡片展开内容、代码块、内联代码)均写死为 **14px**。
-- 若要调整字号:替换 `src/css.ts` 中所有 `14px`(标题、摘要行、代码块、内联代码、卡片正文),以及工具/bash 卡片 token 的 `14px/…` 与 `--dsh-chat-flow-gap` 的 `14px * 0.5`。
+- 内容字号轴、标题、摘要行与内容(卡片展开内容、代码块、内联代码)均写死为 **14px**。
+- 若要调整字号:同时替换 `src/client.ts` 的 `PINNED_FONT_SIZE`、`src/css.ts` 中所有 `14px`(内容字号轴、标题、摘要行、代码块、内联代码、卡片正文),以及工具/bash 卡片 token 的 `14px/…` 与 `--dsh-chat-flow-gap` 的 `14px * 0.5`。
 - 改完执行 `npm run typecheck && npm run build`,重启 App 生效。

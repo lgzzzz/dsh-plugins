@@ -29,6 +29,17 @@ module.exports = __toCommonJS(client_exports);
 
 // src/css.ts
 var CSS = `
+/* ===== \u5185\u5BB9\u5B57\u53F7\u8F74\u6052\u5B9A 14px(\u4E0E\u300C\u5B57\u53F7\u5927\u5C0F\u300D\u8BBE\u7F6E\u65E0\u5173)=====
+ * \u5E03\u5C40\u670D\u52A1(ui-layout \u7684 ThemePresenter)\u7528 body.style.setProperty \u628A
+ * --dsh-content-font-size \u5199\u6210**\u5185\u8054\u6837\u5F0F**,\u666E\u901A\u6837\u5F0F\u8868\u58F0\u660E\u538B\u4E0D\u8FC7\u5185\u8054\u6837\u5F0F,\u6545
+ * \u5FC5\u987B\u52A0 !important \u624D\u80FD\u9489\u6B7B;\u9996\u5C4F boot \u811A\u672C\u5199\u5165\u7684\u540C\u4E00\u53D8\u91CF\u540C\u6837\u88AB\u8986\u76D6\u3002
+ * \u6B63\u6587\u3001\u5361\u7247\u3001\u4EE3\u7801\u884C\u9AD8\u4E0E --dsh-content-font-delta / -secondary \u7B49\u6D3E\u751F\u53D8\u91CF\u90FD\u5728
+ * body \u4E0A\u4ECE\u8BE5\u53D8\u91CF\u6C42\u503C,\u6545\u4E00\u5904\u9489\u6B7B\u5373\u5168\u5C40\u751F\u6548\u3002
+ * \u8BBE\u7F6E\u884C\u672C\u8EAB(\u663E\u793A\u503C\u4E0E\u6301\u4E45\u5316\u503C)\u7531 src/client.ts \u4FA7\u5F52\u4E00\u5230 14 \u5E76\u62E6\u622A +/-\u3002 */
+body {
+  --dsh-content-font-size: 14px !important;
+}
+
 /* \u95F4\u8DDD = \u5185\u5BB9\u5B57\u53F7\u4E00\u534A\u3002\u58F0\u660E\u5728 body \u800C\u975E :root:--dsh-content-font-size \u7531\u4E3B\u9898
    \u4EE5\u5185\u8054\u6837\u5F0F\u8BBE\u5728 body \u4E0A,\u653E :root \u4F1A\u53D6\u4E0D\u5230\u5B9E\u9645\u503C\u3001\u6052\u7528\u56DE\u9000 14px\u3002 */
 body {
@@ -117,7 +128,12 @@ body {
 
 // src/client.ts
 var name = "dsh-code-card-fonts";
+var PINNED_FONT_SIZE = 14;
 function apply(ctx) {
+  installStyles(ctx);
+  installFontSizePin(ctx);
+}
+function installStyles(ctx) {
   const tag = document.createElement("style");
   tag.dataset.plugin = "dsh-code-card-fonts";
   tag.textContent = CSS;
@@ -125,5 +141,51 @@ function apply(ctx) {
   if (typeof (ctx == null ? void 0 : ctx.effect) === "function") {
     ctx.effect(() => () => tag.remove());
   }
+}
+function installFontSizePin(ctx) {
+  if (ctx === void 0 || typeof ctx.get !== "function") return;
+  const lock = (scope) => {
+    var _a;
+    const theme = (_a = scope.get) == null ? void 0 : _a.call(scope, "theme");
+    if (isThemeService(theme)) lockFontSize(scope, theme);
+  };
+  if (ctx.get("theme") !== void 0) {
+    lock(ctx);
+    return;
+  }
+  if (typeof ctx.inject === "function") ctx.inject(["theme"], lock);
+}
+function lockFontSize(ctx, theme) {
+  const original = theme.setFontSize;
+  const write = (px) => {
+    original.call(theme, px);
+  };
+  normalize(theme, write);
+  let patched = false;
+  try {
+    theme.setFontSize = () => {
+      write(PINNED_FONT_SIZE);
+    };
+    patched = true;
+  } catch {
+  }
+  if (typeof ctx.on === "function") {
+    ctx.on("theme/change", () => {
+      normalize(theme, write);
+    });
+  }
+  if (patched && typeof ctx.effect === "function") {
+    ctx.effect(() => () => {
+      theme.setFontSize = original;
+    });
+  }
+}
+function normalize(theme, write) {
+  if (theme.getTheme().fontSize !== PINNED_FONT_SIZE) write(PINNED_FONT_SIZE);
+}
+function isThemeService(value) {
+  if (value === null || value === void 0) return false;
+  const candidate = value;
+  return typeof candidate.getTheme === "function" && typeof candidate.setFontSize === "function";
 }
 return module.exports; } });
