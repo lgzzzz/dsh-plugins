@@ -28,6 +28,131 @@ __export(client_exports, {
 });
 module.exports = __toCommonJS(client_exports);
 
+// src/sidebar-order.ts
+var FLAT_ORDER_KEY = "__flat_session_order__";
+var UNGROUPED_KEY = "";
+var WORKSPACE_SLOT = "sidebar.workspaces";
+function sidebarOrderedSessionIds(snapshot, services) {
+  var _a, _b, _c, _d, _e, _f, _g;
+  const view = readSidebarViewState(services);
+  if (view === void 0) return [];
+  const workspaceSnapshot = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
+  if (workspaceSnapshot === void 0) return [];
+  const byId = (_d = snapshot.byId) != null ? _d : {};
+  const current = snapshot.current;
+  const archived = new Set((_e = workspaceSnapshot.archivedSessionIds) != null ? _e : []);
+  const order = view.sessionOrderByAccount;
+  const visible = (id) => {
+    const summary = byId[id];
+    return summary !== void 0 && sessionVisible(summary, current, archived);
+  };
+  const recency = (a, b) => compareRecency(a, b, byId);
+  if (view.groupBy === "flat") {
+    const base = ((_f = snapshot.ids) != null ? _f : []).filter(visible);
+    base.sort(recency);
+    return reconcileOrder(base, order == null ? void 0 : order[FLAT_ORDER_KEY]);
+  }
+  if (view.groupBy !== "workspace") return [];
+  const items = workspaceSnapshot.items;
+  if (items === void 0) return [];
+  const ids = [];
+  const accounted = /* @__PURE__ */ new Set();
+  for (const workspace of items) {
+    for (const id of groupOrder(workspace, order)) {
+      accounted.add(id);
+      if (visible(id)) ids.push(id);
+    }
+  }
+  const stray = ((_g = snapshot.ids) != null ? _g : []).filter((id) => !accounted.has(id) && visible(id));
+  const ungrouped = order == null ? void 0 : order[UNGROUPED_KEY];
+  if (ungrouped === void 0) {
+    stray.sort(recency);
+    ids.push(...stray);
+  } else {
+    ids.push(...orderedUngrouped(stray, ungrouped, recency));
+  }
+  return ids;
+}
+function readSidebarViewState(services) {
+  var _a;
+  const slots = services.slots;
+  if (slots === null || slots === void 0) return void 0;
+  if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
+  for (const entry of entriesOf(slots)) {
+    const handle = entry == null ? void 0 : entry.store;
+    if (handle === void 0 || handle === null) continue;
+    const instance = liveInstance(slots, handle);
+    const state = asViewState((_a = instance == null ? void 0 : instance.getSnapshot) == null ? void 0 : _a.call(instance));
+    if (state !== void 0) return state;
+  }
+  return void 0;
+}
+function entriesOf(slots) {
+  var _a;
+  try {
+    const entries = (_a = slots.entries) == null ? void 0 : _a.call(slots, WORKSPACE_SLOT);
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+function liveInstance(slots, handle) {
+  var _a;
+  try {
+    return (_a = slots.resolveStore) == null ? void 0 : _a.call(slots, handle, void 0);
+  } catch {
+    return void 0;
+  }
+}
+function asViewState(raw) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return void 0;
+  return raw;
+}
+function groupOrder(workspace, order) {
+  var _a;
+  const sessionIds = (_a = workspace.sessionIds) != null ? _a : [];
+  return reconcileOrder(sessionIds, order == null ? void 0 : order[workspace.workspaceId]);
+}
+function reconcileOrder(ids, stored) {
+  if (stored === void 0) return [...ids];
+  const known = new Set(ids);
+  const out = [];
+  const included = /* @__PURE__ */ new Set();
+  for (const id of stored) {
+    if (!known.has(id) || included.has(id)) continue;
+    out.push(id);
+    included.add(id);
+  }
+  for (const id of ids) {
+    if (included.has(id)) continue;
+    out.push(id);
+  }
+  return out;
+}
+function orderedUngrouped(ids, stored, recency) {
+  const known = new Set(ids);
+  const out = [];
+  const included = /* @__PURE__ */ new Set();
+  for (const id of stored) {
+    if (!known.has(id) || included.has(id)) continue;
+    out.push(id);
+    included.add(id);
+  }
+  const rest = ids.filter((id) => !included.has(id));
+  rest.sort(recency);
+  return [...out, ...rest];
+}
+function compareRecency(a, b, byId) {
+  var _a, _b, _c, _d;
+  const aUpdated = (_b = (_a = byId[a]) == null ? void 0 : _a.updatedAt) != null ? _b : Number.NEGATIVE_INFINITY;
+  const bUpdated = (_d = (_c = byId[b]) == null ? void 0 : _c.updatedAt) != null ? _d : Number.NEGATIVE_INFINITY;
+  if (bUpdated !== aUpdated) return bUpdated - aUpdated;
+  return a < b ? -1 : 1;
+}
+function sessionVisible(summary, current, archived) {
+  return summary.origin !== "subagent" && !archived.has(summary.id) && (!summary.blank || summary.id === current);
+}
+
 // src/actions.ts
 function pendingMap(services) {
   var _a, _b;
@@ -331,17 +456,17 @@ function openNeighborSession(services, delta) {
   if (snapshot.ids === void 0 || snapshot.ids.length === 0 || snapshot.byId === void 0 || typeof sessions.open !== "function") {
     return false;
   }
-  const axis = visibleSessionsByRecency(snapshot, services);
+  const axis = sidebarOrderedSessionIds(snapshot, services);
   if (axis.length === 0) return false;
   const current = snapshot.current;
-  const anchor = current === void 0 ? -1 : axis.findIndex((row) => row.id === current);
+  const anchor = current === void 0 ? -1 : axis.indexOf(current);
   if (anchor < 0) return false;
   const active = activeSessionIds(snapshot, services);
   for (let i = anchor + delta; i >= 0 && i < axis.length; i += delta) {
-    const row = axis[i];
-    if (row === void 0) continue;
-    if (active.has(row.id)) {
-      sessions.open(row.id);
+    const id = axis[i];
+    if (id === void 0) continue;
+    if (active.has(id)) {
+      sessions.open(id);
       return true;
     }
   }
@@ -359,28 +484,6 @@ function activeSessionIds(snapshot, services) {
     }
   }
   return active;
-}
-function visibleSessionsByRecency(snapshot, services) {
-  var _a, _b, _c, _d, _e, _f, _g;
-  const archived = new Set((_e = (_d = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.archivedSessionIds) != null ? _e : []);
-  const rows = [];
-  for (const id of (_f = snapshot.ids) != null ? _f : []) {
-    const summary = (_g = snapshot.byId) == null ? void 0 : _g[id];
-    if (summary === void 0 || !sessionVisible(summary, snapshot.current, archived)) continue;
-    rows.push(summary);
-  }
-  rows.sort(byRecency);
-  return rows;
-}
-function byRecency(a, b) {
-  var _a, _b;
-  const aUpdated = (_a = a.updatedAt) != null ? _a : Number.NEGATIVE_INFINITY;
-  const bUpdated = (_b = b.updatedAt) != null ? _b : Number.NEGATIVE_INFINITY;
-  if (bUpdated !== aUpdated) return bUpdated - aUpdated;
-  return a.id < b.id ? -1 : 1;
-}
-function sessionVisible(summary, current, archived) {
-  return summary.origin !== "subagent" && !archived.has(summary.id) && (!summary.blank || summary.id === current);
 }
 
 // src/config.ts
@@ -649,7 +752,7 @@ function createOverlays(deps) {
 
 // src/client.ts
 var name = "dsh-kbd-hotkeys";
-var inject = ["sessions", "uiSession", "layout", "workspaces"];
+var inject = ["sessions", "uiSession", "layout", "workspaces", "slots"];
 function getService(ctx, serviceName) {
   if (ctx.get === void 0 || ctx.get === null) return void 0;
   const value = ctx.get(serviceName);
@@ -703,7 +806,8 @@ function apply(ctx) {
     sessions: getService(ctx, "sessions"),
     uiSession: getService(ctx, "uiSession"),
     layout: getService(ctx, "layout"),
-    workspaces: getService(ctx, "workspaces")
+    workspaces: getService(ctx, "workspaces"),
+    slots: getService(ctx, "slots")
   };
   const config = loadConfig();
   const actionByCombo = comboActionMap(config.bindings);

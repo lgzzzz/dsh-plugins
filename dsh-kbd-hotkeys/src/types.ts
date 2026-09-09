@@ -100,6 +100,58 @@ export interface WorkspacesLike {
   list?: { getSnapshot?(): WorkspaceSnapshotLike }
 }
 
+/* ------------------------------------------------------------------ *
+ * 侧栏(workspace 浏览器)视图状态:会话排序的权威来源
+ * ------------------------------------------------------------------ */
+
+/**
+ * 侧栏 workspace 浏览器的视图 store 状态(见 dsh-client-ui-workspace 的
+ * createWorkspaceViewStore,持久化键名 `dsh.workspace.view.v5`)。
+ * 侧栏渲染顺序由它决定:分组方式 + 每组本地会话顺序账号。
+ */
+export interface WorkspaceViewStateLike {
+  /** 分组方式:`workspace`(默认,按工作区分组) / `flat`(单列表)。 */
+  groupBy?: string
+  /** 排序方式:`manual`(仅手动序) / `updated`(默认,手动序 + 活跃提升)。 */
+  orderBy?: string
+  /** 分组展开状态:组 key(workspaceId 或 `''`)→ 是否展开。 */
+  groupExpansion?: Readonly<Record<string, boolean | undefined>>
+  /** 每组(或单列表)的本地会话顺序账号:组 key → 会话 id 顺序。 */
+  sessionOrderByAccount?: Readonly<Record<string, readonly string[] | undefined>>
+}
+
+/** store 实例(createSnapshotStore 产物)消费面。 */
+export interface StoreInstanceLike {
+  getSnapshot?(): unknown
+}
+
+/**
+ * defineStore 返回的 store handle 消费面。
+ * - `spec.persist` 即持久化键名(侧栏视图状态的 localStorage 键);
+ * - `create(scopeKey?)` 新建实例,`getSnapshot()` 直接读 handle 自带实例。
+ */
+export interface StoreHandleLike {
+  spec?: { persist?: string }
+  create?(scopeKey?: string): StoreInstanceLike
+  getSnapshot?(): unknown
+}
+
+/** slots 注册项:workspace 浏览器把视图 store handle 挂在注册项上。 */
+export interface SlotEntryLike {
+  store?: StoreHandleLike
+}
+
+/**
+ * slots 服务(SlotRegistry)消费面:
+ * - `entries(key)` 返回某 slot 的注册项(含 `store` handle);
+ * - `resolveStore(handle, scopeBinding)` 解析该 handle 的**活实例**(root 作用域
+ *   无需 scopeBinding),与侧栏渲染同一份内存状态。
+ */
+export interface SlotsLike {
+  entries?(key: string): readonly SlotEntryLike[]
+  resolveStore?(handle: unknown, scopeBinding: unknown): StoreInstanceLike | undefined
+}
+
 /** 会话快照消费面(见 dsh-api-session-controller …/contract/snapshot.d.ts)。 */
 export interface SessionSnapshotLike {
   running?: boolean
@@ -158,4 +210,6 @@ export interface Services {
   uiSession: UiSessionLike | undefined
   layout: LayoutLike | undefined
   workspaces: WorkspacesLike | undefined
+  /** slots 服务:只用于读侧栏视图 store(会话跳转顺序的权威来源)。 */
+  slots: SlotsLike | undefined
 }

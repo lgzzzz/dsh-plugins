@@ -27,7 +27,10 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
 
 活跃会话的定义：**正在运行（`running`）∪ 有待处理交互（`uiSession.pendingInteractions` 命中，即审批/问答/计划评审卡）∪ 刚完成未查看（`completed`，侧栏绿色「完成」提醒）**。
-跳转以当前会话为锚，向目标方向找**最近**的活跃会话并打开（当前会话本身不活跃时同样可用，落点即方向上最近的活跃会话）。
+跳转沿**左侧侧栏里看到的顺序**（工作区分组 + 组内会话顺序）逐格扫描，落点是方向上
+**最近的活跃会话**（当前会话本身不活跃时同样可用，落点即方向上最近的活跃会话）。
+每次按键都重新取一次会话快照与侧栏顺序，不缓存；侧栏顺序读不到时**不跳转**
+（无降级，不猜顺序）。
 
 `Esc` 与迁移前（`dsh-new-session`）行为一致：只停止运行中的会话树，**不吞键**，
 页面默认 `Esc` 行为（关弹层 / 退出编辑态）照常执行；速查表浮层打开时由浮层优先关闭。
@@ -54,11 +57,28 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 - 侧栏开关：`layout.toggleSidebar()`。
 - 会话跳转（`⌘/Ctrl+Alt+↑/↓`）：在**活跃会话**之间跳转。活跃 =
   正在运行（`running`）∪ 有待处理交互（待处理交互表命中）∪
-  刚完成未查看（`completed`）。基础轴 = 可见会话（复刻 workspace 浏览器的
-  `sessionVisible` 过滤：剔除子代理 / 归档 / 非当前空白行）× `byRecency`
-  （updatedAt 新→旧，id 升序决胜）；以当前会话在轴上的位置为锚，向目标方向
-  扫描**最近**的活跃会话并 `sessions.open(id)`；锚点不在可见轴 / 方向尽头无
-  活跃会话时 no-op。`workspaces` 服务不可用时仅归档过滤降级（无归档集合）。
+  刚完成未查看（`completed`）。
+  **导航轴 = 侧栏可见顺序**（`src/sidebar-order.ts` 逐条复刻
+  `dsh-client-ui-workspace` 的派生规则）：
+  1. **分组**：`groupBy==='workspace'`（默认）按 `workspaces.list` 快照的宿主顺序逐组
+     渲染（组内成员来自该工作区的 `sessionIds`），无归属会话落在末尾的 Ungrouped 桶；
+     `groupBy==='flat'` 时是单列表。
+  2. **组内顺序**：取自侧栏视图 store（`createWorkspaceViewStore`）的
+     `sessionOrderByAccount[组 key]`——手动拖拽与 `orderBy==='updated'` 的活跃提升
+     结果都在这里；再按上游 `reconciledSessionOrder` 与当前账号对账（新增会话追加末尾）。
+     该 store 经 `slots.entries('sidebar.workspaces')` 注册项上的 store handle
+     + `slots.resolveStore(handle, undefined)` 取**活实例**（与侧栏渲染同一份内存态；
+     实例尚未创建时由上游 store 自身水合）。
+  3. **可见性**：复刻上游 `sessionVisible`——剔除子代理（`origin==='subagent'`）、
+     归档、非当前空白行。
+  以当前会话在轴上的位置为锚，向目标方向扫描**最近**的活跃会话并
+  `sessions.open(id)`；锚点不在可见轴 / 方向尽头无活跃会话时 no-op。
+  **无降级**：顺序只有上面这一个权威来源（侧栏视图 store + `workspaces` 快照），
+  任一项读不到（服务缺失、slot 未注册、store 不可解析、`groupBy` 非已知值、
+  `workspaces` 快照缺 `items`）一律 no-op——宁可不动，也不按猜测的顺序跳转。
+  > 只取**顺序**、不按分组折叠态（`groupExpansion`）与每组 5 行的折叠上限
+  > （`COLLAPSED_SESSION_LIMIT`）裁剪：折叠组 / 超限行里的会话仍有确定的顺序位置，
+  > 若一并裁掉就会变成「跳不到」。
 - `Esc` 停止会话（动作 `session.stop`，自 `dsh-new-session` 迁移）：起点 =
   `sessions.list.getSnapshot().current`，沿 `subagentsByParent[id].entries` 递归
   `kind==='child'` 的直系子代理（visited 去重），对每个节点 `sessions.binding(id)`
@@ -99,7 +119,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
   请求未提供「拒绝」选项时 `2` 为空操作。
 - 镜像按载体 key 缓存，请求结算（应答 / 取消 / 作用域销毁）后自动回收。
 
-服务注入：`['sessions', 'uiSession', 'layout', 'workspaces']`（全部判空后才消费）。
+服务注入：`['sessions', 'uiSession', 'layout', 'workspaces', 'slots']`（全部判空后才消费；
+`slots` 仅用于读侧栏视图 store，取会话跳转顺序）。
 无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表为纯 DOM 浮层）。
 
 ## 自定义键位
@@ -140,7 +161,7 @@ npm run check       # node --check 产物与宿主
 
 ```sh
 node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/card 态判定（DOM 桩不提供任何卡片）
-node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 活跃会话跳转
+node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序跳转（分组 / flat / 来源不可用 no-op）
 ```
 
 ## 加载（用户操作）
