@@ -1,31 +1,22 @@
 /**
  * 卡片字号补丁的样式真源(经 scripts/build-client.mjs 打包进浏览器半部)。
  *
- * 功能:把内容字号轴 --dsh-content-font-size 钉死在 14px(与「字号大小」设置
- * 无关),并让卡片标题、摘要行、展开正文、代码块、内联代码统一 14px;消息卡片
- * 间距 = 内容字号一半(14px × 0.5)。选择器均基于稳定 data 属性精确命中,不使用
- * `[data-x], [data-x] *` 全量覆盖,避免压扁卡内元信息字号的例外(如 inspect
- * 按钮 11px)。
+ * 功能:把卡片标题、摘要行、展开正文、代码块、内联代码与 Markdown 表格单元格
+ * 统一写死 14px;**不覆盖**内容字号轴 --dsh-content-font-size(正文、行高等派生
+ * 变量仍随「字号大小」设置变化),并把消息卡片间距设为 calc(14px * 0.5) = 7px。
+ * 选择器均基于稳定 data 属性精确命中,不使用 `[data-x], [data-x] *` 全量覆盖,
+ * 避免压扁卡内元信息字号的例外(如 inspect 按钮 11px)。
  *
- * 注意事项:改字号/间距后执行 `npm run build` 重建 lib/client.js(产物,禁止
- * 手改);按行内结构定位的规则(第 N 个子元素等)在卡片结构变动后可能失效,
- * 需同步核对。
+ * 注意事项:改字号后执行 `npm run build` 重建 lib/client.js(产物,禁止手改);
+ * 按行内结构定位的规则(第 N 个子元素等)在卡片结构变动后可能失效,需同步核对。
  */
 
 export const CSS = `
-/* ===== 内容字号轴恒定 14px(与「字号大小」设置无关)=====
- * 布局服务(ui-layout 的 ThemePresenter)用 body.style.setProperty 把
- * --dsh-content-font-size 写成**内联样式**,普通样式表声明压不过内联样式,故
- * 必须加 !important 才能钉死;首屏 boot 脚本写入的同一变量同样被覆盖。
- * 正文、卡片、代码行高与 --dsh-content-font-delta / -secondary 等派生变量都在
- * body 上从该变量求值,故一处钉死即全局生效。
- * 设置行本身(显示值与持久化值)由 src/client.ts 侧归一到 14 并拦截 +/-。 */
-body {
-  --dsh-content-font-size: 14px !important;
-}
-
-/* 间距 = 内容字号一半。声明在 body 而非 :root:--dsh-content-font-size 由主题
-   以内联样式设在 body 上,放 :root 会取不到实际值、恒用回退 14px。 */
+/* ===== 消息卡片间距 — calc(14px * 0.5) = 7px =====
+ * 聊天列(dsh-client-ui-chat)用 margin-top: var(--dsh-chat-flow-gap, 16px);
+ * 声明在 body 而非 :root:自定义属性内部的 var() 在**声明元素**上求值,而
+ * --dsh-content-font-size 由主题以**内联样式**设在 body 上,放 :root 会取不到
+ * 实际值、恒用回退 14px。 */
 body {
   --dsh-chat-flow-gap: calc(14px * 0.5);
 }
@@ -74,6 +65,18 @@ body {
    (特异性 0,1,2)。须保持等特异性(属性 + :not(pre) + code)并以本样式后注入
    的文档顺序胜出——勿降特异性。 */
 [data-chat-flow-kind] :not(pre) > code {
+  font-size: 14px !important;
+}
+
+/* ===== Markdown 表格单元格 — 14px =====
+ * 表格 th/td 消费 --dsw-font-markdown-table(-head),其字号取自
+ * --dsh-content-font-size-secondary(= 内容字号 - 1px),比正文小一档;这里把
+ * 单元格字号提升到与卡片其余文本一致的 14px。行高、字重与字体族仍由应用侧
+ * font 简写给出(th 500 / td 400,行高 22px),不在此重写。
+ * 选择器带 [data-chat-flow-kind] 前缀:应用侧 ._tableScroll_* td/th 特异性
+ * (0,1,1),本规则 (0,1,2) 稳定胜出;!important 与该插件其余规则保持一致。 */
+[data-chat-flow-kind] table th,
+[data-chat-flow-kind] table td {
   font-size: 14px !important;
 }
 

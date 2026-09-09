@@ -1,35 +1,34 @@
 # dsh-code-card-fonts
 
-本地持久化 Web UI 补丁:把**内容字号**(`--dsh-content-font-size`,即设置里的「字号大小」)钉死在 **14px**,并把**消息显示区域所有卡片的标题**、**卡片表头的摘要行**、**卡片展开后的内容**、**代码块**与**内联代码**统一为 **14px**;同时把**消息卡片之间的间距**设为内容字号的一半(14px × 0.5 = 7px)。
+本地持久化 Web UI 补丁:把**消息显示区域所有卡片的标题**、**卡片表头的摘要行**、**卡片展开后的内容**、**代码块**、**内联代码**与 **Markdown 表格单元格**统一为 **14px**,并把**消息卡片之间的间距**设为 `calc(14px * 0.5)`(即 **7px**)。内容字号轴 `--dsh-content-font-size`(设置里的「字号大小」)**不再覆盖**:正文、行高等派生变量随设置变化。
 
 - 卡片标题 14px,与「字号大小」设置项无关,统一写死。
 - 卡片表头摘要(标题右侧的单行预览:工具结果摘要、思考首行、命令/上下文摘要等)与卡片展开后的内容(工具输入/输出、思考正文、命令正文、上下文/系统提示词正文、代码块、内联代码等)统一为 14px。
+- **Markdown 表格单元格(th/td)为 14px**:表格字号 token(`--dsw-font-markdown-table` / `-head`)取自 `--dsh-content-font-size-secondary`(内容字号 - 1px),比正文小一档;本插件把单元格字号提升到与卡片其余文本一致的 14px。行高、字重(th 500 / td 400)与字体族仍由应用侧 `font:` 简写提供,未改写;表格内行内代码本就由内联代码规则统一为 14px,现在与单元格正文同号。
 - **不再使用 `[data-x], [data-x] * { ... }` 这类全量覆盖选择器**:每条规则都精确命中目标元素;摘要行以外的元信息(inspect 按钮 11px、时间戳、卡片内其他小字)以及用户/助手正文,都保持组件自身的字号,不再被压成同一档。
 - 保留 `!important`:作用是压过卡片内部子元素自带的显式 `font-size`(`.summary`、`.ioText`、`.ioCard`、`font:` 简写、内联代码的 `.875em !important` 等),保证"标题、摘要与内容统一 14px"的核心效果。
 
-## 内容字号钉死 14px(设置项也锁死)
+## 内容字号不再锁定(设置可调)
 
-设置里的「字号大小」由 `dsh-client-ui-theme` 持有(schema 范围 12..17,默认 14),布局服务 `dsh-client-ui-layout` 的 `ThemePresenter` 把它写成 `<body>` 的**内联样式** `--dsh-content-font-size`;正文、卡片、代码行高以及 `--dsh-content-font-delta`、`--dsh-content-font-size-secondary` 等派生变量都在 `body` 上从该变量求值。本插件分两层钉死:
+设置里的「字号大小」由 `dsh-client-ui-theme` 持有(schema 范围 12..17,默认 14),布局服务 `dsh-client-ui-layout` 的 `ThemePresenter` 把它写成 `<body>` 的**内联样式** `--dsh-content-font-size`;正文、代码行高以及 `--dsh-content-font-delta`、`--dsh-content-font-size-secondary` 等派生变量都在 `body` 上从该变量求值。
 
-1. **渲染层**(`src/css.ts`):`body { --dsh-content-font-size: 14px !important; }`。普通样式表声明压不过内联样式,必须 `!important`;它同时覆盖首屏 boot 脚本写入的同一变量,因此**从第一帧起**就是 14px,也不会因设置变化而闪动。
-2. **设置行层**(`src/client.ts`):通过 `ctx.get('theme')`(未就绪时 `ctx.inject(['theme'], …)` 等待)拿到 theme 服务,做三件事——① 归一架上的持久化值(此前若是 12/13/15/16/17,写回 14,仅此一次);② 改写实例上的 `setFontSize` 使设置行 `+/-` 成为空操作(值已是 14 时服务自身提前返回,无写入、无重渲染);③ 监听 `theme/change`,在设置被 Host 侧外部改动(`adopt`)时重新归一。插件卸载时还原实例方法。
+本插件**不覆盖**该变量,也不改写 theme 服务的 `setFontSize`:设置行 `+/-` 正常生效、持久化值保持用户选择,正文与行高随设置变化。卡片标题、摘要、展开正文、代码块、内联代码与表格单元格仍写死 14px,因此调整设置会影响用户/助手正文等未被本插件写死字号的部分,卡片内文本字号恒为 14px。
 
-结果:设置行始终显示 **14**,点 `+/-` 无反应,持久化设置也保持 14,页面内容恒为 14px。
+- 服务缺席不影响补丁:本插件**不声明 `inject`**,样式注入无条件执行。
+- 若要让卡片字号也随设置变化:把 `src/css.ts` 中所有 `14px` 换成 `var(--dsh-content-font-size)`(工具/bash 卡片的 `14px/…` token 与表格单元格同理),`npm run build` 后重启 App。
 
-- 服务缺席不影响补丁:本插件**不声明 `inject`**,样式注入无条件执行;`theme` 未就绪时才按需等待。
-- 若要去掉这把锁、恢复设置可调:删除 `src/css.ts` 的 `body { --dsh-content-font-size: 14px !important }` 与 `src/client.ts` 的 `installFontSizePin(ctx)` 调用,`npm run build` 后重启 App。
+## 消息卡片间距(calc(14px * 0.5) = 7px)
 
-## 消息卡片间距(内容字号的一半)
-
-- 聊天列(`dsh-client-ui-chat`)用 `margin-top: var(--dsh-chat-flow-gap, 16px)` 控制相邻卡片间距,默认回退 16px,全局无其他定义。本插件在 `body` 上声明 `--dsh-chat-flow-gap: calc(14px * 0.5)`,即间距 = 14px × 0.5 = 7px。
+- 聊天列(`dsh-client-ui-chat`)用 `margin-top: var(--dsh-chat-flow-gap, 16px)` 控制相邻卡片间距,默认回退 16px,全局无其他定义。本插件在 `body` 上声明 `--dsh-chat-flow-gap: calc(14px * 0.5)`,即间距 = 14px × 0.5 = **7px**。
 - 覆盖声明在 `body` 而非 `:root`:自定义属性内部的 `var()` 在**声明元素**上求值,而 `--dsh-content-font-size` 是主题插件以**内联样式**设在 `<body>` 上的——放 `:root` 会取不到实际设置值、恒用回退 14px。
 - 紧凑回答卡自带元素级规则 `.flowItem[data-turn-process-answer]{--dsh-chat-flow-gap:8px}`,元素级声明优先于继承,该例外(8px)保持不变。
-- 调整比例:改 `src/css.ts` 中 `* 0.5` 为目标系数,`npm run build` 重建后重启 App 即可。
+- 调整间距:改 `src/css.ts` 中 `--dsh-chat-flow-gap` 的 `calc(14px * 0.5)` 为目标值,`npm run build` 重建后重启 App 即可。
 
 ## 解决的问题
 
 - 代码块(`pre`/`pre code`)由 Shiki 渲染,直接对文本所在元素设 font-size 即可生效。
 - 内联代码(`` `...` ``)由 Markdown 渲染为 `code`,应用侧规则 `._markdown_* :not(pre)>code` 自带 `font-size: .875em !important`,特异性(0,1,2)高于一般属性选择器,因此用等特异性选择器 `[data-chat-flow-kind] :not(pre) > code` 覆盖(等特异性 + 本插件 `<style>` 后注入,靠文档顺序胜出)。
+- Markdown 表格的 th/td 由应用侧 `._tableScroll_* th` / `td` 的 `font:` 简写驱动,字号取 `--dsh-content-font-size-secondary`(内容字号 - 1px,比正文小一档);本插件用 `[data-chat-flow-kind] table th/td`(特异性 (0,1,2) > 应用侧 (0,1,1))把字号提升到 14px,不改写行高与字重。
 - 卡片根元素设 font-size 无效:卡片内部的大多数文本元素(`.summary`、`.ioText`、`.ioCard` 等)自带显式 font-size,覆盖了继承值。因此按目标元素分别精确覆盖,而不是对根 + 全部后代(`*`)一刀切。
 - 标题与摘要均为 14px,通过**更高特异性**的选择器覆盖内容规则实现的,不是调整继承。摘要行(而非摘要 + 全部后代)通过行内结构定位:DisclosureRow 表头里标题恒为第 2 个子元素,其后所有直属子元素即摘要行。
 - 工具/bash 卡片的内容文本(I/O 文本、终端、code/read/diff/search/web 正文)由 `--dsw-font-markdown-code-block-small` / `--dsw-font-markdown-code-block` 两个字体 token 驱动(主题默认 **11px**,过小):在卡片根上重指这两个 token,只有消费它们的元素会变,inspect 按钮等次要文本不受影响。
@@ -47,6 +46,7 @@
 | 卡片摘要行(压缩标记) | `[data-chat-flow-kind="compaction"] button > span:last-child`、`[data-chat-flow-kind="manual-compaction"] button > span:last-child` |
 | 代码块 | `[data-chat-flow-kind] pre`、`[data-chat-flow-kind] pre code` |
 | 内联代码 | `[data-chat-flow-kind] :not(pre) > code` |
+| Markdown 表格单元格(表头/正文) | `[data-chat-flow-kind] table th`、`[data-chat-flow-kind] table td` |
 | 卡片展开正文(DisclosureRow 系:思考/命令/上下文/系统提示词/workflow-run 等) | `[data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row])` |
 | 卡片展开正文(压缩标记) | `[data-chat-flow-kind="compaction"] button[aria-expanded="true"] + div`、`[data-chat-flow-kind="manual-compaction"] button[aria-expanded="true"] + div` |
 | 工具/bash 卡片内容(I/O 文本、终端、read/diff/search/web 正文) | 在 `[data-tool]`、`[data-sample]` 上重指 `--dsw-font-markdown-code-block-small` 与 `--dsw-font-markdown-code-block`;Bash 卡片(BashRow)展开正文是表头 `[data-sample]` 的**相邻兄弟节点**,另在 `[data-sample] + *` 上重指 |
@@ -95,7 +95,7 @@ dsh plugin --profile web remove dsh-code-card-fonts
 
 ## 工程结构(TypeScript)
 
-- 浏览器半部为 TypeScript:`src/client.ts`(入口:注入 `<style>` + 锁定「字号大小」设置)+ `src/css.ts`(样式真源);
+- 浏览器半部为 TypeScript:`src/client.ts`(入口:注入 `<style>` 卡片字号补丁)+ `src/css.ts`(样式真源);
   `npm run build`(`scripts/build-client.mjs`,esbuild)把 `src/` 打包成经
   `window.__ModuleLoader__.load({...})` 包装的单文件 `lib/client.js`。
   `lib/client.js` 为**构建产物、禁止手改**,已入仓以便离线加载。
@@ -106,6 +106,6 @@ dsh plugin --profile web remove dsh-code-card-fonts
 
 ## 调整字号
 
-- 内容字号轴、标题、摘要行与内容(卡片展开内容、代码块、内联代码)均写死为 **14px**。
-- 若要调整字号:同时替换 `src/client.ts` 的 `PINNED_FONT_SIZE`、`src/css.ts` 中所有 `14px`(内容字号轴、标题、摘要行、代码块、内联代码、卡片正文),以及工具/bash 卡片 token 的 `14px/…` 与 `--dsh-chat-flow-gap` 的 `14px * 0.5`。
+- 标题、摘要行与内容(卡片展开内容、代码块、内联代码、Markdown 表格单元格)均写死为 **14px**;内容字号轴不再覆盖,卡片间距为 `calc(14px * 0.5)` = 7px。
+- 若要调整卡片字号:替换 `src/css.ts` 中所有 `14px`(标题、摘要行、代码块、内联代码、表格单元格、卡片正文)与工具/bash 卡片 token 的 `14px/…`;卡片间距为独立的 `--dsh-chat-flow-gap: calc(14px * 0.5)`,如需保持 7px 请同步改为固定值。
 - 改完执行 `npm run typecheck && npm run build`,重启 App 生效。
