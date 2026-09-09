@@ -4,12 +4,18 @@
  * 键位设计依据 docs/dsh-hotkeys-proposal.md 第 4 节(Open WebUI 打底 +
  * OpenCode/Claude Code 补充,浏览器冲突已按第 3 节重映射):
  * - `mod` 在 macOS = ⌘(Cmd),Win/Linux = Ctrl;
- * - 三态分发:态 A 审批/问题卡片打开;态 B 输入框聚焦;态 C 浏览对话;
+ * - 三态分发:`card` 卡片态(审批/问答/计划评审卡片打开)、`editing` 输入态
+ *   (输入框聚焦)、`browse` 浏览态(浏览对话);
  * - 用户可通过 localStorage 覆盖默认键位(见 README「自定义键位」)。
  */
 
-/** 三态分发状态名。 */
-export type StateName = 'A' | 'B' | 'C'
+/**
+ * 三态分发状态名:
+ * - `card`    — 卡片态:当前会话有待处理交互(审批 / 问答 / 计划评审卡片);
+ * - `editing` — 输入态:焦点在可编辑元素(输入框 / textarea / contenteditable);
+ * - `browse`  — 浏览态:其余情形(浏览对话)。
+ */
+export type StateName = 'card' | 'editing' | 'browse'
 
 /** 单个动作定义。 */
 export interface ActionDef {
@@ -27,22 +33,23 @@ export interface ActionDef {
  * (见 dispatcher),但仍在 ACTIONS 中展示说明。
  */
 export const ACTIONS: readonly ActionDef[] = [
-  // P0 回合级高频(审批动作放行任意态:服务级 pendingSnapshot 判定,
-  // 不受 React 渲染卡片时序影响;问答卡片依赖 DOM,仅态 A 固定分发)
-  { id: 'approval.allow', label: '审批:允许一次', group: '审批(P0)', states: ['A', 'B', 'C'] },
-  { id: 'approval.reject', label: '审批:拒绝', group: '审批(P0)', states: ['A', 'B', 'C'] },
-  { id: 'question.option', label: '问题:按 1–9 选择选项', group: '问答卡片(P0)', states: ['A'] },
-  { id: 'question.submit', label: '问题:Enter 确认 / 提交', group: '问答卡片(P0)', states: ['A'] },
+  // P0 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
+  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;数字键/Enter 由分发器固定分发。
+  { id: 'approval.allow', label: '审批:允许一次', group: '审批(P0)', states: ['card', 'editing', 'browse'] },
+  { id: 'approval.reject', label: '审批:拒绝', group: '审批(P0)', states: ['card', 'editing', 'browse'] },
+  { id: 'question.option', label: '问题:按 1–9 选择选项', group: '问答卡片(P0)', states: ['card'] },
+  { id: 'question.submit', label: '问题:Enter 确认 / 提交', group: '问答卡片(P0)', states: ['card'] },
   // P1 会话级
-  { id: 'sidebar.toggle', label: '开关侧栏', group: '会话(P1)', states: ['C'] },
-  { id: 'session.prev', label: '上一个活跃会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
-  { id: 'session.next', label: '下一个活跃会话', group: '会话(P1)', states: ['A', 'B', 'C'] },
-  { id: 'view.prev', label: '上一个会话视图标签', group: '会话视图(P1)', states: ['A', 'B', 'C'] },
-  { id: 'view.next', label: '下一个会话视图标签', group: '会话视图(P1)', states: ['A', 'B', 'C'] },
-  { id: 'settings.open', label: '打开设置', group: '面板(P1)', states: ['A', 'B', 'C'] },
-  { id: 'model.open', label: '打开模型选择器', group: '面板(P1)', states: ['B', 'C'] },
-  { id: 'composer.focus', label: '聚焦输入框', group: '面板(P1)', states: ['C'] },
-  { id: 'help.toggle', label: '快捷键速查表', group: '面板(P1)', states: ['A', 'B', 'C'] },
+  { id: 'sidebar.toggle', label: '开关侧栏', group: '会话(P1)', states: ['browse'] },
+  { id: 'session.prev', label: '上一个活跃会话', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
+  { id: 'session.next', label: '下一个活跃会话', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
+  { id: 'session.stop', label: '停止当前会话(含运行中子代理)', group: '会话(P1)', states: ['card', 'editing', 'browse'] },
+  { id: 'view.prev', label: '上一个会话视图标签', group: '会话视图(P1)', states: ['card', 'editing', 'browse'] },
+  { id: 'view.next', label: '下一个会话视图标签', group: '会话视图(P1)', states: ['card', 'editing', 'browse'] },
+  { id: 'settings.open', label: '打开设置', group: '面板(P1)', states: ['card', 'editing', 'browse'] },
+  { id: 'model.open', label: '打开模型选择器', group: '面板(P1)', states: ['editing', 'browse'] },
+  { id: 'composer.focus', label: '聚焦输入框', group: '面板(P1)', states: ['browse'] },
+  { id: 'help.toggle', label: '快捷键速查表', group: '面板(P1)', states: ['card', 'editing', 'browse'] },
 ]
 
 export const ACTION_BY_ID: ReadonlyMap<string, ActionDef> = new Map(ACTIONS.map((a) => [a.id, a]))
@@ -54,6 +61,9 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'sidebar.toggle': 'mod+b',
   'session.prev': 'mod+alt+arrowup',
   'session.next': 'mod+alt+arrowdown',
+  // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。
+  // 无运行中会话时不消费该键,页面默认 Esc 行为保留(浮层打开时由浮层优先处理)。
+  'session.stop': 'escape',
   'view.prev': 'mod+alt+arrowleft',
   'view.next': 'mod+alt+arrowright',
   // settings.open 不提供默认键位:原 Ctrl/Cmd+. 已移除;

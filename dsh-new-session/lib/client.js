@@ -22,7 +22,7 @@ var module = { exports: {} }; var exports = module.exports;
  */
 module.exports = {
   name: 'dsh-new-session',
-  inject: ['slots', 'uiWorkspace', 'sessions'],
+  inject: ['slots', 'uiWorkspace'],
   apply: function (ctx) {
     if (!ctx || typeof ctx.on !== 'function') return;
     ctx.on('command/executed', function (sessionId, name, result) {
@@ -46,40 +46,6 @@ module.exports = {
       style.textContent = '[data-chat-flow-kind="command"]:has([data-slot="conversation.chat.commandview"]:empty) { display: none; }';
       document.head.appendChild(style);
     }
-      ctx.effect(function () {
-          var cancelIfRunning = function (id, sessions) {
-              var binding = sessions.binding(id)
-              if (binding === undefined) return
-              var snapshot = binding.session.getSnapshot()
-              if (snapshot.running !== true) return
-              var address = snapshot.subagent === null ? undefined : snapshot.subagent.address
-              if (address !== undefined && address.mode === 'one-shot') return
-              binding.session.cancel().catch(function () {})
-          }
-          var stopTree = function (id, sessions, list, seen) {
-              if (id === undefined || seen.has(id)) return
-              seen.add(id)
-              cancelIfRunning(id, sessions)
-              var catalog = list.subagentsByParent === undefined ? undefined : list.subagentsByParent[id]
-              if (catalog === undefined || !Array.isArray(catalog.entries)) return
-              for (var i = 0; i < catalog.entries.length; i++) {
-                  var entry = catalog.entries[i]
-                  if (entry.kind !== 'child') continue
-                  stopTree(entry.id, sessions, list, seen)
-              }
-          }
-          var onKeyDown = function (event) {
-              if (event.key !== 'Escape' || event.repeat) return
-              var sessions = ctx.get('sessions')
-              if (sessions === undefined) return
-              var list = sessions.list.getSnapshot()
-              stopTree(list.current, sessions, list, new Set())
-          }
-          document.addEventListener('keydown', onKeyDown)
-          return function () {
-              document.removeEventListener('keydown', onKeyDown)
-          }
-      })
   },
 };
 
