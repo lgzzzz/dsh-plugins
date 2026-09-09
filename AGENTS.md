@@ -25,8 +25,8 @@ Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 7 个插件
 web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待用户安装挂载）。
 `dsh-text-editor`、`dsh-change-summary`（以及更早的
 `dsh-kbd-nav-focus`，提交 6499dd9）已从仓库移除，仅存于 git 历史。仓库根提供
-`install.sh` / `install.ps1` 安装脚本，默认把**全部** 7 个插件逐个装入 Profile
-（推荐入口，详见仓库根 README）。
+`install.sh` / `install.ps1` 安装脚本与 `uninstall.sh` / `uninstall.ps1` 卸载脚本，
+默认对**全部** 7 个插件逐个装入 / 卸载（推荐入口，详见仓库根 README）。
 
 - 版本控制采用黑名单：`.gitignore` 默认放行全部内容，仅忽略系统/编辑器文件
   （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`.npm-cache/`、
@@ -40,12 +40,47 @@ web Profile 当前已挂载其中 6 个（`dsh-no-right-sidebar` 已交付、待
 | 目录 | 形态 | 宿主半部 | 浏览器半部 | 构建 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `dsh-git-guard` | Host only（TS） | `index.ts`，钩挂 `tools/pre-execute` | — | `npm run typecheck`；`node test.mjs` | 拦截 `git push`（deny）/ `git commit`（ask） |
-| `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + Esc 停止 | 无 | `/new` 新建会话命令 |
+| `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发）：审批/问答键盘化、会话切换、对话滚动、复制、⌘K 命令面板与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化、活跃会话切换、会话视图标签切换、Esc 停止当前会话交互树、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md`（随仓库根安装脚本默认安装） |
 | `dsh-no-right-sidebar` | Host + Client（TS） | `index.ts`（空宿主） | `src/client.ts` → esbuild → `lib/client.js`：no-op `sidebarRight` 桩服务 | `npm run typecheck && npm run build && npm run check` | 停用右侧边栏三行（ui-sidebar-right / ui-sidebar-textpreview / ui-sidebar-files）；桩服务保住 inject `sidebarRight` 的 ui-chat 不被 cordis 停摆（随仓库根安装脚本默认安装） |
+
+### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
+
+上游存在可用服务面的动作**全部改为服务触发**（不触碰 DOM）；无服务面的动作维持 DOM
+点击 / 聚焦。逐项源码依据见该插件 `README.md`「实现要点」与 `src/actions.ts` 头部注释。
+
+| 动作 | 键位（默认） | 触发路径 | 服务接口 / DOM 选择器 |
+| --- | --- | --- | --- |
+| `approval.allow` / `approval.reject` | ⌘/Ctrl+Alt+Enter / ⌘/Ctrl+Alt+Backspace | **服务** | `uiSession.pendingInteractions` → `PendingApproval.answer('allowed-once' \| 'rejected')` |
+| `question.option` / `question.submit`（计划评审） | `1`–`3` / `Enter` | **服务** | 同上 → `PendingQuestion.answer({answers})`；`3` = `cancel()`；确认/拒绝标签取自 `questions[0].intent.approve` |
+| `question.option` / `question.submit`（通用问答） | `1`–`9` / `Enter` | **服务** | 同上 + 插件侧草稿镜像（题号 / 选中 / 多选）→ `answer({answers:[{id,selected,custom?}]})` |
+| `card` 态判定（数字键 / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
+| `sidebar.toggle` | ⌘/Ctrl+B | **服务** | `layout.toggleSidebar()` |
+| `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `sessions.open(id)` |
+| `session.stop` | `Esc` | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
+| `view.prev` / `view.next` | ⌘/Ctrl+Alt+←/→ | DOM | `[role="tablist"]` 中 `role="tab"` 按钮 `.click()` |
+| `settings.open` | 无默认键位 | DOM | `button[aria-haspopup="dialog"]`（取最后一个匹配） |
+| `model.open` | 无默认键位 | DOM | `[data-composer-card]` 内 `button[aria-haspopup="menu"]` |
+| `composer.focus` | 无默认键位 | DOM | `[data-composer-input]` → `.focus()` |
+| `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
+
+维持 DOM 的原因（内置包 0.1.5-alpha.1 源码核实）：
+
+- **会话视图标签**：`selectView` / `openView` 是 slot 注入的 React 回调，无跨插件服务面
+  （活跃视图存于 ui-conversation 的 per-session slot store，外部不可读）。
+- **打开设置**：打开状态是 ui-settings-general 组件内 `useState`（无 store、无命令、无服务）。
+- **打开模型选择器**：下拉展开是 ui-model-selection 组件内 `useState`。
+- **聚焦输入框**：`commandUi.bindComposerFocus` 在 0.1.5-alpha.1 无任何调用点，
+  `popupFor(actx).dismiss({ focusComposer: true })` 实际为 no-op。
+
+取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
+`pendingSnapshot` 为同源私有字段，仅作兼容回退）；通用问答的选中态由插件镜像维护，
+卡片不实时高亮，且勿与鼠标点选混用——详见 `dsh-kbd-hotkeys/README.md`
+「服务化后的已知限制」。验证：`node test-services.mjs`（最小 DOM 桩不提供任何卡片，
+断言服务路径）与 `node test-dispatch.mjs`（会话跳转分发）。
 
 ## 包结构与约定
 

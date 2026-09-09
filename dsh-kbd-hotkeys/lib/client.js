@@ -29,8 +29,192 @@ __export(client_exports, {
 module.exports = __toCommonJS(client_exports);
 
 // src/actions.ts
-function detectStateA() {
-  return document.querySelector("[data-approval-key], [data-question-key], [data-plan-review-key]") !== null;
+function pendingMap(services) {
+  var _a, _b;
+  const uiSession = services.uiSession;
+  if (uiSession === null || uiSession === void 0) return void 0;
+  const snapshot = (_b = (_a = uiSession.pendingInteractions) == null ? void 0 : _a.getSnapshot) == null ? void 0 : _b.call(_a);
+  if (snapshot !== void 0) return snapshot;
+  return uiSession.pendingSnapshot;
+}
+function currentSessionId(services) {
+  var _a, _b, _c, _d;
+  const current = (_d = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.current;
+  return current === void 0 || current === "" ? void 0 : current;
+}
+function hasPendingCard(services) {
+  const map = pendingMap(services);
+  if (map === void 0 || map.size === 0) return false;
+  const current = currentSessionId(services);
+  if (current === void 0) return false;
+  return map.has(current);
+}
+function pendingInteraction(services) {
+  const map = pendingMap(services);
+  if (map === void 0 || map.size === 0) return void 0;
+  const current = currentSessionId(services);
+  if (current !== void 0) {
+    const scoped = map.get(current);
+    if (scoped !== void 0) return scoped;
+  }
+  const first = map.values().next();
+  return first.done === true ? void 0 : first.value;
+}
+function pendingQuestion(services) {
+  const pending = pendingInteraction(services);
+  if (pending === void 0) return void 0;
+  return pending.kind === "question" || pending.kind === "plan-review" ? pending : void 0;
+}
+function fireAndForget(run) {
+  try {
+    void Promise.resolve(run()).catch(() => {
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function answerApproval(services, outcome) {
+  const pending = pendingInteraction(services);
+  if (pending === void 0 || pending.kind !== "approval") return false;
+  if (typeof pending.answer !== "function") return false;
+  return fireAndForget(() => {
+    var _a;
+    return (_a = pending.answer) == null ? void 0 : _a.call(pending, outcome);
+  });
+}
+var questionMirrors = /* @__PURE__ */ new Map();
+function mirrorFor(key, questions) {
+  const existing = questionMirrors.get(key);
+  if (existing !== void 0 && existing.drafts.length === questions.length) return existing;
+  const fresh = {
+    index: 0,
+    drafts: questions.map(() => ({ selected: [], custom: "", skipped: false }))
+  };
+  questionMirrors.set(key, fresh);
+  return fresh;
+}
+function pruneMirrors(map) {
+  if (map === void 0) {
+    questionMirrors.clear();
+    return;
+  }
+  const live = /* @__PURE__ */ new Set();
+  for (const pending of map.values()) live.add(mirrorKeyOf(pending));
+  for (const key of [...questionMirrors.keys()]) {
+    if (!live.has(key)) questionMirrors.delete(key);
+  }
+}
+function answered(draft) {
+  return draft.selected.length > 0 || draft.custom.trim() !== "";
+}
+function mirrorKeyOf(pending) {
+  var _a, _b;
+  return (_b = pending.key) != null ? _b : `${(_a = pending.sessionId) != null ? _a : ""}#question`;
+}
+function planReviewLabels(pending) {
+  var _a, _b, _c;
+  const question = (_a = pending.questions) == null ? void 0 : _a[0];
+  if (question === void 0) return void 0;
+  const approveLabel = (_b = question.intent) == null ? void 0 : _b.approve;
+  const options = (_c = question.options) != null ? _c : [];
+  const approve = approveLabel === void 0 ? void 0 : options.find((option) => option.label === approveLabel);
+  const decline = approveLabel === void 0 ? void 0 : options.find((option) => option.label !== approveLabel);
+  return {
+    id: question.id,
+    ...approve === void 0 ? {} : { approve: approve.label },
+    ...decline === void 0 ? {} : { decline: decline.label }
+  };
+}
+function answerPlanReview(pending, decision) {
+  if (decision === "discuss") {
+    if (typeof pending.cancel !== "function") return false;
+    const settled2 = fireAndForget(() => {
+      var _a;
+      return (_a = pending.cancel) == null ? void 0 : _a.call(pending);
+    });
+    if (settled2) questionMirrors.delete(mirrorKeyOf(pending));
+    return settled2;
+  }
+  const labels = planReviewLabels(pending);
+  if (labels === void 0 || typeof pending.answer !== "function") return false;
+  const label = decision === "approve" ? labels.approve : labels.decline;
+  if (label === void 0) return false;
+  const settled = fireAndForget(() => {
+    var _a;
+    return (_a = pending.answer) == null ? void 0 : _a.call(pending, { answers: [{ id: labels.id, selected: [label] }] });
+  });
+  if (settled) questionMirrors.delete(mirrorKeyOf(pending));
+  return settled;
+}
+function pickQuestionOption(services, n) {
+  var _a, _b;
+  const pending = pendingQuestion(services);
+  if (pending === void 0) return false;
+  pruneMirrors(pendingMap(services));
+  if (pending.kind === "plan-review") {
+    if (n === 1) return answerPlanReview(pending, "approve");
+    if (n === 2) return answerPlanReview(pending, "decline");
+    if (n === 3) return answerPlanReview(pending, "discuss");
+    return false;
+  }
+  const questions = (_a = pending.questions) != null ? _a : [];
+  if (questions.length === 0) return false;
+  const mirror = mirrorFor(mirrorKeyOf(pending), questions);
+  const question = questions[mirror.index];
+  const draft = mirror.drafts[mirror.index];
+  if (question === void 0 || draft === void 0) return false;
+  const option = ((_b = question.options) != null ? _b : [])[n - 1];
+  if (option === void 0) return false;
+  if (question.multiSelect === true) {
+    draft.selected = draft.selected.includes(option.label) ? draft.selected.filter((label) => label !== option.label) : [...draft.selected, option.label];
+  } else {
+    draft.selected = [option.label];
+    draft.custom = "";
+    if (mirror.index < questions.length - 1) mirror.index += 1;
+  }
+  draft.skipped = false;
+  return true;
+}
+function submitQuestion(services) {
+  var _a;
+  const pending = pendingQuestion(services);
+  if (pending === void 0) return false;
+  pruneMirrors(pendingMap(services));
+  if (pending.kind === "plan-review") return answerPlanReview(pending, "approve");
+  const questions = (_a = pending.questions) != null ? _a : [];
+  if (questions.length === 0) return false;
+  const key = mirrorKeyOf(pending);
+  const mirror = mirrorFor(key, questions);
+  const draft = mirror.drafts[mirror.index];
+  if (draft === void 0 || !answered(draft)) return false;
+  if (mirror.index < questions.length - 1) {
+    mirror.index += 1;
+    return true;
+  }
+  const incomplete = mirror.drafts.findIndex((item) => !item.skipped && !answered(item));
+  if (incomplete >= 0) {
+    mirror.index = incomplete;
+    return false;
+  }
+  if (typeof pending.answer !== "function") return false;
+  const answers = questions.map((item, index) => {
+    var _a2;
+    const value = (_a2 = mirror.drafts[index]) != null ? _a2 : { selected: [], custom: "", skipped: false };
+    if (value.skipped) return { id: item.id, selected: [] };
+    const custom = value.custom.trim();
+    return {
+      id: item.id,
+      selected: custom === "" || item.multiSelect === true ? [...value.selected] : [],
+      ...custom === "" ? {} : { custom }
+    };
+  });
+  const settled = fireAndForget(() => {
+    var _a2;
+    return (_a2 = pending.answer) == null ? void 0 : _a2.call(pending, { answers });
+  });
+  if (settled) questionMirrors.delete(key);
+  return settled;
 }
 function isEditableTarget(target) {
   if (!(target instanceof HTMLElement)) return false;
@@ -64,6 +248,50 @@ function toggleSidebar(services) {
   if (layout === null || layout === void 0 || typeof layout.toggleSidebar !== "function") return false;
   layout.toggleSidebar();
   return true;
+}
+function stopCurrentSessionTree(services) {
+  var _a, _b;
+  const sessions = services.sessions;
+  const snapshot = (_b = (_a = sessions == null ? void 0 : sessions.list) == null ? void 0 : _a.getSnapshot) == null ? void 0 : _b.call(_a);
+  if (sessions === null || sessions === void 0 || snapshot === null || snapshot === void 0) return false;
+  const current = snapshot.current;
+  if (current === void 0 || current === "") return false;
+  const cancelled = /* @__PURE__ */ new Set();
+  const visit = (id, seen) => {
+    var _a2;
+    if (id === void 0 || id === "" || seen.has(id)) return;
+    seen.add(id);
+    cancelIfRunning(id, sessions, cancelled);
+    const catalog = (_a2 = snapshot.subagentsByParent) == null ? void 0 : _a2[id];
+    const entries = catalog == null ? void 0 : catalog.entries;
+    if (entries === void 0) return;
+    for (const entry of entries) {
+      if (entry.kind !== "child") continue;
+      visit(entry.id, seen);
+    }
+  };
+  visit(current, /* @__PURE__ */ new Set());
+  return cancelled.size > 0;
+}
+function cancelIfRunning(id, sessions, cancelled) {
+  var _a, _b;
+  const binding = (_a = sessions.binding) == null ? void 0 : _a.call(sessions, id);
+  const session = binding == null ? void 0 : binding.session;
+  if (session === void 0) return false;
+  const snapshot = (_b = session.getSnapshot) == null ? void 0 : _b.call(session);
+  if ((snapshot == null ? void 0 : snapshot.running) !== true) return false;
+  const subagent = snapshot.subagent;
+  const address = subagent === null || subagent === void 0 ? void 0 : subagent.address;
+  if (address !== void 0 && address.mode === "one-shot") return false;
+  if (typeof session.cancel !== "function") return false;
+  try {
+    void Promise.resolve(session.cancel()).catch(() => {
+    });
+    cancelled.add(id);
+    return true;
+  } catch {
+    return false;
+  }
 }
 function switchView(delta) {
   const tablist = findSessionViewTablist();
@@ -120,11 +348,11 @@ function openNeighborSession(services, delta) {
   return false;
 }
 function activeSessionIds(snapshot, services) {
-  var _a, _b, _c;
-  const pending = (_a = services.uiSession) == null ? void 0 : _a.pendingSnapshot;
+  var _a, _b;
+  const pending = pendingMap(services);
   const active = /* @__PURE__ */ new Set();
-  for (const id of (_b = snapshot.ids) != null ? _b : []) {
-    const summary = (_c = snapshot.byId) == null ? void 0 : _c[id];
+  for (const id of (_a = snapshot.ids) != null ? _a : []) {
+    const summary = (_b = snapshot.byId) == null ? void 0 : _b[id];
     if (summary === void 0) continue;
     if (summary.running === true || summary.completed === true || pending !== void 0 && pending.has(id)) {
       active.add(id);
@@ -154,110 +382,26 @@ function byRecency(a, b) {
 function sessionVisible(summary, current, archived) {
   return summary.origin !== "subagent" && !archived.has(summary.id) && (!summary.blank || summary.id === current);
 }
-function pendingInteraction(services) {
-  var _a, _b, _c;
-  const uiSession = services.uiSession;
-  const snapshot = uiSession === null || uiSession === void 0 ? void 0 : uiSession.pendingSnapshot;
-  if (snapshot === void 0 || snapshot.size === 0) return void 0;
-  const current = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b).current;
-  if (current !== void 0) {
-    const scoped = snapshot.get(current);
-    if (scoped !== void 0) return scoped;
-  }
-  const first = snapshot.values().next();
-  return first.done === true ? void 0 : first.value;
-}
-function answerApproval(services, outcome) {
-  const pending = pendingInteraction(services);
-  if (pending !== void 0 && pending.kind === "approval" && typeof pending.answer === "function") {
-    try {
-      void Promise.resolve(pending.answer(outcome)).catch(() => {
-      });
-      return true;
-    } catch {
-    }
-  }
-  const cards = document.querySelectorAll("[data-approval-key]");
-  if (cards.length === 0) return false;
-  const card = cards[cards.length - 1];
-  const buttons = [...card.querySelectorAll("button")].filter((b) => !b.disabled);
-  if (buttons.length < 2) return false;
-  const button = outcome === "allowed-once" ? buttons[buttons.length - 1] : buttons[0];
-  button.click();
-  return true;
-}
-function pickQuestionOption(n) {
-  const question = document.querySelector("[data-question-key]");
-  if (question !== null) {
-    const options = question.querySelectorAll(
-      '[data-question-scroll] button[role="radio"], [data-question-scroll] button[role="checkbox"]'
-    );
-    const option = options[n - 1];
-    if (option !== void 0 && !option.disabled) {
-      option.click();
-      return true;
-    }
-    return false;
-  }
-  const plan = document.querySelector("[data-plan-review-key]");
-  if (plan !== null) {
-    const buttons = planButtons(plan);
-    const button = buttons[n - 1];
-    if (button !== void 0 && !button.disabled) {
-      button.click();
-      return true;
-    }
-  }
-  return false;
-}
-function submitQuestion() {
-  const question = document.querySelector("[data-question-key]");
-  if (question !== null) {
-    const buttons = footerButtons(question, "[data-question-scroll]");
-    const submit = buttons[buttons.length - 1];
-    if (submit !== void 0 && !submit.disabled) {
-      submit.click();
-      return true;
-    }
-    return false;
-  }
-  const plan = document.querySelector("[data-plan-review-key]");
-  if (plan !== null) {
-    const approve = planButtons(plan)[0];
-    if (approve !== void 0 && !approve.disabled) {
-      approve.click();
-      return true;
-    }
-  }
-  return false;
-}
-function footerButtons(card, scrollSelector) {
-  return [...card.querySelectorAll("button")].filter(
-    (b) => b.closest(scrollSelector) === null
-  );
-}
-function planButtons(card) {
-  return footerButtons(card, "[data-plan-review-scroll]");
-}
 
 // src/config.ts
 var ACTIONS = [
-  // P0 回合级高频(审批动作放行任意态:服务级 pendingSnapshot 判定,
-  // 不受 React 渲染卡片时序影响;问答卡片依赖 DOM,仅态 A 固定分发)
-  { id: "approval.allow", label: "\u5BA1\u6279:\u5141\u8BB8\u4E00\u6B21", group: "\u5BA1\u6279(P0)", states: ["A", "B", "C"] },
-  { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279(P0)", states: ["A", "B", "C"] },
-  { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["A"] },
-  { id: "question.submit", label: "\u95EE\u9898:Enter \u786E\u8BA4 / \u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["A"] },
+  // P0 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
+  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;数字键/Enter 由分发器固定分发。
+  { id: "approval.allow", label: "\u5BA1\u6279:\u5141\u8BB8\u4E00\u6B21", group: "\u5BA1\u6279(P0)", states: ["card", "editing", "browse"] },
+  { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279(P0)", states: ["card", "editing", "browse"] },
+  { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
+  { id: "question.submit", label: "\u95EE\u9898:Enter \u786E\u8BA4 / \u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
   // P1 会话级
-  { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD(P1)", states: ["C"] },
-  { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
-  { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["A", "B", "C"] },
-  { id: "view.prev", label: "\u4E0A\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["A", "B", "C"] },
-  { id: "view.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["A", "B", "C"] },
-  { id: "settings.open", label: "\u6253\u5F00\u8BBE\u7F6E", group: "\u9762\u677F(P1)", states: ["A", "B", "C"] },
-  { id: "model.open", label: "\u6253\u5F00\u6A21\u578B\u9009\u62E9\u5668", group: "\u9762\u677F(P1)", states: ["B", "C"] },
-  { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u9762\u677F(P1)", states: ["C"] },
-  { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F(P1)", states: ["A", "B", "C"] }
+  { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD(P1)", states: ["browse"] },
+  { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
+  { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
+  { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
+  { id: "view.prev", label: "\u4E0A\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["card", "editing", "browse"] },
+  { id: "view.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["card", "editing", "browse"] },
+  { id: "settings.open", label: "\u6253\u5F00\u8BBE\u7F6E", group: "\u9762\u677F(P1)", states: ["card", "editing", "browse"] },
+  { id: "model.open", label: "\u6253\u5F00\u6A21\u578B\u9009\u62E9\u5668", group: "\u9762\u677F(P1)", states: ["editing", "browse"] },
+  { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u9762\u677F(P1)", states: ["browse"] },
+  { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F(P1)", states: ["card", "editing", "browse"] }
 ];
 var ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 var DEFAULT_BINDINGS = {
@@ -266,6 +410,9 @@ var DEFAULT_BINDINGS = {
   "sidebar.toggle": "mod+b",
   "session.prev": "mod+alt+arrowup",
   "session.next": "mod+alt+arrowdown",
+  // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。
+  // 无运行中会话时不消费该键,页面默认 Esc 行为保留(浮层打开时由浮层优先处理)。
+  "session.stop": "escape",
   "view.prev": "mod+alt+arrowleft",
   "view.next": "mod+alt+arrowright",
   // settings.open 不提供默认键位:原 Ctrl/Cmd+. 已移除;
@@ -519,13 +666,16 @@ function runAction(id, services, overlays) {
         return false;
       // 数字键走固定分发逻辑,不作为可执行动作
       case "question.submit":
-        return submitQuestion();
+        return submitQuestion(services);
       case "sidebar.toggle":
         return toggleSidebar(services);
       case "session.prev":
         return openNeighborSession(services, -1);
       case "session.next":
         return openNeighborSession(services, 1);
+      case "session.stop":
+        stopCurrentSessionTree(services);
+        return false;
       case "view.prev":
         return switchView(-1);
       case "view.next":
@@ -583,14 +733,14 @@ function apply(ctx) {
       return;
     }
     const editable = isEditableTarget(event.target);
-    const stateA = detectStateA();
-    const state = stateA ? "A" : editable ? "B" : "C";
-    if (state === "A" && !editable) {
-      if (/^[1-9]$/.test(combo) && pickQuestionOption(Number(combo))) {
+    const cardState = hasPendingCard(services);
+    const state = cardState ? "card" : editable ? "editing" : "browse";
+    if (state === "card" && !editable) {
+      if (/^[1-9]$/.test(combo) && pickQuestionOption(services, Number(combo))) {
         swallow(event);
         return;
       }
-      if (combo === "enter" && submitQuestion()) {
+      if (combo === "enter" && submitQuestion(services)) {
         swallow(event);
         return;
       }

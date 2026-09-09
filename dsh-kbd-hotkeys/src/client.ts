@@ -3,22 +3,25 @@
  * 用 esbuild 打包为 lib/client.js)。
  *
  * 功能:降低鼠标依赖的全局快捷键(键位设计见 docs/dsh-hotkeys-proposal.md):
- * - 态 A(审批 / ask_user_question / 计划评审卡片打开):⌘/Ctrl+Alt+Enter 允许、
+ * - `card` 卡片态(审批 / ask_user_question / 计划评审卡片打开):⌘/Ctrl+Alt+Enter 允许、
  *   ⌘/Ctrl+Alt+Backspace 拒绝、数字键 1–9 选选项、Enter 确认提交;
  * - 全态:⌘/ 速查表、⌘⌥↑/↓ 在活跃会话间跳转(活跃 = 运行中 ∪ 有待回应 ∪
- *   刚完成未查看,按最近活动时间定位)、⌘⌥←/→ 在会话视图标签间切换;
- * - 态 C(输入框失焦):⌘B 开关侧栏。
+ *   刚完成未查看,按最近活动时间定位)、⌘⌥←/→ 在会话视图标签间切换、
+ *   Esc 停止当前会话的整棵运行中交互树(自身 + 直系子代理,one-shot 跳过);
+ * - `browse` 浏览态(输入框失焦):⌘B 开关侧栏。
  *
- * 实现:document 捕获阶段单一 keydown 监听,按三态分发(态 A 卡片 → 态 B 输入框
- * → 态 C 浏览),消费 sessions / uiSession / layout / workspaces 既有服务,
+ * 实现:document 捕获阶段单一 keydown 监听,按三态分发(`card` 卡片 → `editing`
+ * 输入框 → `browse` 浏览),消费 sessions / uiSession / layout / workspaces 既有服务,
  * 会话跳转 = 活跃会话扫描(running ∪ pending 交互 ∪ completed,锚点定向跳跃);
- * 审批优先走 uiSession.pendingSnapshot 服务级 answer(),DOM 结构仅作回退。
- * 不消费 react,无 external;Esc 中断回合由 dsh-new-session 插件继续承担。
+ * 审批与问答/计划评审全部走 uiSession 待处理交互的服务级 answer()/cancel(),
+ * `card` 态亦由该表判定(不依赖卡片渲染与 DOM 结构);
+ * Esc 停止当前会话交互树(sessions.binding(id).session.cancel(),含直系子代理,
+ * 无运行中会话时不吞键)。不消费 react,无 external。
  */
 import {
   answerApproval,
-  detectStateA,
   focusComposer,
+  hasPendingCard,
   isEditableTarget,
   openNeighborSession,
   openModelSelector,
@@ -26,6 +29,7 @@ import {
   pickQuestionOption,
   submitQuestion,
   switchView,
+  stopCurrentSessionTree,
   toggleSidebar,
 } from './actions.ts'
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
@@ -55,13 +59,18 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
       case 'question.option':
         return false // 数字键走固定分发逻辑,不作为可执行动作
       case 'question.submit':
-        return submitQuestion()
+        return submitQuestion(services)
       case 'sidebar.toggle':
         return toggleSidebar(services)
       case 'session.prev':
         return openNeighborSession(services, -1)
       case 'session.next':
         return openNeighborSession(services, 1)
+      case 'session.stop':
+        // 与迁移前行为一致:只取消运行中的会话树,不吞 Esc——页面默认 Esc
+        // 行为(关弹层 / 退出编辑态)照常执行;浮层打开时已在上方模态分发返回。
+        stopCurrentSessionTree(services)
+        return false
       case 'view.prev':
         return switchView(-1)
       case 'view.next':
@@ -135,16 +144,17 @@ export function apply(ctx: ClientContext): void {
     }
 
     const editable = isEditableTarget(event.target)
-    const stateA = detectStateA()
-    const state = stateA ? 'A' : editable ? 'B' : 'C'
+    const cardState = hasPendingCard(services)
+    const state = cardState ? 'card' : editable ? 'editing' : 'browse'
 
-    // 固定行为:问答/计划评审卡片的数字键与 Enter(仅态 A 且焦点不在编辑框)
-    if (state === 'A' && !editable) {
-      if (/^[1-9]$/.test(combo) && pickQuestionOption(Number(combo))) {
+    // 固定行为:问答/计划评审卡片的数字键与 Enter(仅 card 态且焦点不在编辑框)。
+    // card 态由 uiSession 待处理交互表判定,动作本身为服务级应答。
+    if (state === 'card' && !editable) {
+      if (/^[1-9]$/.test(combo) && pickQuestionOption(services, Number(combo))) {
         swallow(event)
         return
       }
-      if (combo === 'enter' && submitQuestion()) {
+      if (combo === 'enter' && submitQuestion(services)) {
         swallow(event)
         return
       }

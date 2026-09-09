@@ -13,17 +13,54 @@ export interface ClientContext {
   effect?(callback: () => void | (() => void)): void
 }
 
-/** uiSession.pendingSnapshot 里的一项(审批/问题/计划评审共用形态)。 */
+/** 问答请求里的一个选项(见 dsh-user-questions/lib/types/types.d.ts AskUserQuestionOption)。 */
+export interface PendingQuestionOptionLike {
+  label: string
+  description?: string
+}
+
+/**
+ * 问答请求里的一道题(见 dsh-user-questions/lib/types/types.d.ts AskUserQuestionItem)。
+ * 计划评审由 intent.kind==='plan-review' + intent.approve 标签标识,判定不依赖 DOM 顺序。
+ */
+export interface PendingQuestionItemLike {
+  id: string
+  question?: string
+  detail?: string
+  header?: string
+  options?: readonly PendingQuestionOptionLike[]
+  multiSelect?: boolean
+  intent?: { kind?: string; approve?: string }
+}
+
+/**
+ * 待处理交互里的一项(审批/问答/计划评审共用形态)。
+ * - 审批(PendingApproval):answer('allowed-once' | 'rejected');
+ * - 问答/计划评审(PendingQuestion):questions 携带选项与 intent,
+ *   answer({ answers: [{ id, selected, custom? }] })、cancel()(计划评审的「去聊天里说」)。
+ */
 export interface PendingInteractionLike {
   kind?: string
   key?: string
   sessionId?: string
-  answer?(outcome: unknown): Promise<void> | void
+  /** 问答/计划评审请求的题目列表(审批载体无此字段)。 */
+  questions?: readonly PendingQuestionItemLike[]
+  answer?(payload: unknown): Promise<void> | void
   cancel?(): Promise<void> | void
 }
 
-/** UiSession 服务实例消费面(pendingSnapshot: sessionId → interaction)。 */
+/** uiSession 待处理交互的公开观察面(pendingInteractions 的 getSnapshot 半边)。 */
+export interface PendingInteractionsLike {
+  getSnapshot?(): ReadonlyMap<string, PendingInteractionLike>
+}
+
+/**
+ * UiSession 服务实例消费面:
+ * - `pendingInteractions` 为公开面(sessionId → interaction);
+ * - `pendingSnapshot` 为同一份数据的私有字段,仅作兼容回退。
+ */
 export interface UiSessionLike {
+  pendingInteractions?: PendingInteractionsLike
   pendingSnapshot?: ReadonlyMap<string, PendingInteractionLike>
 }
 
@@ -63,17 +100,49 @@ export interface WorkspacesLike {
   list?: { getSnapshot?(): WorkspaceSnapshotLike }
 }
 
+/** 会话快照消费面(见 dsh-api-session-controller …/contract/snapshot.d.ts)。 */
+export interface SessionSnapshotLike {
+  running?: boolean
+  /** 子代理会话的直系父地址;普通会话为 null。 */
+  subagent?: { address?: { mode?: string } } | null
+}
+
+/** 单个会话的面(session.getSnapshot / session.cancel)。 */
+export interface SessionFaceLike {
+  getSnapshot?(): SessionSnapshotLike
+  cancel?(): Promise<unknown> | void
+}
+
+/** sessions.binding(id) 结果(身份稳定的会话绑定)。 */
+export interface SessionBindingLike {
+  session?: SessionFaceLike
+}
+
+/** 子代理目录里的一行(kind==='child' 才是真子会话,diagnostic 行跳过)。 */
+export interface SubagentCatalogEntryLike {
+  kind?: string
+  id?: string
+}
+
+/** 子代理目录快照(subagentsByParent[id])。 */
+export interface SubagentCatalogLike {
+  entries?: readonly SubagentCatalogEntryLike[]
+}
+
 /** sessions.list 快照消费面。 */
 export interface SessionListSnapshotLike {
   ids?: readonly string[]
   byId?: Readonly<Record<string, SessionSummaryLike>>
   current?: string
+  /** 直系子代理目录:父会话 id → 目录快照。 */
+  subagentsByParent?: Readonly<Record<string, SubagentCatalogLike | undefined>>
 }
 
 /** sessions(sessions 控制器)消费面。 */
 export interface SessionsLike {
   list?: { getSnapshot?(): SessionListSnapshotLike }
   open?(sessionId: string): void
+  binding?(sessionId: string): SessionBindingLike | undefined
 }
 
 /** layout 服务消费面(ctx.reflect.provide("layout", …) 的 LayoutController)。 */

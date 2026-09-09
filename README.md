@@ -5,13 +5,15 @@
 重启即失效，故固化为仓库内的本地包）。
 
 仓库根**不再作为「一个插件」整体安装**（没有集合包 / 根 `cordis.patch.yml`），
-而是随附两个安装脚本，把仓库内的插件**逐个**装入 DSH Web Profile，每个插件成为
+而是随附安装 / 卸载脚本，把仓库内的插件**逐个**装入 DSH Web Profile，每个插件成为
 Profile 中独立的 `link:` 依赖，经其自身的 `cordis.patch.yml` 独立挂载：
 
-| 脚本 | 适用系统 |
-| --- | --- |
-| `install.sh` | 类 Unix（macOS / Linux / WSL） |
-| `install.ps1` | Windows（PowerShell） |
+| 脚本 | 作用 | 适用系统 |
+| --- | --- | --- |
+| `install.sh` | 安装全部插件 | 类 Unix（macOS / Linux / WSL） |
+| `install.ps1` | 安装全部插件 | Windows（PowerShell） |
+| `uninstall.sh` | 卸载全部插件 | 类 Unix（macOS / Linux / WSL） |
+| `uninstall.ps1` | 卸载全部插件 | Windows（PowerShell） |
 
 各插件的功能说明见其目录内 `README.md`；跨插件工程规范见 `AGENTS.md`。
 
@@ -27,7 +29,8 @@ Profile 中独立的 `link:` 依赖，经其自身的 `cordis.patch.yml` 独立�
 | `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、滚动、复制、⌘K 面板等） | ✅ |
 | `dsh-no-right-sidebar` | 关闭右侧边栏：停用右栏三行插件的加载，并提供 `sidebarRight` 桩保住 ui-chat | ✅ |
 
-> 两个安装脚本**默认安装仓库内全部 7 个插件**（不再有“可选插件”概念）。
+> 安装脚本**默认安装仓库内全部 7 个插件**（不再有“可选插件”概念）；卸载脚本
+> 作用于同一份清单。
 > `dsh-text-editor` 与 `dsh-change-summary` 已从仓库移除，仅存于 git 历史。
 
 ## 安装（脚本，推荐）
@@ -42,7 +45,7 @@ cd <仓库根>
 # 重启 App 生效
 ```
 
-若无执行权限先 `chmod +x install.sh`。
+若无执行权限先 `chmod +x install.sh`（`uninstall.sh` 同理）。
 
 ### Windows（PowerShell）
 
@@ -108,6 +111,28 @@ dsh plugin --profile web remove dsh-plugins
 
 ## 卸载
 
+### 脚本（推荐）
+
+```sh
+# 类 Unix（macOS / Linux / WSL）
+./uninstall.sh                        # 卸载全部 7 个插件（默认 web Profile）
+
+# Windows（PowerShell）
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
+
+# 重启 App 生效
+```
+
+脚本对清单内每个插件执行一次 `dsh plugin --profile web remove <name>`——`dsh plugin`
+转发 `pnpm remove` 后会自动核对 `dsh.profile.bundles`，把不再安装的 bundle 挂载行
+一并移除，无需手工改 Profile 清单。Profile 未安装的插件自动跳过（幂等）；只移除
+Profile 中的 `link:` 依赖与挂载行，仓库内插件目录本体不受影响。
+
+装入 / 卸载其它 Profile：类 Unix 用 `DSH_PROFILE=<name> ./uninstall.sh`，Windows
+用 `.\uninstall.ps1 -ProfileName <名称>`。
+
+### 手动
+
 移除单个插件：
 
 ```sh
@@ -125,8 +150,9 @@ dsh plugin --profile web remove dsh-code-card-fonts dsh-git-guard dsh-fullwidth-
 ## 新增 / 移除插件时
 
 1. 按各插件 README 完成插件包本体（新插件须遵循 `AGENTS.md` 强制规范第 2 条）；
-2. 同步更新 `install.sh` 与 `install.ps1` 中的插件目录列表——**两处必须保持
-   一致**（两个脚本均默认安装清单中的全部插件）；
+2. 同步更新 `install.sh` / `install.ps1` / `uninstall.sh` / `uninstall.ps1`
+   中的插件目录列表——**四处必须保持一致**（安装脚本装入清单中的全部插件，
+   卸载脚本按同一清单卸载）；
 3. 需要手动单装验证时，构建后按上文「手动安装单个插件」执行。
 
 ## 验证
