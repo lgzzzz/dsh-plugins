@@ -98,10 +98,16 @@ function getMonacoWindow(): MonacoWindow {
   return window as unknown as MonacoWindow
 }
 
-/** 注入 Monaco AMD loader 并解析出 `monaco` 全局（幂等）。 */
+/**
+ * 注入 Monaco AMD loader 并解析出 `monaco` 全局（幂等）。
+ *
+ * 失败**不缓存**：资源缺失（vendor/monaco 未铺）或网络抖动修好后，下一次打开文件
+ * 应当能重试成功；否则这个 rejected promise 会一直留着，整页刷新前每次打开都只
+ * 显示同一句失败。失败时顺带把已经注入的 loader script 摘掉，避免死标签堆积。
+ */
 export function ensureMonaco(): Promise<MonacoEditor> {
   if (monacoPromise !== null) return monacoPromise
-  monacoPromise = new Promise((resolve, reject) => {
+  const attempt = new Promise<MonacoEditor>((resolve, reject) => {
     const script = document.createElement('script')
     script.src = `${MONACO_BASE}/loader.js`
     script.onload = () => {
@@ -125,8 +131,15 @@ export function ensureMonaco(): Promise<MonacoEditor> {
         }
       })
     }
-    script.onerror = () => reject(new Error('Monaco loader failed to load'))
+    script.onerror = () => {
+      script.remove()
+      reject(new Error('Monaco loader failed to load'))
+    }
     document.head.appendChild(script)
+  })
+  monacoPromise = attempt.catch((error: unknown) => {
+    monacoPromise = null
+    throw error
   })
   return monacoPromise
 }

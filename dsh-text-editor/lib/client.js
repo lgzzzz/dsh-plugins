@@ -4029,7 +4029,7 @@ function getMonacoWindow() {
 }
 function ensureMonaco() {
   if (monacoPromise !== null) return monacoPromise;
-  monacoPromise = new Promise((resolve, reject) => {
+  const attempt = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = `${MONACO_BASE}/loader.js`;
     script.onload = () => {
@@ -4051,8 +4051,15 @@ function ensureMonaco() {
         }
       });
     };
-    script.onerror = () => reject(new Error("Monaco loader failed to load"));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error("Monaco loader failed to load"));
+    };
     document.head.appendChild(script);
+  });
+  monacoPromise = attempt.catch((error) => {
+    monacoPromise = null;
+    throw error;
   });
   return monacoPromise;
 }
