@@ -30,11 +30,11 @@ var module = { exports: {} }; var exports = module.exports;
  * Full width and a draggable width are mutually exclusive on this axis by
  * design; remove this rule to get the draggable width back.
  */
-var CSS = "[data-slot='main.conversation'] [data-phase] { --dsh-chat-content-width: 100%; }";
+let CSS = "[data-slot='main.conversation'] [data-phase] { --dsh-chat-content-width: 100%; }";
 module.exports = {
   name: 'fullwidth-chat',
   apply: function (ctx) {
-    var tag = document.createElement('style');
+    let tag = document.createElement('style');
     tag.dataset.plugin = 'dsh-fullwidth-chat';
     tag.textContent = CSS;
     document.head.appendChild(tag);
