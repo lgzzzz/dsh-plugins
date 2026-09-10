@@ -21,9 +21,9 @@
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
 进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 9 个插件目录（见下节插件清单），
-web Profile 当前已挂载其中 8 个。
-`dsh-change-summary`、`dsh-kbd-nav-focus`（提交 6499dd9）已从仓库移除，仅存于
+Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 7 个插件目录（见下节插件清单），
+web Profile 当前已全部挂载。`dsh-change-summary`、`dsh-kbd-nav-focus`（提交 6499dd9）、
+`dsh-fork-inbox-guard`、`dsh-no-right-sidebar` 已从仓库移除，仅存于
 git 历史。仓库根不提供集合
 安装 / 卸载脚本：每个插件由用户逐个执行
 `dsh plugin --profile web add link:<目录>`（详见仓库根 README「安装」）。
@@ -40,13 +40,11 @@ git 历史。仓库根不提供集合
 | 目录 | 形态 | 宿主半部 | 浏览器半部 | 构建 | 说明 |
 | --- | --- | --- | --- | --- | --- |
 | `dsh-git-guard` | Host only（TS） | `index.ts`，钩挂 `tools/pre-execute` | — | `npm run typecheck`；`node test.mjs` | 拦截 `git push`（deny）/ `git commit`（ask） |
-| `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`，监听 `agent/created` | — | `npm run typecheck`；`node test.mjs` | 分叉子会话不继承源会话「已入队未认领」的输入：折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，移除仍 pending 的继承消息 |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
 | `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树（无审批卡片时）、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md` |
-| `dsh-no-right-sidebar` | Host + Client（TS） | `index.ts`（空宿主） | `src/client.ts` → esbuild → `lib/client.js`：no-op `sidebarRight` 桩服务 | `npm run typecheck && npm run build && npm run check` | 停用右侧边栏三行（ui-sidebar-right / ui-sidebar-textpreview / ui-sidebar-files）；桩服务保住 inject `sidebarRight` 的 ui-chat 不被 cordis 停摆 |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
@@ -148,8 +146,11 @@ store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slot
 
 `~/.dsh/profiles/web/package.json` 当前配置：
 
-- `dsh.profile.bundles` 共 10 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
-  及上述 8 个本地插件；
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 7 个：
+  code-card-fonts / directory-picker-browse / fullwidth-chat / git-guard /
+  kbd-hotkeys / new-session / text-editor）；
+- `dsh.profile.bundles` 共 9 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
+  及上述 7 个本地插件；
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
   （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
 
@@ -198,10 +199,8 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | 插件 | 命令 | 说明 |
 | --- | --- | --- |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
-| `dsh-fork-inbox-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以真实 `@deepseek-ai/dsh-session` 构造 seeded 会话，验证前缀折叠、只移除继承 pending、幂等与异常兜底 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
-| `dsh-no-right-sidebar` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
 
 `node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
