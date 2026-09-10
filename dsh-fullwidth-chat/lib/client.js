@@ -3,14 +3,34 @@ var module = { exports: {} }; var exports = module.exports;
 /**
  * Persistent full-width conversation column.
  *
- * --dsh-chat-content-width (default 748px) caps the transcript, the stats
- * line and the takeover panels on the conversation root (`[data-phase]`
- * under the `conversation` slot anchor). Overriding it to 100% tiles the
- * transcript across the whole column; the composer card width derives as
- * calc(+32px) and keeps its 16px-per-side clearance, so no other rule has
+ * Anchor: the conversation root (the element carrying `data-phase`) is rendered
+ * by `renderSlot("main.conversation")` inside the conversation panel that
+ * occupies the `main` keyed slot, so its slot outlet wrapper is addressable as
+ * `[data-slot="main.conversation"]` (the wrapper itself is display:contents,
+ * so only the attribute matters). There is no slot named plain `conversation`.
+ *
+ * Axis: upstream defines the width on that root as
+ *   --dsh-chat-content-width: var(--dsh-chat-user-width, clamp(680px, column*64%, 920px))
+ * Overriding the derived property to 100% tiles the transcript, the stats line
+ * and the takeover panels (approval / user-questions) across the whole center
+ * column. The composer card follows via `--dsh-composer-card-max-width`
+ * (calc(+32px)) while keeping its 16px-per-side clearance, so no other rule has
  * to change.
+ *
+ * The descendant form is deliberate: the rule must outrank upstream's own
+ * `.wSkVaW_root` declaration (class = 0,1,0) of the same property, hence two
+ * attribute selectors (0,2,0) rather than a bare `[data-phase]` (which ties and
+ * would also hit the composer editor, whose own `data-phase` sits deeper).
+ *
+ * Side effect: at 100% the built-in resize handles `[data-width-handle]`
+ * (ui-conversation, positioned outside the content edges with
+ * `width: min(40px, calc((100% - var(--dsh-chat-content-width)) / 2 - 48px))`)
+ * collapse to zero width, and `--dsh-chat-user-width` is no longer referenced —
+ * so the dragged / localStorage width preference stops having any effect.
+ * Full width and a draggable width are mutually exclusive on this axis by
+ * design; remove this rule to get the draggable width back.
  */
-var CSS = "[data-slot='conversation'] [data-phase] { --dsh-chat-content-width: 100%; }";
+var CSS = "[data-slot='main.conversation'] [data-phase] { --dsh-chat-content-width: 100%; }";
 module.exports = {
   name: 'fullwidth-chat',
   apply: function (ctx) {
