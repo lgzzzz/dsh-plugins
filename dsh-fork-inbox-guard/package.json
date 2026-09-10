@@ -1,0 +1,22 @@
+{
+  "name": "dsh-fork-inbox-guard",
+  "version": "1.0.0",
+  "description": "Drop the input a forked session wrongly inherited from its source's unclaimed inbox queue (host-only guard on agent/created; never touches sub-agent forks)",
+  "type": "module",
+  "main": "index.ts",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node test.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}
