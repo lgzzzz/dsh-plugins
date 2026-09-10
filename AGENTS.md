@@ -21,10 +21,11 @@
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
 进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 7 个插件目录（见下节插件清单），
+Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 8 个插件目录（见下节插件清单），
 web Profile 当前已全部挂载。`dsh-change-summary`、`dsh-kbd-nav-focus`（提交 6499dd9）、
-`dsh-fork-inbox-guard`、`dsh-no-right-sidebar` 已从仓库移除，仅存于
-git 历史。仓库根不提供集合
+`dsh-no-right-sidebar` 已从仓库移除，仅存于
+git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本次按其根因分析
+重写后重新纳入仓库）。仓库根不提供集合
 安装 / 卸载脚本：每个插件由用户逐个执行
 `dsh plugin --profile web add link:<目录>`（详见仓库根 README「安装」）。
 
@@ -39,6 +40,7 @@ git 历史。仓库根不提供集合
 
 | 目录 | 形态 | 宿主半部 | 浏览器半部 | 构建 | 说明 |
 | --- | --- | --- | --- | --- | --- |
+| `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`：监听 `agent/created`，折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，与当前 pending 求交后 `inbox.remove()` | — | `npm run typecheck`；`node test.mjs` | 分叉子会话丢弃「继承自源会话、仍 pending」的输入；子代理（有 runtime owner）显式跳过，普通/非 seeded 会话不动作 |
 | `dsh-git-guard` | Host only（TS） | `index.ts`，钩挂 `tools/pre-execute` | — | `npm run typecheck`；`node test.mjs` | 拦截 `git push`（deny）/ `git commit`（ask） |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
@@ -149,11 +151,11 @@ store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slot
 
 `~/.dsh/profiles/web/package.json` 当前配置：
 
-- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 7 个：
-  code-card-fonts / directory-picker-browse / fullwidth-chat / git-guard /
-  kbd-hotkeys / new-session / text-editor）；
-- `dsh.profile.bundles` 共 9 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
-  及上述 7 个本地插件；
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 8 个：
+  code-card-fonts / directory-picker-browse / fork-inbox-guard / fullwidth-chat /
+  git-guard / kbd-hotkeys / new-session / text-editor）；
+- `dsh.profile.bundles` 共 10 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
+  及上述 8 个本地插件；
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
   （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
 
@@ -202,6 +204,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | 插件 | 命令 | 说明 |
 | --- | --- | --- |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
+| `dsh-fork-inbox-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 用真实 `@deepseek-ai/dsh-session` 构造 seeded 子会话，验证前缀折叠、移除幂等、子代理 balanced 前缀零改动、异常不外逸 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-text-editor` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`；构建依赖 `monaco-editor`（复制到不入仓的 `vendor/monaco/`） |
