@@ -1,0 +1,38 @@
+{
+  "name": "dsh-left-dock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web plugin: an IntelliJ-style left dock. Takes over the left sidebar column (the ui-sidebar row is disabled by this bundle's patch) and renders a two-button tool bar plus two mutually exclusive panels: the session sidebar (new session + sidebar.panellist rows + the real sidebar.workspaces browser + footer actions + settings) and a workspace file tree fed by remote.workspaceFiles. Each panel keeps its own width; clicking a file opens it in a conversation-area tab through the dsh-text-editor service. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild, react external).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "external": [
+        "react"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}
