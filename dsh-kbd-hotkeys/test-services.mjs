@@ -641,5 +641,166 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+Alt+B → 左右栏开关 ---')
   check('无挂载会话面(抛错)→ ⌘/Ctrl+Alt+B 不吞键', event.propagationStopped !== true)
 }
 
+// ===========================================================================
+// 阶段 4:⌘/Ctrl+I → 聚焦对话输入框
+//         路径 = sessions.binding(id).ctx → conversation.input.for(actx)
+//                → shell.editor.getRootElement() → element.focus({preventScroll:true})
+//         只允许走服务链路:DOM 桩的 querySelector/querySelectorAll 恒空,任何
+//         选择器式实现都拿不到元素;断言对象是服务图里的假元素与 binding.ctx 同一性。
+// ===========================================================================
+console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.editor) ---')
+{
+  const actx = { scope: 'sess-b' } // sessions.binding('sess-b').ctx(必须原样传给 input.for)
+  const makeComposerSessions = (ctx = actx) => ({
+    list: { getSnapshot: () => snapshot },
+    open() {},
+    binding: (id) => (id === 'sess-b' ? { ctx } : undefined),
+  })
+  const makeRoot = () => new FakeHTMLElement('DIV') // editor 宿主内容(ComposerContentEditable 绑定的 div)
+  const base = {
+    uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
+    workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+  }
+
+  // --- 主路径:browse 态 ⌘/Ctrl+I 聚焦,且 for() 收到的就是 binding.ctx 本身 ---
+  const root = makeRoot()
+  const seenActx = []
+  const shellCalls = []
+  const main = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(),
+    conversation: {
+      input: {
+        for: (arg) => { seenActx.push(arg); return { editor: { getRootElement: () => root } } },
+        shell: (id) => { shellCalls.push(id); return undefined },
+      },
+    },
+  })
+  let event = main({ key: 'i', code: 'KeyI', ctrlKey: true })
+  check('browse 态 Ctrl+I → 宿主元素 focus({preventScroll:true})', root.focused === true)
+  check('Ctrl+I 被吞', event.propagationStopped === true)
+  check('input.for 收到 binding.ctx 本身', same(seenActx, [actx]))
+  check('主路径不触碰 shell(id)', shellCalls.length === 0, JSON.stringify(shellCalls))
+
+  // --- macOS ⌘I:metaKey 同样归一化成 mod+i ---
+  const macRoot = makeRoot()
+  const mac = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(),
+    conversation: { input: { for: () => ({ editor: { getRootElement: () => macRoot } }) } },
+  })
+  event = mac({ key: 'i', code: 'KeyI', metaKey: true })
+  check('macOS ⌘I(metaKey)→ 同样聚焦', macRoot.focused === true)
+  check('macOS ⌘I 被吞', event.propagationStopped === true)
+
+  // --- 态门闸:editing(焦点已在可编辑元素)不接管,交回输入框 ---
+  const editRoot = makeRoot()
+  const editing = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(),
+    conversation: { input: { for: () => ({ editor: { getRootElement: () => editRoot } }) } },
+  })
+  event = editing({ key: 'i', code: 'KeyI', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 Ctrl+I 不聚焦(不干扰文本编辑)', editRoot.focused !== true)
+  check('editing 态 Ctrl+I 不吞键', event.propagationStopped !== true)
+
+  // --- 态门闸:card(有待审批卡片)不接管 ---
+  const cardPending = new Map([['sess-b', { kind: 'approval', key: 'a:1', answer() {} }]])
+  const cardRoot = makeRoot()
+  const card = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(),
+    uiSession: { pendingInteractions: { getSnapshot: () => cardPending } },
+    conversation: { input: { for: () => ({ editor: { getRootElement: () => cardRoot } }) } },
+  })
+  event = card({ key: 'i', code: 'KeyI', ctrlKey: true })
+  check('card 态 Ctrl+I 不聚焦', cardRoot.focused !== true)
+  check('card 态 Ctrl+I 不吞键', event.propagationStopped !== true)
+
+  // --- for 缺席 → 回退公开的 shell(id)(同一 SessionInputShell) ---
+  const shellRoot = makeRoot()
+  const shellIds = []
+  const viaShell = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(),
+    conversation: {
+      input: { shell: (id) => { shellIds.push(id); return { editor: { getRootElement: () => shellRoot } } } },
+    },
+  })
+  event = viaShell({ key: 'i', code: 'KeyI', ctrlKey: true })
+  check('input.for 缺席 → shell(id) 回退聚焦', shellRoot.focused === true)
+  check('shell(id) 收到当前会话 id', same(shellIds, ['sess-b']), JSON.stringify(shellIds))
+  check('shell 回退路径吞键', event.propagationStopped === true)
+
+  // --- 无 binding.ctx → 直接走 shell(id) ---
+  const noCtxRoot = makeRoot()
+  const noCtx = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(undefined),
+    conversation: {
+      input: {
+        for: () => { throw new Error('for must not be called without a scope ctx') },
+        shell: () => ({ editor: { getRootElement: () => noCtxRoot } }),
+      },
+    },
+  })
+  event = noCtx({ key: 'i', code: 'KeyI', ctrlKey: true })
+  check('无 binding.ctx → 走 shell(id)', noCtxRoot.focused === true)
+  check('无 binding.ctx 路径吞键', event.propagationStopped === true)
+
+  // --- 无降级:任一环缺失 / 抛错一律 no-op 且不吞键,不回退到 DOM 查询 ---
+  const cases = [
+    ['conversation 服务缺席', { conversation: undefined }],
+    ['input 缺席', { conversation: {} }],
+    ['for/shell 都缺席', { conversation: { input: {} } }],
+    ['for 返回 undefined 且无 shell', { conversation: { input: { for: () => undefined } } }],
+    ['shell 返回 undefined', { conversation: { input: { shell: () => undefined } } }],
+    ['shell 抛错(会话无绑定)', { conversation: { input: { shell: () => { throw new Error('no binding') } } } }],
+    ['shell 返回无 editor 的壳', { conversation: { input: { shell: () => ({}) } } }],
+    [
+      'editor 未绑宿主元素(getRootElement → null)',
+      { conversation: { input: { shell: () => ({ editor: { getRootElement: () => null } }) } } },
+    ],
+    ['editor 缺 getRootElement', { conversation: { input: { shell: () => ({ editor: {} }) } } }],
+    [
+      '宿主元素缺 focus',
+      { conversation: { input: { shell: () => ({ editor: { getRootElement: () => ({}) } }) } } },
+    ],
+  ]
+  for (const [label, extra] of cases) {
+    const env = loadPlugin({ ...base, sessions: makeComposerSessions(), ...extra })
+    event = env({ key: 'i', code: 'KeyI', ctrlKey: true })
+    check(`${label} → Ctrl+I 不吞键(no-op)`, event.propagationStopped !== true)
+  }
+
+  // 无当前会话 / current 为空串:sessions 有 conversation 也不动作
+  for (const [label, current] of [['无当前会话', undefined], ['current 为空串', '']]) {
+    const env = loadPlugin({
+      ...base,
+      sessions: { list: { getSnapshot: () => ({ ...snapshot, current }) }, binding: () => ({ ctx: actx }) },
+      conversation: {
+        input: { for: () => { throw new Error('must not resolve without a current session') } },
+      },
+    })
+    event = env({ key: 'i', code: 'KeyI', ctrlKey: true })
+    check(`${label} → Ctrl+I 不吞键`, event.propagationStopped !== true)
+  }
+
+  // 键位可经 localStorage 覆盖(与左右栏同一套 bindings 机制)
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'composer.focus': 'mod+alt+k' } }))
+  const customRoot = makeRoot()
+  const custom = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(),
+    conversation: { input: { for: () => ({ editor: { getRootElement: () => customRoot } }) } },
+  })
+  event = custom({ key: 'i', code: 'KeyI', ctrlKey: true })
+  check('覆盖键位后 ⌘/Ctrl+I 不再聚焦', customRoot.focused !== true)
+  event = custom({ key: 'k', code: 'KeyK', ctrlKey: true, altKey: true })
+  check('自定义 ⌘/Ctrl+Alt+K → 聚焦', customRoot.focused === true)
+  check('自定义键位被吞', event.propagationStopped === true)
+  storage.delete('dsh-kbd-hotkeys:v1')
+}
+
 console.log(`\n${failures === 0 ? 'ALL PASS' : `${String(failures)} FAILED`}`)
 process.exitCode = failures === 0 ? 0 : 1

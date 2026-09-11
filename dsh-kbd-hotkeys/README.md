@@ -21,11 +21,18 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 | `⌘/Ctrl+/` | 快捷键速查表 | 任意 |
 | `⌘/Ctrl+B` | 开关**左**侧栏（主键；走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+B` | 开关**右**侧栏（派生键；走 `sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
+| `⌘/Ctrl+I` | 聚焦对话**输入框**（走 `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`） | `browse` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
 
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
 > 两个侧栏开关均为 `['browse','editing']`：输入框聚焦时同样生效（带修饰键的组合不
 > 干扰文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）。
+> **聚焦输入框只放行 `browse`**：焦点已经在输入框里时该动作没有意义（`editing`），
+> 且 contenteditable 里的 `⌘/Ctrl+I` 是浏览器「斜体」默认行为（`execCommand`，
+> 绕过 Lexical 直接改 DOM），放行会与编辑器状态打架；卡片态同理（卡片自己的输入框
+> 归卡片管）。`mod` 在 `comboOf` 里同时吸收 `ctrlKey` 与 `metaKey`，所以 macOS 上
+> **⌃I 与 ⌘I 都能触发**（用户按 Ctrl+I 的习惯在 mac 上按 ⌃I 即可），Win/Linux 就是
+> Ctrl+I；两平台浏览器 DevTools 都带 `Shift`（⌘⌥I / Ctrl+Shift+I），不冲突。
 >
 > **为什么左栏拿 `⌘/Ctrl+B`、右栏拿 `⌘/Ctrl+Alt+B`**（主键给主面板）：
 > ① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器一致），也是本
@@ -102,6 +109,25 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   插件无需自己调右栏那两个 layout 方法。
   控制器在无挂载会话面（空白/hero 会话、右栏插件缺席）时 `require()` 抛错，插件兜住
   → **no-op 且不吞键**（无降级：不碰 DOM 里那个折叠按钮）。
+- 聚焦输入框（`⌘/Ctrl+I`）：**上游没有可触发的「聚焦 composer」服务面**——`conversation`
+  契约（`send` / `updateQueue` / `cancel` / `loadOlder` / `input` / `blocks`）与
+  `SessionInput` 契约（`setDraft` / `submit` / `state` …）都没有聚焦动词；
+  `commandUi.bindComposerFocus(id, fn)` 语义对口但**只 bind 不 trigger**（触发方是
+  slash 弹层的 Escape / 选中路径），当前构建里全仓无人调用它 → `focusHooks` 恒空；
+  `ConversationViewRequest.focus` 是 trajectory 视图的 callId，不是 composer 焦点。
+  因此路径是（`src/actions.ts` 的 `focusComposer`）：
+  `sessions.list.getSnapshot().current` → `sessions.binding(id).ctx`
+  → `conversation.input.for(actx)`（`for` 缺席时回退公开的 `InputHub.shell(id)`，
+  两者返回同一个 `SessionInputShell`）→ `shell.editor.getRootElement()`
+  → `focus({ preventScroll: true })`。
+  只用服务链路给出的元素，**零选择器查询、零 DOM 遍历、零事件合成**；
+  参数与上游 composer autofocus（`editor.getRootElement()?.focus({ preventScroll: true })`）
+  一致。任一环缺失 / 抛错即 no-op（不吞键，**不回退到 DOM 查询**）。
+  > **为什么不能只调 `editor.focus()`**：lexical 0.49 的 `LexicalEditor.focus()`
+  > 只做「克隆选区置 dirty + 打 `FOCUS_TAG` + 注册回调」，**没有** DOM 聚焦调用；
+  > 真正的 `rootElement.focus()` 在选区调和器里，且只在「当前 DOM 选区已等于目标
+  > 选区」的分支中执行——DOM 选区落在 composer 之外时（刚在正文里点选过文本）
+  > 它不会把键盘焦点移回输入框。所以取宿主元素后直接 `focus()` 才是可靠原语。
 - 会话跳转（`⌘/Ctrl+Alt+↑/↓`）：在**活跃会话**之间跳转。活跃 =
   正在运行（`running`）∪ 有待处理交互（待处理交互表命中）∪
   刚完成未查看（`completed`）。
@@ -154,10 +180,22 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   不属于当前请求（上一次请求残留）时按上游 `initialProgress` 语义重建空进度。
 - 计划评审键位语义以请求数据为准（`1`/`2`/`3` = 确认 / 拒绝 / 去聊天里说）；
   请求未提供「拒绝」选项时 `2` 为空操作。
+- **聚焦输入框只在 `browse` 态生效**：焦点已经在任意可编辑元素里（`editing`）时
+  `⌘/Ctrl+I` 不接管也不吞键——否则会在 contenteditable 里触发浏览器「斜体」
+  （`execCommand('italic')` 直接改 DOM，绕过 Lexical）。若你在别的输入框里想跳到
+  对话输入框，请先 `Esc` / 点击对话区域退出编辑态再按。
+- **聚焦输入框依赖 composer 已渲染**：目标会话的输入框从未挂载（例如该会话从未在
+  当前布局里显示过）时 `editor.getRootElement()` 为 `null`，动作 no-op（不吞键）；
+  空白/hero 会话、composer 被 block 停用时同理。
+- **上游把 composer 聚焦接上后本插件可再简化**：`commandUi.bindComposerFocus(id, fn)`
+  就是上游为此预留的注册口（注释写的是「overlay wiring binds the textarea focus
+  here」），当前构建里没有任何调用方；等上游补上「触发侧」或新增
+  `conversation.focusComposer()` 之后，本动作可退化为一次纯服务调用。
 
-服务注入：`['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots']`
+服务注入：`['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation']`
 （全部判空后才消费；`slots` 用于读侧栏视图 store（会话跳转顺序）与问答草稿 store，
-`layout` 用于 `⌘/Ctrl+B` 开关左栏，`sidebarRight` 用于 `⌘/Ctrl+Alt+B` 开关右栏）。
+`layout` 用于 `⌘/Ctrl+B` 开关左栏，`sidebarRight` 用于 `⌘/Ctrl+Alt+B` 开关右栏，
+`conversation` 用于 `⌘/Ctrl+I` 取 composer 的 editor 宿主元素）。
 无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表为纯 DOM 浮层）。
 
 ## 自定义键位
@@ -175,7 +213,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 
 - `bindings` 与默认表**浅合并**：只写想覆盖的动作 id（动作 id 见
   `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；两个侧栏动作
-  （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）各自独立可覆盖。
+  （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）与聚焦输入框
+  （`composer.focus`）各自独立可覆盖。
   > 未注册的动作 id 写在 `bindings` 里不会触发：分发前先查动作注册表
   > （`ACTION_BY_ID`），未注册即忽略。
 - **固定分发动作不可自定义**：`approval.allow` / `approval.reject` /
@@ -205,7 +244,9 @@ npm run check       # node --check 产物与宿主
 node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/card 态判定（DOM 桩不提供任何卡片；
                          # 问答断言直接落在卡片草稿 store 上——数字键必须写入 store、Enter 必须取自 store；
                          # 另含 ⌘/Ctrl+B → layout.toggleSidebar（左栏）/ ⌘/Ctrl+Alt+B →
-                         # sidebarRight.toggleExpanded（右栏）的两态调用、互不串场、自定义键位与无降级）
+                         # sidebarRight.toggleExpanded（右栏）的两态调用、互不串场、自定义键位与无降级；
+                         # 以及 ⌘/Ctrl+I 聚焦输入框：binding.ctx 原样传给 input.for、只认 browse 态、
+                         # for 缺席回退 shell(id)、任一环缺失/抛错一律 no-op 不吞键）
 node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序跳转（分组 / flat / 来源不可用 no-op）
                          # 与两个侧栏开关的键位 / browse·editing 态闸门
 ```

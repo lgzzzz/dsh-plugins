@@ -11,13 +11,16 @@
  *   刚完成未查看,按**侧栏可见顺序**定位)、
  *   Esc 停止当前会话的整棵运行中交互树(自身 + 直系子代理,one-shot 跳过);
  * - `browse` 浏览态(输入框失焦)与 `editing` 输入态:⌘B 开关左侧栏、
- *   ⌘⌥B 开关右侧栏。
+ *   ⌘⌥B 开关右侧栏;
+ * - `browse` 浏览态:⌘/Ctrl+I 聚焦对话输入框(上游无聚焦服务面,经
+ *   conversation.input 取 shell.editor 的宿主元素后调 focus(),见 actions.ts
+ *   的 focusComposer;不做选择器查询 / DOM 遍历 / 事件合成)。
  *
  * 实现:document 捕获阶段单一 keydown 监听,按三态分发(`card` 卡片 → `editing`
  * 输入框 → `browse` 浏览),消费 sessions / uiSession / layout / sidebarRight /
- * workspaces / slots 既有服务,会话跳转 = 活跃会话扫描(running ∪ pending 交互 ∪
- * completed,锚点定向跳跃),导航轴为侧栏顺序(工作区分组 + slots 中 workspace 视图
- * store 的本地会话顺序,每次按键重新取数);
+ * workspaces / slots / conversation 既有服务,会话跳转 = 活跃会话扫描(running ∪
+ * pending 交互 ∪ completed,锚点定向跳跃),导航轴为侧栏顺序(工作区分组 + slots 中
+ * workspace 视图 store 的本地会话顺序,每次按键重新取数);
  * 审批与问答/计划评审全部走 uiSession 待处理交互的服务级 answer()/cancel(),
  * 通用问答的选项/切题/提交直接读写**卡片自己的 Session 级 slot store**
  * (`conversation.composer` 注册项,见 question-drafts.ts),卡片实时高亮并翻题;
@@ -27,6 +30,7 @@
  */
 import {
   answerApproval,
+  focusComposer,
   hasPendingCard,
   isEditableTarget,
   moveQuestion,
@@ -39,16 +43,17 @@ import {
 } from './actions.ts'
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
-import type { ClientContext, LayoutLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, WorkspacesLike } from './types.ts'
+import type { ClientContext, ConversationLike, LayoutLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, WorkspacesLike } from './types.ts'
 
 export const name = 'dsh-kbd-hotkeys'
 
 /**
  * 浏览器半部注入的服务(模块加载器读取)。
  * workspaces 供会话切换复刻侧栏分组,slots 供读取侧栏视图 store(会话顺序),
- * layout 供 ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+Alt+B 开关右侧栏。
+ * layout 供 ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+Alt+B 开关右侧栏,
+ * conversation 供 ⌘/Ctrl+I 取 composer 的 editor 宿主元素(聚焦输入框)。
  */
-export const inject = ['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots']
+export const inject = ['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation']
 
 /** null 与 undefined 双重判空后取服务(缺失时返回 undefined)。 */
 function getService(ctx: ClientContext, serviceName: string): unknown {
@@ -69,6 +74,8 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return toggleSidebar(services)
       case 'sidebarRight.toggle':
         return toggleRightSidebar(services)
+      case 'composer.focus':
+        return focusComposer(services)
       case 'session.prev':
         return openNeighborSession(services, -1)
       case 'session.next':
@@ -104,6 +111,7 @@ export function apply(ctx: ClientContext): void {
     sidebarRight: getService(ctx, 'sidebarRight') as SidebarRightLike | undefined,
     workspaces: getService(ctx, 'workspaces') as WorkspacesLike | undefined,
     slots: getService(ctx, 'slots') as SlotsLike | undefined,
+    conversation: getService(ctx, 'conversation') as ConversationLike | undefined,
   }
 
   const config: HotkeyConfig = loadConfig()

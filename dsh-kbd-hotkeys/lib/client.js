@@ -475,6 +475,47 @@ function toggleRightSidebar(services) {
     return false;
   }
 }
+function focusComposer(services) {
+  var _a, _b, _c, _d;
+  const sessions = services.sessions;
+  const conversation = services.conversation;
+  if (sessions === null || sessions === void 0) return false;
+  if (conversation === null || conversation === void 0) return false;
+  const input = conversation.input;
+  if (input === null || input === void 0) return false;
+  const current = currentSessionId(services);
+  if (current === void 0) return false;
+  let shell;
+  let actx;
+  try {
+    actx = (_b = (_a = sessions.binding) == null ? void 0 : _a.call(sessions, current)) == null ? void 0 : _b.ctx;
+  } catch {
+    actx = void 0;
+  }
+  if (actx !== void 0 && typeof input.for === "function") {
+    try {
+      shell = (_c = input.for(actx)) != null ? _c : void 0;
+    } catch {
+      shell = void 0;
+    }
+  }
+  if (shell === void 0 && typeof input.shell === "function") {
+    try {
+      shell = (_d = input.shell(current)) != null ? _d : void 0;
+    } catch {
+      shell = void 0;
+    }
+  }
+  if (shell === null || shell === void 0) return false;
+  const editor = shell.editor;
+  if (editor === null || editor === void 0) return false;
+  if (typeof editor.getRootElement !== "function") return false;
+  const root = editor.getRootElement();
+  if (root === null || root === void 0) return false;
+  if (typeof root.focus !== "function") return false;
+  root.focus({ preventScroll: true });
+  return true;
+}
 function stopCurrentSessionTree(services) {
   var _a, _b;
   const sessions = services.sessions;
@@ -575,6 +616,10 @@ var ACTIONS = [
   // 「只保留带修饰键的全局组合」一致。
   { id: "sidebar.toggle", label: "\u5F00\u5173\u5DE6\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "sidebarRight.toggle", label: "\u5F00\u5173\u53F3\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
+  // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义,且 contenteditable
+  // 里 ⌘/Ctrl+I 是浏览器「斜体」默认行为(execCommand,绕过 Lexical),card 态则归卡片
+  // 自己的输入框。
+  { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u4F1A\u8BDD", states: ["browse"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u65E0\u5BA1\u6279\u5361\u7247\u65F6;\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
@@ -597,6 +642,10 @@ var DEFAULT_BINDINGS = {
   //   是派生面板,拿"左栏 + alt"这一档栈式修饰键。
   "sidebar.toggle": "mod+b",
   "sidebarRight.toggle": "mod+alt+b",
+  // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
+  // macOS 上 ⌃I 与 ⌘I 都能触发(用户要的 Ctrl+I 在 mac 上按 ⌃I 即可),Win/Linux
+  // 就是 Ctrl+I;两平台的浏览器 DevTools 都带 Shift(⌘⌥I / Ctrl+Shift+I),不冲突。
+  "composer.focus": "mod+i",
   "session.prev": "mod+alt+arrowup",
   "session.next": "mod+alt+arrowdown",
   // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。
@@ -824,7 +873,7 @@ function createOverlays(deps) {
 
 // src/client.ts
 var name = "dsh-kbd-hotkeys";
-var inject = ["sessions", "uiSession", "layout", "sidebarRight", "workspaces", "slots"];
+var inject = ["sessions", "uiSession", "layout", "sidebarRight", "workspaces", "slots", "conversation"];
 function getService(ctx, serviceName) {
   if (ctx.get === void 0 || ctx.get === null) return void 0;
   const value = ctx.get(serviceName);
@@ -842,6 +891,8 @@ function runAction(id, services, overlays) {
         return toggleSidebar(services);
       case "sidebarRight.toggle":
         return toggleRightSidebar(services);
+      case "composer.focus":
+        return focusComposer(services);
       case "session.prev":
         return openNeighborSession(services, -1);
       case "session.next":
@@ -868,7 +919,8 @@ function apply(ctx) {
     layout: getService(ctx, "layout"),
     sidebarRight: getService(ctx, "sidebarRight"),
     workspaces: getService(ctx, "workspaces"),
-    slots: getService(ctx, "slots")
+    slots: getService(ctx, "slots"),
+    conversation: getService(ctx, "conversation")
   };
   const config = loadConfig();
   const actionByCombo = comboActionMap(config.bindings);
