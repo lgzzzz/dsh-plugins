@@ -13,7 +13,7 @@
  *   ←/→ = 上游 pager 的 nav.prev / nav.next 语义(仅改题号、草稿原样保留、首末题
  *   不循环);Enter = 保留上游 continueFlow 的推进语义(当前题已作答且非末题 →
  *   翻到下一题),末题仅在全部题目完成后按 store 的草稿成批结算(不跳回未完成题);
- * - 侧栏:layout.toggleSidebar();
+ * - 侧栏:layout.toggleSidebar()(左栏) / sidebarRight.toggleExpanded()(右栏);
  * - 会话跳转:sessions 快照 + slots 里的侧栏视图 store(顺序)+ sessions.open(id);
  * - Esc 停止:sessions.binding(id).session.cancel();
  * - `card` 态判定:当前会话在 uiSession 待处理交互表中命中(不依赖卡片是否已渲染)。
@@ -327,7 +327,7 @@ export function submitQuestion(services: Services): boolean {
 }
 
 /* ------------------------------------------------------------------ *
- * 态判定(DOM 事件目标)+ 其余服务级动作(侧栏 / 停止会话树)
+ * 态判定(DOM 事件目标)+ 其余服务级动作(左右栏开关 / 停止会话树)
  * ------------------------------------------------------------------ */
 
 /** 焦点是否在文本编辑目标上(分发 `editing` 态判定)。 */
@@ -338,12 +338,39 @@ export function isEditableTarget(target: EventTarget | null | undefined): boolea
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
 
-/** 开关侧栏(layout 服务)。 */
+/**
+ * 开关左侧栏(`layout.toggleSidebar()`,⌘/Ctrl+B)。
+ *
+ * 宽屏下在契约默认宽(280px)与 0 之间切换,窄屏(<1024)下只翻转 `narrowExpanded`
+ * 覆盖——即 AppFrame 左列轨道本身。服务缺席(无 layout 行)时 no-op(不吞键)。
+ */
 export function toggleSidebar(services: Services): boolean {
   const layout = services.layout
   if (layout === null || layout === undefined || typeof layout.toggleSidebar !== 'function') return false
   layout.toggleSidebar()
   return true
+}
+
+/**
+ * 开关右侧栏(`sidebarRight.toggleExpanded()`,⌘/Ctrl+Alt+B,
+ * 与右栏头部的折叠按钮同一入口)。
+ *
+ * 一次调用即完成「面板 + AppFrame 右栏轨道」的开合:展开态是会话级 slot store
+ * 状态,seat 重渲染后由自己的 useLayoutEffect 调 `layout.openRightbar /
+ * closeRightbar` 把轨道同步给 AppFrame(见 dsh-client-ui-sidebar-right/lib/client.js
+ * 的 RightbarSeat → syncPresentation);控制器 `require()` 在无挂载会话面时抛错
+ * (空白/hero 会话、右栏插件缺席),这里兜住 → no-op(返回 false,不吞键)。
+ */
+export function toggleRightSidebar(services: Services): boolean {
+  const sidebarRight = services.sidebarRight
+  if (sidebarRight === null || sidebarRight === undefined) return false
+  if (typeof sidebarRight.toggleExpanded !== 'function') return false
+  try {
+    sidebarRight.toggleExpanded()
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**

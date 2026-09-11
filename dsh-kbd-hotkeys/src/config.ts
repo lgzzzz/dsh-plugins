@@ -45,9 +45,11 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'question.next', label: '问题:→ 下一题', group: '问答卡片', states: ['card'] },
   { id: 'question.submit', label: '问题:Enter 下一题 / 末题提交', group: '问答卡片', states: ['card'] },
   // 会话级
-  // sidebar.toggle 额外放行 editing:⌘/Ctrl+B 在输入框聚焦时同样开关侧栏
-  // (带修饰键的组合不干扰文本编辑,与 `editing` 态「只保留带修饰键的全局组合」一致)。
-  { id: 'sidebar.toggle', label: '开关侧栏', group: '会话', states: ['browse', 'editing'] },
+  // 左栏为主键(⌘/Ctrl+B,跨应用肌肉记忆),右栏为派生键(⌘/Ctrl+Alt+B,叠加 alt);
+  // 两者都额外放行 editing:带修饰键的组合不干扰文本编辑,与 `editing` 态
+  // 「只保留带修饰键的全局组合」一致。
+  { id: 'sidebar.toggle', label: '开关左侧栏', group: '会话', states: ['browse', 'editing'] },
+  { id: 'sidebarRight.toggle', label: '开关右侧栏', group: '会话', states: ['browse', 'editing'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'session.next', label: '下一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'session.stop', label: '停止当前会话(无审批卡片时;含运行中子代理)', group: '会话', states: ['card', 'editing', 'browse'] },
@@ -73,7 +75,13 @@ export const FIXED_KEYS: Readonly<Record<string, string>> = {
 
 /** 默认键位(动作 id → 归一化组合键);固定分发的动作(见 FIXED_KEYS)不在此表。 */
 export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
+  // 侧栏开关的两个键位按「主键给主面板」分配:
+  // - 左栏 = ⌘/Ctrl+B:与 VS Code / Slack / 各类编辑器的侧栏开关一致,也是上游
+  //   `layout.toggleSidebar()` 的本名(sidebar / sidebarCol 不带限定词就指左栏);
+  // - 右栏 = ⌘/Ctrl+Alt+B:右栏在上游叫 rightbar(rightbarShown / rightbarTrack),
+  //   是派生面板,拿"左栏 + alt"这一档栈式修饰键。
   'sidebar.toggle': 'mod+b',
+  'sidebarRight.toggle': 'mod+alt+b',
   'session.prev': 'mod+alt+arrowup',
   'session.next': 'mod+alt+arrowdown',
   // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。

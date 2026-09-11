@@ -121,7 +121,7 @@ function boot(services) {
 }
 
 const pending = { pendingInteractions: { getSnapshot: () => new Map() } }
-const layout = { toggleSidebar() {} }
+const sidebarRight = { toggleExpanded() {} }
 
 /** 会话快照:running / completed 决定活跃集。 */
 function snapshotOf(current, rows) {
@@ -176,7 +176,7 @@ function check(label, actual, expected) {
   const env = boot({
     sessions: { list: { getSnapshot: () => snapshot } },
     uiSession: pending,
-    layout,
+    sidebarRight,
     workspaces: {
       list: {
         getSnapshot: () => ({
@@ -215,7 +215,7 @@ function check(label, actual, expected) {
   const env = boot({
     sessions: { list: { getSnapshot: () => snapshot } },
     uiSession: pending,
-    layout,
+    sidebarRight,
     workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
     slots,
   })
@@ -248,7 +248,7 @@ function check(label, actual, expected) {
     const env = boot({
       sessions,
       uiSession: pending,
-      layout,
+      sidebarRight,
       workspaces: workspacesSnapshot === undefined ? undefined : { list: { getSnapshot: () => workspacesSnapshot } },
       ...extra,
     })
@@ -259,26 +259,33 @@ function check(label, actual, expected) {
 }
 
 /* ------------------------------------------------------------------ *
- * 场景 4:⌘/Ctrl+B 在 editing 态(输入框聚焦)也开关侧栏
+ * 场景 4:⌘/Ctrl+B(左栏)与 ⌘/Ctrl+Alt+B(右栏)在 browse / editing 态都生效
  * ------------------------------------------------------------------ */
 {
-  console.log('\n--- 场景 4:⌘/Ctrl+B 的态闸门 ---')
+  console.log('\n--- 场景 4:侧栏开关的键位与态闸门 ---')
   const snapshot = snapshotOf('s-1', [{ id: 's-1', running: false, completed: false, updatedAt: 1 }])
-  let toggles = 0
+  let left = 0
+  let right = 0
   const env = boot({
     sessions: { list: { getSnapshot: () => snapshot } },
     uiSession: pending,
-    layout: { toggleSidebar: () => { toggles += 1 } },
+    layout: { toggleSidebar: () => { left += 1 } },
+    sidebarRight: { toggleExpanded: () => { right += 1 } },
     workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
     slots: undefined,
   })
   const editable = new FakeHTMLElement('DIV')
   editable.isContentEditable = true
 
-  const browseEvent = env.press('b', { altKey: false })
-  check('browse 态 ⌘/Ctrl+B → toggleSidebar + 吞键', [toggles, browseEvent.propagationStopped], [1, true])
-  const editingEvent = env.press('b', { altKey: false, target: editable })
-  check('editing 态 ⌘/Ctrl+B → toggleSidebar + 吞键', [toggles, editingEvent.propagationStopped], [2, true])
+  let event = env.press('b', { altKey: false })
+  check('browse 态 ⌘/Ctrl+B → 左栏 + 吞键', [left, right, event.propagationStopped], [1, 0, true])
+  event = env.press('b', { altKey: false, target: editable })
+  check('editing 态 ⌘/Ctrl+B → 左栏 + 吞键', [left, right, event.propagationStopped], [2, 0, true])
+
+  event = env.press('b')
+  check('browse 态 ⌘/Ctrl+Alt+B → 右栏 + 吞键', [left, right, event.propagationStopped], [2, 1, true])
+  event = env.press('b', { target: editable })
+  check('editing 态 ⌘/Ctrl+Alt+B → 右栏 + 吞键', [left, right, event.propagationStopped], [2, 2, true])
 }
 
 console.log(failures === 0 ? '\nall dispatch probes passed' : `\n${failures} probe(s) FAILED`)

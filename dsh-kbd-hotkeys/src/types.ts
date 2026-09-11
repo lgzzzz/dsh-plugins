@@ -246,18 +246,38 @@ export interface SessionsLike {
   binding?(sessionId: string): SessionBindingLike | undefined
 }
 
-/** layout 服务消费面(ctx.reflect.provide("layout", …) 的 LayoutController)。 */
+/**
+ * layout 服务消费面(ctx.reflect.provide("layout", …) 的 LayoutController)。
+ * `toggleSidebar()` 开关**左侧栏**:宽屏下在契约默认宽(280)与 0 之间切换,
+ * 窄屏(<1024)下只翻转 `narrowExpanded` 覆盖——即 AppFrame 左列轨道本身。
+ */
 export interface LayoutLike {
   toggleSidebar?(): void
-  openDetails?(): void
-  closeDetails?(): void
+}
+
+/**
+ * sidebarRight 服务消费面(ctx.reflect.provide("sidebarRight", …) 的控制器,
+ * 见 dsh-client-ui-sidebar-right/lib/client.js 的 SidebarRightController)。
+ * - `toggleExpanded()`:反转**已挂载会话面**的右栏面板展开态,与右栏头部的
+ *   `[data-sidebar-right-toggle]` 折叠按钮同一入口(store 动作 toggleExpanded);
+ *   `require()` 在无挂载会话面(空白/hero 会话、右栏插件缺席)时抛错,调用方兜住;
+ * - 面板展开态是会话级 store 状态:seat 重渲染后由自己的 useLayoutEffect 调
+ *   `layout.openRightbar / closeRightbar` 同步 AppFrame 的右栏轨道,故本插件
+ *   无需自己调 layout 的右栏那两个方法。
+ */
+export interface SidebarRightLike {
+  toggleExpanded?(): void
+  isExpanded?(): boolean
 }
 
 /** 本插件解析后的服务集合(get 结果全部判空后才装进来)。 */
 export interface Services {
   sessions: SessionsLike | undefined
   uiSession: UiSessionLike | undefined
+  /** layout 服务:只用于开关左侧栏(⌘/Ctrl+B)。 */
   layout: LayoutLike | undefined
+  /** sidebarRight 服务:只用于开关右侧栏(⌘/Ctrl+Alt+B)。 */
+  sidebarRight: SidebarRightLike | undefined
   workspaces: WorkspacesLike | undefined
   /** slots 服务:只用于读侧栏视图 store(会话跳转顺序的权威来源)。 */
   slots: SlotsLike | undefined

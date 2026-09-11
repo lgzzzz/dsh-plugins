@@ -14,6 +14,11 @@
  * 数字键必须写进这份 store(卡片才会高亮,且不翻题)、←/→ 必须只改题号(草稿原样保留)、
  * Enter 必须从这份 store 取草稿(非末题推进、末题结算)——插件不得再持有任何私有镜像。
  *
+ * 另含侧栏开关断言:⌘/Ctrl+B → `layout.toggleSidebar()`(左栏)、
+ * ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`(右栏),两者在 browse / editing
+ * 两态都生效且互不串场;服务缺席或抛错(无挂载会话面)时 no-op 且不吞键;左栏键位
+ * 可经 localStorage 自定义且不影响右栏默认键位。
+ *
  * 用法: node test-services.mjs
  */
 import { readFileSync } from 'node:fs'
@@ -183,7 +188,7 @@ const services = {
     pendingInteractions: { getSnapshot: () => pending },
     resolve: (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined),
   },
-  layout: { toggleSidebar() {} },
+  sidebarRight: { toggleExpanded() {} },
   workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
   slots: composerSlots(draft),
 }
@@ -526,7 +531,7 @@ console.log('\n--- 权威来源不可用 → no-op(无降级) ---')
         pendingInteractions: { getSnapshot: () => isolated },
         resolve: (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined),
       },
-      layout: { toggleSidebar() {} },
+      sidebarRight: { toggleExpanded() {} },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
       ...extra,
     })
@@ -548,7 +553,7 @@ console.log('\n--- 兼容回退:仅 pendingSnapshot ---')
   const legacyServices = {
     sessions,
     uiSession: { pendingSnapshot: legacy },
-    layout: { toggleSidebar() {} },
+    sidebarRight: { toggleExpanded() {} },
     workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
   }
   const pressLegacy = loadPlugin(legacyServices)
@@ -561,6 +566,79 @@ console.log('\n--- 兼容回退:仅 pendingSnapshot ---')
   const event = pressLegacy({ key: 'Enter', code: 'Enter' })
   check('pendingSnapshot 回退仍可应答', same(log.answer, ['allowed-once']), JSON.stringify(log.answer))
   check('回退路径吞键', event.propagationStopped === true)
+}
+
+// ===========================================================================
+// 阶段 3:⌘/Ctrl+B → 左栏(layout.toggleSidebar)、⌘/Ctrl+Alt+B → 右栏
+//          (sidebarRight.toggleExpanded);两键互不串场,服务缺席一律不吞键
+// ===========================================================================
+console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+Alt+B → 左右栏开关 ---')
+{
+  const base = {
+    sessions,
+    uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
+    workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+  }
+
+  let left = 0
+  let right = 0
+  const both = loadPlugin({
+    ...base,
+    layout: { toggleSidebar: () => { left += 1 } },
+    sidebarRight: { toggleExpanded: () => { right += 1 } },
+  })
+
+  // ⌘/Ctrl+B:只打左栏
+  let event = both({ key: 'b', code: 'KeyB', ctrlKey: true })
+  check('browse 态 ⌘/Ctrl+B → layout.toggleSidebar(左栏)', same([left, right], [1, 0]), `${left},${right}`)
+  check('browse 态 ⌘/Ctrl+B 被吞', event.propagationStopped === true)
+
+  // ⌘/Ctrl+Alt+B:只打右栏
+  event = both({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })
+  check('browse 态 ⌘/Ctrl+Alt+B → sidebarRight.toggleExpanded(右栏)', same([left, right], [1, 1]), `${left},${right}`)
+  check('browse 态 ⌘/Ctrl+Alt+B 被吞', event.propagationStopped === true)
+
+  // editing 态(焦点在输入框)两个键位同样生效
+  event = both({ key: 'b', code: 'KeyB', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 ⌘/Ctrl+B → 左栏', same([left, right], [2, 1]), `${left},${right}`)
+  check('editing 态 ⌘/Ctrl+B 被吞', event.propagationStopped === true)
+  event = both({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 ⌘/Ctrl+Alt+B → 右栏', same([left, right], [2, 2]), `${left},${right}`)
+  check('editing 态 ⌘/Ctrl+Alt+B 被吞', event.propagationStopped === true)
+
+  // 旧配置仍可用:sidebar.toggle 是左栏的合法动作 id(键位可自定义)
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'sidebar.toggle': 'mod+alt+s' } }))
+  let customLeft = 0
+  let customRight = 0
+  const custom = loadPlugin({
+    ...base,
+    layout: { toggleSidebar: () => { customLeft += 1 } },
+    sidebarRight: { toggleExpanded: () => { customRight += 1 } },
+  })
+  event = custom({ key: 'b', code: 'KeyB', ctrlKey: true })
+  check('左栏自定义键位后 ⌘/Ctrl+B 不再触发左栏', same([customLeft, customRight], [0, 0]), `${customLeft},${customRight}`)
+  event = custom({ key: 's', code: 'KeyS', ctrlKey: true, altKey: true })
+  check('自定义 ⌘/Ctrl+Alt+S → 左栏', same([customLeft, customRight], [1, 0]), `${customLeft},${customRight}`)
+  event = custom({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })
+  check('右栏默认键位不受左栏自定义影响', same([customLeft, customRight], [1, 1]), `${customLeft},${customRight}`)
+  storage.delete('dsh-kbd-hotkeys:v1')
+
+  // 无降级:服务缺席 / 无挂载会话面(控制器 require 抛错)→ no-op 且不吞键
+  const missing = loadPlugin(base)
+  event = missing({ key: 'b', code: 'KeyB', ctrlKey: true })
+  check('layout 缺席 → ⌘/Ctrl+B 不吞键', event.propagationStopped !== true)
+  event = missing({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })
+  check('sidebarRight 缺席 → ⌘/Ctrl+Alt+B 不吞键', event.propagationStopped !== true)
+
+  const dead = loadPlugin({
+    ...base,
+    layout: { toggleSidebar: () => { throw new Error('layout: not mounted') } },
+    sidebarRight: { toggleExpanded: () => { throw new Error('sidebarRight: no session surface is mounted') } },
+  })
+  event = dead({ key: 'b', code: 'KeyB', ctrlKey: true })
+  check('layout 抛错 → ⌘/Ctrl+B 不吞键', event.propagationStopped !== true)
+  event = dead({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })
+  check('无挂载会话面(抛错)→ ⌘/Ctrl+Alt+B 不吞键', event.propagationStopped !== true)
 }
 
 console.log(`\n${failures === 0 ? 'ALL PASS' : `${String(failures)} FAILED`}`)
