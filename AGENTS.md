@@ -68,10 +68,13 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `session.stop` | `Esc`（仅当前会话无待审批卡片时） | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
-已移除的动作：**会话视图标签切换**（`view.prev` / `view.next`，⌘/Ctrl+Alt+←/→）——
-其唯一实现路径是 DOM 点击（`selectView` / `openView` 是 slot 注入的 React 回调，
-无跨插件服务面；活跃视图存于 ui-conversation 的 per-session slot store，外部不可读），
-该键位与对应代码（`switchView` / `findSessionViewTablist`）已整体删除。
+已移除的动作：**会话视图标签切换**（`view.prev` / `view.next`，⌘/Ctrl+Alt+←/→），
+该键位与对应代码（`switchView` / `findSessionViewTablist`）已整体删除。当初记录的
+删除理由（「唯一实现路径是 DOM 点击 `selectView`」「活跃视图外部不可读」）**不成立**，
+只是当时未找到取数面的结论：`selectView` / `openView` 确实只是 slot 注入的 React
+回调、不是服务方法，但会话视图的选中态落在 ui-conversation 的 per-session slot
+store 上，外部可经公开 slots API 解析到**同一活实例**读写，零 DOM 即可切换——取证与
+做法见下文「无服务面 UI 状态的取数范式」。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
 `pendingSnapshot` 为同源私有字段，仅作兼容回退）；审批为**固定单键** `Enter`（允许）/
@@ -87,6 +90,75 @@ store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slot
 写入，含数字键不翻题、`←`/`→` 只改题号、首末题不循环、Enter 非末题推进 / 末题未完成不结算）与
 `node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，
 覆盖分组 / flat / 权威来源不可用时 no-op——**无降级**）。
+
+## 无服务面 UI 状态的取数范式（slot store）
+
+有些 UI 状态上游**没有** cordis 服务方法，只存在于某个 slot 注册项挂载的 per-session
+store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本仓库的问答卡片草稿
+`dsh-kbd-hotkeys/src/question-drafts.ts` 与侧栏视图顺序 `src/sidebar-order.ts`
+已在用）：
+
+1. `slots.entries('<slot 名>')` → 该 slot 的注册项；带 `store` 字段的那一项即承载
+   目标状态的 store handle（`SlotsService.entries` 与注册项的 `store` 都是公开面）；
+2. `uiSession.resolve(sessionId)` → 该会话**已物化的作用域绑定**
+   `{ key: sessionId, ctx, hooks, keyedHooks, props }`（`uiSession.resolve` →
+   `createMaterializedBinding` → `materialize`，其内部就调了 `slots.bindStoreScope`）；
+3. `slots.resolveStore(handle, binding)` → **活实例**：`getSnapshot()` / `actions` /
+   `subscribe`。
+
+渲染端组件拿到的 `useStore` / `actions` 也来自同一句
+`resolveStore(entry.store, scopeBinding)`（`dsh-client-ui-renderer` 的 `standardKit`），
+因此外部写入与鼠标操作共用**同一份内存态**、React 订阅者立即重渲染，不是镜像。
+**无降级**：任一环节不可用（注册项未挂载 / 无该 handle / `uiSession.resolve` 返回
+`undefined` / `resolveStore` 抛 `store handle is not registered`）即 no-op，
+不得回退到 DOM 点击。
+
+### 会话视图 tab 的零 DOM 切换（结论：可以）
+
+对话显示区域头部那排 `对话 / 轨迹` 标签（`role="tablist"`）属于上式：**切换可以完全
+不用 DOM**。
+
+- **渲染**：`dsh-client-ui-conversation` 的 `ConversationSessionHeader` 输出
+  `role="tablist"`，每个 tab 是 `role="tab"` 的 button、`onClick → selectView(id)`；
+  **仅在注册视图数 > 1 时渲染**，空白/hero 会话 `hideChrome` 时不渲染。
+- **tab 列表**：slot `conversation.view`（`kind: list, scope: session`）注册项的投影——
+  上游 `viewTabs()` 遍历 `slots.entries('conversation.view')` 取 `options.id` 与
+  `resolveSlotLabel(options.label)`。当前组合恰为 `chat`（`dsh-client-ui-chat`，order 0）
+  与 `trajectory`（`dsh-client-ui-trajectory`，order 10）。
+- **选中态**：per-session conversation store `createConversationStore()` =
+  `{ draft, view, viewRequest }`（`persist: "dsh.conversation"` →
+  `localStorage["dsh.conversation.<sessionId>"]`），注册为 slot `conversation.session`
+  与 `conversation.session.header` 两条注册项的 `store`。头部的
+  `selectView = activateView(sessionId, view) + actions.setView(view)`，会话体的
+  `openView = activateView + actions.openView(view, focus)`。
+- **零 DOM 做法**：按上式解析到该 store 活实例 → `store.actions.setView(viewId)`
+  （切换，UI 立即重渲染）；可先调 `ctx.uiConversation.binding(sessionId).activate(viewId)`
+  复刻上游 `activateView` 的副作用（`ctx.uiConversation` 是公开服务，
+  构造里 `super(ctx, "uiConversation")`）。读当前 = `store.getSnapshot().view`；
+  枚举 = `slots.entries('conversation.view')`；带焦点的"打开" =
+  `actions.openView(view, focus)`（由目标视图消费 `viewRequest` 后
+  `completeViewRequest()`）。
+- **没有服务方法**：`ctx.conversation`（send / cancel / loadOlder / updateQueue / …）
+  与 `ctx.uiConversation`（binding / activate / target / views / events）都不含视图
+  选中态的读写；选中态只在那份 slot store 里。
+- **没有"打开/关闭"语义**：视图是插件注册项、不是可开关的实例，tab 栏是选中器。
+  第三方只能新增/注销自己的 `conversation.view` 条目
+  （`ctx.slots.inject('conversation.view', () => ctx.slots.register({name, id, order, label}, Component))`），
+  无法隐藏或关闭 `chat` / `trajectory`。
+- **限制与风险**：①注册项只在 `main.conversation` 挂载期间存在（DSH 自带文档：
+  declaredBy "an entry in 'conversation.session' … exists while that entry is mounted"），
+  缺失时 `entries` 为空 / `resolveStore` 抛错 → 必须判空 no-op；②写入未注册的 id 时
+  `resolveActiveView` 回落到 `chat`（`view` 字段留死 id），切换前宜用枚举结果校验；
+  ③`slots.entries` / `entry.store` / `resolveStore` / `uiSession.resolve` 是公开面，
+  但"从注册项挖 store + 快照字段名（`view`）"属私有形状耦合，上游改注册结构会断；
+  ④`localStorage` 里的 `dsh.conversation.<sessionId>.view` 只可作观测，写它不触发 UI。
+
+> 依据（本机 `0.1.5-rc.2`，`<dsh>/node_modules/@deepseek-ai/`）：
+> `dsh-client-ui-conversation/lib/client.js` 15022 / 15073 / 15094 / 14986-14988 /
+> 15124-15128 / 16541-16552 / 2708-2745 / 16673 / 16677-16680 / 16704 / 16710-16713；
+> `dsh-client-ui-renderer/lib/client.js` 605-611 / 1188 / 1286 / 1329-1341；
+> `dsh-client-ui-session/lib/client.js` 193-202 / 258-265；
+> `dsh-client-ui-chat/lib/client.js` 8290、`dsh-client-ui-trajectory/lib/client.js` 8225。
 
 ## 包结构与约定
 
@@ -259,5 +331,5 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 
 | 路径 | 内容 |
 | --- | --- |
-| `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项 |
+| `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项，以及「无服务面 UI 状态的取数范式（slot store）」（含会话视图 tab 的零 DOM 切换） |
 | 各插件 `README.md` | 功能说明、加载方式与构建说明（`dsh-fullwidth-chat`、`dsh-text-editor` 暂无 README，功能见其 `package.json` 的 `description` 与本文档插件清单） |
