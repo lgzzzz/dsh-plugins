@@ -508,36 +508,6 @@ function cancelIfRunning(id, sessions, cancelled) {
     return false;
   }
 }
-function switchView(delta) {
-  const tablist = findSessionViewTablist();
-  if (tablist === null) return false;
-  const tabs = [...tablist.querySelectorAll('[role="tab"]')];
-  if (tabs.length === 0) return false;
-  const current = tabs.findIndex((el) => el.getAttribute("aria-selected") === "true");
-  const base = current < 0 ? delta > 0 ? -1 : tabs.length : current;
-  const nextIndex = (base + delta + tabs.length) % tabs.length;
-  const nextTab = tabs[nextIndex];
-  if (nextTab === void 0) return false;
-  nextTab.click();
-  return true;
-}
-function findSessionViewTablist() {
-  const tablists = document.querySelectorAll('[role="tablist"]');
-  for (const tablist of tablists) {
-    const tabs = tablist.querySelectorAll('[role="tab"]');
-    if (tabs.length === 0) continue;
-    let hasControls = false;
-    for (const tab of tabs) {
-      const controls = tab.getAttribute("aria-controls");
-      if (controls !== null && controls !== "") {
-        hasControls = true;
-        break;
-      }
-    }
-    if (!hasControls) return tablist;
-  }
-  return null;
-}
 function openNeighborSession(services, delta) {
   var _a, _b;
   const sessions = services.sessions;
@@ -578,26 +548,24 @@ function activeSessionIds(snapshot, services) {
 
 // src/config.ts
 var ACTIONS = [
-  // P0 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
+  // 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
   // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;审批 Enter/Esc 与问答的
   // 数字键/方向键/Enter 由分发器固定分发(单键不参与 bindings 覆盖,避免与输入框
   // 光标移动 / 发送消息冲突)。
-  { id: "approval.allow", label: "\u5BA1\u6279:\u5141\u8BB8\u4E00\u6B21", group: "\u5BA1\u6279(P0)", states: ["card"] },
-  { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279(P0)", states: ["card"] },
-  { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879(\u4E0D\u7FFB\u9898)", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
-  { id: "question.prev", label: "\u95EE\u9898:\u2190 \u4E0A\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
-  { id: "question.next", label: "\u95EE\u9898:\u2192 \u4E0B\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
-  { id: "question.submit", label: "\u95EE\u9898:Enter \u4E0B\u4E00\u9898 / \u672B\u9898\u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247(P0)", states: ["card"] },
-  // P1 会话级
+  { id: "approval.allow", label: "\u5BA1\u6279:\u5141\u8BB8\u4E00\u6B21", group: "\u5BA1\u6279", states: ["card"] },
+  { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279", states: ["card"] },
+  { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879(\u4E0D\u7FFB\u9898)", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
+  { id: "question.prev", label: "\u95EE\u9898:\u2190 \u4E0A\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
+  { id: "question.next", label: "\u95EE\u9898:\u2192 \u4E0B\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
+  { id: "question.submit", label: "\u95EE\u9898:Enter \u4E0B\u4E00\u9898 / \u672B\u9898\u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
+  // 会话级
   // sidebar.toggle 额外放行 editing:⌘/Ctrl+B 在输入框聚焦时同样开关侧栏
   // (带修饰键的组合不干扰文本编辑,与 `editing` 态「只保留带修饰键的全局组合」一致)。
-  { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD(P1)", states: ["browse", "editing"] },
-  { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
-  { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
-  { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u65E0\u5BA1\u6279\u5361\u7247\u65F6;\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD(P1)", states: ["card", "editing", "browse"] },
-  { id: "view.prev", label: "\u4E0A\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["card", "editing", "browse"] },
-  { id: "view.next", label: "\u4E0B\u4E00\u4E2A\u4F1A\u8BDD\u89C6\u56FE\u6807\u7B7E", group: "\u4F1A\u8BDD\u89C6\u56FE(P1)", states: ["card", "editing", "browse"] },
-  { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F(P1)", states: ["card", "editing", "browse"] }
+  { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
+  { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u65E0\u5BA1\u6279\u5361\u7247\u65F6;\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F", states: ["card", "editing", "browse"] }
 ];
 var ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 var FIXED_KEYS = {
@@ -615,8 +583,6 @@ var DEFAULT_BINDINGS = {
   // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。
   // 无运行中会话时不消费该键,页面默认 Esc 行为保留(浮层打开时由浮层优先处理)。
   "session.stop": "escape",
-  "view.prev": "mod+alt+arrowleft",
-  "view.next": "mod+alt+arrowright",
   "help.toggle": "mod+/"
 };
 function comboActionMap(bindings) {
@@ -862,10 +828,6 @@ function runAction(id, services, overlays) {
       case "session.stop":
         stopCurrentSessionTree(services);
         return false;
-      case "view.prev":
-        return switchView(-1);
-      case "view.next":
-        return switchView(1);
       case "help.toggle":
         overlays.toggleHelp();
         return true;

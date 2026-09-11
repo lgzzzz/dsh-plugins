@@ -18,8 +18,9 @@
  * - Esc 停止:sessions.binding(id).session.cancel();
  * - `card` 态判定:当前会话在 uiSession 待处理交互表中命中(不依赖卡片是否已渲染)。
  *
- * DOM 级(上游无可用服务面,维持点击):
- * - 会话视图标签切换(switchView):selectView 是 slot 注入的 React 回调,无服务面。
+ * DOM 级:仅 `editing` 态判定消耗 DOM(isEditableTarget,事件目标判定),
+ * 不再有任何点击型动作——原「会话视图标签切换」(selectView 为 slot 注入的
+ * React 回调、无服务面)及其 ⌘/Ctrl+Alt+←/→ 键位已移除。
  *
  * 源码事实依据(以 <dsh>/node_modules/@deepseek-ai 各包 lib/client.js 为准):
  * - uiSession.pendingInteractions.getSnapshot():sessionId → 待处理交互(公开面;
@@ -32,9 +33,7 @@
  *   取活实例,动作面 actions.replace/clear(dsh-client-ui-renderer 的 resolveStore、
  *   dsh-web-frontend 的 defineStore);
  * - 计划评审卡片的 DOM 底部按钮顺序实为 去聊天里说 / 拒绝 / 确认执行,故键位语义
- *   改为按 intent.approve 标签判定,不再依赖按钮顺序;
- * - 会话视图 tablist:tabs.length>1 时渲染 role=tab 的 button(全应用仅此一个
- *   tablist 的 tab 不带 aria-controls)。
+ *   改为按 intent.approve 标签判定,不再依赖按钮顺序。
  */
 import type {
   PendingInteractionLike,
@@ -116,7 +115,7 @@ function fireAndForget(run: () => Promise<void> | void): boolean {
 }
 
 /* ------------------------------------------------------------------ *
- * 审批(P0,任意态)
+ * 审批(任意态,回合级高频)
  * ------------------------------------------------------------------ */
 
 /**
@@ -131,7 +130,7 @@ export function answerApproval(services: Services, outcome: 'allowed-once' | 're
 }
 
 /* ------------------------------------------------------------------ *
- * 问答 / 计划评审(P0,`card` 态)
+ * 问答 / 计划评审(`card` 态,回合级高频)
  * ------------------------------------------------------------------ */
 
 /** 单题是否已作答(选中过选项或填过自定义文本)——上游 QuestionFlow.answered 同语义。 */
@@ -328,7 +327,7 @@ export function submitQuestion(services: Services): boolean {
 }
 
 /* ------------------------------------------------------------------ *
- * DOM 级(上游无可用服务面)
+ * 态判定(DOM 事件目标)+ 其余服务级动作(侧栏 / 停止会话树)
  * ------------------------------------------------------------------ */
 
 /** 焦点是否在文本编辑目标上(分发 `editing` 态判定)。 */
@@ -406,65 +405,6 @@ function cancelIfRunning(id: string, sessions: SessionsLike, cancelled: Set<stri
   } catch {
     return false
   }
-}
-
-/**
- * 会话视图标签切换:在同一个会话的头部视图 tab(conversation.view)之间切换。
- *
- * 定位方式是「内容判别」而非「DOM 位置」:遍历整页 [role="tablist"],返回
- * 其 tab(role="tab")均不带 aria-controls 的那一个。全应用共有 4 个 tablist,
- * 除会话视图外其余 3 个(cordis 源码、trajectory 详情、settings-plugins)的
- * tab 均带 id + aria-controls,因此「无 aria-controls」可唯一锁定会话头部
- * 的视图 tablist(conversation.session.header,见 dsh-client-ui-conversation)。
- * 不依赖 data-phase/header 的 DOM 层级,兼容 slot 引擎对头部内容的任意渲染
- * (直接子节点 / 包裹层 / 挂载到他处)。
- *
- * 每个视图为一个 role=tab 的 <button>,aria-selected 标记当前,点击触发
- * selectView(view.id)。切换为循环:最右标签按下一个回到第一个,最左标签按
- * 上一个跳到最后一个(模运算回绕);未选中时按方向落到第一个/最后一个。
- *
- * 注:selectView / openView 是 slot 注入的 React 回调,上游没有可调用的服务面,
- * 故本动作维持 DOM 点击。
- *
- * @param delta - 方向:1 = 下一个标签, -1 = 上一个标签。
- */
-export function switchView(delta: number): boolean {
-  const tablist = findSessionViewTablist()
-  if (tablist === null) return false
-  const tabs = [...tablist.querySelectorAll<HTMLElement>('[role="tab"]')]
-  if (tabs.length === 0) return false
-  // 循环切换:最右按右回到第一个,最左按左跳到最后一个(模运算回绕)。
-  // tabs.length===1 时无意义(源里仅当 tabs.length>1 才渲染 tablist)。
-  const current = tabs.findIndex((el) => el.getAttribute('aria-selected') === 'true')
-  const base = current < 0 ? (delta > 0 ? -1 : tabs.length) : current
-  const nextIndex = (base + delta + tabs.length) % tabs.length
-  const nextTab = tabs[nextIndex]
-  if (nextTab === undefined) return false
-  nextTab.click()
-  return true
-}
-
-/**
- * 定位会话视图 tablist:整页唯一的「tab 不带 aria-controls」的 [role="tablist"]。
- * 返回 null 表示当前页面没有可切换的会话视图标签(如空白会话只渲染 hero,
- * 头部不渲染 tablist)。
- */
-function findSessionViewTablist(): HTMLElement | null {
-  const tablists = document.querySelectorAll<HTMLElement>('[role="tablist"]')
-  for (const tablist of tablists) {
-    const tabs = tablist.querySelectorAll<HTMLElement>('[role="tab"]')
-    if (tabs.length === 0) continue
-    let hasControls = false
-    for (const tab of tabs) {
-      const controls = tab.getAttribute('aria-controls')
-      if (controls !== null && controls !== '') {
-        hasControls = true
-        break
-      }
-    }
-    if (!hasControls) return tablist
-  }
-  return null
 }
 
 /**
