@@ -1,6 +1,6 @@
 # dsh-kbd-hotkeys
 
-DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 `docs/dsh-hotkeys-proposal.md`）。
+DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 
 单一 `document` 捕获阶段 `keydown` 监听，按 **三态分发**（状态名即代码中的 `StateName`）：
 
@@ -18,7 +18,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 | `Esc` | 审批卡片：拒绝；其余情况：停止当前会话的整棵运行中交互树（自身 + 运行中的直系子代理后代；one-shot 子代理跳过） | 任意 |
 | `1`–`9` | 问答卡片：选择第 N 个选项（**只改选中态，不翻题**；计划评审：确认/拒绝/去聊） | `card` |
 | `←` / `→` | 问答卡片：上一题 / 下一题（只切题号，草稿保留；首题按 `←`、末题按 `→` 不循环且不吞键） | `card` |
-| `⌘/Ctrl+/` | 快捷键速查表（含总开关） | 任意 |
+| `⌘/Ctrl+/` | 快捷键速查表 | 任意 |
 | `⌘/Ctrl+B` | 开关**左**侧栏（主键；走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+B` | 开关**右**侧栏（派生键；走 `sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
@@ -40,9 +40,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 > `localStorage` 覆盖单个动作的键位（见「自定义键位」）。
 >
 > 审批与问答的 `Enter` / `Esc` / 数字键 / 方向键是**固定分发的单键**，不参与
-> `bindings` 自定义（见「自定义键位」）。旧的审批组合键
-> `⌘/Ctrl+Alt+Enter`（允许）与 `⌘/Ctrl+Alt+Backspace`（拒绝）**已移除**，
-> 残留的旧配置也会被忽略。
+> `bindings` 自定义（见「自定义键位」）。
 > 审批卡片的 `Enter` / `Esc` 只要当前会话有审批卡片就生效，**不受焦点位置影响**
 > （审批卡片自身没有输入框）；问答卡片的单键在焦点位于输入框时交回输入框。
 > 没有审批卡片时 `Esc` 保持原行为：停止当前会话树且不吞键。
@@ -53,9 +51,9 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 每次按键都重新取一次会话快照与侧栏顺序，不缓存；侧栏顺序读不到时**不跳转**
 （无降级，不猜顺序）。
 
-`Esc` 是双职责键：当前会话有待审批卡片时 = 拒绝（吞键）；否则与迁移前
-（`dsh-new-session`）行为一致——只停止运行中的会话树，**不吞键**，页面默认 `Esc`
-行为（关弹层 / 退出编辑态）照常执行；速查表浮层打开时由浮层优先关闭。
+`Esc` 是双职责键：当前会话有待审批卡片时 = 拒绝（吞键）；否则只停止运行中的
+会话树，**不吞键**，页面默认 `Esc` 行为（关弹层 / 退出编辑态）照常执行；
+速查表浮层打开时由浮层优先关闭。
 
 ## 实现要点（源码核实结论）
 
@@ -64,15 +62,13 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 - 审批：`uiSession.pendingInteractions.getSnapshot()`（公开观察面；同源的私有字段
   `pendingSnapshot` 仅作兼容回退）取当前会话的 `kind==='approval'` 载体，
   **`Enter` = 允许一次、`Esc` = 拒绝**，调 `answer('allowed-once' | 'rejected')`；
-  单键固定分发（不再走 `bindings`），**不再回退 DOM 点击**。`card` 态判定与动作
+  单键固定分发（不走 `bindings`）。`card` 态判定与动作
   同源：只有当前会话命中审批载体时才吞键，无审批载体时 `Enter` / `Esc` 放行
   （`Esc` 继续走 `session.stop`）。
 - 问答 / 计划评审：同一待处理表取 `PendingQuestion`（`kind==='question' | 'plan-review'`）：
   - **计划评审**：`1` = 确认执行、`2` = 拒绝、`3` = 去聊天里说、`Enter` = 确认执行。
     标签取自请求数据——`questions[0].intent.approve` 是确认标签、其余选项是拒绝标签，
-    `cancel()` 对应「去聊天里说」。**不再依赖 DOM 按钮顺序**：上游计划评审卡片的
-    DOM 底部顺序实为 *去聊天里说 / 拒绝 / 确认执行*，与旧实现的假设相反（旧实现里
-    `Enter` 实际点到了「去聊天里说」、数字键顺序也颠倒）。
+    `cancel()` 对应「去聊天里说」。只认请求数据，与卡片底部按钮顺序无关。
   - **通用问答**：直接读写**卡片自己的 Session 级 slot store**
     （`dsh-client-ui-user-questions` 的 `createQuestionDraftStore`，挂在
     `conversation.composer` 链式 slot 的注册项上）——数字键 = 上游
@@ -87,13 +83,13 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
     完成（已作答或显式跳过）后**按 store 里的草稿
     `answer({ answers: [{ id, selected, custom? }] })` 成批结算并 `clear()` 本次草稿；
     末题仍有未完成题时 no-op（不结算、不吞键，且**不跳回**未完成题——回跳请用 `←`）。
-    因此**卡片会实时高亮 / 翻题，鼠标点选与键盘操作共用同一份状态**（旧实现的插件
-    私有镜像已删除）。取数路径见 `src/question-drafts.ts`：
+    因此**卡片会实时高亮 / 翻题，鼠标点选与键盘操作共用同一份状态**。
+    取数路径见 `src/question-drafts.ts`：
     `slots.entries('conversation.composer')` 注册项（用注册项自带的 `select` 确认它是
     承载当前待处理交互的那一个）→ `uiSession.resolve(sessionId)` 作用域绑定 →
     `slots.resolveStore(handle, binding)` 活实例；任一环不可用即 no-op（无降级）。
-- `card` 态判定：当前会话是否命中待处理交互表（服务级），不再用
-  `[data-approval-key]` 等 DOM 查询，故不受卡片渲染时序影响。
+- `card` 态判定：当前会话是否命中待处理交互表（服务级），不使用任何 DOM 查询，
+  故不受卡片渲染时序影响。
 - 左栏开关（`⌘/Ctrl+B` → `layout.toggleSidebar()`）：宽屏下在侧栏契约默认宽（280px）与
   0 之间切换，窄屏（`viewportWidth < 1024`）下只翻转 `narrowExpanded` 覆盖——即
   AppFrame 左列轨道本身。服务缺席时 no-op（不吞键）。
@@ -130,13 +126,13 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
   > 只取**顺序**、不按分组折叠态（`groupExpansion`）与每组 5 行的折叠上限
   > （`COLLAPSED_SESSION_LIMIT`）裁剪：折叠组 / 超限行里的会话仍有确定的顺序位置，
   > 若一并裁掉就会变成「跳不到」。
-- `Esc` 停止会话（动作 `session.stop`，自 `dsh-new-session` 迁移）：**仅在当前会话
+- `Esc` 停止会话（动作 `session.stop`）：**仅在当前会话
   没有待审批卡片时生效**（有审批卡片时 `Esc` 已被审批拒绝占用并吞键）；起点 =
   `sessions.list.getSnapshot().current`，沿 `subagentsByParent[id].entries` 递归
   `kind==='child'` 的直系子代理（visited 去重），对每个节点 `sessions.binding(id)`
   → `session.getSnapshot().running === true` 时 `session.cancel()`；`subagent.address
   .mode === 'one-shot'` 的一次性子代理不可取消（跳过取消但仍继续递归其后代）；
-  与迁移前一致**不吞键**，`Esc` 的页面默认行为照常执行。
+  **不吞键**，`Esc` 的页面默认行为照常执行。
 
 ## 服务化后的已知限制
 
@@ -179,19 +175,17 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 
 - `bindings` 与默认表**浅合并**：只写想覆盖的动作 id（动作 id 见
   `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；两个侧栏动作
-  （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）各自独立可覆盖；
-  > 已移除的动作（新建会话 / 对话滚动 / 复制 / 打开设置 / 打开模型选择器 /
-  > 聚焦输入框 / **会话视图标签切换（`view.prev` / `view.next`）** 等）即使残留在旧
-  > `bindings` 里也不会触发（分发前先查动作注册表，未注册即忽略），无需清理。
+  （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）各自独立可覆盖。
+  > 未注册的动作 id 写在 `bindings` 里不会触发：分发前先查动作注册表
+  > （`ACTION_BY_ID`），未注册即忽略。
 - **固定分发动作不可自定义**：`approval.allow` / `approval.reject` /
   `question.option` / `question.prev` / `question.next` / `question.submit`
   （见 `src/config.ts` 的 `FIXED_KEYS`）由分发器按卡片类型固定分发，`bindings`
-  里的同名键位（含旧的 `"approval.allow": "mod+alt+enter"`）会被 `loadConfig`
-  剔除——旧的审批组合键已清除，改不回来，也不需要手动清理。
+  里的同名键位会被 `loadConfig` 剔除，固定单键改不回来，也不需要手动清理。
 - 组合键写法：`mod`（⌘/Ctrl）+ `alt` + 键名（字母/数字/`enter`/
   `backspace`/`escape`/`arrow*`/`pageup`/`pagedown`/`;` 等），如 `"Cmd+Alt+M"`；
-  默认键位一律不使用 `shift` 作为修饰键（解析器仍兼容旧自定义配置里的 `shift`，仅作过渡）；
-  旧配置中的 `"enabled"` 字段已废弃：快捷键默认启用、无总开关，该项被忽略。
+  默认键位一律不使用 `shift` 作为修饰键（解析器兼容 `shift` 写法，可自定义使用）。
+  配置中其他字段一律忽略：快捷键默认启用、无总开关。
 - 未实现（方案 P2，预留后续）：readline 编辑键（`Ctrl+A/E/K/U`、`Alt+B/F/D`）、
   `Esc Esc` 清空草稿、输入框历史反查、单键 `o`/`t`、权限模式循环（预留，默认不绑定）、
   Leader 前缀集。

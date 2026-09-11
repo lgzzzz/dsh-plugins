@@ -1,8 +1,8 @@
 /**
  * dsh-kbd-hotkeys — 键位表、组合键归一化与用户配置(localStorage)。
  *
- * 键位设计依据 docs/dsh-hotkeys-proposal.md 第 4 节(Open WebUI 打底 +
- * OpenCode/Claude Code 补充,浏览器冲突已按第 3 节重映射):
+ * 键位取向:尽量贴合跨应用肌肉记忆(`⌘/Ctrl+B` 开关侧栏等),并与上游语义同源
+ * (动作名 / 服务方法名与键位一一对应),浏览器自带快捷键冲突的键位一律避开:
  * - `mod` 在 macOS = ⌘(Cmd),Win/Linux = Ctrl;
  * - 三态分发:`card` 卡片态(审批/问答/计划评审卡片打开)、`editing` 输入态
  *   (输入框聚焦)、`browse` 浏览态(浏览对话);
@@ -61,8 +61,8 @@ export const ACTION_BY_ID: ReadonlyMap<string, ActionDef> = new Map(ACTIONS.map(
 /**
  * 固定分发的键位(单键,不进 bindings 映射,不可经 localStorage 覆盖):
  * 审批卡片 Enter = 允许一次、Esc = 拒绝;问答卡片 1–9 / ← / → / Enter。
- * 速查表按动作 id 展示这里的字面键位;loadConfig 亦按这些 id 剔除残留的旧自定义
- * 键位——旧的 ⌘/Ctrl+Alt+Enter、⌘/Ctrl+Alt+Backspace 审批组合键已移除。
+ * 速查表按动作 id 展示这里的字面键位;loadConfig 亦按这些 id 剔除用户配置里
+ * 的同名键位,确保固定分发的单键不可被自定义覆盖。
  */
 export const FIXED_KEYS: Readonly<Record<string, string>> = {
   'approval.allow': 'Enter',
@@ -130,8 +130,8 @@ export function loadConfig(): HotkeyConfig {
   } catch {
     // 配置损坏时静默回退默认键位
   }
-  // 固定分发动作不参与 bindings:剔除旧配置里残留的审批键位(已移除)等,
-  // 避免已清除的快捷键被旧 localStorage 配置复活。
+  // 固定分发动作不参与 bindings:剔除用户配置里的同名键位,
+  // 避免覆盖固定分发的单键。
   for (const id of Object.keys(FIXED_KEYS)) delete bindings[id]
   return { bindings }
 }
@@ -195,7 +195,7 @@ export function comboOf(event: KeyboardEvent): string {
   return parts.join('+')
 }
 
-/** 把用户配置里的组合键字符串归一化(如 "Cmd+Alt+C" → "mod+alt+c";旧配置中的 shift 也解析)。 */
+/** 把用户配置里的组合键字符串归一化(如 "Cmd+Alt+C" → "mod+alt+c";兼容 shift 修饰)。 */
 export function normalizeComboString(combo: string): string {
   const key = combo.split('+').pop() ?? ''
   const parts: string[] = []

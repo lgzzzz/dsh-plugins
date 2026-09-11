@@ -18,7 +18,7 @@
  *    动作面为 `defineStore` 产出的 `actions.replace` / `actions.clear`。
  *
  * **无降级**:上述任一环节不可用即返回 `undefined`,调用方 no-op——不猜、不写 DOM、
- * 不回退插件私有镜像。快照不属于当前请求(`requestKey` 不匹配或题数不符)时按上游
+ * 也不在插件内另存一份镜像状态。快照不属于当前请求(`requestKey` 不匹配或题数不符)时按上游
  * `QuestionFlow` 的 `initialProgress` 语义重建空进度,与卡片自身 `?? initialProgress`
  * 完全一致,不属于降级。
  */

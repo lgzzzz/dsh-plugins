@@ -6,13 +6,13 @@
  * 仍依赖卡片 DOM,断言必然失败。
  *
  * 审批为固定单键:当前会话有待审批卡片时 Enter = 允许一次、Esc = 拒绝(不受焦点
- * 位置影响),旧的 ⌘/Ctrl+Alt+Enter、⌘/Ctrl+Alt+Backspace 已移除且残留配置被剔除;
+ * 位置影响),组合键形式的审批键位不作为动作执行;
  * 无审批卡片时 Esc 仍走 session.stop。
  *
  * 通用问答的断言对象是**卡片自己的草稿 store**(conversation.composer 注册项
  * 上的 store handle → uiSession.resolve(sessionId) → slots.resolveStore):
  * 数字键必须写进这份 store(卡片才会高亮,且不翻题)、←/→ 必须只改题号(草稿原样保留)、
- * Enter 必须从这份 store 取草稿(非末题推进、末题结算)——插件不得再持有任何私有镜像。
+ * Enter 必须从这份 store 取草稿(非末题推进、末题结算)——插件内不另存镜像状态。
  *
  * 另含侧栏开关断言:⌘/Ctrl+B → `layout.toggleSidebar()`(左栏)、
  * ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`(右栏),两者在 browse / editing
@@ -218,13 +218,13 @@ console.log('--- 审批(服务级:Enter 同意 / Esc 拒绝) ---')
   check('Esc → answer(rejected)', same(log.answer, ['rejected']), JSON.stringify(log.answer))
   check('Esc 被吞', event.propagationStopped === true)
 
-  // 旧审批组合键已清除:不应答、不吞键
+  // 审批是固定单键分发:组合键形式的审批键位不应答、不吞键
   log = mount({ kind: 'approval', key: 'approval:3' })
   event = press({ key: 'Enter', code: 'Enter', ctrlKey: true, altKey: true })
-  check('Ctrl+Alt+Enter 不再应答(旧键位已清除)', log.answer.length === 0, JSON.stringify(log.answer))
+  check('Ctrl+Alt+Enter 不应答(审批只认固定单键)', log.answer.length === 0, JSON.stringify(log.answer))
   check('Ctrl+Alt+Enter 不吞键', event.propagationStopped !== true)
   event = press({ key: 'Backspace', code: 'Backspace', ctrlKey: true, altKey: true })
-  check('Ctrl+Alt+Backspace 不再应答(旧键位已清除)', log.answer.length === 0, JSON.stringify(log.answer))
+  check('Ctrl+Alt+Backspace 不应答(审批只认固定单键)', log.answer.length === 0, JSON.stringify(log.answer))
   check('Ctrl+Alt+Backspace 不吞键', event.propagationStopped !== true)
   pending.delete('sess-b')
 
@@ -260,7 +260,7 @@ console.log('\n--- 无审批卡片时 Esc 仍停止当前会话(不吞键) ---')
   check('无审批卡片时 Esc 不吞键', event.propagationStopped !== true)
 }
 
-console.log('\n--- 旧审批键位清除:残留 localStorage 配置不生效 ---')
+console.log('\n--- 固定分发动作不可经 bindings 覆盖 ---')
 {
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({
     bindings: { 'approval.allow': 'mod+alt+enter', 'approval.reject': 'mod+alt+backspace' },
@@ -268,9 +268,9 @@ console.log('\n--- 旧审批键位清除:残留 localStorage 配置不生效 ---
   const pressStale = loadPlugin(services)
   const log = mount({ kind: 'approval', key: 'approval:6' })
   let event = pressStale({ key: 'Enter', code: 'Enter', ctrlKey: true, altKey: true })
-  check('残留配置下 Ctrl+Alt+Enter 不应答', log.answer.length === 0 && event.propagationStopped !== true, JSON.stringify(log.answer))
+  check('自定义组合键不应答', log.answer.length === 0 && event.propagationStopped !== true, JSON.stringify(log.answer))
   event = pressStale({ key: 'Enter', code: 'Enter' })
-  check('残留配置下普通 Enter 仍同意', same(log.answer, ['allowed-once']), JSON.stringify(log.answer))
+  check('固定单键 Enter 仍同意', same(log.answer, ['allowed-once']), JSON.stringify(log.answer))
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
@@ -606,7 +606,7 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+Alt+B → 左右栏开关 ---')
   check('editing 态 ⌘/Ctrl+Alt+B → 右栏', same([left, right], [2, 2]), `${left},${right}`)
   check('editing 态 ⌘/Ctrl+Alt+B 被吞', event.propagationStopped === true)
 
-  // 旧配置仍可用:sidebar.toggle 是左栏的合法动作 id(键位可自定义)
+  // bindings 覆盖:sidebar.toggle 是左栏的合法动作 id(键位可自定义)
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'sidebar.toggle': 'mod+alt+s' } }))
   let customLeft = 0
   let customRight = 0

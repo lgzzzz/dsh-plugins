@@ -4,7 +4,7 @@
  * 依据 AGENTS.md「类型解析约定」:`dsh-client-ui-slots` / `dsh-client-ui-primitives`
  * 等类型包不全,这里自行声明结构切片,
  * 仅覆盖本插件实际消费的字段,以 <dsh>/node_modules/@deepseek-ai 各包 lib 的
- * 构建产物为核实依据(见 docs/dsh-hotkeys-proposal.md 第 5 节)。
+ * 构建产物为核实依据。
  */
 
 /** apply(ctx) 的运行时上下文最小面。 */

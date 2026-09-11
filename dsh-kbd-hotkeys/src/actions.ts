@@ -18,9 +18,9 @@
  * - Esc 停止:sessions.binding(id).session.cancel();
  * - `card` 态判定:当前会话在 uiSession 待处理交互表中命中(不依赖卡片是否已渲染)。
  *
- * DOM 级:仅 `editing` 态判定消耗 DOM(isEditableTarget,事件目标判定),
- * 不再有任何点击型动作——原「会话视图标签切换」(selectView 为 slot 注入的
- * React 回调、无服务面)及其 ⌘/Ctrl+Alt+←/→ 键位已移除。
+ * DOM 级:只有三处,均不是点击型动作——`editing` 态判定消耗 DOM
+ * (isEditableTarget,事件目标判定);`document` 上的 `keydown` 捕获监听是全部
+ * 快捷键的入口;速查表浮层是插件自建自管的 DOM(overlay.ts)。
  *
  * 源码事实依据(以 <dsh>/node_modules/@deepseek-ai 各包 lib/client.js 为准):
  * - uiSession.pendingInteractions.getSnapshot():sessionId → 待处理交互(公开面;
@@ -32,8 +32,7 @@
  *   + uiSession.resolve(sessionId) 作用域绑定 + slots.resolveStore(handle, binding)
  *   取活实例,动作面 actions.replace/clear(dsh-client-ui-renderer 的 resolveStore、
  *   dsh-web-frontend 的 defineStore);
- * - 计划评审卡片的 DOM 底部按钮顺序实为 去聊天里说 / 拒绝 / 确认执行,故键位语义
- *   改为按 intent.approve 标签判定,不再依赖按钮顺序。
+ * - 计划评审键位按 intent.approve 标签判定,与卡片底部按钮顺序无关。
  */
 import type {
   PendingInteractionLike,
@@ -383,8 +382,8 @@ export function toggleRightSidebar(services: Services): boolean {
  *   跳过(其自身与后代都不动);
  * - 沿 subagentsByParent[id].entries 递归 kind==='child' 的直系子代理,visited 去重
  *   防环;
- * - 返回是否**实际取消过**至少一个会话(供测试/诊断用);分发器不据此吞键——与
- *   迁移前的 dsh-new-session 一致,Esc 的页面默认行为(关弹层 / 退出编辑态)照常。
+ * - 返回是否**实际取消过**至少一个会话(供测试/诊断用);分发器不据此吞键,Esc 的
+ *   页面默认行为(关弹层 / 退出编辑态)照常。
  *
  * 服务缺失、binding 未解析(未列出且未 scoped)、快照缺字段一律静默跳过。
  */
