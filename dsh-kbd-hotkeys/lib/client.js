@@ -464,6 +464,17 @@ function toggleSidebar(services) {
   layout.toggleSidebar();
   return true;
 }
+function toggleRightSidebar(services) {
+  const sidebarRight = services.sidebarRight;
+  if (sidebarRight === null || sidebarRight === void 0) return false;
+  if (typeof sidebarRight.toggleExpanded !== "function") return false;
+  try {
+    sidebarRight.toggleExpanded();
+    return true;
+  } catch {
+    return false;
+  }
+}
 function stopCurrentSessionTree(services) {
   var _a, _b;
   const sessions = services.sessions;
@@ -559,9 +570,11 @@ var ACTIONS = [
   { id: "question.next", label: "\u95EE\u9898:\u2192 \u4E0B\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
   { id: "question.submit", label: "\u95EE\u9898:Enter \u4E0B\u4E00\u9898 / \u672B\u9898\u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
   // 会话级
-  // sidebar.toggle 额外放行 editing:⌘/Ctrl+B 在输入框聚焦时同样开关侧栏
-  // (带修饰键的组合不干扰文本编辑,与 `editing` 态「只保留带修饰键的全局组合」一致)。
-  { id: "sidebar.toggle", label: "\u5F00\u5173\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
+  // 左栏为主键(⌘/Ctrl+B,跨应用肌肉记忆),右栏为派生键(⌘/Ctrl+Alt+B,叠加 alt);
+  // 两者都额外放行 editing:带修饰键的组合不干扰文本编辑,与 `editing` 态
+  // 「只保留带修饰键的全局组合」一致。
+  { id: "sidebar.toggle", label: "\u5F00\u5173\u5DE6\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
+  { id: "sidebarRight.toggle", label: "\u5F00\u5173\u53F3\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u65E0\u5BA1\u6279\u5361\u7247\u65F6;\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
@@ -577,7 +590,13 @@ var FIXED_KEYS = {
   "question.submit": "Enter"
 };
 var DEFAULT_BINDINGS = {
+  // 侧栏开关的两个键位按「主键给主面板」分配:
+  // - 左栏 = ⌘/Ctrl+B:与 VS Code / Slack / 各类编辑器的侧栏开关一致,也是上游
+  //   `layout.toggleSidebar()` 的本名(sidebar / sidebarCol 不带限定词就指左栏);
+  // - 右栏 = ⌘/Ctrl+Alt+B:右栏在上游叫 rightbar(rightbarShown / rightbarTrack),
+  //   是派生面板,拿"左栏 + alt"这一档栈式修饰键。
   "sidebar.toggle": "mod+b",
+  "sidebarRight.toggle": "mod+alt+b",
   "session.prev": "mod+alt+arrowup",
   "session.next": "mod+alt+arrowdown",
   // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。
@@ -805,7 +824,7 @@ function createOverlays(deps) {
 
 // src/client.ts
 var name = "dsh-kbd-hotkeys";
-var inject = ["sessions", "uiSession", "layout", "workspaces", "slots"];
+var inject = ["sessions", "uiSession", "layout", "sidebarRight", "workspaces", "slots"];
 function getService(ctx, serviceName) {
   if (ctx.get === void 0 || ctx.get === null) return void 0;
   const value = ctx.get(serviceName);
@@ -821,6 +840,8 @@ function runAction(id, services, overlays) {
         return submitQuestion(services);
       case "sidebar.toggle":
         return toggleSidebar(services);
+      case "sidebarRight.toggle":
+        return toggleRightSidebar(services);
       case "session.prev":
         return openNeighborSession(services, -1);
       case "session.next":
@@ -845,6 +866,7 @@ function apply(ctx) {
     sessions: getService(ctx, "sessions"),
     uiSession: getService(ctx, "uiSession"),
     layout: getService(ctx, "layout"),
+    sidebarRight: getService(ctx, "sidebarRight"),
     workspaces: getService(ctx, "workspaces"),
     slots: getService(ctx, "slots")
   };

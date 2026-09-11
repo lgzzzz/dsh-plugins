@@ -19,12 +19,25 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 | `1`–`9` | 问答卡片：选择第 N 个选项（**只改选中态，不翻题**；计划评审：确认/拒绝/去聊） | `card` |
 | `←` / `→` | 问答卡片：上一题 / 下一题（只切题号，草稿保留；首题按 `←`、末题按 `→` 不循环且不吞键） | `card` |
 | `⌘/Ctrl+/` | 快捷键速查表（含总开关） | 任意 |
-| `⌘/Ctrl+B` | 开关侧栏（走 `layout.toggleSidebar`） | `browse` / `editing` |
+| `⌘/Ctrl+B` | 开关**左**侧栏（主键；走 `layout.toggleSidebar`） | `browse` / `editing` |
+| `⌘/Ctrl+Alt+B` | 开关**右**侧栏（派生键；走 `sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
 
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
-> `⌘/Ctrl+B` 为 `['browse','editing']`：输入框聚焦时同样开关侧栏（带修饰键的组合不
+> 两个侧栏开关均为 `['browse','editing']`：输入框聚焦时同样生效（带修饰键的组合不
 > 干扰文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）。
+>
+> **为什么左栏拿 `⌘/Ctrl+B`、右栏拿 `⌘/Ctrl+Alt+B`**（主键给主面板）：
+> ① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器一致），也是本
+> 插件最初就有的默认——把「已经被训练过的反射」留给最基础的左栏（导航主面板），
+> 右栏只需要多记一个 `Alt`；
+> ② 命名同源：上游不带限定词的 `sidebar` / `sidebarCol` 就指左栏
+> （`layout.toggleSidebar()`），右栏是派生的 `rightbar`（`rightbarShown` /
+> `rightbarTrack`）——主键给「本名」，叠加修饰键给「限定名」；
+> ③ 越常用越省力：`⌘/Ctrl+B` 比 `⌘/Ctrl+Alt+B` 更短、更好按，自然该给使用频率更高、
+> 更基础的左栏；`Alt` 这一档留给上下文面板（右栏）。
+> 若实际用下来右栏更常用，互换只需改 `src/config.ts` 的两行 `DEFAULT_BINDINGS`，或用
+> `localStorage` 覆盖单个动作的键位（见「自定义键位」）。
 >
 > 审批与问答的 `Enter` / `Esc` / 数字键 / 方向键是**固定分发的单键**，不参与
 > `bindings` 自定义（见「自定义键位」）。旧的审批组合键
@@ -81,7 +94,18 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
     `slots.resolveStore(handle, binding)` 活实例；任一环不可用即 no-op（无降级）。
 - `card` 态判定：当前会话是否命中待处理交互表（服务级），不再用
   `[data-approval-key]` 等 DOM 查询，故不受卡片渲染时序影响。
-- 侧栏开关：`layout.toggleSidebar()`。
+- 左栏开关（`⌘/Ctrl+B` → `layout.toggleSidebar()`）：宽屏下在侧栏契约默认宽（280px）与
+  0 之间切换，窄屏（`viewportWidth < 1024`）下只翻转 `narrowExpanded` 覆盖——即
+  AppFrame 左列轨道本身。服务缺席时 no-op（不吞键）。
+- 右栏开关（`⌘/Ctrl+Alt+B` → `sidebarRight.toggleExpanded()`）：与右栏头部的折叠按钮
+  （`[data-sidebar-right-toggle]`）**同一入口**——反转**当前会话**右栏面板的展开态。
+  展开态是 `dsh-client-ui-sidebar-right` 的会话级 store 状态：右侧 seat 重渲染后由
+  自己的 `useLayoutEffect` 调 `layout.openRightbar(track, fullscreen)` /
+  `closeRightbar()`，把 AppFrame 的右栏轨道同步过来（见该包 `lib/client.js` 的
+  `RightbarSeat → syncPresentation`），故**一次服务调用即完成「面板 + 轨道」的开合**，
+  插件无需自己调右栏那两个 layout 方法。
+  控制器在无挂载会话面（空白/hero 会话、右栏插件缺席）时 `require()` 抛错，插件兜住
+  → **no-op 且不吞键**（无降级：不碰 DOM 里那个折叠按钮）。
 - 会话跳转（`⌘/Ctrl+Alt+↑/↓`）：在**活跃会话**之间跳转。活跃 =
   正在运行（`running`）∪ 有待处理交互（待处理交互表命中）∪
   刚完成未查看（`completed`）。
@@ -135,8 +159,9 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 - 计划评审键位语义以请求数据为准（`1`/`2`/`3` = 确认 / 拒绝 / 去聊天里说）；
   请求未提供「拒绝」选项时 `2` 为空操作。
 
-服务注入：`['sessions', 'uiSession', 'layout', 'workspaces', 'slots']`（全部判空后才消费；
-`slots` 用于读侧栏视图 store（会话跳转顺序）与问答草稿 store）。
+服务注入：`['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots']`
+（全部判空后才消费；`slots` 用于读侧栏视图 store（会话跳转顺序）与问答草稿 store，
+`layout` 用于 `⌘/Ctrl+B` 开关左栏，`sidebarRight` 用于 `⌘/Ctrl+Alt+B` 开关右栏）。
 无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表为纯 DOM 浮层）。
 
 ## 自定义键位
@@ -153,7 +178,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 ```
 
 - `bindings` 与默认表**浅合并**：只写想覆盖的动作 id（动作 id 见
-  `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；
+  `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；两个侧栏动作
+  （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）各自独立可覆盖；
   > 已移除的动作（新建会话 / 对话滚动 / 复制 / 打开设置 / 打开模型选择器 /
   > 聚焦输入框 / **会话视图标签切换（`view.prev` / `view.next`）** 等）即使残留在旧
   > `bindings` 里也不会触发（分发前先查动作注册表，未注册即忽略），无需清理。
@@ -183,8 +209,11 @@ npm run check       # node --check 产物与宿主
 
 ```sh
 node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/card 态判定（DOM 桩不提供任何卡片；
-                         # 问答断言直接落在卡片草稿 store 上——数字键必须写入 store、Enter 必须取自 store）
+                         # 问答断言直接落在卡片草稿 store 上——数字键必须写入 store、Enter 必须取自 store；
+                         # 另含 ⌘/Ctrl+B → layout.toggleSidebar（左栏）/ ⌘/Ctrl+Alt+B →
+                         # sidebarRight.toggleExpanded（右栏）的两态调用、互不串场、自定义键位与无降级）
 node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序跳转（分组 / flat / 来源不可用 no-op）
+                         # 与两个侧栏开关的键位 / browse·editing 态闸门
 ```
 
 ## 加载（用户操作）
