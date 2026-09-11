@@ -47,13 +47,14 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、会话视图标签切换、Esc 停止当前会话交互树（无审批卡片时）、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md` |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、侧栏开关与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md` |
 | `dsh-text-editor` | Host + Client（TS） | `index.ts` + `host/*.ts`（注册 read/write/monaco 路由；挂载行 `inject: [webServer, fs]`） | `src/client.ts` → esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 应用内 Monaco 文本编辑器能力提供者：经 `ctx.provide('dsh-text-editor')` 暴露 `openFile`（文件 tab，可编辑保存）与 `showDiff`（差异 tab，手动推进）；构建依赖 `monaco-editor`（Monaco 复制到不入仓的 `vendor/monaco/`）；暂无 README |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
-上游存在可用服务面的动作**全部改为服务触发**（不触碰 DOM）；无服务面的动作维持 DOM
-点击。逐项源码依据见该插件 `README.md`「实现要点」与 `src/actions.ts` 头部注释。
+上游存在可用服务面的动作**全部改为服务触发**（不触碰 DOM）；DOM 仅用于 `editing`
+态的事件目标判定，已无点击型动作（原「会话视图标签切换」⌘/Ctrl+Alt+←/→ 已移除）。
+逐项源码依据见该插件 `README.md`「实现要点」与 `src/actions.ts` 头部注释。
 
 | 动作 | 键位（默认） | 触发路径 | 服务接口 / DOM 选择器 |
 | --- | --- | --- | --- |
@@ -65,13 +66,12 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `sidebar.toggle` | ⌘/Ctrl+B | **服务** | `layout.toggleSidebar()`（`browse` + `editing`） |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
 | `session.stop` | `Esc`（仅当前会话无待审批卡片时） | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
-| `view.prev` / `view.next` | ⌘/Ctrl+Alt+←/→ | DOM | `[role="tablist"]` 中 `role="tab"` 按钮 `.click()` |
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
-维持 DOM 的原因（内置包 0.1.5-alpha.1 源码核实）：
-
-- **会话视图标签**：`selectView` / `openView` 是 slot 注入的 React 回调，无跨插件服务面
-  （活跃视图存于 ui-conversation 的 per-session slot store，外部不可读）。
+已移除的动作：**会话视图标签切换**（`view.prev` / `view.next`，⌘/Ctrl+Alt+←/→）——
+其唯一实现路径是 DOM 点击（`selectView` / `openView` 是 slot 注入的 React 回调，
+无跨插件服务面；活跃视图存于 ui-conversation 的 per-session slot store，外部不可读），
+该键位与对应代码（`switchView` / `findSessionViewTablist`）已整体删除。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
 `pendingSnapshot` 为同源私有字段，仅作兼容回退）；审批为**固定单键** `Enter`（允许）/

@@ -8,7 +8,7 @@
  *   自身没有输入框);问答卡片数字键 1–9 选选项(只选不翻题)、←/→ 上一题/下一题、
  *   Enter 推进(非末题翻到下一题)/ 末题结算(全部题目完成后);
  * - 全态:⌘/ 速查表、⌘⌥↑/↓ 在活跃会话间跳转(活跃 = 运行中 ∪ 有待回应 ∪
- *   刚完成未查看,按**侧栏可见顺序**定位)、⌘⌥←/→ 在会话视图标签间切换、
+ *   刚完成未查看,按**侧栏可见顺序**定位)、
  *   Esc 停止当前会话的整棵运行中交互树(自身 + 直系子代理,one-shot 跳过);
  * - `browse` 浏览态(输入框失焦):⌘B 开关侧栏。
  *
@@ -32,7 +32,6 @@ import {
   openNeighborSession,
   pickQuestionOption,
   submitQuestion,
-  switchView,
   stopCurrentSessionTree,
   toggleSidebar,
 } from './actions.ts'
@@ -74,10 +73,6 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         // 行为(关弹层 / 退出编辑态)照常执行;浮层打开时已在上方模态分发返回。
         stopCurrentSessionTree(services)
         return false
-      case 'view.prev':
-        return switchView(-1)
-      case 'view.next':
-        return switchView(1)
       case 'help.toggle':
         overlays.toggleHelp()
         return true

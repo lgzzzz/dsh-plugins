@@ -21,7 +21,6 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 | `⌘/Ctrl+/` | 快捷键速查表（含总开关） | 任意 |
 | `⌘/Ctrl+B` | 开关侧栏（走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
-| `⌘/Ctrl+Alt+←` / `→` | 上一个 / 下一个**会话视图标签**（同一会话内的 tab 页，如 chat / 计划 / 轨迹） | 任意 |
 
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
 > `⌘/Ctrl+B` 为 `['browse','editing']`：输入框聚焦时同样开关侧栏（带修饰键的组合不
@@ -115,19 +114,6 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
   .mode === 'one-shot'` 的一次性子代理不可取消（跳过取消但仍继续递归其后代）；
   与迁移前一致**不吞键**，`Esc` 的页面默认行为照常执行。
 
-**DOM 级（上游无可用服务面，本次未改动）**
-
-- 会话视图标签切换（`⌘/Ctrl+Alt+←/→`）：在同一个会话的头部视图 tab
-  （`conversation.view`，如 chat / 计划 / 轨迹）之间切换。定位方式是**内容判别**
-  而非 DOM 位置：遍历整页 `[role="tablist"]`，返回其 `role=tab` 按钮均不带
-  `aria-controls` 的那一个（全应用仅 4 个 tablist——cordis 源码、trajectory 详情、
-  settings-plugins 的 tab 都带 `id`+`aria-controls`，唯独会话视图 tab 不带，故可
-  唯一锁定）。取 `role=tab` 按钮，以 `aria-selected` 识别当前标签、向 `delta`
-  方向点击下一个并**循环切换**（最右按下一个回到第一个、最左按上一个跳到最后一个，
-  模运算回绕；未选中时按方向落到第一个 / 最后一个）；不依赖
-  `data-phase`/`header` 的 DOM 层级，兼容 slot 引擎对头部内容的任意渲染。
-  原因：`selectView` / `openView` 是 slot 注入的 React 回调，上游没有可调用的服务面。
-
 ## 服务化后的已知限制
 
 - **审批卡片的 `Enter` / `Esc` 会抢占输入框**：当前会话有审批卡片时，即使焦点在
@@ -161,7 +147,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 {
   "bindings": {
     "sidebar.toggle": "mod+alt+s",
-    "view.next": "mod+alt+n"
+    "session.next": "mod+alt+j"
   }
 }
 ```
@@ -169,8 +155,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only，设计依据 
 - `bindings` 与默认表**浅合并**：只写想覆盖的动作 id（动作 id 见
   `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；
   > 已移除的动作（新建会话 / 对话滚动 / 复制 / 打开设置 / 打开模型选择器 /
-  > 聚焦输入框等）即使残留在旧 `bindings` 里也不会触发（分发前先查动作注册表，
-  > 未注册即忽略），无需清理。
+  > 聚焦输入框 / **会话视图标签切换（`view.prev` / `view.next`）** 等）即使残留在旧
+  > `bindings` 里也不会触发（分发前先查动作注册表，未注册即忽略），无需清理。
 - **固定分发动作不可自定义**：`approval.allow` / `approval.reject` /
   `question.option` / `question.prev` / `question.next` / `question.submit`
   （见 `src/config.ts` 的 `FIXED_KEYS`）由分发器按卡片类型固定分发，`bindings`
