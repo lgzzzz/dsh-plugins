@@ -14,13 +14,19 @@
  *   不循环);Enter = 保留上游 continueFlow 的推进语义(当前题已作答且非末题 →
  *   翻到下一题),末题仅在全部题目完成后按 store 的草稿成批结算(不跳回未完成题);
  * - 侧栏:layout.toggleSidebar()(左栏) / sidebarRight.toggleExpanded()(右栏);
+ * - 聚焦输入框(⌘/Ctrl+I):sessions.binding(id).ctx → conversation.input
+ *   (SessionInputResolver.for / InputHub.shell)→ shell.editor.getRootElement()
+ *   → `focus({ preventScroll: true })`——上游无聚焦服务面,这是唯一可靠原语;
+ *   只调服务给出的元素,不做任何选择器查询 / DOM 遍历 / 事件合成(见 focusComposer);
  * - 会话跳转:sessions 快照 + slots 里的侧栏视图 store(顺序)+ sessions.open(id);
  * - Esc 停止:sessions.binding(id).session.cancel();
  * - `card` 态判定:当前会话在 uiSession 待处理交互表中命中(不依赖卡片是否已渲染)。
  *
- * DOM 级:只有三处,均不是点击型动作——`editing` 态判定消耗 DOM
+ * DOM 级:三处判定/入口(均不是点击型动作)——`editing` 态判定消耗 DOM
  * (isEditableTarget,事件目标判定);`document` 上的 `keydown` 捕获监听是全部
  * 快捷键的入口;速查表浮层是插件自建自管的 DOM(overlay.ts)。
+ * 另有**唯一一次元素级调用**:聚焦输入框时对服务给出的宿主元素调 `focus()`
+ * (见 focusComposer——不做选择器查询 / 遍历 / 事件合成,元素来自服务链路)。
  *
  * 源码事实依据(以 <dsh>/node_modules/@deepseek-ai 各包 lib/client.js 为准):
  * - uiSession.pendingInteractions.getSnapshot():sessionId → 待处理交互(公开面;
@@ -40,6 +46,7 @@ import type {
   QuestionDraftStoreLike,
   Services,
   SessionFaceLike,
+  SessionInputShellLike,
   SessionListSnapshotLike,
   SessionsLike,
 } from './types.ts'
@@ -370,6 +377,76 @@ export function toggleRightSidebar(services: Services): boolean {
   } catch {
     return false
   }
+}
+
+/**
+ * 聚焦对话输入框(⌘/Ctrl+I)。
+ *
+ * 为什么必须走到元素上的 `focus()`:上游**没有**可触发的「聚焦 composer」服务面。
+ * - conversation 契约(`send` / `updateQueue` / `cancel` / `loadOlder`)无聚焦动词;
+ * - SessionInput 契约(`setDraft` / `submit` / `state` …)无聚焦动词;
+ * - `commandUi.bindComposerFocus(id, fn)` 语义对口,但它是**只 bind 不 trigger**
+ *   的注册口(触发方是 slash 弹层的 Escape/选中路径),且当前构建里全仓无人调用
+ *   → focusHooks 恒空,调用它只会得到 no-op;
+ * - `ConversationViewRequest.focus` 是 trajectory 视图的 callId,不是 composer 焦点;
+ * - lexical 0.49 的 `editor.focus()` **不是** DOM 聚焦原语:它只克隆选区、打
+ *   FOCUS_TAG 并注册回调,真正的 `rootElement.focus()` 在选区调和器里、且只在
+ *   「当前 DOM 选区已等于目标选区」的分支中调用——DOM 选区落在 composer 之外时
+ *   (刚在正文里点选过文本)按键焦点不会回到输入框。
+ *
+ * 因此本动作只用服务链路取宿主元素,再调它的 `focus({ preventScroll: true })`
+ * (与上游 composer autofocus 同一原语、同一参数):**零选择器、零 DOM 遍历、
+ * 零事件合成**,元素引用来自 `sessions.binding(id).ctx` →
+ * `conversation.input.for(actx)`(`for` 缺席时回退公开的 `shell(id)`,两者返回
+ * 同一个 SessionInputShell)→ `shell.editor.getRootElement()`。
+ *
+ * 无降级:任一环缺失(无 conversation 服务 / 无当前会话 / 无 binding.ctx /
+ * for 与 shell 都缺席 / 会话无编辑器 / editor 未绑宿主元素)即 no-op 返回 false,
+ * **不回退到 DOM 查询**。
+ */
+export function focusComposer(services: Services): boolean {
+  const sessions = services.sessions
+  const conversation = services.conversation
+  if (sessions === null || sessions === undefined) return false
+  if (conversation === null || conversation === undefined) return false
+  const input = conversation.input
+  if (input === null || input === undefined) return false
+  const current = currentSessionId(services)
+  if (current === undefined) return false
+
+  let shell: SessionInputShellLike | undefined
+  let actx: unknown
+  try {
+    actx = sessions.binding?.(current)?.ctx
+  } catch {
+    actx = undefined
+  }
+  if (actx !== undefined && typeof input.for === 'function') {
+    try {
+      shell = input.for(actx) ?? undefined
+    } catch {
+      // for 要求传入会话作用域 ctx,不满足时抛错 → 继续试 shell(id)
+      shell = undefined
+    }
+  }
+  if (shell === undefined && typeof input.shell === 'function') {
+    try {
+      shell = input.shell(current) ?? undefined
+    } catch {
+      // shell 在会话无绑定时抛错 → no-op
+      shell = undefined
+    }
+  }
+  if (shell === null || shell === undefined) return false
+
+  const editor = shell.editor
+  if (editor === null || editor === undefined) return false
+  if (typeof editor.getRootElement !== 'function') return false
+  const root = editor.getRootElement()
+  if (root === null || root === undefined) return false
+  if (typeof root.focus !== 'function') return false
+  root.focus({ preventScroll: true })
+  return true
 }
 
 /**

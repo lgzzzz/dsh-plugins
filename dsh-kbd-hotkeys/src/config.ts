@@ -1,9 +1,11 @@
 /**
  * dsh-kbd-hotkeys — 键位表、组合键归一化与用户配置(localStorage)。
  *
- * 键位取向:尽量贴合跨应用肌肉记忆(`⌘/Ctrl+B` 开关侧栏等),并与上游语义同源
- * (动作名 / 服务方法名与键位一一对应),浏览器自带快捷键冲突的键位一律避开:
- * - `mod` 在 macOS = ⌘(Cmd),Win/Linux = Ctrl;
+ * 键位取向:尽量贴合跨应用肌肉记忆(`⌘/Ctrl+B` 开关侧栏、`⌘/Ctrl+I` 聚焦输入框等),
+ * 并与上游语义同源(动作名 / 服务方法名与键位一一对应),浏览器自带快捷键冲突的键位
+ * 一律避开:
+ * - `mod` 在 macOS = ⌘(Cmd),Win/Linux = Ctrl——`comboOf` 同时吸收 ctrlKey 与
+ *   metaKey,故 macOS 上 `mod+i` 的 ⌃I 与 ⌘I 都能触发;
  * - 三态分发:`card` 卡片态(审批/问答/计划评审卡片打开)、`editing` 输入态
  *   (输入框聚焦)、`browse` 浏览态(浏览对话);
  * - 用户可通过 localStorage 覆盖默认键位(见 README「自定义键位」)。
@@ -50,6 +52,10 @@ export const ACTIONS: readonly ActionDef[] = [
   // 「只保留带修饰键的全局组合」一致。
   { id: 'sidebar.toggle', label: '开关左侧栏', group: '会话', states: ['browse', 'editing'] },
   { id: 'sidebarRight.toggle', label: '开关右侧栏', group: '会话', states: ['browse', 'editing'] },
+  // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义,且 contenteditable
+  // 里 ⌘/Ctrl+I 是浏览器「斜体」默认行为(execCommand,绕过 Lexical),card 态则归卡片
+  // 自己的输入框。
+  { id: 'composer.focus', label: '聚焦输入框', group: '会话', states: ['browse'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'session.next', label: '下一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'session.stop', label: '停止当前会话(无审批卡片时;含运行中子代理)', group: '会话', states: ['card', 'editing', 'browse'] },
@@ -82,6 +88,10 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   //   是派生面板,拿"左栏 + alt"这一档栈式修饰键。
   'sidebar.toggle': 'mod+b',
   'sidebarRight.toggle': 'mod+alt+b',
+  // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
+  // macOS 上 ⌃I 与 ⌘I 都能触发(用户要的 Ctrl+I 在 mac 上按 ⌃I 即可),Win/Linux
+  // 就是 Ctrl+I;两平台的浏览器 DevTools 都带 Shift(⌘⌥I / Ctrl+Shift+I),不冲突。
+  'composer.focus': 'mod+i',
   'session.prev': 'mod+alt+arrowup',
   'session.next': 'mod+alt+arrowdown',
   // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。

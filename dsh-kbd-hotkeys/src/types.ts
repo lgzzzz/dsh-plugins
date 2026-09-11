@@ -214,9 +214,15 @@ export interface SessionFaceLike {
   cancel?(): Promise<unknown> | void
 }
 
-/** sessions.binding(id) 结果(身份稳定的会话绑定)。 */
+/**
+ * sessions.binding(id) 结果(身份稳定的会话绑定)。
+ * `ctx` 是该会话的作用域 Cordis 上下文(uiSession.materialize 用的同一个
+ * `binding.ctx`,见 dsh-client-ui-session/lib/client.js);
+ * `conversation.input.for(actx)` 需要它以解析到对应会话的 input facade。
+ */
 export interface SessionBindingLike {
   session?: SessionFaceLike
+  ctx?: unknown
 }
 
 /** 子代理目录里的一行(kind==='child' 才是真子会话,diagnostic 行跳过)。 */
@@ -270,6 +276,69 @@ export interface SidebarRightLike {
   isExpanded?(): boolean
 }
 
+/* ------------------------------------------------------------------ *
+ * 输入框聚焦(⌘/Ctrl+I):conversation 服务面 → composer 的 Lexical editor
+ * ------------------------------------------------------------------ */
+
+/**
+ * composer 的 contenteditable 宿主元素(见 dsh-client-ui-conversation
+ * `ComposerContentEditable`:`editor.setRootElement(el)` 绑定的那个 div)。
+ *
+ * 只声明 `focus`:聚焦的唯一可靠原语。**不做任何选择器查询 / DOM 遍历 /
+ * 事件合成**——元素引用完全来自服务链路(shell.editor.getRootElement())。
+ * `preventScroll` 与上游自己的 composer autofocus
+ * (`editor.getRootElement()?.focus({ preventScroll: true })`)同参。
+ */
+export interface ComposerEditableLike {
+  focus?(options?: { preventScroll?: boolean }): void
+}
+
+/**
+ * shell 自有的 Lexical editor 最小面(见
+ * dsh-client-ui-conversation/lib/types/client/input/facade.d.ts 的
+ * `SessionInputShell.editor: readonly editor: LexicalEditor`)。
+ *
+ * 注意 `focus()` 不是聚焦原语:lexical 0.49 的 `LexicalEditor.focus()` 只把
+ * 选区克隆置 dirty + 打 FOCUS_TAG,真正的 DOM 聚焦在选区调和器里、且要求
+ * 「当前 DOM 选区已等于目标选区」才调用 rootElement.focus()——DOM 选区在
+ * composer 之外时(例如刚在正文里点选过文本)它不移动键盘焦点。故这里只用
+ * `getRootElement()` 取宿主元素。
+ */
+export interface ComposerEditorLike {
+  getRootElement?(): ComposerEditableLike | null
+}
+
+/**
+ * 一个会话的 input facade(InputHub 的 `shell(id)` / `for(actx)` 产物,
+ * 见 dsh-client-ui-conversation/lib/types/client/input/hub.d.ts 与
+ * input/facade.d.ts 的 SessionInputShell)。
+ */
+export interface SessionInputShellLike {
+  editor?: ComposerEditorLike
+}
+
+/**
+ * InputHub 消费面(`ctx.conversation.input`)。
+ *
+ * 公开契约 `SessionInputResolver` 只声明 `for(actx): SessionInput`(不含 editor),
+ * 这里按 InputHub 的**公开类型**(hub.d.ts 的 `shell(id): SessionInputShell`)
+ * 结构切片取 editor;`for` / `shell` 在会话无绑定时都抛错,调用方兜住。
+ */
+export interface InputHubLike {
+  for?(actx: unknown): SessionInputShellLike | undefined
+  shell?(id: string): SessionInputShellLike | undefined
+}
+
+/**
+ * conversation 服务消费面(super(ctx, "conversation") 的 ConversationController,
+ * 见 dsh-client-ui-conversation/lib/types/client/service.d.ts)。
+ * 契约面无聚焦动词(`send` / `updateQueue` / `cancel` / `loadOlder` / `input` /
+ * `blocks`),聚焦所需的 editor 只能经 `input` 的 InputHub 取。
+ */
+export interface ConversationLike {
+  input?: InputHubLike
+}
+
 /** 本插件解析后的服务集合(get 结果全部判空后才装进来)。 */
 export interface Services {
   sessions: SessionsLike | undefined
@@ -281,4 +350,6 @@ export interface Services {
   workspaces: WorkspacesLike | undefined
   /** slots 服务:只用于读侧栏视图 store(会话跳转顺序的权威来源)。 */
   slots: SlotsLike | undefined
+  /** conversation 服务:只用于取 composer 的 editor 宿主元素(⌘/Ctrl+I 聚焦输入框)。 */
+  conversation: ConversationLike | undefined
 }
