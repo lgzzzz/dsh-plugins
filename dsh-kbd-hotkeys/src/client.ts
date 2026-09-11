@@ -2,7 +2,7 @@
  * dsh-kbd-hotkeys — 浏览器半部入口(TypeScript 真源;由 scripts/build-client.mjs
  * 用 esbuild 打包为 lib/client.js)。
  *
- * 功能:降低鼠标依赖的全局快捷键(键位设计见 docs/dsh-hotkeys-proposal.md):
+ * 功能:降低鼠标依赖的全局快捷键(键位表见 README「键位表」):
  * - `card` 卡片态(审批 / ask_user_question / 计划评审卡片打开):审批卡片
  *   Enter 允许一次、Esc 拒绝(当前会话有审批卡片时不受焦点位置影响——审批卡片
  *   自身没有输入框);问答卡片数字键 1–9 选选项(只选不翻题)、←/→ 上一题/下一题、
@@ -74,8 +74,8 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
       case 'session.next':
         return openNeighborSession(services, 1)
       case 'session.stop':
-        // 与迁移前行为一致:只取消运行中的会话树,不吞 Esc——页面默认 Esc
-        // 行为(关弹层 / 退出编辑态)照常执行;浮层打开时已在上方模态分发返回。
+        // 只取消运行中的会话树,不吞 Esc——页面默认 Esc 行为(关弹层 /
+        // 退出编辑态)照常执行;浮层打开时已在上方模态分发返回。
         stopCurrentSessionTree(services)
         return false
       case 'help.toggle':

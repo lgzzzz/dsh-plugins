@@ -47,18 +47,19 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）与 ⌘/ 速查表；功能与键位见其 README，设计文档 `docs/dsh-hotkeys-proposal.md` |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）与 ⌘/ 速查表；功能与键位见其 README |
 | `dsh-text-editor` | Host + Client（TS） | `index.ts` + `host/*.ts`（注册 read/write/monaco 路由；挂载行 `inject: [webServer, fs]`） | `src/client.ts` → esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 应用内 Monaco 文本编辑器能力提供者：经 `ctx.provide('dsh-text-editor')` 暴露 `openFile`（文件 tab，可编辑保存）与 `showDiff`（差异 tab，手动推进）；构建依赖 `monaco-editor`（Monaco 复制到不入仓的 `vendor/monaco/`）；暂无 README |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
-上游存在可用服务面的动作**全部改为服务触发**（不触碰 DOM）；DOM 仅用于 `editing`
-态的事件目标判定，已无点击型动作（原「会话视图标签切换」⌘/Ctrl+Alt+←/→ 已移除）。
+动作**全部走服务触发**（不触碰 DOM）；DOM 只有三处：`document` 上的 `keydown`
+捕获监听（全部快捷键的入口）、`editing` 态的事件目标判定（`isEditableTarget`），
+以及插件自建自管的速查表浮层（`overlay.ts`，不消费上游服务）。
 逐项源码依据见该插件 `README.md`「实现要点」与 `src/actions.ts` 头部注释。
 
 | 动作 | 键位（默认） | 触发路径 | 服务接口 / DOM 选择器 |
 | --- | --- | --- | --- |
-| `approval.allow` / `approval.reject` | `Enter` / `Esc`（固定单键，当前会话有待审批卡片时） | **服务** | `uiSession.pendingInteractions` → `PendingApproval.answer('allowed-once' \| 'rejected')`；旧组合键 ⌘/Ctrl+Alt+Enter、⌘/Ctrl+Alt+Backspace 已移除 |
+| `approval.allow` / `approval.reject` | `Enter` / `Esc`（固定单键，当前会话有待审批卡片时） | **服务** | `uiSession.pendingInteractions` → `PendingApproval.answer('allowed-once' \| 'rejected')`；固定单键不经 `bindings`，组合键形式的审批键位不生效 |
 | `question.option` / `question.submit`（计划评审） | `1`–`3` / `Enter` | **服务** | 同上 → `PendingQuestion.answer({answers})`；`3` = `cancel()`；确认/拒绝标签取自 `questions[0].intent.approve` |
 | `question.option` / `question.submit`（通用问答） | `1`–`9` / `Enter` | **服务** | 同上 → 卡片自身的 slot 草稿 store（`slots.entries('conversation.composer')` 注册项 + `uiSession.resolve(sessionId)` + `slots.resolveStore`）写入 `{index, drafts}`：数字键只改选中态（**不翻题**）；Enter 保留上游 `continueFlow` 推进（当前题已作答且非末题 → 翻到下一题），末题仅在**全部题目完成后**结算 `answer({answers:[{id,selected,custom?}]})`（未完成即 no-op，不跳回未完成题）；卡片实时高亮，与鼠标点选共用同一状态 |
 | `question.prev` / `question.next`（通用问答） | `←` / `→` | **服务** | 同一草稿 store 写入 `{index ± 1, drafts}`（草稿原样保留）；对齐上游 pager `nav.prev`/`nav.next` 的 disabled 语义，首题/末题越界 no-op 且不吞键 |
@@ -68,17 +69,9 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `session.stop` | `Esc`（仅当前会话无待审批卡片时） | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
-已移除的动作：**会话视图标签切换**（`view.prev` / `view.next`，⌘/Ctrl+Alt+←/→），
-该键位与对应代码（`switchView` / `findSessionViewTablist`）已整体删除。当初记录的
-删除理由（「唯一实现路径是 DOM 点击 `selectView`」「活跃视图外部不可读」）**不成立**，
-只是当时未找到取数面的结论：`selectView` / `openView` 确实只是 slot 注入的 React
-回调、不是服务方法，但会话视图的选中态落在 ui-conversation 的 per-session slot
-store 上，外部可经公开 slots API 解析到**同一活实例**读写，零 DOM 即可切换——取证与
-做法见下文「无服务面 UI 状态的取数范式」。
-
 侧栏开关的键位分配：**左栏 = ⌘/Ctrl+B（主键）**、**右栏 = ⌘/Ctrl+Alt+B（派生键）**。
-理由三条：① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器），也是
-本插件最初的默认，把已被训练过的反射留给最基础的左栏（导航主面板）；② 上游命名同源——
+理由三条：① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器），
+把已被训练过的反射留给最基础的左栏（导航主面板）；② 上游命名同源——
 不带限定词的 `sidebar` / `sidebarCol` 就指左栏（`layout.toggleSidebar()`），右栏是派生的
 `rightbar`（`rightbarShown` / `rightbarTrack`），主键给「本名」、叠加修饰键给「限定名」；
 ③ 越常用越省力——更短更好按的 `⌘/Ctrl+B` 给频率更高的左栏，`Alt` 这一档留给上下文面板
@@ -122,53 +115,6 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 **无降级**：任一环节不可用（注册项未挂载 / 无该 handle / `uiSession.resolve` 返回
 `undefined` / `resolveStore` 抛 `store handle is not registered`）即 no-op，
 不得回退到 DOM 点击。
-
-### 会话视图 tab 的零 DOM 切换（结论：可以）
-
-对话显示区域头部那排 `对话 / 轨迹` 标签（`role="tablist"`）属于上式：**切换可以完全
-不用 DOM**。
-
-- **渲染**：`dsh-client-ui-conversation` 的 `ConversationSessionHeader` 输出
-  `role="tablist"`，每个 tab 是 `role="tab"` 的 button、`onClick → selectView(id)`；
-  **仅在注册视图数 > 1 时渲染**，空白/hero 会话 `hideChrome` 时不渲染。
-- **tab 列表**：slot `conversation.view`（`kind: list, scope: session`）注册项的投影——
-  上游 `viewTabs()` 遍历 `slots.entries('conversation.view')` 取 `options.id` 与
-  `resolveSlotLabel(options.label)`。当前组合恰为 `chat`（`dsh-client-ui-chat`，order 0）
-  与 `trajectory`（`dsh-client-ui-trajectory`，order 10）。
-- **选中态**：per-session conversation store `createConversationStore()` =
-  `{ draft, view, viewRequest }`（`persist: "dsh.conversation"` →
-  `localStorage["dsh.conversation.<sessionId>"]`），注册为 slot `conversation.session`
-  与 `conversation.session.header` 两条注册项的 `store`。头部的
-  `selectView = activateView(sessionId, view) + actions.setView(view)`，会话体的
-  `openView = activateView + actions.openView(view, focus)`。
-- **零 DOM 做法**：按上式解析到该 store 活实例 → `store.actions.setView(viewId)`
-  （切换，UI 立即重渲染）；可先调 `ctx.uiConversation.binding(sessionId).activate(viewId)`
-  复刻上游 `activateView` 的副作用（`ctx.uiConversation` 是公开服务，
-  构造里 `super(ctx, "uiConversation")`）。读当前 = `store.getSnapshot().view`；
-  枚举 = `slots.entries('conversation.view')`；带焦点的"打开" =
-  `actions.openView(view, focus)`（由目标视图消费 `viewRequest` 后
-  `completeViewRequest()`）。
-- **没有服务方法**：`ctx.conversation`（send / cancel / loadOlder / updateQueue / …）
-  与 `ctx.uiConversation`（binding / activate / target / views / events）都不含视图
-  选中态的读写；选中态只在那份 slot store 里。
-- **没有"打开/关闭"语义**：视图是插件注册项、不是可开关的实例，tab 栏是选中器。
-  第三方只能新增/注销自己的 `conversation.view` 条目
-  （`ctx.slots.inject('conversation.view', () => ctx.slots.register({name, id, order, label}, Component))`），
-  无法隐藏或关闭 `chat` / `trajectory`。
-- **限制与风险**：①注册项只在 `main.conversation` 挂载期间存在（DSH 自带文档：
-  declaredBy "an entry in 'conversation.session' … exists while that entry is mounted"），
-  缺失时 `entries` 为空 / `resolveStore` 抛错 → 必须判空 no-op；②写入未注册的 id 时
-  `resolveActiveView` 回落到 `chat`（`view` 字段留死 id），切换前宜用枚举结果校验；
-  ③`slots.entries` / `entry.store` / `resolveStore` / `uiSession.resolve` 是公开面，
-  但"从注册项挖 store + 快照字段名（`view`）"属私有形状耦合，上游改注册结构会断；
-  ④`localStorage` 里的 `dsh.conversation.<sessionId>.view` 只可作观测，写它不触发 UI。
-
-> 依据（本机 `0.1.5-rc.2`，`<dsh>/node_modules/@deepseek-ai/`）：
-> `dsh-client-ui-conversation/lib/client.js` 15022 / 15073 / 15094 / 14986-14988 /
-> 15124-15128 / 16541-16552 / 2708-2745 / 16673 / 16677-16680 / 16704 / 16710-16713；
-> `dsh-client-ui-renderer/lib/client.js` 605-611 / 1188 / 1286 / 1329-1341；
-> `dsh-client-ui-session/lib/client.js` 193-202 / 258-265；
-> `dsh-client-ui-chat/lib/client.js` 8290、`dsh-client-ui-trajectory/lib/client.js` 8225。
 
 ## 包结构与约定
 
@@ -342,5 +288,5 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 
 | 路径 | 内容 |
 | --- | --- |
-| `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项，以及「无服务面 UI 状态的取数范式（slot store）」（含会话视图 tab 的零 DOM 切换） |
+| `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项，以及「无服务面 UI 状态的取数范式（slot store）」 |
 | 各插件 `README.md` | 功能说明、加载方式与构建说明（`dsh-fullwidth-chat`、`dsh-text-editor` 暂无 README，功能见其 `package.json` 的 `description` 与本文档插件清单） |
