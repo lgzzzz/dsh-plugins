@@ -21,13 +21,13 @@
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
 进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 9 个插件目录（见下节插件清单），
-web Profile 当前已挂载全部 9 个。
+Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 10 个插件目录（见下节插件清单），
+web Profile 已挂载全部 10 个。
 `dsh-change-summary`、`dsh-kbd-nav-focus`（提交 6499dd9）、`dsh-no-right-sidebar`、
 `dsh-left-dock` 已从仓库移除，仅存于
 git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本次按其根因分析
-重写后重新纳入仓库）；`dsh-rightbar-files-guard` 亦已移除（该目录当时未纳入版本控制，
-git 历史中没有它）。仓库根不提供集合
+重写后重新纳入仓库）；`dsh-rightbar-files-guard`、`dsh-rightbar-split-open` 亦已移除
+（该两目录当时均未纳入版本控制，git 历史中没有它们）。仓库根不提供集合
 安装 / 卸载脚本：每个插件由用户逐个执行
 `dsh plugin --profile web add link:<目录>`（详见仓库根 README「安装」）。
 
@@ -49,7 +49,8 @@ git 历史中没有它）。仓库根不提供集合
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-rightbar-tab-width` | Client only（TS） | `index.ts`（空宿主） | `src/`（client.ts + css.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 右栏 tab 胶囊定宽补丁：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」（border-box 分支直接返回该值；空 pane 或 `min-width<=0` 才回落到 `SPLIT_MINIMUMS.chip = 100`），进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（`canSplitPane`），决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏。取值 100 与兜底常量同值 ⇒ 分栏判定与上游默认逐字相同、无偏移；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2）。右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染（不是禁用）。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；见其 README |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/sidebar-tabs/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、右栏当前面板标签切换（⌘/Ctrl+Alt+←/→ → 读右栏会话级 slot store 的 `layout.activePaneId` 面板标签顺序 + `sidebarRight.focus(tabId)`，循环、单标签不吞键）、右栏打开文件浏览器并置顶（⌘/Ctrl+Alt+`\` → 公开的 `sidebarRight.openTab('files')` 打开/展开 + 同一份会话级 store 的 `actions.placeTab(…, 0)` 置顶，与标签拖拽同一入口）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/sidebar-tabs/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、右栏当前面板标签切换（⌘/Ctrl+Alt+←/→ → 读右栏会话级 slot store 的 `layout.activePaneId` 面板标签顺序 + `sidebarRight.focus(tabId)`，循环、单标签不吞键）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
+| `dsh-rightbar-files-float` | Client only（TS） | `index.ts`（空宿主） | `src/`（client.ts + config.ts + sidebar-float.ts + float-rect.ts + composer-box.ts + types.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check`；`node test-float.mjs` | **右栏文件浏览器浮窗开关**（⌘/Ctrl+Alt+`\`，从 `dsh-kbd-hotkeys` 搬出来的独立插件）：① 浮窗里已有文件浏览器标签 → 同一份会话级 store **活实例**的 `actions.closeTab(sessionId, tabId)` 只关浮窗（`host === 'float'` 判定，停靠面板里的副本一律不碰）；② 浮窗里没有但停靠面板里有 → 同一活实例的 `actions.floatTab(sessionId, tabId, rect)` 直接浮出（**不调 `openTab`**，故不顺手展开右栏）；③ 两处都没有 → 公开的 `sidebarRight.openTab('files')` 打开（上游 `openContent` 恒先 `planSetExpanded(true)`），再在**同一个同步调用链**里用同一活实例浮出（**不走**公开的 `sidebarRight.float`——它按 seat 上次渲染的布局校验标签，会把本轮才提交的标签静默丢掉；**不订阅、不重试**）。活实例缺 `actions.floatTab`（没有浮窗时）→ 连打开都不做且不吞键；缺 `closeTab` → 浮窗与副本都不动；其余取数环不可用 → 退化为「打开」或 no-op（不吞键）。`rect` 是**一次性落点**（`float-rect.ts`）：右栏可见时 `x = viewportWidth − 右栏宽 − 280`（右缘贴右栏左缘）、`y = 0`、`height = 渲染视口高`，右栏收起 / 全屏 / 窄帧挤不下则贴窗口右缘；**宽度恒为左栏的预设宽度 280px**（上游 `createLayoutStore` 的 `layoutInfo.sidebar` 初值 / `toggleSidebar()` 恢复值，不随用户拖动左栏变化）；**高度按输入框让位**（`composer-box.ts`：只读量 composer 外框顶边与其还能长高的余量，居中布局只让一半；量不到 / 横向不重叠 / 顶边 ≤ 0 时保持整屏高），保证输入框长到上限也不与浮窗重叠。键位可经 `localStorage["dsh-rightbar-files-float:v1"]` 覆盖，忽略 `event.repeat`；**不订阅、不跟随**、不写 `moveFloat`/`resizeFloat`；见其 README |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
@@ -69,7 +70,6 @@ git 历史中没有它）。仓库根不提供集合
 | `card` 态判定（数字键 / `←` `→` / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
 | `sidebar.toggle` / `sidebarRight.toggle` | ⌘/Ctrl+B / ⌘/Ctrl+Alt+B | **服务** | 左栏 `layout.toggleSidebar()`；右栏 `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；帧轨道由右侧 seat 自行同步 `layout.openRightbar`/`closeRightbar`）。两者均 `browse` + `editing`：主键给主面板（左栏），派生键给上下文面板（右栏） |
 | `sidebarRight.tabPrev` / `sidebarRight.tabNext` | ⌘/Ctrl+Alt+←/→ | **服务** | 标签顺序读右栏自己的会话级 slot store：`slots.entries('rightbar.session')` 注册项上的 store handle → `uiSession.resolve(sessionId)` 作用域绑定 → `slots.resolveStore` → `getSnapshot().bySession[sessionId].layout`，取 `layout.nodes[layout.activePaneId]`（**当前面板**）的 `tabs` / `activeTabId`；切换调公开的 `sidebarRight.focus(tabId)`（与标签 chip 点击同一入口）。**只在当前面板内循环**，单标签 / 该会话尚无面板 / 任一环不可用一律 no-op 不吞键（**无降级**）；**任意态**（含 `card`——问答卡片只占**裸** `←`/`→`，与 `mod+alt` 组合键不冲突） |
-| `sidebarRight.files` | ⌘/Ctrl+Alt+`\` | **服务**（打开走公开面，置顶走同一份 store 的**写集动作**） | ① 打开/揭示：公开的 `sidebarRight.openTab('files')`——`files` = `dsh-client-ui-sidebar-files` 注册的**页类型**（引导页唯一胶囊「工作区文件」），上游 `openContent` 恒先 `planSetExpanded(true)`，一次调用即「展开右栏 + 打开/聚焦」，故不再调 `toggleExpanded()`；页类型按**目标面板**去重，新 tab 落在面板**末尾**（公开面无 index）。② 置顶：同一 `rightbar.session` 会话级 store **活实例**的 `actions.placeTab(sessionId, tabId, paneId, 0)`——与标签条**拖拽**同一入口（seat 的 `intentsFor.placeTab`），dockkit 落地为 `reorderTab`/`moveTab`/`unfloat`，标签栏顺序即 `pane.tabs` 数组顺序。**已在首位**时上游不产生 op、插件也不调；只认**停靠**面板（浮窗不碰）且**优先当前面板**，别面板已有的文件树 tab 不搬（搬过去会被上游 `arriving()` 判重复页而 `closeTab`）；**不用 `replaceTab`**（会关掉被顶掉的 tab）。`openTab` 抛错（无挂载会话面 / `files` 未注册）→ no-op 不吞键；打开成功而取数环不可用 → 只静默跳过置顶、不回退 DOM。**任意态** |
 | `composer.focus` | ⌘/Ctrl+I（`mod+i`；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃I 与 ⌘I 均可） | **服务取元素 + 一次 `focus()`** | `sessions.list` 快照 `current` → `sessions.binding(id).ctx` → `conversation.input.for(actx)`（`for` 缺席回退 `InputHub.shell(id)`，同一 `SessionInputShell`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。仅 `browse` 态；上游无可触发的聚焦服务面（`commandUi.bindComposerFocus` 只 bind 不 trigger，全仓无人调用；`editor.focus()` 非 DOM 聚焦原语），任一环缺失即 no-op 不吞键、不回退 DOM 查询 |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
 | `session.stop` | `Esc`（仅当前会话无待审批卡片时） | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
@@ -87,11 +87,6 @@ git 历史中没有它）。仓库根不提供集合
 跳转同族但不同轴（会话轴在左栏、标签轴在右栏）。标签**循环**（末个 → 回到第一个），
 只有一个标签时 no-op 且不吞键；两个动作 id（`sidebarRight.tabPrev` /
 `sidebarRight.tabNext`）同样各自独立可覆盖。
-**打开文件浏览器并置顶 = ⌘/Ctrl+Alt+`\`**：同属 `rightbar` 这一档（`mod+alt`），
-反斜杠在主键区右端、不与同档方向键抢位；语义是「打开 + 归位」而非开关（已开着就只是
-聚焦 + 归位，天然幂等，故不需要 toggle 键位）。动作 id `sidebarRight.files` 同样可经
-localStorage 覆盖。Win/Linux 上 `Ctrl+Alt` 即 AltGr——插件按 `event.code` 的物理键位
-`Backslash` 命中，与布局产出什么字符无关。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
 `pendingSnapshot` 为同源私有字段，仅作兼容回退）；审批为**固定单键** `Enter`（允许）/
@@ -109,12 +104,7 @@ store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slot
 ⌘/Ctrl+Alt+←/→ 右栏标签切换：标签顺序必须取自 `rightbar.session` 注册项的**会话级
 store**（`bySession[sessionId].layout` 的 `activePaneId` 面板）、切换必须调
 `sidebarRight.focus`，首末标签循环、单标签 / 无面板 / 任一环不可用一律 no-op 不吞键、
-`card` 态仍生效而裸 `←`/`→` 仍归卡片；另有 ⌘/Ctrl+Alt+`\` 右栏文件浏览器：
-打开必须调公开的 `sidebarRight.openTab('files')`、置顶必须调**同一份**会话级 store
-实例的 `actions.placeTab(sessionId, tabId, paneId, 0)`（与标签拖拽同一入口），
-已在首位不调 `placeTab`、只作用于停靠面板且优先当前面板（浮窗与别的分屏面板不搬动）、
-`openTab` 抛错（无挂载会话面 / `files` 未注册）一律 no-op 不吞键、
-取数环不可用只跳过置顶仍吞键、`editing`/`card` 态仍生效、裸 `\` 不触发；
+`card` 态仍生效而裸 `←`/`→` 仍归卡片；
 以及
 ⌘/Ctrl+I 聚焦输入框：`binding.ctx` 原样传给 `conversation.input.for`、只认 `browse` 态、
 `for` 缺席回退 `shell(id)`、任一环缺失/抛错一律 no-op 不吞键）与
@@ -177,11 +167,15 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
   声明；浏览器半部则按需 `export const inject = [...]`（由模块加载器读取注入，如
   `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','sidebarRight','workspaces','slots','conversation']`——`slots`
   用于读侧栏视图 store 的会话顺序、问答卡片草稿 store 与右栏标签 store
-  （`rightbar.session` 注册项：读标签顺序，并借同一实例的 `actions.placeTab` 把文件
-  浏览器 tab 置顶），`layout` / `sidebarRight` 分别用于
-  开关左右栏与（右栏）标签切换 / 打开文件浏览器，`conversation` 用于 ⌘/Ctrl+I 聚焦输入框
-  （取 composer 的 editor 宿主元素）），不消费服务的
-  客户端（纯样式补丁 `dsh-code-card-fonts`）无需声明。遗留纯 JS 宿主
+  （`rightbar.session` 注册项：读标签顺序），`layout` / `sidebarRight` 分别用于
+  开关左右栏与（右栏）标签切换，`conversation` 用于 ⌘/Ctrl+I 聚焦输入框
+  （取 composer 的 editor 宿主元素））；
+  `dsh-rightbar-files-float`：`['sessions','uiSession','sidebarRight','slots','conversation']`
+  ——`sessions` / `uiSession` / `slots` 走 slot store 三步范式读右栏会话级 store
+  （现场 + 动作面 `actions.floatTab` / `actions.closeTab`），`sessions` 还供
+  `conversation.input` 取 composer 宿主元素（高度让位），`sidebarRight` 只用公开的
+  `openTab('files')`。
+  不消费服务的客户端（纯样式补丁 `dsh-code-card-fonts`）无需声明。遗留纯 JS 宿主
   （`dsh-new-session` 的 `lib/index.js`）维持现状：仍在代码中
   `export inject = ['commands']`。
 
@@ -211,11 +205,12 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 
 `~/.dsh/profiles/web/package.json` 当前配置：
 
-- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 9 个：
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 10 个：
   code-card-fonts / directory-picker-browse / fork-inbox-guard / fullwidth-chat /
-  git-guard / kbd-hotkeys / new-session / rightbar-tab-width / text-editor）；
-- `dsh.profile.bundles` 共 11 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
-  及上述 9 个本地插件；
+  git-guard / kbd-hotkeys / new-session / rightbar-files-float / rightbar-tab-width /
+  text-editor）；
+- `dsh.profile.bundles` 共 12 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
+  及上述 10 个本地插件；
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
   （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
 
@@ -268,6 +263,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-rightbar-tab-width` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。其构建脚本**直接执行 esbuild 的平台二进制**（`@esbuild/<platform>-<arch>`，`stdio: 'inherit'`）而非 `import 'esbuild'` 的 `buildSync`：esbuild 的 JS API 以 stdin/stdout 管道与子进程通信，在受限沙箱下 `spawn` 报 `EPERM`；同组 flag 下产物一致 |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check`；`node test-services.mjs`；`node test-dispatch.mjs` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。其构建脚本与 `dsh-rightbar-tab-width` 同一做法：**直接执行 esbuild 的平台二进制**（`@esbuild/<platform>-<arch>`，`stdio: 'inherit'`）而非 `import 'esbuild'` 的 `buildSync`（后者以 stdin/stdout 管道与子进程通信，受限沙箱下 `spawn` 报 `EPERM`；同组 flag 下产物一致） |
+| `dsh-rightbar-files-float` | `npm run typecheck && npm run build && npm run check`；`node test-float.mjs` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。同样**直接执行 esbuild 的平台二进制**（受限沙箱下 `buildSync` 的 stdio 管道会 `EPERM`）。`test-float.mjs` 用最小 DOM 桩 + 假右栏 store（复刻上游 `planSettle` 给清空停靠面板补默认页、`floatTab` 要求标签停靠否则抛错）断言 95 条：①②③ 三条路径（停靠中不重复打开、浮窗 + 停靠副本只关浮窗、两处都没有时**同一次按键内**完成打开 + 浮出、再按只关浮窗、第三次直接浮出右栏那一枚）、一次性落点（几何变化后不再产生新的 floatTab 调用）、落点几何（右栏收起 / 全屏 / 窄帧 / 挤不下 / 窄屏图标轨、**宽度不跟随左栏当前宽**、根 layout store 与视口高读不到时不传 rect）、输入框让位（贴底 / 居中只让一半 / 已到上限 / 上限属性读不到退回常量 / 横向不重叠 / 找不到外框 / 顶边 ≤ 0 / 取不到元素）、无降级各条（服务与 store 缺失、`resolveStore` 抛错、缺 `getSnapshot`/`bySession`、无作用域绑定、无当前会话、缺 `floatTab`/`closeTab`、`openTab` 与 `floatTab` 抛错）、键位分发（裸 `\` / 位移键 / 长按重复 / 输入法组合 / macOS ⌘+Alt、localStorage 覆盖与损坏回退）与 `dispose` 摘监听 |
 | 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
 
 `node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写

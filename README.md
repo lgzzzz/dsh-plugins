@@ -26,8 +26,9 @@ README，功能见其 `package.json` 的 `description` 与 `AGENTS.md` 插件清
 | `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、左右栏开关、右栏标签切换、⌘/ 速查表等） | ✅ |
 | `dsh-new-session` | `/new` 新建会话命令 | ✅ |
 | `dsh-rightbar-tab-width` | 右栏 tab 胶囊定宽 100px 补丁（并保持分栏判定与上游一致） | ✅ |
+| `dsh-rightbar-files-float` | 右栏文件浏览器**浮窗开关**：⌘/Ctrl+Alt+`\` 冷启动时打开并浮出、停靠时浮出、浮窗里已有时只关浮窗；宽度 = 左栏预设宽 280px，高度按输入框最坏顶边让位 | ✅ |
 
-> 上表的「当前已挂载」是写入本仓库时的本机状态；README 列出的 9 个插件均已装入
+> 上表的「当前已挂载」是写入本仓库时的本机状态；README 列出的 10 个插件全部已装入
 > web Profile（装入 / 卸载属用户操作，见 `AGENTS.md` 强制规范第 1 条）。
 
 ## 安装
@@ -89,7 +90,7 @@ dsh plugin --profile web remove dsh-plugins
 dsh plugin --profile web remove <name>
 
 # 全部本地插件（按需删减；写成一行即可）
-dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fork-inbox-guard dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-new-session dsh-rightbar-tab-width
+dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fork-inbox-guard dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-new-session dsh-rightbar-files-float dsh-rightbar-tab-width
 # 重启 App 生效
 ```
 
