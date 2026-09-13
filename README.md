@@ -23,7 +23,7 @@ README，功能见其 `package.json` 的 `description` 与 `AGENTS.md` 插件清
 | `dsh-fork-inbox-guard` | 分叉子会话丢弃继承自源会话的、仍 pending 的输入（子代理显式跳过） | — |
 | `dsh-fullwidth-chat` | 对话列全宽展示 | ✅ |
 | `dsh-git-guard` | 拦截 `git push`（deny）/ `git commit`（ask） | ✅ |
-| `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、侧栏开关、⌘/ 速查表等） | ✅ |
+| `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、左右栏开关、右栏标签切换、⌘/ 速查表等） | ✅ |
 | `dsh-new-session` | `/new` 新建会话命令 | ✅ |
 
 > 上表的「当前已挂载」是写入本仓库时的本机状态；README 列出的 8 个插件中 7 个已装入
