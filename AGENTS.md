@@ -47,8 +47,8 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
-| `dsh-text-editor` | Host + Client（TS） | `index.ts` + `host/*.ts`（注册 read/write/monaco 路由；挂载行 `inject: [webServer, fs]`） | `src/client.ts` → esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 应用内 Monaco 文本编辑器能力提供者：经 `ctx.provide('dsh-text-editor')` 暴露 `openFile`（文件 tab，可编辑保存）与 `showDiff`（差异 tab，手动推进）；构建依赖 `monaco-editor`（Monaco 复制到不入仓的 `vendor/monaco/`）；暂无 README |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/sidebar-tabs/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、右栏当前面板标签切换（⌘/Ctrl+Alt+←/→ → 读右栏会话级 slot store 的 `layout.activePaneId` 面板标签顺序 + `sidebarRight.focus(tabId)`，循环、单标签不吞键）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
+| `dsh-text-editor` | Host + Client（TS） | `index.ts` + `host/*.ts`（注册 read/write/monaco 路由；挂载行 `inject: [webServer, fs]`） | `src/`（client.ts + sidebar.ts + file-io.ts + address.ts + controller.ts + ui.ts + monaco.ts + state.ts + commands.ts + routes.ts + path.ts + faces.ts + css.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && node test-address.mjs && npm run build && npm run check` | 应用内 Monaco 文本编辑器：**文件面在右侧栏**——浏览器半部以未声明 `priority`（= 上游最高档 `extension`）注册右栏资源 tab 类型 `dsh-text-editor/editor`（`kind: dsh-text-editor`、`patterns: ['dsh-resource://file/**']`、`canOpen` 否决图片/PDF），于是**右栏文件树的行与对话区的文件链接**都开进右栏的 Monaco pane（可编辑、可保存，未保存修改跨 tab 保留、关 tab 丢弃）；图片/PDF 仍由内置 `ui-sidebar-documentpreview` 渲染；会话主区不再出现文件 tab（只剩 `showDiff` 的「差异」tab）。另经 `ctx.provide('dsh-text-editor')` 暴露 `openFile`（开进右栏）与 `showDiff`（会话主区差异 tab，手动推进）；构建依赖 `monaco-editor`（Monaco 复制到不入仓的 `vendor/monaco/`）；详见其 README |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
@@ -67,6 +67,7 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `question.prev` / `question.next`（通用问答） | `←` / `→` | **服务** | 同一草稿 store 写入 `{index ± 1, drafts}`（草稿原样保留）；对齐上游 pager `nav.prev`/`nav.next` 的 disabled 语义，首题/末题越界 no-op 且不吞键 |
 | `card` 态判定（数字键 / `←` `→` / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
 | `sidebar.toggle` / `sidebarRight.toggle` | ⌘/Ctrl+B / ⌘/Ctrl+Alt+B | **服务** | 左栏 `layout.toggleSidebar()`；右栏 `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；帧轨道由右侧 seat 自行同步 `layout.openRightbar`/`closeRightbar`）。两者均 `browse` + `editing`：主键给主面板（左栏），派生键给上下文面板（右栏） |
+| `sidebarRight.tabPrev` / `sidebarRight.tabNext` | ⌘/Ctrl+Alt+←/→ | **服务** | 标签顺序读右栏自己的会话级 slot store：`slots.entries('rightbar.session')` 注册项上的 store handle → `uiSession.resolve(sessionId)` 作用域绑定 → `slots.resolveStore` → `getSnapshot().bySession[sessionId].layout`，取 `layout.nodes[layout.activePaneId]`（**当前面板**）的 `tabs` / `activeTabId`；切换调公开的 `sidebarRight.focus(tabId)`（与标签 chip 点击同一入口）。**只在当前面板内循环**，单标签 / 该会话尚无面板 / 任一环不可用一律 no-op 不吞键（**无降级**）；**任意态**（含 `card`——问答卡片只占**裸** `←`/`→`，与 `mod+alt` 组合键不冲突） |
 | `composer.focus` | ⌘/Ctrl+I（`mod+i`；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃I 与 ⌘I 均可） | **服务取元素 + 一次 `focus()`** | `sessions.list` 快照 `current` → `sessions.binding(id).ctx` → `conversation.input.for(actx)`（`for` 缺席回退 `InputHub.shell(id)`，同一 `SessionInputShell`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。仅 `browse` 态；上游无可触发的聚焦服务面（`commandUi.bindComposerFocus` 只 bind 不 trigger，全仓无人调用；`editor.focus()` 非 DOM 聚焦原语），任一环缺失即 no-op 不吞键、不回退 DOM 查询 |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
 | `session.stop` | `Esc`（仅当前会话无待审批卡片时） | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
@@ -79,7 +80,11 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 `rightbar`（`rightbarShown` / `rightbarTrack`），主键给「本名」、叠加修饰键给「限定名」；
 ③ 越常用越省力——更短更好按的 `⌘/Ctrl+B` 给频率更高的左栏，`Alt` 这一档留给上下文面板
 （右栏）。两个动作 id 各自独立可经 localStorage 覆盖，互换只改 `src/config.ts` 两行
-`DEFAULT_BINDINGS`。
+`DEFAULT_BINDINGS`。**右栏标签切换 = ⌘/Ctrl+Alt+←/→**：与右栏开关同属 `rightbar`
+这一档（`mod+alt`），方向键天然表达「上一个 / 下一个」；与 ⌘/Ctrl+Alt+↑/↓ 的活跃会话
+跳转同族但不同轴（会话轴在左栏、标签轴在右栏）。标签**循环**（末个 → 回到第一个），
+只有一个标签时 no-op 且不吞键；两个动作 id（`sidebarRight.tabPrev` /
+`sidebarRight.tabNext`）同样各自独立可覆盖。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
 `pendingSnapshot` 为同源私有字段，仅作兼容回退）；审批为**固定单键** `Enter`（允许）/
@@ -94,6 +99,11 @@ store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slot
 验证：`node test-services.mjs`（最小 DOM 桩不提供任何卡片，断言服务路径与草稿 store
 写入，含数字键不翻题、`←`/`→` 只改题号、首末题不循环、Enter 非末题推进 / 末题未完成不结算，
 以及 ⌘/Ctrl+B / ⌘/Ctrl+Alt+B 分别打左/右栏、互不串场、自定义键位与无降级；另有
+⌘/Ctrl+Alt+←/→ 右栏标签切换：标签顺序必须取自 `rightbar.session` 注册项的**会话级
+store**（`bySession[sessionId].layout` 的 `activePaneId` 面板）、切换必须调
+`sidebarRight.focus`，首末标签循环、单标签 / 无面板 / 任一环不可用一律 no-op 不吞键、
+`card` 态仍生效而裸 `←`/`→` 仍归卡片；
+以及
 ⌘/Ctrl+I 聚焦输入框：`binding.ctx` 原样传给 `conversation.input.for`、只认 `browse` 态、
 `for` 缺席回退 `shell(id)`、任一环缺失/抛错一律 no-op 不吞键）与
 `node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，
@@ -103,8 +113,10 @@ store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slot
 
 有些 UI 状态上游**没有** cordis 服务方法，只存在于某个 slot 注册项挂载的 per-session
 store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本仓库的问答卡片草稿
-`dsh-kbd-hotkeys/src/question-drafts.ts` 与侧栏视图顺序 `src/sidebar-order.ts`
-已在用）：
+`dsh-kbd-hotkeys/src/question-drafts.ts`、侧栏视图顺序 `src/sidebar-order.ts`
+与右栏标签顺序 `src/sidebar-tabs.ts` 已在用；后两者的作用域不同——`sidebar-tabs.ts`
+的 handle 是 **session 作用域**（必须传第 2 步的绑定），`sidebar-order.ts` 的是
+**root 作用域**（传 `undefined`））：
 
 1. `slots.entries('<slot 名>')` → 该 slot 的注册项；带 `store` 字段的那一项即承载
    目标状态的 store handle（`SlotsService.entries` 与注册项的 `store` 都是公开面）；
@@ -153,8 +165,10 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务改由挂载行 `inject`
   声明；浏览器半部则按需 `export const inject = [...]`（由模块加载器读取注入，如
   `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','sidebarRight','workspaces','slots','conversation']`——`slots`
-  用于读侧栏视图 store 的会话顺序与问答卡片草稿 store，`layout` / `sidebarRight` 分别用于
-  开关左右栏，`conversation` 用于 ⌘/Ctrl+I 聚焦输入框（取 composer 的 editor 宿主元素）），不消费服务的
+  用于读侧栏视图 store 的会话顺序、问答卡片草稿 store 与右栏标签 store
+  （`rightbar.session` 注册项），`layout` / `sidebarRight` 分别用于
+  开关左右栏与（右栏）标签切换，`conversation` 用于 ⌘/Ctrl+I 聚焦输入框
+  （取 composer 的 editor 宿主元素）），不消费服务的
   客户端（纯样式补丁 `dsh-code-card-fonts`）无需声明。遗留纯 JS 宿主
   （`dsh-new-session` 的 `lib/index.js`）维持现状：仍在代码中
   `export inject = ['commands']`。
@@ -242,7 +256,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | `dsh-fork-inbox-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 用真实 `@deepseek-ai/dsh-session` 构造 seeded 子会话，验证前缀折叠、移除幂等、子代理 balanced 前缀零改动、异常不外逸 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
-| `dsh-text-editor` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`；构建依赖 `monaco-editor`（复制到不入仓的 `vendor/monaco/`）。`vendor/monaco/` 缺失时文件 tab 报 `Monaco 加载失败：Monaco loader failed to load`（宿主 `/dsh-text-editor/monaco/*` 路由 404），`npm install && npm run build` 即恢复，无需重启 |
+| `dsh-text-editor` | `npm run typecheck && node test-address.mjs && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`；`test-address.mjs` 以 Type Stripping 直载 `src/address.ts`，验证地址解析/构造与「文本接管域」（canOpen 谓词）共 15 项断言；构建依赖 `monaco-editor`（复制到不入仓的 `vendor/monaco/`）。`vendor/monaco/` 缺失时右栏编辑器报 `Monaco 加载失败：Monaco loader failed to load`（宿主 `/dsh-text-editor/monaco/*` 路由 404），`npm install && npm run build` 即恢复，无需重启 |
 | 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
 
 `node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
@@ -294,4 +308,4 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | 路径 | 内容 |
 | --- | --- |
 | `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项，以及「无服务面 UI 状态的取数范式（slot store）」 |
-| 各插件 `README.md` | 功能说明、加载方式与构建说明（`dsh-fullwidth-chat`、`dsh-text-editor` 暂无 README，功能见其 `package.json` 的 `description` 与本文档插件清单） |
+| 各插件 `README.md` | 功能说明、加载方式与构建说明（`dsh-fullwidth-chat` 暂无 README，功能见其 `package.json` 的 `description` 与本文档插件清单） |

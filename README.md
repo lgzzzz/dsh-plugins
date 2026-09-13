@@ -8,7 +8,7 @@
 集合安装 / 卸载脚本**：每个插件作为 Profile 中独立的 `link:` 依赖逐个装入，经其自身的
 `cordis.patch.yml` 独立挂载（见下文「安装」）。
 
-各插件的功能说明见其目录内 `README.md`（`dsh-fullwidth-chat`、`dsh-text-editor` 暂无
+各插件的功能说明见其目录内 `README.md`（`dsh-fullwidth-chat` 暂无
 README，功能见其 `package.json` 的 `description` 与 `AGENTS.md` 插件清单）；跨插件
 工程规范见 `AGENTS.md`。
 
@@ -23,9 +23,9 @@ README，功能见其 `package.json` 的 `description` 与 `AGENTS.md` 插件清
 | `dsh-fork-inbox-guard` | 分叉子会话丢弃继承自源会话的、仍 pending 的输入（子代理显式跳过） | — |
 | `dsh-fullwidth-chat` | 对话列全宽展示 | ✅ |
 | `dsh-git-guard` | 拦截 `git push`（deny）/ `git commit`（ask） | ✅ |
-| `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、侧栏开关、⌘/ 速查表等） | ✅ |
+| `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、左右栏开关、右栏标签切换、⌘/ 速查表等） | ✅ |
 | `dsh-new-session` | `/new` 新建会话命令 | ✅ |
-| `dsh-text-editor` | 应用内 Monaco 文本编辑器能力（`openFile` 文件 tab / `showDiff` 差异 tab + 宿主读写路由） | ✅ |
+| `dsh-text-editor` | 右栏 Monaco 文本编辑器：接管右栏文件树与对话文件链接打开的文本文件（可编辑保存），图片/PDF 仍走内置预览；另有 `openFile` / `showDiff` 能力服务 | ✅ |
 
 > 上表的「当前已挂载」是写入本仓库时的本机状态；README 列出的 8 个插件中 7 个已装入
 > web Profile，`dsh-fork-inbox-guard` 当前未挂载（装入属用户操作，见 `AGENTS.md`
@@ -52,7 +52,7 @@ dsh plugin --profile web add link:<仓库根>/<name>
 
 - `dsh-text-editor`：`lib/client.js` 已入仓；若需重新构建，先 `npm install`
   （`monaco-editor` 依赖会在构建时复制到不入仓的 `vendor/monaco/`）。`vendor/monaco/`
-  缺失时文件 tab 报 `Monaco 加载失败：Monaco loader failed to load`（宿主
+  缺失时右栏编辑器报 `Monaco 加载失败：Monaco loader failed to load`（宿主
   `/dsh-text-editor/monaco/*` 路由 404），在该目录跑一次 `npm install && npm run build`
   即恢复，无需重启；
 - 其余插件：`lib/*.js` 已入仓，可直接挂载；重新构建见各插件 README /
