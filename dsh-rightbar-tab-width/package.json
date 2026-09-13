@@ -1,0 +1,34 @@
+{
+  "name": "dsh-rightbar-tab-width",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web UI patch: every right-sidebar tab capsule (the dockkit chip carrying data-dockkit-tab) gets a fixed 100px outer width instead of upstream's content-driven 100px-190px float (min-width:80px / max-width:170px / padding:0 10px, content-box). 100px is upstream's own floor, so the capsule is always at its minimum. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}
