@@ -14,6 +14,10 @@
  *   不循环);Enter = 保留上游 continueFlow 的推进语义(当前题已作答且非末题 →
  *   翻到下一题),末题仅在全部题目完成后按 store 的草稿成批结算(不跳回未完成题);
  * - 侧栏:layout.toggleSidebar()(左栏) / sidebarRight.toggleExpanded()(右栏);
+ *   右栏标签切换(⌘/Ctrl+Alt+← / →)在 sidebar-tabs.ts:标签顺序读右栏自己的
+ *   会话级 slot store(`rightbar.session` 注册项 → uiSession.resolve →
+ *   slots.resolveStore,取 layout.activePaneId 面板的 tabs),切换调公开的
+ *   sidebarRight.focus(tabId)(与标签 chip 点击同一入口);
  * - 聚焦输入框(⌘/Ctrl+I):sessions.binding(id).ctx → conversation.input
  *   (SessionInputResolver.for / InputHub.shell)→ shell.editor.getRootElement()
  *   → `focus({ preventScroll: true })`——上游无聚焦服务面,这是唯一可靠原语;
