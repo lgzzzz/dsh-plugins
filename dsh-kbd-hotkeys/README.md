@@ -22,6 +22,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 | `⌘/Ctrl+B` | 开关**左**侧栏（主键；走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+B` | 开关**右**侧栏（派生键；走 `sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+←` / `→` | **右侧栏**当前面板的标签：上一个 / 下一个（循环；只有一个标签时不吞键） | 任意 |
+| `⌘/Ctrl+Alt+\` | **右侧栏**打开文件浏览器（`openTab('files')`，同时展开右栏）并把它置于所在标签栏**首位** | 任意 |
 | `⌘/Ctrl+I` | 聚焦对话**输入框**（走 `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`） | `browse` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
 
@@ -56,6 +57,18 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > 面板只有一个标签时**不循环回自身**——no-op 且不吞键，把按键交回页面，
 > 避免「按了没反应还吃掉按键」。三态均生效（含 `card`）：卡片打开时同样能切右栏标签，
 > 因为卡片占用的是**裸** `←` / `→`，带 `mod+alt` 的组合键与它不冲突，本动作无需让路。
+>
+> **打开文件浏览器并置顶为什么是 `⌘/Ctrl+Alt+\`**：它同属右栏（`rightbar`）这一档
+> （`mod+alt`），反斜杠在主键区右端、不与同档的方向键抢位。语义是「打开 + 归位」而不是
+> 「开关」：**已经开着就只是聚焦并归位**（幂等），所以不需要一个 toggle 键位。
+> 上游公开面只提供 `openTab(kind)`（落位是目标面板**末尾**），**没有**「插到第 N 位」
+> 的落位参数，因此置顶走的是**标签拖拽的同一入口**——会话级 slot store 实例上的
+> `actions.placeTab(sessionId, tabId, paneId, 0)`；**绝不使用 `replaceTab`**（那会
+> `closeTab` 掉被顶掉的那个 tab，可能丢掉编辑器的未保存修改）。三态均生效：
+> `mod+alt` 与卡片的裸键、与文本编辑都不冲突。
+> 已知限制：Win/Linux 上 `Ctrl+Alt` 即 AltGr（本插件按 `event.code` 的**物理键位**
+> `Backslash` 命中，与布局产出什么字符无关）；极窄窗口下上游会把「挤不下」的右栏
+> 再折叠回去（与右栏头部展开按钮同一条路）。
 >
 > 审批与问答的 `Enter` / `Esc` / 数字键 / 方向键是**固定分发的单键**，不参与
 > `bindings` 自定义（见「自定义键位」）。
@@ -141,6 +154,32 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   态闸门为**任意态**：问答卡片只用**裸** `←` / `→`（固定分发，见上面的
   `question.prev` / `question.next`），带 `mod+alt` 的组合键与它不在同一个 combo 上，
   所以卡片打开时本动作照常生效。
+- 打开文件浏览器并置顶（`⌘/Ctrl+Alt+\` → `src/sidebar-tabs.ts` 的
+  `revealRightSidebarFiles`）：两步，各走一个上游入口。
+  ① **打开/揭示** = 公开的 `sidebarRight.openTab('files')`——`files` 是
+  `dsh-client-ui-sidebar-files` 注册的**页类型** kind（也就是引导页里「工作区文件」
+  那一格）；上游 store 的 `openContent` 恒先 `planSetExpanded(true)`，所以一次调用
+  即「**展开右栏** + 打开/聚焦」，插件不必也不该再调 `toggleExpanded()`（那会把本来
+  开着的右栏关掉）。页类型按**目标面板**（`activeDockPaneId`）去重：该面板已有文件
+  浏览器页就只聚焦它，否则在面板**末尾**新建（公开面无 index）。
+  ② **置顶** = 同一份会话级 slot store 的**活实例动作面**
+  `actions.placeTab(sessionId, tabId, paneId, 0)`——与标签条**拖拽**同一入口
+  （seat 的 `intentsFor.placeTab`），落地为 dockkit `reorderTab`（同面板）/
+  `moveTab`（跨面板）/ `unfloat`（源为浮窗），是上游声明的写集动词；
+  `index` 已在上游 clamp。标签栏顺序就是 `pane.tabs` 数组顺序（strip 渲染
+  `r.tabs.map(…)`，chip 带 `data-dockkit-tab`），所以「首位」= `tabs[0]`。
+  取数路径与切标签**共用** `slots.entries('rightbar.session')` →
+  `uiSession.resolve(sessionId)` → `slots.resolveStore(handle, binding)`（本轮把
+  `rightbarTabsState` 收敛为返回 `{ instance, snapshot }` 的 `rightbarStore`，
+  读顺序取 `snapshot`、写置顶取 `instance.actions`）。
+  语义与边界：**已在首位**时上游 `planPlaceTab` 不产生任何 op（零提交、零历史），
+  插件也不调 `placeTab`；只认**停靠**面板（浮窗不碰），**优先当前面板**（本次
+  `openTab` 的落点），别的分屏面板里已有的文件树 tab **不搬过来**——搬过去会被上游
+  `arriving()` 判为重复页而 `closeTab`，所以跨面板可能各有一份（上游「页唯一性按
+  面板」的既定语义）。**无降级**：`openTab` 抛错（无挂载会话面 / `files` 类型未注册）
+  → no-op 且**不吞键**；打开成功但任一取数环不可用（无 `slots`、无作用域绑定、
+  `resolveStore` 抛错、实例无 `actions.placeTab`）→ 只静默跳过置顶，**不回退**到 DOM
+  或 `replaceTab`，打开本身照旧吞键（该按键确实做了事）。
 - 聚焦输入框（`⌘/Ctrl+I`）：**上游没有可触发的「聚焦 composer」服务面**——`conversation`
   契约（`send` / `updateQueue` / `cancel` / `loadOlder` / `input` / `blocks`）与
   `SessionInput` 契约（`setDraft` / `submit` / `state` …）都没有聚焦动词；
@@ -235,11 +274,19 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   no-op 并把按键交回页面——避免「按了没反应还吃掉按键」。
 - **`card` 态下右栏标签照常可切**：卡片占用的方向键是**裸** `←` / `→`（问答翻题），
   `⌘/Ctrl+Alt+←/→` 是另一个 combo，两者互不影响；同理输入框聚焦（`editing`）时也生效。
+- **文件浏览器置顶只作用于它所在的那个停靠面板**：优先**当前面板**（本次 `openTab`
+  的落点）。若文件树页同时存在于另一个分屏面板，那里那个 tab 保持不动（上游「页唯一性
+  按**面板**」的语义，跨面板可能各有一份）；浮窗里的文件树 tab 也不被挪动、不被关闭。
+  两个已知的上游行为沿用：Win/Linux 上 `Ctrl+Alt` 即 AltGr（按物理键位 `Backslash`
+  命中）；极窄窗口下右栏会被上游按「挤不下」的规则再折叠回去（与右栏头部展开按钮
+  同一条路，见 `dsh-client-ui-layout` 的 `canShow: normal.rightbar > 0`）。
 
 服务注入：`['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation']`
 （全部判空后才消费；`slots` 用于读侧栏视图 store（会话跳转顺序）、问答草稿 store
-与右栏标签 store（`rightbar.session`），`layout` 用于 `⌘/Ctrl+B` 开关左栏，
-`sidebarRight` 用于 `⌘/Ctrl+Alt+B` 开关右栏与 `⌘/Ctrl+Alt+←/→` 聚焦右栏标签，
+与右栏标签 store（`rightbar.session` 的标签顺序 + 置顶用的 `actions.placeTab`），
+`layout` 用于 `⌘/Ctrl+B` 开关左栏，
+`sidebarRight` 用于 `⌘/Ctrl+Alt+B` 开关右栏、`⌘/Ctrl+Alt+←/→` 聚焦右栏标签与
+`⌘/Ctrl+Alt+\` 打开文件浏览器，
 `conversation` 用于 `⌘/Ctrl+I` 取 composer 的 editor 宿主元素）。
 无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表为纯 DOM 浮层）。
 
@@ -259,7 +306,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 - `bindings` 与默认表**浅合并**：只写想覆盖的动作 id（动作 id 见
   `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；两个侧栏动作
   （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）、右栏标签切换
-  （`sidebarRight.tabPrev` / `sidebarRight.tabNext`）与聚焦输入框
+  （`sidebarRight.tabPrev` / `sidebarRight.tabNext`）、打开文件浏览器并置顶
+  （`sidebarRight.files`）与聚焦输入框
   （`composer.focus`）各自独立可覆盖。
   > 未注册的动作 id 写在 `bindings` 里不会触发：分发前先查动作注册表
   > （`ACTION_BY_ID`），未注册即忽略。
@@ -295,6 +343,11 @@ node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/ca
                          # rightbar.session 注册项的会话级 store（bySession[sessionId].layout
                          # 的 activePaneId 面板）、切换必须调 sidebarRight.focus，首末标签循环、
                          # 单标签与任一环不可用一律 no-op 不吞键、card 态仍生效（裸方向键归卡片）；
+                         # 以及 ⌘/Ctrl+Alt+\ 打开文件浏览器并置顶：必须调公开的
+                         # sidebarRight.openTab('files')，置顶必须调同一份会话级 store 实例的
+                         # actions.placeTab(sessionId, tabId, paneId, 0)（与标签拖拽同一入口）、
+                         # 已在首位不调 placeTab、只作用于停靠面板且优先当前面板（浮窗与别的
+                         # 分屏面板不搬动）、openTab 抛错时 no-op 不吞键、取数失败只跳过置顶；
                          # 以及 ⌘/Ctrl+I 聚焦输入框：binding.ctx 原样传给 input.for、只认 browse 态、
                          # for 缺席回退 shell(id)、任一环缺失/抛错一律 no-op 不吞键）
 node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序跳转（分组 / flat / 来源不可用 no-op）

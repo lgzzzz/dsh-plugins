@@ -57,6 +57,10 @@ export const ACTIONS: readonly ActionDef[] = [
   // 问答卡片,但那是**裸**方向键(固定分发),与带 mod+alt 的组合键不冲突,故无需让路。
   { id: 'sidebarRight.tabPrev', label: '右侧栏:上一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'sidebarRight.tabNext', label: '右侧栏:下一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 打开文件浏览器并置顶(⌘/Ctrl+Alt+\):与右栏开关 / 标签切换同属 rightbar 这一档
+  // (mod+alt),同样三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,
+  // 也不干扰文本编辑。
+  { id: 'sidebarRight.files', label: '右侧栏:打开文件浏览器并置于首位', group: '会话', states: ['card', 'editing', 'browse'] },
   // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义,且 contenteditable
   // 里 ⌘/Ctrl+I 是浏览器「斜体」默认行为(execCommand,绕过 Lexical),card 态则归卡片
   // 自己的输入框。
@@ -98,6 +102,11 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   // (会话轴 vs 右栏标签轴)。边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
   'sidebarRight.tabPrev': 'mod+alt+arrowleft',
   'sidebarRight.tabNext': 'mod+alt+arrowright',
+  // 打开右栏文件浏览器并置顶 = ⌘/Ctrl+Alt+\:反斜杠在主键区右端,与右栏那一档
+  // (mod+alt)同族。键名走 `comboOf` 的 e.code 归一化(`Backslash` → `\`),
+  // 与布局产出什么字符无关;JIS 等把 `\` 放在别的物理键上的键盘由 e.key 回退兜住。
+  // 注意 Win/Linux 上 Ctrl+Alt 即 AltGr(见 README「已知限制」)。
+  'sidebarRight.files': 'mod+alt+\\',
   // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
   // macOS 上 ⌃I 与 ⌘I 都能触发(用户要的 Ctrl+I 在 mac 上按 ⌃I 即可),Win/Linux
   // 就是 Ctrl+I;两平台的浏览器 DevTools 都带 Shift(⌘⌥I / Ctrl+Shift+I),不冲突。

@@ -20,15 +20,15 @@ README，功能见其 `package.json` 的 `description` 与 `AGENTS.md` 插件清
 | --- | --- | --- |
 | `dsh-code-card-fonts` | 卡片标题/摘要行/展开内容与代码块字号补丁 | ✅ |
 | `dsh-directory-picker-browse` | 目录选择器固定 browse 模式的覆盖层 | ✅ |
-| `dsh-fork-inbox-guard` | 分叉子会话丢弃继承自源会话的、仍 pending 的输入（子代理显式跳过） | — |
+| `dsh-fork-inbox-guard` | 分叉子会话丢弃继承自源会话的、仍 pending 的输入（子代理显式跳过） | ✅ |
 | `dsh-fullwidth-chat` | 对话列全宽展示 | ✅ |
 | `dsh-git-guard` | 拦截 `git push`（deny）/ `git commit`（ask） | ✅ |
 | `dsh-kbd-hotkeys` | 全局快捷键（审批/问答键盘化、会话切换、左右栏开关、右栏标签切换、⌘/ 速查表等） | ✅ |
 | `dsh-new-session` | `/new` 新建会话命令 | ✅ |
+| `dsh-rightbar-tab-width` | 右栏 tab 胶囊定宽 100px 补丁（并保持分栏判定与上游一致） | ✅ |
 
-> 上表的「当前已挂载」是写入本仓库时的本机状态；README 列出的 8 个插件中 7 个已装入
-> web Profile，`dsh-fork-inbox-guard` 当前未挂载（装入属用户操作，见 `AGENTS.md`
-> 强制规范第 1 条）。
+> 上表的「当前已挂载」是写入本仓库时的本机状态；README 列出的 9 个插件均已装入
+> web Profile（装入 / 卸载属用户操作，见 `AGENTS.md` 强制规范第 1 条）。
 
 ## 安装
 
@@ -89,7 +89,7 @@ dsh plugin --profile web remove dsh-plugins
 dsh plugin --profile web remove <name>
 
 # 全部本地插件（按需删减；写成一行即可）
-dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fork-inbox-guard dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-new-session
+dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fork-inbox-guard dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-new-session dsh-rightbar-tab-width
 # 重启 App 生效
 ```
 

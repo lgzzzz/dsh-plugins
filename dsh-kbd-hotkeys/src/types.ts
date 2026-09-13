@@ -262,6 +262,20 @@ export interface LayoutLike {
 }
 
 /**
+ * 打开落点(见 ISidebarRight 的 `SidebarRightPlacement`)。
+ * **没有 index**:公开面无法表达「插到第 N 位」——把 tab 放到首位只能经会话级
+ * store 的 `placeTab`(见 SidebarRightSurfaceActionsLike)。
+ */
+export interface SidebarRightPlacementLike {
+  /** 落到这个面板,而不是当前停靠面板。 */
+  paneId?: string
+  /** 顶掉这个标签的槽位,并在同一步里把它关掉。 */
+  replaceTab?: string
+  /** 资源 tab 默认按 (kind, contentId) 揭示已开的那一个;`false` 允许重复。页类型恒按面板去重。 */
+  revealIfOpened?: boolean
+}
+
+/**
  * sidebarRight 服务消费面(ctx.reflect.provide("sidebarRight", …) 的控制器,
  * 见 dsh-client-ui-sidebar-right/lib/client.js 的 SidebarRightController)。
  * - `toggleExpanded()`:反转**已挂载会话面**的右栏面板展开态,与右栏头部的
@@ -269,7 +283,10 @@ export interface LayoutLike {
  *   `require()` 在无挂载会话面(空白/hero 会话、右栏插件缺席)时抛错,调用方兜住;
  * - 面板展开态是会话级 store 状态:seat 重渲染后由自己的 useLayoutEffect 调
  *   `layout.openRightbar / closeRightbar` 同步 AppFrame 的右栏轨道,故本插件
- *   无需自己调 layout 的右栏那两个方法。
+ *   无需自己调 layout 的右栏那两个方法;
+ * - `openTab(kind)`:按 kind 打开一个**页类型**(`files` = 右栏文件浏览器)——
+ *   上游 store 的 openContent 恒先 `planSetExpanded(true)`,所以一次调用即完成
+ *   「展开右栏 + 打开/聚焦该页」;新 tab 的落位是目标面板末尾(公开面无 index)。
  */
 export interface SidebarRightLike {
   toggleExpanded?(): void
@@ -281,6 +298,12 @@ export interface SidebarRightLike {
    * 标签不存在时上游静默跳过,无挂载会话面时 `require()` 抛错(调用方兜住 → no-op)。
    */
   focus?(tabId: string): void
+  /**
+   * 打开/揭示一个页类型的 tab,并在同一步里展开右栏。
+   * 页类型按**目标面板**去重(已有该页 → 只聚焦);无挂载会话面时 `require()`
+   * 抛错、kind 未注册时上游抛错,调用方一律兜住 → no-op。
+   */
+  openTab?(kind: string, options?: SidebarRightPlacementLike): void
 }
 
 /* ------------------------------------------------------------------ *
@@ -333,6 +356,36 @@ export interface SidebarRightSurfaceLike {
  */
 export interface SidebarRightTabsStateLike {
   bySession?: Readonly<Record<string, SidebarRightSurfaceLike | undefined>>
+}
+
+/* ------------------------------------------------------------------ *
+ * 右侧栏会话级 store 的**写**面(⌘/Ctrl+Alt+\ 把文件浏览器置于首位)
+ * ------------------------------------------------------------------ */
+
+/**
+ * store 实例的动作面(仅本插件用到的动词;见 stores.d.ts 的 SidebarRightActions)。
+ *
+ * `placeTab` 是**标签拖拽**的同一条入口(seat 的 `intentsFor.placeTab` →
+ * `actions.placeTab(sessionId, tabId, toPaneId, index)`,见
+ * dsh-client-ui-sidebar-right/lib/client.js 的 intentsFor),落地为 dockkit:
+ * - 同面板 → `reorderTab`(上游对 index 做「先摘除再插入」的位移校正,越界 clamp);
+ * - 跨面板 → `moveTab`(目标必须是停靠面板);
+ * - 源为浮窗 → `unfloat`。
+ * 与鼠标操作共用同一份内存态:defineStore 的实例动作面即
+ * `(...args) => snapshotStore.update(draft => action(draft, ...args))`,同步提交并
+ * 通知订阅者,故外部写入后 React 订阅者立即重渲染(与 question-drafts.ts 同一范式)。
+ */
+export interface SidebarRightSurfaceActionsLike {
+  placeTab?(sessionId: string, tabId: string, paneId: string, index: number): void
+}
+
+/**
+ * `slots.resolveStore(handle, binding)` 返回的**活实例**(defineStore 的实例面:
+ * `{ actions, getSnapshot, subscribe }`,见 dsh-client-store 的 defineStore)。
+ * 快照之外还要 `actions`,置顶才写得到 seat 正在画的那份状态。
+ */
+export interface SidebarRightStoreLike extends StoreInstanceLike {
+  actions?: SidebarRightSurfaceActionsLike
 }
 
 /* ------------------------------------------------------------------ *

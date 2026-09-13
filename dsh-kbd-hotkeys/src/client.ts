@@ -13,7 +13,10 @@
  * - `browse` 浏览态(输入框失焦)与 `editing` 输入态:⌘B 开关左侧栏、
  *   ⌘⌥B 开关右侧栏、⌘⌥←/→ 在右侧栏当前面板的标签之间循环切换
  *   (标签顺序读右栏自己的会话级 slot store,切换调公开的 `sidebarRight.focus`,
- *   见 sidebar-tabs.ts;单个标签时不吞键);
+ *   见 sidebar-tabs.ts;单个标签时不吞键)、
+ *   ⌘⌥\ 打开右栏文件浏览器并把它置于所在标签栏首位(公开的
+ *   `sidebarRight.openTab('files')` + 同一份 store 的 `actions.placeTab(…, 0)`,
+ *   见 sidebar-tabs.ts 的 revealRightSidebarFiles);
  * - `browse` 浏览态:⌘/Ctrl+I 聚焦对话输入框(上游无聚焦服务面,经
  *   conversation.input 取 shell.editor 的宿主元素后调 focus(),见 actions.ts
  *   的 focusComposer;不做选择器查询 / DOM 遍历 / 事件合成)。
@@ -48,7 +51,7 @@ import {
 } from './actions.ts'
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
-import { cycleRightSidebarTab } from './sidebar-tabs.ts'
+import { cycleRightSidebarTab, revealRightSidebarFiles } from './sidebar-tabs.ts'
 import type { ClientContext, ConversationLike, LayoutLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, WorkspacesLike } from './types.ts'
 
 export const name = 'dsh-kbd-hotkeys'
@@ -56,8 +59,9 @@ export const name = 'dsh-kbd-hotkeys'
 /**
  * 浏览器半部注入的服务(模块加载器读取)。
  * workspaces 供会话切换复刻侧栏分组,slots 供读取侧栏视图 store(会话顺序)与
- * 右栏标签 store(标签顺序),layout 供 ⌘/Ctrl+B 开关左侧栏,sidebarRight 供
- * ⌘/Ctrl+Alt+B 开关右侧栏、⌘/Ctrl+Alt+←/→ 聚焦右栏标签,
+ * 右栏标签 store(标签顺序 + 置顶用的 actions),layout 供 ⌘/Ctrl+B 开关左侧栏,
+ * sidebarRight 供 ⌘/Ctrl+Alt+B 开关右侧栏、⌘/Ctrl+Alt+←/→ 聚焦右栏标签、
+ * ⌘/Ctrl+Alt+\ 打开文件浏览器,
  * conversation 供 ⌘/Ctrl+I 取 composer 的 editor 宿主元素(聚焦输入框)。
  */
 export const inject = ['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation']
@@ -85,6 +89,10 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return cycleRightSidebarTab(services, -1)
       case 'sidebarRight.tabNext':
         return cycleRightSidebarTab(services, 1)
+      case 'sidebarRight.files':
+        // 打开右栏文件浏览器并置于首位:openTab('files') 打开/聚焦并展开右栏,
+        // 置顶走会话级 store 的 actions.placeTab(与标签拖拽同一入口)。
+        return revealRightSidebarFiles(services)
       case 'composer.focus':
         return focusComposer(services)
       case 'session.prev':

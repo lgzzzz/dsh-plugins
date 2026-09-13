@@ -621,6 +621,10 @@ var ACTIONS = [
   // 问答卡片,但那是**裸**方向键(固定分发),与带 mod+alt 的组合键不冲突,故无需让路。
   { id: "sidebarRight.tabPrev", label: "\u53F3\u4FA7\u680F:\u4E0A\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "sidebarRight.tabNext", label: "\u53F3\u4FA7\u680F:\u4E0B\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 打开文件浏览器并置顶(⌘/Ctrl+Alt+\):与右栏开关 / 标签切换同属 rightbar 这一档
+  // (mod+alt),同样三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,
+  // 也不干扰文本编辑。
+  { id: "sidebarRight.files", label: "\u53F3\u4FA7\u680F:\u6253\u5F00\u6587\u4EF6\u6D4F\u89C8\u5668\u5E76\u7F6E\u4E8E\u9996\u4F4D", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义,且 contenteditable
   // 里 ⌘/Ctrl+I 是浏览器「斜体」默认行为(execCommand,绕过 Lexical),card 态则归卡片
   // 自己的输入框。
@@ -652,6 +656,11 @@ var DEFAULT_BINDINGS = {
   // (会话轴 vs 右栏标签轴)。边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
   "sidebarRight.tabPrev": "mod+alt+arrowleft",
   "sidebarRight.tabNext": "mod+alt+arrowright",
+  // 打开右栏文件浏览器并置顶 = ⌘/Ctrl+Alt+\:反斜杠在主键区右端,与右栏那一档
+  // (mod+alt)同族。键名走 `comboOf` 的 e.code 归一化(`Backslash` → `\`),
+  // 与布局产出什么字符无关;JIS 等把 `\` 放在别的物理键上的键盘由 e.key 回退兜住。
+  // 注意 Win/Linux 上 Ctrl+Alt 即 AltGr(见 README「已知限制」)。
+  "sidebarRight.files": "mod+alt+\\",
   // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
   // macOS 上 ⌃I 与 ⌘I 都能触发(用户要的 Ctrl+I 在 mac 上按 ⌃I 即可),Win/Linux
   // 就是 Ctrl+I;两平台的浏览器 DevTools 都带 Shift(⌘⌥I / Ctrl+Shift+I),不冲突。
@@ -883,6 +892,8 @@ function createOverlays(deps) {
 
 // src/sidebar-tabs.ts
 var RIGHTBAR_SLOT = "rightbar.session";
+var FILES_KIND = "files";
+var FILES_PAGE_ADDRESS = "sidebar://files";
 function cycleRightSidebarTab(services, delta) {
   const sidebarRight = services.sidebarRight;
   if (sidebarRight === null || sidebarRight === void 0) return false;
@@ -899,6 +910,60 @@ function cycleRightSidebarTab(services, delta) {
   } catch {
     return false;
   }
+}
+function revealRightSidebarFiles(services) {
+  const sidebarRight = services.sidebarRight;
+  if (sidebarRight === null || sidebarRight === void 0) return false;
+  if (typeof sidebarRight.openTab !== "function") return false;
+  try {
+    sidebarRight.openTab(FILES_KIND);
+  } catch {
+    return false;
+  }
+  promoteFilesTab(services);
+  return true;
+}
+function promoteFilesTab(services) {
+  var _a, _b;
+  const resolved = rightbarStore(services);
+  if (resolved === void 0) return;
+  const sessionId = currentSessionId2(services);
+  if (sessionId === void 0) return;
+  const actions = resolved.instance.actions;
+  const placeTab = actions == null ? void 0 : actions.placeTab;
+  if (actions === void 0 || typeof placeTab !== "function") return;
+  const layout = (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
+  if (layout === void 0) return;
+  const target = filesTabIn(layout);
+  if (target === void 0 || target.index === 0) return;
+  try {
+    placeTab.call(actions, sessionId, target.tabId, target.paneId, 0);
+  } catch {
+  }
+}
+function filesTabIn(layout) {
+  var _a, _b, _c;
+  const order = [];
+  const active = layout.activePaneId;
+  if (typeof active === "string" && active !== "") order.push(active);
+  for (const paneId of Object.keys((_a = layout.nodes) != null ? _a : {})) {
+    if (paneId !== active) order.push(paneId);
+  }
+  for (const paneId of order) {
+    const pane = paneOf(layout, paneId);
+    if (pane === void 0 || pane.host !== "dock") continue;
+    const tabs = (_b = pane.tabs) != null ? _b : [];
+    for (let index = 0; index < tabs.length; index += 1) {
+      const tabId = tabs[index];
+      if (typeof tabId !== "string" || tabId === "") continue;
+      const record = (_c = layout.tabs) == null ? void 0 : _c[tabId];
+      if (record === void 0 || record === null) continue;
+      if (record.kind === FILES_KIND || record.contentId === FILES_PAGE_ADDRESS) {
+        return { paneId, tabId, index };
+      }
+    }
+  }
+  return void 0;
 }
 function currentPaneTabs(services) {
   var _a, _b, _c;
@@ -921,18 +986,18 @@ function currentPaneTabs(services) {
 }
 function currentLayout(services) {
   var _a, _b;
-  const state = rightbarTabsState(services);
-  if (state === void 0) return void 0;
+  const resolved = rightbarStore(services);
+  if (resolved === void 0) return void 0;
   const sessionId = currentSessionId2(services);
   if (sessionId === void 0) return void 0;
-  return (_b = (_a = state.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
+  return (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
 }
 function currentSessionId2(services) {
   var _a, _b, _c, _d;
   const current = (_d = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.current;
   return current === void 0 || current === "" ? void 0 : current;
 }
-function rightbarTabsState(services) {
+function rightbarStore(services) {
   const slots = services.slots;
   const uiSession = services.uiSession;
   if (slots === null || slots === void 0 || uiSession === null || uiSession === void 0) return void 0;
@@ -950,8 +1015,8 @@ function rightbarTabsState(services) {
     } catch {
       continue;
     }
-    const state = asTabsState(instance);
-    if (state !== void 0) return state;
+    const resolved = asRightbarStore(instance);
+    if (resolved !== void 0) return resolved;
   }
   return void 0;
 }
@@ -977,7 +1042,7 @@ function resolveBinding2(uiSession, sessionId) {
   const key = binding.key;
   return typeof key === "string" && key !== "" ? binding : void 0;
 }
-function asTabsState(instance) {
+function asRightbarStore(instance) {
   if (typeof instance !== "object" || instance === null) return void 0;
   const getSnapshot = instance.getSnapshot;
   if (typeof getSnapshot !== "function") return void 0;
@@ -990,7 +1055,10 @@ function asTabsState(instance) {
   if (typeof snapshot !== "object" || snapshot === null) return void 0;
   const bySession = snapshot.bySession;
   if (typeof bySession !== "object" || bySession === null || Array.isArray(bySession)) return void 0;
-  return snapshot;
+  return {
+    instance,
+    snapshot
+  };
 }
 function paneOf(layout, paneId) {
   var _a;
@@ -1025,6 +1093,8 @@ function runAction(id, services, overlays) {
         return cycleRightSidebarTab(services, -1);
       case "sidebarRight.tabNext":
         return cycleRightSidebarTab(services, 1);
+      case "sidebarRight.files":
+        return revealRightSidebarFiles(services);
       case "composer.focus":
         return focusComposer(services);
       case "session.prev":
