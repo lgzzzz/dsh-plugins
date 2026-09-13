@@ -1,8 +1,8 @@
 {
   "name": "dsh-text-editor",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
-  "description": "In-app Monaco-based text-editor capability provider for the DSH Web GUI. Exposes two client-side capabilities via the 'dsh-text-editor' service (ctx.provide): openFile (open a file in a 文件 tab, editable + saveable) and showDiff (show a sequence of per-file diffs in a 差异 tab, manually advanced). Host half (index.ts) registers read/write/Monaco routes; browser half (src/client.ts → lib/client.js) registers the tabs and provides the service. No longer intercepts file-link clicks itself.",
+  "description": "In-app Monaco text editor for the DSH Web GUI, living in the right Sidebar. The browser half registers an `extension`-band right-Sidebar resource tab type for `dsh-resource://file/**`, so every text file opened from the workspace file tree or a conversation file link is edited (and saved) in place; images and PDF keep the built-in document preview. It also still provides the 'dsh-text-editor' client service (ctx.provide): openFile (open a path in the right-Sidebar editor) and showDiff (a 差异 tab in the conversation area, manually advanced). Host half (index.ts) registers read/write/Monaco routes.",
   "type": "module",
   "exports": {
     ".": {
@@ -28,6 +28,7 @@
   "scripts": {
     "build": "node scripts/build-client.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "node test-address.mjs",
     "check": "node --check lib/client.js && node --check index.ts && node --check host/read.ts && node --check host/write.ts && node --check host/monaco.ts && node --check host/http.ts && node --check host/types.ts"
   },
   "devDependencies": {

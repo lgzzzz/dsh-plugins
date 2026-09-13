@@ -1,5 +1,9 @@
 /**
- * Monaco 封装：AMD loader 注入（幂等）+ 当前编辑器实例的模块级单例。
+ * Monaco 封装：AMD loader 注入（幂等）+ 已解析的 monaco 全局缓存 + 当前 diff 实例。
+ *
+ * 文件编辑器实例不再走模块级单例：右栏 pane 正文自己持有实例（同一时刻只挂载
+ * 活动 tab 的那一个，见 sidebar.ts / file-io.ts 的「当前挂载的编辑器」登记）。
+ * `activeMonaco` 只是 ensureMonaco 结果的复用点，diff 视图建模型时要用它。
  *
  * 注意：Monaco 的 API 入口在 `monaco.editor` 下（`monaco.editor.create`、
  * `setTheme`、`setModelLanguage`），不是 `monaco.create`。
@@ -66,19 +70,12 @@ interface MonacoWindow {
 
 let monacoPromise: Promise<MonacoEditor> | null = null
 let activeMonaco: MonacoEditor | null = null
-let activeEditor: MonacoEditorInstance | null = null
 let activeDiffEditor: MonacoDiffEditorInstance | null = null
-/** 当前挂载的文件编辑器对应的文件 key（保存以它为准，避免用陈旧的活动索引）。 */
-let activeFileKey: string | null = null
 
 export function getActiveMonaco(): MonacoEditor | null { return activeMonaco }
 export function setActiveMonaco(monaco: MonacoEditor | null): void { activeMonaco = monaco }
-export function getActiveEditor(): MonacoEditorInstance | null { return activeEditor }
-export function setActiveEditor(editor: MonacoEditorInstance | null): void { activeEditor = editor }
 export function getActiveDiffEditor(): MonacoDiffEditorInstance | null { return activeDiffEditor }
 export function setActiveDiffEditor(editor: MonacoDiffEditorInstance | null): void { activeDiffEditor = editor }
-export function getActiveFileKey(): string | null { return activeFileKey }
-export function setActiveFileKey(key: string | null): void { activeFileKey = key }
 
 // ── 跨文件 diff 跳转的定位意图 ────────────────────────────────────────────────
 // 「上一处/下一处修改」在当前文件最后一处/第一处修改时跨文件：先写意图（'first'/'last'），

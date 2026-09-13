@@ -3,8 +3,8 @@
 用来在**不重启 `dsh web`、不改 web profile** 的前提下，验证改造后的
 `dsh-text-editor` 已正确提供两个能力服务（`ctx.provide('dsh-text-editor', …)`）：
 
-- `openFile({ path, cwd?, sessionId? })` → 「文件」tab（可编辑/保存）
-- `showDiff({ files: [{ label?, path?, before, after }], sessionId? })` → 「差异」tab
+- `openFile({ path, cwd?, sessionId? })` → 右栏编辑器 tab（可编辑/保存）
+- `showDiff({ files: [{ label?, path?, before, after }], sessionId? })` → 会话主区「差异」tab
 
 ## 运行方式（动态，推荐）
 
@@ -13,10 +13,13 @@
    - `cordis_define`，参数：`name` / `purpose` / `code.client` = [client-body.js](client-body.js) 的**全部内容**（`code.host` 留空 → 纯客户端插件）
    - `cordis_run`，参数：`pluginId` = 定义时生成的 id（通常是 `dsh-te-verify`）
 3. 在出现的**审批弹窗里批准**（approve）。
-4. 插件运行后：左侧/上方出现两个 tab —— 一个是已打开
-   `~/.dsh/profiles/web/package.json`（宿主端展开 `~`，任何机器都存在）的「文件」tab，另一个是激活中的
-   「差异 · 2」tab，展示两个示例文件的 Monaco 双栏 diff；顶部左侧「上一处修改 / 下一处修改」、
-   文件名右侧「上一个 / 下一个」按钮手动切换。
+4. 插件运行后：
+   - **右栏**展开并出现一个编辑器 tab，打开 `~/.dsh/profiles/web/package.json`
+     （宿主端展开 `~`，任何机器都存在）：Monaco 可编辑，顶部路径 + 「保存」按钮，
+     未保存时按钮变「未保存」、chip 标题带 ●；
+   - **会话主区**出现激活中的「差异 · 2」tab，展示两个示例文件的 Monaco 双栏 diff；
+     顶部左侧「上一处修改 / 下一处修改」、文件名右侧「上一个 / 下一个」按钮手动切换。
+   （文件面已移入右栏：会话主区不再出现文件 tab。）
 5. 验证完毕可让 agent 执行 `cordis_stop`（停止）与 `cordis_undefine`（移除），
    或在 HARNESS/Cordis 面板里点 stop / remove。
 

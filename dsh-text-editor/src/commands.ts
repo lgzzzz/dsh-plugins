@@ -1,38 +1,23 @@
 /**
- * UI → 编排层的命令总线。
+ * UI → 编排层的命令总线（只剩「差异」tab 的命令）。
  *
  * ui.ts（React 组件）不能反向 import controller.ts（否则依赖成环，而构建器
  * 拒绝环），所以组件只触发命令；controller.bind() 注册真正的处理函数。
  *
- * save/close 命令可携带文件 key：多个文件 tab 并存时，组件知道自己属于哪个
- * 文件（requestSave(fileKey) / requestClose(fileKey)）；不带 key 时按
- * 「当前活动文件」处理（如全局 Ctrl+S）。
+ * 文件面（右栏编辑器）不需要总线：正文组件直接调用 file-io.ts 的读写函数，
+ * 该模块不 import 任何视图模块，构不成环。
  */
-let saveHandler: ((key?: string) => void) | null = null
-let closeHandler: ((key?: string) => void) | null = null
 let diffNextHandler: (() => void) | null = null
 let diffPrevHandler: (() => void) | null = null
 let diffCloseHandler: (() => void) | null = null
 let diffHunkNextHandler: (() => void) | null = null
 let diffHunkPrevHandler: (() => void) | null = null
 
-export function setSaveHandler(fn: ((key?: string) => void) | null): void { saveHandler = fn }
-export function setCloseHandler(fn: ((key?: string) => void) | null): void { closeHandler = fn }
 export function setDiffNextHandler(fn: (() => void) | null): void { diffNextHandler = fn }
 export function setDiffPrevHandler(fn: (() => void) | null): void { diffPrevHandler = fn }
 export function setDiffCloseHandler(fn: (() => void) | null): void { diffCloseHandler = fn }
 export function setDiffHunkNextHandler(fn: (() => void) | null): void { diffHunkNextHandler = fn }
 export function setDiffHunkPrevHandler(fn: (() => void) | null): void { diffHunkPrevHandler = fn }
-
-/** 请求保存（缺省保存当前活动文件）。 */
-export function requestSave(key?: string): void {
-  if (saveHandler !== null) saveHandler(key)
-}
-
-/** 请求关闭编辑器（标签 × 被点击时；缺省关闭当前活动文件）。 */
-export function requestClose(key?: string): void {
-  if (closeHandler !== null) closeHandler(key)
-}
 
 /** 请求差异视图显示下一个文件。 */
 export function requestDiffNext(): void {

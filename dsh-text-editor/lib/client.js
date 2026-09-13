@@ -41,39 +41,6 @@ module.exports = __toCommonJS(client_exports);
 // src/api.ts
 var TEXT_EDITOR_SERVICE = "dsh-text-editor";
 
-// src/css.ts
-var CSS = [
-  '.dsh-te-root{display:flex;flex-direction:column;flex:1;min-height:0;background:var(--dsw-alias-bg-base,#1e1e1e);color:var(--dsw-alias-label-primary,#e6e6e6);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:13px;line-height:1.5;}',
-  ".dsh-te-empty{justify-content:center;align-items:center;}",
-  ".dsh-te-toolbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.25));background:var(--dsw-alias-bg-layer-1,#252526);flex:none;}",
-  ".dsh-te-path{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;max-width:60%;}",
-  ".dsh-te-status{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;}",
-  ".dsh-te-status-error{color:var(--dsw-alias-state-error-primary,#f48771);}",
-  ".dsh-te-save{border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;flex:none;}",
-  ".dsh-te-save:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}",
-  ".dsh-te-save:disabled{opacity:.5;cursor:default;}",
-  ".dsh-te-save-dirty{color:#dcdcaa;border-color:rgba(220,220,170,.6);}",
-  ".dsh-te-save-dirty:hover{background:rgba(220,220,170,.25);}",
-  ".dsh-te-tab{display:inline-flex;align-items:center;gap:6px;}",
-  ".dsh-te-tab-label{white-space:nowrap;}",
-  ".dsh-te-tab-label.dsh-te-tab-dirty{color:#dcdcaa;}",
-  ".dsh-te-diff-tab-label{white-space:nowrap;}",
-  ".dsh-te-tab-close{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;font-size:13px;line-height:1;color:var(--dsw-alias-label-secondary,#9d9d9d);cursor:pointer;user-select:none;}",
-  ".dsh-te-tab-close:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.25));color:var(--dsw-alias-label-primary,#fff);}",
-  ".dsh-te-diff-nav{border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;}",
-  ".dsh-te-diff-nav:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}",
-  ".dsh-te-diff-nav:disabled{opacity:.5;cursor:default;}",
-  ".dsh-te-diff-counter{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;}",
-  ".dsh-te-diff-divider{width:1px;align-self:stretch;background:var(--dsw-alias-border-l1,rgba(128,128,128,.25));margin:0 2px;flex:none;}",
-  ".dsh-te-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;}",
-  ".dsh-te-monaco{flex:1;min-height:0;position:relative;}",
-  ".dsh-te-monaco-host{position:absolute;inset:0;}",
-  ".dsh-te-note{padding:12px 16px;color:var(--dsw-alias-label-secondary,#9d9d9d);}"
-].join("\n");
-
-// src/controller.ts
-var React2 = __toESM(require("react"), 1);
-
 // src/path.ts
 function basename(path) {
   const at = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
@@ -132,8 +99,106 @@ function languageFor(path) {
   return (_c = EXT_LANG[lower.slice(dot + 1)]) != null ? _c : "plaintext";
 }
 
+// src/address.ts
+var FILE_ADDRESS_PREFIX = "dsh-resource://file/";
+function encodeSegment(segment) {
+  return encodeURIComponent(segment).replace(/%3A/gi, ":");
+}
+function encodePath(path) {
+  return path.split("/").map(encodeSegment).join("/");
+}
+function parseSessionFileAddress(address) {
+  try {
+    if (!address.startsWith(FILE_ADDRESS_PREFIX)) return void 0;
+    const end = address.search(/[?#]/);
+    const [scope, ...rest] = address.slice(FILE_ADDRESS_PREFIX.length, end === -1 ? void 0 : end).split("/");
+    if (scope !== "session") return void 0;
+    const [id, ...segments] = rest;
+    if (id === void 0 || id === "" || segments.length === 0) return void 0;
+    return {
+      sessionId: decodeURIComponent(id),
+      path: segments.map(decodeURIComponent).join("/")
+    };
+  } catch {
+    return void 0;
+  }
+}
+function sessionFileAddress(sessionId, path) {
+  const normalized = path.replace(/\\/g, "/").replace(/^(?:\.\/)+/, "");
+  return `${FILE_ADDRESS_PREFIX}session/${encodeSegment(sessionId)}/${encodePath(normalized)}`;
+}
+function isAbsolutePath(path) {
+  return path.startsWith("/") || /^[A-Za-z]:[/\\]/.test(path) || path.startsWith("\\\\");
+}
+function fileAddressFor(sessionId, cwd, path) {
+  const normalized = path.replace(/\\/g, "/");
+  if (!isAbsolutePath(normalized)) return sessionFileAddress(sessionId, normalized);
+  const root = cwd === void 0 ? "" : cwd.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (root !== "" && normalized === root) return sessionFileAddress(sessionId, "");
+  if (root !== "" && normalized.startsWith(`${root}/`)) {
+    return sessionFileAddress(sessionId, normalized.slice(root.length + 1));
+  }
+  return sessionFileAddress(sessionId, normalized);
+}
+var PREVIEW_ONLY_EXTENSIONS = /* @__PURE__ */ new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "ico",
+  "svg",
+  "pdf"
+]);
+function isTextFile(path) {
+  const name2 = basename(path).toLowerCase();
+  const dot = name2.lastIndexOf(".");
+  if (dot === -1) return true;
+  return !PREVIEW_ONLY_EXTENSIONS.has(name2.slice(dot + 1));
+}
+
+// src/css.ts
+var CSS = [
+  '.dsh-te-root{display:flex;flex-direction:column;flex:1;min-height:0;background:var(--dsw-alias-bg-base,#1e1e1e);color:var(--dsw-alias-label-primary,#e6e6e6);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:13px;line-height:1.5;}',
+  // 右栏 pane 的容器：贴满 dockkit 给的格，正文内部各自滚动。
+  ".dsh-te-pane{display:flex;flex-direction:column;flex:1 1 auto;height:100%;min-height:0;min-width:0;overflow:hidden;}",
+  ".dsh-te-pane .dsh-te-toolbar{flex-wrap:wrap;row-gap:4px;}",
+  ".dsh-te-empty{justify-content:center;align-items:center;}",
+  ".dsh-te-toolbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.25));background:var(--dsw-alias-bg-layer-1,#252526);flex:none;}",
+  ".dsh-te-path{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;max-width:60%;}",
+  ".dsh-te-status{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;}",
+  ".dsh-te-status-error{color:var(--dsw-alias-state-error-primary,#f48771);}",
+  ".dsh-te-actions{display:flex;gap:8px;padding:8px 12px;flex:none;}",
+  // chip 标题：右栏 tab 条里的文件名（未保存时加亮）。
+  ".dsh-te-chip{white-space:nowrap;}",
+  ".dsh-te-chip-dirty{color:#dcdcaa;}",
+  ".dsh-te-save{border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;flex:none;}",
+  ".dsh-te-save:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}",
+  ".dsh-te-save:disabled{opacity:.5;cursor:default;}",
+  ".dsh-te-save-dirty{color:#dcdcaa;border-color:rgba(220,220,170,.6);}",
+  ".dsh-te-save-dirty:hover{background:rgba(220,220,170,.25);}",
+  ".dsh-te-tab{display:inline-flex;align-items:center;gap:6px;}",
+  ".dsh-te-tab-label{white-space:nowrap;}",
+  ".dsh-te-tab-label.dsh-te-tab-dirty{color:#dcdcaa;}",
+  ".dsh-te-diff-tab-label{white-space:nowrap;}",
+  ".dsh-te-tab-close{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:4px;font-size:13px;line-height:1;color:var(--dsw-alias-label-secondary,#9d9d9d);cursor:pointer;user-select:none;}",
+  ".dsh-te-tab-close:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.25));color:var(--dsw-alias-label-primary,#fff);}",
+  ".dsh-te-diff-nav{border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;}",
+  ".dsh-te-diff-nav:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}",
+  ".dsh-te-diff-nav:disabled{opacity:.5;cursor:default;}",
+  ".dsh-te-diff-counter{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;}",
+  ".dsh-te-diff-divider{width:1px;align-self:stretch;background:var(--dsw-alias-border-l1,rgba(128,128,128,.25));margin:0 2px;flex:none;}",
+  ".dsh-te-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;}",
+  ".dsh-te-monaco{flex:1;min-height:0;position:relative;}",
+  ".dsh-te-monaco-host{position:absolute;inset:0;}",
+  ".dsh-te-note{padding:12px 16px;color:var(--dsw-alias-label-secondary,#9d9d9d);}"
+].join("\n");
+
+// src/controller.ts
+var React2 = __toESM(require("react"), 1);
+
 // src/state.ts
-var MAX_EDITOR_TABS = 5;
 function hashKey(path) {
   let h1 = 5381;
   let h2 = 52711;
@@ -146,8 +211,6 @@ function hashKey(path) {
 }
 var activeSessionId = void 0;
 var filesBySession = /* @__PURE__ */ new Map();
-var activeIndexBySession = /* @__PURE__ */ new Map();
-var recencyBySession = /* @__PURE__ */ new Map();
 var diffBySession = /* @__PURE__ */ new Map();
 var listeners = /* @__PURE__ */ new Set();
 function emit() {
@@ -167,90 +230,16 @@ function setActiveSessionId(id) {
   activeSessionId = id;
   emit();
 }
-function filesOf(sessionId) {
-  var _a;
-  if (sessionId === void 0) return [];
-  return (_a = filesBySession.get(sessionId)) != null ? _a : [];
-}
-function getActiveFiles() {
-  return filesOf(activeSessionId);
-}
-function getFileAt(index) {
-  const files = getActiveFiles();
-  return index >= 0 && index < files.length ? files[index] : null;
-}
-function getActiveIndex() {
-  const files = getActiveFiles();
-  if (files.length === 0) return -1;
-  const stored = activeSessionId !== void 0 ? activeIndexBySession.get(activeSessionId) : void 0;
-  if (stored === void 0 || stored < 0 || stored >= files.length) return 0;
-  return stored;
-}
-function getFileIndexByKey(sessionId, key) {
-  const files = filesOf(sessionId);
-  return files.findIndex((f) => f.key === key);
-}
-function getFileByKey(sessionId, key) {
-  const index = getFileIndexByKey(sessionId, key);
-  return index === -1 ? null : filesOf(sessionId)[index];
-}
-function touchRecency(sessionId, key) {
-  let rec = recencyBySession.get(sessionId);
-  if (rec === void 0) {
-    rec = [];
-    recencyBySession.set(sessionId, rec);
-  }
-  const at = rec.indexOf(key);
-  if (at !== -1) rec.splice(at, 1);
-  rec.unshift(key);
-}
-function noteActiveFile(sessionId, key) {
-  const index = getFileIndexByKey(sessionId, key);
-  if (index === -1) return;
-  activeIndexBySession.set(sessionId, index);
-  touchRecency(sessionId, key);
-  emit();
-}
-function openFileInSession(sessionId, path, cwd, fileSessionId) {
-  var _a;
+function ensureFile(sessionId, path, cwd) {
   const key = hashKey(path);
   let files = filesBySession.get(sessionId);
   if (files === void 0) {
     files = [];
     filesBySession.set(sessionId, files);
   }
-  const existing = files.findIndex((f) => f.key === key);
-  if (existing !== -1) {
-    activeIndexBySession.set(sessionId, existing);
-    touchRecency(sessionId, key);
-    emit();
-    return { ok: true, key, index: existing, alreadyOpen: true, evictedIndex: null, reason: null };
-  }
-  let evictedIndex = null;
-  if (files.length >= MAX_EDITOR_TABS) {
-    const rec = (_a = recencyBySession.get(sessionId)) != null ? _a : [];
-    const candidates = files.map((f, i) => ({ f, i })).filter(({ f }) => !f.dirty);
-    if (candidates.length === 0) {
-      emit();
-      return { ok: false, key, index: -1, alreadyOpen: false, evictedIndex: null, reason: "limit" };
-    }
-    candidates.sort((a, b) => {
-      const ra = rec.indexOf(a.f.key);
-      const rb = rec.indexOf(b.f.key);
-      const sa = ra === -1 ? Number.MAX_SAFE_INTEGER : ra;
-      const sb = rb === -1 ? Number.MAX_SAFE_INTEGER : rb;
-      return sb - sa;
-    });
-    evictedIndex = candidates[0].i;
-    files.splice(evictedIndex, 1);
-    const activeIdx = activeIndexBySession.get(sessionId);
-    if (activeIdx !== void 0) {
-      if (activeIdx === evictedIndex) activeIndexBySession.delete(sessionId);
-      else if (activeIdx > evictedIndex) activeIndexBySession.set(sessionId, activeIdx - 1);
-    }
-  }
-  const newIndex = files.length;
-  files.push({
+  const existing = files.find((f) => f.key === key);
+  if (existing !== void 0) return { key, created: false, file: existing };
+  const file = {
     key,
     path,
     label: basename(path),
@@ -263,45 +252,40 @@ function openFileInSession(sessionId, path, cwd, fileSessionId) {
     error: null,
     notice: null,
     cwd,
-    sessionId: fileSessionId != null ? fileSessionId : sessionId
-  });
-  activeIndexBySession.set(sessionId, newIndex);
-  touchRecency(sessionId, key);
+    sessionId
+  };
+  files.push(file);
   emit();
-  return { ok: true, key, index: newIndex, alreadyOpen: false, evictedIndex, reason: null };
+  return { key, created: true, file };
 }
-function closeFileInSession(sessionId, index) {
+function getFileByKey(sessionId, key) {
+  var _a;
+  if (sessionId === void 0 || key === "") return null;
   const files = filesBySession.get(sessionId);
-  if (files === void 0 || index < 0 || index >= files.length) return false;
-  const wasActive = activeIndexBySession.get(sessionId) === index;
-  files.splice(index, 1);
-  const activeIdx = activeIndexBySession.get(sessionId);
-  if (activeIdx !== void 0) {
-    if (activeIdx === index) activeIndexBySession.delete(sessionId);
-    else if (activeIdx > index) activeIndexBySession.set(sessionId, activeIdx - 1);
-  }
-  emit();
-  return wasActive;
-}
-function updateFileAt(sessionId, index, patch) {
-  const files = filesOf(sessionId);
-  if (index < 0 || index >= files.length) return;
-  files[index] = { ...files[index], ...patch };
-  emit();
+  if (files === void 0) return null;
+  return (_a = files.find((f) => f.key === key)) != null ? _a : null;
 }
 function updateFileByKey(sessionId, key, patch) {
   if (sessionId === void 0) return;
-  const index = getFileIndexByKey(sessionId, key);
+  const files = filesBySession.get(sessionId);
+  if (files === void 0) return;
+  const index = files.findIndex((f) => f.key === key);
   if (index === -1) return;
-  updateFileAt(sessionId, index, patch);
+  files[index] = { ...files[index], ...patch };
+  emit();
 }
 function commitFileContent(sessionId, key, content) {
-  const index = getFileIndexByKey(sessionId, key);
+  const file = getFileByKey(sessionId, key);
+  if (file === null) return;
+  updateFileByKey(sessionId, key, { content, dirty: content !== file.content });
+}
+function forgetFile(sessionId, key) {
+  const files = filesBySession.get(sessionId);
+  if (files === void 0) return;
+  const index = files.findIndex((f) => f.key === key);
   if (index === -1) return;
-  const files = filesOf(sessionId);
-  const file = files[index];
-  const dirty = content !== file.content;
-  files[index] = { ...file, content, dirty };
+  files.splice(index, 1);
+  if (files.length === 0) filesBySession.delete(sessionId);
   emit();
 }
 function getDiffState() {
@@ -3988,32 +3972,18 @@ function toMonacoRules() {
 // src/monaco.ts
 var monacoPromise = null;
 var activeMonaco = null;
-var activeEditor = null;
 var activeDiffEditor = null;
-var activeFileKey = null;
 function getActiveMonaco() {
   return activeMonaco;
 }
 function setActiveMonaco(monaco) {
   activeMonaco = monaco;
 }
-function getActiveEditor() {
-  return activeEditor;
-}
-function setActiveEditor(editor) {
-  activeEditor = editor;
-}
 function getActiveDiffEditor() {
   return activeDiffEditor;
 }
 function setActiveDiffEditor(editor) {
   activeDiffEditor = editor;
-}
-function getActiveFileKey() {
-  return activeFileKey;
-}
-function setActiveFileKey(key) {
-  activeFileKey = key;
 }
 var pendingDiffReveal = null;
 function setPendingDiffReveal(v) {
@@ -4067,20 +4037,103 @@ function currentTheme() {
   return document.body.hasAttribute("data-ds-dark-theme") ? ISLANDS_DARK_THEME : "vs";
 }
 
+// src/file-io.ts
+var loadSeqByKey = /* @__PURE__ */ new Map();
+function loadFile(sessionId, key) {
+  var _a;
+  const file = getFileByKey(sessionId, key);
+  if (file === null) return;
+  const seq = ((_a = loadSeqByKey.get(key)) != null ? _a : 0) + 1;
+  loadSeqByKey.set(key, seq);
+  const url = `${READ_ROUTE}?path=${encodeURIComponent(file.path)}` + (file.cwd ? `&cwd=${encodeURIComponent(file.cwd)}` : "");
+  fetch(url, { credentials: "same-origin", cache: "no-store" }).then((response) => response.json()).then((data) => {
+    var _a2;
+    if (loadSeqByKey.get(key) !== seq) return;
+    if (!data.ok) throw new Error(data.error || "\u8BFB\u53D6\u5931\u8D25");
+    updateFileByKey(sessionId, key, {
+      path: data.path || file.path,
+      label: basename(file.path),
+      content: (_a2 = data.content) != null ? _a2 : "",
+      loading: false,
+      saving: false,
+      binary: !!data.binary,
+      truncated: !!data.truncated,
+      error: null,
+      notice: null,
+      dirty: false
+    });
+  }).catch((error) => {
+    if (loadSeqByKey.get(key) !== seq) return;
+    updateFileByKey(sessionId, key, {
+      content: "",
+      loading: false,
+      saving: false,
+      binary: false,
+      truncated: false,
+      error: error instanceof Error ? error.message : String(error),
+      notice: null,
+      dirty: false
+    });
+  });
+}
+async function saveFile(sessionId, key, editor) {
+  var _a;
+  const file = getFileByKey(sessionId, key);
+  if (file === null) return;
+  const content = editor.getValue();
+  updateFileByKey(sessionId, key, { saving: true, error: null, notice: null });
+  try {
+    const response = await fetch(WRITE_ROUTE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        path: file.path,
+        cwd: file.cwd,
+        content,
+        sessionId: (_a = file.sessionId) != null ? _a : null
+      })
+    });
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error || "\u4FDD\u5B58\u5931\u8D25");
+    updateFileByKey(sessionId, key, {
+      saving: false,
+      notice: "\u5DF2\u4FDD\u5B58",
+      error: null,
+      dirty: false,
+      content
+    });
+  } catch (error) {
+    updateFileByKey(sessionId, key, {
+      saving: false,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+var mountedEditor = null;
+var mountedEditorKey = null;
+function setMountedEditor(key, editor) {
+  mountedEditorKey = key;
+  mountedEditor = editor;
+}
+function getMountedEditor() {
+  return mountedEditor;
+}
+function getMountedEditorKey() {
+  return mountedEditorKey;
+}
+async function saveMountedEditor(sessionId) {
+  const key = mountedEditorKey;
+  const editor = mountedEditor;
+  if (sessionId === void 0 || key === null || editor === null) return;
+  await saveFile(sessionId, key, editor);
+}
+
 // src/commands.ts
-var saveHandler = null;
-var closeHandler = null;
 var diffNextHandler = null;
 var diffPrevHandler = null;
 var diffCloseHandler = null;
 var diffHunkNextHandler = null;
 var diffHunkPrevHandler = null;
-function setSaveHandler(fn) {
-  saveHandler = fn;
-}
-function setCloseHandler(fn) {
-  closeHandler = fn;
-}
 function setDiffNextHandler(fn) {
   diffNextHandler = fn;
 }
@@ -4095,12 +4148,6 @@ function setDiffHunkNextHandler(fn) {
 }
 function setDiffHunkPrevHandler(fn) {
   diffHunkPrevHandler = fn;
-}
-function requestSave(key) {
-  if (saveHandler !== null) saveHandler(key);
-}
-function requestClose(key) {
-  if (closeHandler !== null) closeHandler(key);
 }
 function requestDiffNext() {
   if (diffNextHandler !== null) diffNextHandler();
@@ -4120,29 +4167,6 @@ function requestDiffHunkPrev() {
 
 // src/ui.ts
 var React = __toESM(require("react"), 1);
-function TabLabel({ sessionId, fileKey }) {
-  const state = React.useSyncExternalStore(subscribe, () => getFileByKey(sessionId, fileKey));
-  const label = state !== null && state.label !== "" ? state.label : "\u6587\u4EF6";
-  return React.createElement(
-    "span",
-    { className: "dsh-te-tab" },
-    React.createElement("span", {
-      className: state !== null && state.dirty ? "dsh-te-tab-label dsh-te-tab-dirty" : "dsh-te-tab-label",
-      "data-dsh-te-key": fileKey,
-      title: state !== null ? state.path : void 0
-    }, state !== null && state.dirty ? `${label} \u25CF` : label),
-    React.createElement("span", {
-      role: "button",
-      className: "dsh-te-tab-close",
-      title: "\u5173\u95ED",
-      "aria-label": "\u5173\u95ED\u7F16\u8F91\u5668",
-      onClick: (event) => {
-        event.stopPropagation();
-        requestClose(fileKey);
-      }
-    }, "\xD7")
-  );
-}
 function diffFileLabel(file, index) {
   if (file.label !== void 0 && file.label !== "") return file.label;
   if (file.path !== void 0 && file.path !== "") return basename(file.path);
@@ -4168,139 +4192,6 @@ function DiffTabLabel() {
         requestDiffClose();
       }
     }, "\xD7")
-  );
-}
-function FileView({ sessionId, fileKey }) {
-  const state = React.useSyncExternalStore(subscribe, () => getFileByKey(sessionId, fileKey));
-  React.useEffect(() => {
-    noteActiveFile(sessionId, fileKey);
-  }, [sessionId, fileKey]);
-  if (state === null) {
-    return React.createElement(
-      "div",
-      { className: "dsh-te-root dsh-te-empty" },
-      React.createElement("div", { className: "dsh-te-note" }, "\u672A\u6253\u5F00\u6587\u4EF6")
-    );
-  }
-  const statusText = state.loading ? "\u52A0\u8F7D\u4E2D\u2026" : state.saving ? "\u4FDD\u5B58\u4E2D\u2026" : state.error !== null ? state.error : state.notice;
-  return React.createElement(
-    "div",
-    { className: "dsh-te-root" },
-    React.createElement(
-      "div",
-      { className: "dsh-te-toolbar" },
-      React.createElement("span", { className: "dsh-te-path", title: state.path }, state.path),
-      React.createElement("button", {
-        type: "button",
-        className: state.dirty ? "dsh-te-save dsh-te-save-dirty" : "dsh-te-save",
-        title: "\u4FDD\u5B58 (Ctrl+S)",
-        onClick: () => {
-          void requestSave(fileKey);
-        },
-        disabled: state.loading || state.error !== null
-      }, state.dirty ? "\u672A\u4FDD\u5B58" : "\u4FDD\u5B58"),
-      statusText !== void 0 && statusText !== null && statusText !== "" ? React.createElement("span", {
-        className: state.error !== null ? "dsh-te-status dsh-te-status-error" : "dsh-te-status"
-      }, statusText) : null,
-      state.binary ? React.createElement("span", { className: "dsh-te-status dsh-te-status-error" }, "\u4E8C\u8FDB\u5236\u6587\u4EF6") : null
-    ),
-    React.createElement(
-      "div",
-      { className: "dsh-te-body" },
-      state.binary || state.error !== null ? React.createElement(
-        "div",
-        { className: "dsh-te-note" },
-        state.binary ? "\u8BE5\u6587\u4EF6\u662F\u4E8C\u8FDB\u5236\u6587\u4EF6\uFF0C\u65E0\u6CD5\u4EE5\u6587\u672C\u65B9\u5F0F\u67E5\u770B\u3002" : `\u65E0\u6CD5\u8BFB\u53D6\u6587\u4EF6\uFF1A${state.error}`
-      ) : React.createElement(MonacoHost, { sessionId, fileKey, content: state.content, path: state.path }),
-      state.truncated ? React.createElement("div", { className: "dsh-te-note" }, "\u6587\u4EF6\u8F83\u5927\uFF0C\u4EC5\u663E\u793A\u524D 2MB\u3002") : null
-    )
-  );
-}
-function MonacoHost({
-  sessionId,
-  fileKey,
-  content,
-  path
-}) {
-  const containerRef = React.useRef(null);
-  const [ready, setReady] = React.useState(false);
-  const [loadError, setLoadError] = React.useState(null);
-  const suppressChangeRef = React.useRef(false);
-  React.useEffect(() => {
-    let cancelled = false;
-    let changeSub = null;
-    void ensureMonaco().then((monaco) => {
-      if (cancelled || containerRef.current === null) return;
-      setActiveMonaco(monaco);
-      const editor = monaco.editor.create(containerRef.current, {
-        value: content,
-        language: languageFor(path),
-        theme: currentTheme(),
-        automaticLayout: true,
-        fontSize: 14,
-        lineNumbers: "on",
-        minimap: { enabled: false },
-        readOnly: false,
-        scrollBeyondLastLine: false,
-        wordWrap: "off",
-        tabSize: 2,
-        // 不框全角标点（（），等被判定为「易混淆字符」）；零宽字符继续框。
-        unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: true }
-      });
-      setActiveEditor(editor);
-      setActiveFileKey(fileKey);
-      changeSub = editor.onDidChangeModelContent(() => {
-        if (suppressChangeRef.current) return;
-        const s = getFileByKey(sessionId, fileKey);
-        if (s !== null && !s.dirty) updateFileByKey(sessionId, fileKey, { dirty: true, notice: null });
-      });
-      setReady(true);
-    }).catch((error) => {
-      if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
-    });
-    return () => {
-      cancelled = true;
-      changeSub == null ? void 0 : changeSub.dispose();
-      changeSub = null;
-      const editor = getActiveEditor();
-      if (editor !== null) {
-        commitFileContent(sessionId, fileKey, editor.getValue());
-        editor.dispose();
-        setActiveEditor(null);
-      }
-      setActiveFileKey(null);
-      setActiveMonaco(null);
-    };
-  }, []);
-  React.useEffect(() => {
-    if (!ready) return;
-    const editor = getActiveEditor();
-    if (editor === null) return;
-    if (editor.getValue() !== content) {
-      suppressChangeRef.current = true;
-      editor.setValue(content);
-      suppressChangeRef.current = false;
-      const s = getFileByKey(sessionId, fileKey);
-      if (s !== null && s.dirty) updateFileByKey(sessionId, fileKey, { dirty: false });
-    }
-    const monaco = getActiveMonaco();
-    if (monaco !== null) {
-      const model = editor.getModel();
-      if (model !== null && model !== void 0) monaco.editor.setModelLanguage(model, languageFor(path));
-    }
-  }, [content, path, ready, sessionId, fileKey]);
-  if (loadError !== null) {
-    return React.createElement(
-      "div",
-      { className: "dsh-te-note" },
-      `Monaco \u52A0\u8F7D\u5931\u8D25\uFF1A${loadError}`
-    );
-  }
-  return React.createElement(
-    "div",
-    { className: "dsh-te-monaco" },
-    React.createElement("div", { ref: containerRef, className: "dsh-te-monaco-host" }),
-    !ready ? React.createElement("div", { className: "dsh-te-note" }, "\u52A0\u8F7D Monaco \u7F16\u8F91\u5668\u2026") : null
   );
 }
 function DiffView() {
@@ -4459,21 +4350,12 @@ function DiffHost({ file }) {
 }
 
 // src/controller.ts
-var FILE_TAB_PREFIX = "dsh-text-editor-";
 var DIFF_TAB_ID = "dsh-text-editor-diff";
 var slotsRef = null;
-var fileEntryDisposers = [];
 var diffEntryDisposer = null;
 var lastSig = "";
-var loadSeqByKey = /* @__PURE__ */ new Map();
 function bind(slots, sessions) {
   slotsRef = slots;
-  setSaveHandler((key) => {
-    const sid = getActiveSessionId();
-    if (sid === void 0) return;
-    void saveFile(sid, key);
-  });
-  setCloseHandler(closeEditor);
   setDiffNextHandler(() => advanceDiff(1));
   setDiffPrevHandler(() => advanceDiff(-1));
   setDiffCloseHandler(closeDiff);
@@ -4482,11 +4364,9 @@ function bind(slots, sessions) {
   const onKeyDown = (event) => {
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key.toLowerCase() !== "s") return;
-    if (getActiveIndex() < 0) return;
+    if (getMountedEditor() === null) return;
     event.preventDefault();
-    const sid = getActiveSessionId();
-    if (sid === void 0) return;
-    if (getActiveEditor() !== null) void saveFile(sid, void 0);
+    void saveMountedEditor(getActiveSessionId());
   };
   window.addEventListener("keydown", onKeyDown, true);
   let unsubSessions;
@@ -4504,33 +4384,28 @@ function bind(slots, sessions) {
     lastSig = sig;
     reconcile();
   });
+  reconcile();
   return () => {
     window.removeEventListener("keydown", onKeyDown, true);
     unsubSessions == null ? void 0 : unsubSessions();
     unsubStore();
-    setSaveHandler(null);
-    setCloseHandler(null);
     setDiffNextHandler(null);
     setDiffPrevHandler(null);
     setDiffCloseHandler(null);
     setDiffHunkNextHandler(null);
     setDiffHunkPrevHandler(null);
-    disposeAllEntries();
+    disposeDiffEntry();
     slotsRef = null;
   };
 }
 function registrationSignature() {
   var _a;
   const sid = (_a = getActiveSessionId()) != null ? _a : "";
-  const files = getActiveFiles();
   const diff = getDiffState();
-  const fileSig = files.map((f) => f.key).join("|");
   const diffSig = diff !== null && diff.files.length > 0 ? "1" : "0";
-  return `${sid}::${fileSig}::${diffSig}`;
+  return `${sid}::${diffSig}`;
 }
-function disposeAllEntries() {
-  for (const d of fileEntryDisposers) d();
-  fileEntryDisposers = [];
+function disposeDiffEntry() {
   if (diffEntryDisposer !== null) {
     diffEntryDisposer();
     diffEntryDisposer = null;
@@ -4538,49 +4413,17 @@ function disposeAllEntries() {
 }
 function reconcile() {
   if (slotsRef === null || slotsRef === void 0) return;
-  disposeAllEntries();
+  disposeDiffEntry();
   const sid = getActiveSessionId();
   if (sid === void 0) return;
-  const files = getActiveFiles();
-  files.forEach((file, index) => {
-    const id = FILE_TAB_PREFIX + file.key;
-    fileEntryDisposers.push(slotsRef.register({
-      name: "conversation.view",
-      id,
-      order: 100 + index,
-      // label/body 都捕获 sid 与 key：标签按文件显示 basename（含脏标记）与 ×。
-      label: () => React2.createElement(TabLabel, { sessionId: sid, fileKey: file.key })
-    }, () => React2.createElement(FileView, { sessionId: sid, fileKey: file.key })));
-  });
   const diff = getDiffState();
-  if (diff !== null && diff.files.length > 0) {
-    diffEntryDisposer = slotsRef.register({
-      name: "conversation.view",
-      id: DIFF_TAB_ID,
-      order: 200,
-      label: () => React2.createElement(DiffTabLabel, null)
-    }, () => React2.createElement(DiffView, null));
-  }
-}
-function openInEditor(path, cwd, sessionId) {
-  const sid = sessionId != null ? sessionId : getActiveSessionId();
-  if (sid === void 0) return;
-  const result = openFileInSession(sid, path, cwd, sessionId);
-  if (!result.ok) {
-    if (result.reason === "limit") {
-      const index = getActiveIndex();
-      const file = getFileAt(index);
-      if (file !== null) {
-        updateFileByKey(sid, file.key, {
-          notice: `\u6700\u591A\u540C\u65F6\u6253\u5F00 ${MAX_EDITOR_TABS} \u4E2A\u6587\u4EF6\uFF0C\u4E14\u5F53\u524D\u6253\u5F00\u7684\u6587\u4EF6\u5747\u6709\u672A\u4FDD\u5B58\u4FEE\u6539`
-        });
-      }
-    }
-    return;
-  }
-  const isActive = sid === getActiveSessionId();
-  if (!result.alreadyOpen) loadFile(sid, result.key);
-  if (isActive) activateTab(result.key);
+  if (diff === null || diff.files.length === 0) return;
+  diffEntryDisposer = slotsRef.register({
+    name: "conversation.view",
+    id: DIFF_TAB_ID,
+    order: 200,
+    label: () => React2.createElement(DiffTabLabel, null)
+  }, () => React2.createElement(DiffView, null));
 }
 function showDiffInTab(request) {
   var _a, _b;
@@ -4659,92 +4502,6 @@ function hunkJump(dir) {
     if (state !== null && state.index > 0) advanceDiff(-1, "last");
   }
 }
-function loadFile(sessionId, key) {
-  var _a;
-  const file = getFileByKey(sessionId, key);
-  if (file === null) return;
-  const seq = ((_a = loadSeqByKey.get(key)) != null ? _a : 0) + 1;
-  loadSeqByKey.set(key, seq);
-  const url = `${READ_ROUTE}?path=${encodeURIComponent(file.path)}` + (file.cwd ? `&cwd=${encodeURIComponent(file.cwd)}` : "");
-  fetch(url, { credentials: "same-origin", cache: "no-store" }).then((response) => response.json()).then((data) => {
-    var _a2;
-    if (loadSeqByKey.get(key) !== seq) return;
-    if (!data.ok) throw new Error(data.error || "\u8BFB\u53D6\u5931\u8D25");
-    updateFileByKey(sessionId, key, {
-      path: data.path || file.path,
-      label: basename(file.path),
-      content: (_a2 = data.content) != null ? _a2 : "",
-      loading: false,
-      saving: false,
-      binary: !!data.binary,
-      truncated: !!data.truncated,
-      error: null,
-      notice: null,
-      dirty: false
-    });
-  }).catch((error) => {
-    if (loadSeqByKey.get(key) !== seq) return;
-    updateFileByKey(sessionId, key, {
-      content: "",
-      loading: false,
-      saving: false,
-      binary: false,
-      truncated: false,
-      error: error instanceof Error ? error.message : String(error),
-      notice: null,
-      dirty: false
-    });
-  });
-}
-async function saveFile(sessionId, key) {
-  var _a, _b;
-  if (sessionId === void 0) return;
-  const editor = getActiveEditor();
-  if (editor === null) return;
-  const targetKey = (_a = getActiveFileKey()) != null ? _a : key;
-  if (targetKey === void 0) return;
-  const file = getFileByKey(sessionId, targetKey);
-  if (file === null) return;
-  const content = editor.getValue();
-  updateFileByKey(sessionId, targetKey, { saving: true, error: null, notice: null });
-  try {
-    const response = await fetch(WRITE_ROUTE, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        path: file.path,
-        cwd: file.cwd,
-        content,
-        sessionId: (_b = file.sessionId) != null ? _b : null
-      })
-    });
-    const data = await response.json();
-    if (!data.ok) throw new Error(data.error || "\u4FDD\u5B58\u5931\u8D25");
-    updateFileByKey(sessionId, targetKey, {
-      saving: false,
-      notice: "\u5DF2\u4FDD\u5B58",
-      error: null,
-      dirty: false,
-      content
-    });
-  } catch (error) {
-    updateFileByKey(sessionId, targetKey, {
-      saving: false,
-      error: error instanceof Error ? error.message : String(error)
-    });
-  }
-}
-function closeEditor(key) {
-  const sid = getActiveSessionId();
-  if (sid === void 0) return;
-  const files = filesOf(sid);
-  let index = -1;
-  if (key !== void 0) index = getFileIndexByKey(sid, key);
-  else index = getActiveIndex();
-  if (index === -1 || index >= files.length) return;
-  const wasActive = closeFileInSession(sid, index);
-  if (wasActive) fallbackToChat();
-}
 function closeDiff() {
   const sid = getActiveSessionId();
   if (sid !== void 0) clearDiff(sid);
@@ -4763,19 +4520,6 @@ function fallbackToChat() {
   };
   tryClick();
 }
-function activateTab(key) {
-  let attempts = 0;
-  const tryClick = () => {
-    const label = document.querySelector(`[data-dsh-te-key="${key}"]`);
-    const tab = label instanceof HTMLElement ? label.closest('[role="tab"]') : null;
-    if (tab instanceof HTMLElement) {
-      tab.click();
-      return;
-    }
-    if (++attempts < 40) setTimeout(tryClick, 25);
-  };
-  tryClick();
-}
 function activateDiffTab() {
   let attempts = 0;
   const tryClick = () => {
@@ -4790,31 +4534,331 @@ function activateDiffTab() {
   tryClick();
 }
 
+// src/sidebar.ts
+var React3 = __toESM(require("react"), 1);
+var SIDEBAR_TAB_ID = "dsh-text-editor/editor";
+var SIDEBAR_TAB_KIND = "dsh-text-editor";
+var FILE_ADDRESS_PATTERN = "dsh-resource://file/**";
+function noSessions(_selector) {
+  return void 0;
+}
+function useForgetOnTabClose(signal, sessionId, key) {
+  React3.useEffect(() => {
+    if (signal === void 0 || sessionId === "" || key === "") return;
+    const forget = () => {
+      forgetFile(sessionId, key);
+    };
+    signal.addEventListener("abort", forget);
+    return () => {
+      signal.removeEventListener("abort", forget);
+    };
+  }, [signal, sessionId, key]);
+}
+function registerSidebarEditor(slots, tabs) {
+  const definition = {
+    id: SIDEBAR_TAB_ID,
+    kind: SIDEBAR_TAB_KIND,
+    patterns: [FILE_ADDRESS_PATTERN],
+    // 只接管文本类文件地址；图片 / PDF 交回内置预览器（documentpreview 的 builtin 渲染器）。
+    canOpen: (address) => {
+      const ref = parseSessionFileAddress(address);
+      return ref !== void 0 && ref.path !== "" && isTextFile(ref.path);
+    },
+    // 标签文案在打开时捕获；未保存标记由下面的 chip 标题实时补上。
+    title: (address) => {
+      const ref = parseSessionFileAddress(address);
+      return ref === void 0 || ref.path === "" ? "\u7F16\u8F91\u5668" : basename(ref.path);
+    }
+  };
+  const disposeType = tabs.register(definition);
+  const disposeBody = slots.inject("sidebar.right.pane.tab", () => slots.register({
+    name: "sidebar.right.pane.tab",
+    key: SIDEBAR_TAB_ID
+  }, EditorPane));
+  const disposeTitle = slots.inject("sidebar.right.pane.tab.title", () => slots.register({
+    name: "sidebar.right.pane.tab.title",
+    key: SIDEBAR_TAB_ID
+  }, EditorChip));
+  return () => {
+    disposeTitle();
+    disposeBody();
+    disposeType();
+  };
+}
+function note(text) {
+  return React3.createElement(
+    "div",
+    { className: "dsh-te-pane" },
+    React3.createElement(
+      "div",
+      { className: "dsh-te-root dsh-te-empty" },
+      React3.createElement("div", { className: "dsh-te-note" }, text)
+    )
+  );
+}
+function EditorPane(props) {
+  const useTabInfo = props.useTabInfo;
+  if (typeof useTabInfo !== "function") return note("\u7F16\u8F91\u5668\u4E0D\u53EF\u7528\uFF1A\u7F3A\u5C11 tab \u4FE1\u606F");
+  return React3.createElement(EditorPaneBody, { ...props, useTabInfo });
+}
+function EditorPaneBody(props) {
+  var _a, _b, _c, _d, _e, _f;
+  const useSessions = (_a = props.useSessions) != null ? _a : noSessions;
+  const info = props.useTabInfo();
+  const tab = (_b = info.tab) != null ? _b : {};
+  const ref = parseSessionFileAddress((_c = tab.contentId) != null ? _c : "");
+  const sessionId = ref !== void 0 ? ref.sessionId : (_d = props.sessionId) != null ? _d : "";
+  const path = ref !== void 0 ? ref.path : "";
+  const key = path === "" ? "" : hashKey(path);
+  const cwd = (_e = useSessions((snapshot) => {
+    var _a2, _b2;
+    return (_b2 = (_a2 = snapshot.byId) == null ? void 0 : _a2[sessionId]) == null ? void 0 : _b2.cwd;
+  })) != null ? _e : "";
+  const state = React3.useSyncExternalStore(subscribe, () => getFileByKey(sessionId, key));
+  React3.useEffect(() => {
+    if (sessionId === "" || path === "" || key === "") return;
+    const entry = ensureFile(sessionId, path, cwd);
+    if (entry.created || entry.file.loading) {
+      loadFile(sessionId, entry.key);
+      return;
+    }
+    if (entry.file.cwd !== cwd && entry.file.error !== null && !entry.file.dirty) {
+      updateFileByKey(sessionId, entry.key, { cwd, loading: true, error: null, notice: null });
+      loadFile(sessionId, entry.key);
+    }
+  }, [sessionId, path, key, cwd]);
+  useForgetOnTabClose(tab.signal, sessionId, key);
+  if (ref === void 0 || path === "") return note("\u65E0\u6CD5\u8BC6\u522B\u7684\u6587\u4EF6\u5730\u5740");
+  if (state === null) return note("\u52A0\u8F7D\u4E2D\u2026");
+  const statusText = state.loading ? "\u52A0\u8F7D\u4E2D\u2026" : state.saving ? "\u4FDD\u5B58\u4E2D\u2026" : state.error !== null ? state.error : state.notice;
+  const navigation = tab.navigation;
+  return React3.createElement(
+    "div",
+    { className: "dsh-te-pane" },
+    React3.createElement(
+      "div",
+      { className: "dsh-te-root" },
+      React3.createElement(
+        "div",
+        { className: "dsh-te-toolbar" },
+        React3.createElement("span", { className: "dsh-te-path", title: state.path }, state.path),
+        React3.createElement("button", {
+          type: "button",
+          className: state.dirty ? "dsh-te-save dsh-te-save-dirty" : "dsh-te-save",
+          title: "\u4FDD\u5B58 (Ctrl+S)",
+          disabled: state.loading || state.error !== null,
+          onClick: () => {
+            requestSave(sessionId, key);
+          }
+        }, state.dirty ? "\u672A\u4FDD\u5B58" : "\u4FDD\u5B58"),
+        statusText !== void 0 && statusText !== null && statusText !== "" ? React3.createElement("span", {
+          className: state.error !== null ? "dsh-te-status dsh-te-status-error" : "dsh-te-status"
+        }, statusText) : null,
+        state.binary ? React3.createElement("span", { className: "dsh-te-status dsh-te-status-error" }, "\u4E8C\u8FDB\u5236\u6587\u4EF6") : null
+      ),
+      React3.createElement(
+        "div",
+        { className: "dsh-te-body" },
+        state.binary || state.error !== null ? React3.createElement(
+          "div",
+          { className: "dsh-te-note" },
+          state.binary ? "\u8BE5\u6587\u4EF6\u662F\u4E8C\u8FDB\u5236\u6587\u4EF6\uFF0C\u65E0\u6CD5\u4EE5\u6587\u672C\u65B9\u5F0F\u7F16\u8F91\u3002" : `\u65E0\u6CD5\u8BFB\u53D6\u6587\u4EF6\uFF1A${state.error}`
+        ) : React3.createElement(EditorHost, {
+          sessionId,
+          fileKey: key,
+          path: state.path,
+          content: state.content,
+          line: (_f = navigation == null ? void 0 : navigation.params) == null ? void 0 : _f.line,
+          revision: navigation == null ? void 0 : navigation.revision
+        }),
+        state.error !== null && !state.binary ? React3.createElement(
+          "div",
+          { className: "dsh-te-actions" },
+          React3.createElement("button", {
+            type: "button",
+            className: "dsh-te-save",
+            onClick: () => {
+              reload(sessionId, key);
+            }
+          }, "\u91CD\u8BD5")
+        ) : null,
+        state.truncated ? React3.createElement("div", { className: "dsh-te-note" }, "\u6587\u4EF6\u8F83\u5927\uFF0C\u4EC5\u663E\u793A\u524D 2MB\u3002") : null
+      )
+    )
+  );
+}
+function EditorChip(props) {
+  const useTabInfo = props.useTabInfo;
+  if (typeof useTabInfo !== "function") return null;
+  return React3.createElement(EditorChipBody, { useTabInfo });
+}
+function EditorChipBody({ useTabInfo }) {
+  var _a, _b, _c, _d;
+  const info = useTabInfo();
+  const ref = parseSessionFileAddress((_b = (_a = info.tab) == null ? void 0 : _a.contentId) != null ? _b : "");
+  const key = ref === void 0 ? "" : hashKey(ref.path);
+  useForgetOnTabClose((_c = info.tab) == null ? void 0 : _c.signal, (_d = ref == null ? void 0 : ref.sessionId) != null ? _d : "", key);
+  const state = React3.useSyncExternalStore(subscribe, () => getFileByKey(ref == null ? void 0 : ref.sessionId, key));
+  const label = state !== null && state.label !== "" ? state.label : ref !== void 0 ? basename(ref.path) : "\u7F16\u8F91\u5668";
+  const dirty = state !== null && state.dirty;
+  return React3.createElement("span", {
+    className: dirty ? "dsh-te-chip dsh-te-chip-dirty" : "dsh-te-chip"
+  }, dirty ? `${label} \u25CF` : label);
+}
+function requestSave(sessionId, key) {
+  const editor = getMountedEditorKey() === key ? getMountedEditor() : null;
+  if (editor === null) return;
+  void saveFile(sessionId, key, editor);
+}
+function reload(sessionId, key) {
+  updateFileByKey(sessionId, key, { loading: true, error: null, notice: null });
+  loadFile(sessionId, key);
+}
+function EditorHost({
+  sessionId,
+  fileKey,
+  path,
+  content,
+  line,
+  revision
+}) {
+  const containerRef = React3.useRef(null);
+  const editorRef = React3.useRef(null);
+  const monacoRef = React3.useRef(null);
+  const [ready, setReady] = React3.useState(false);
+  const [loadError, setLoadError] = React3.useState(null);
+  const suppressChangeRef = React3.useRef(false);
+  const revealedRef = React3.useRef(void 0);
+  React3.useEffect(() => {
+    let cancelled = false;
+    let changeSub = null;
+    void ensureMonaco().then((monaco) => {
+      if (cancelled || containerRef.current === null) return;
+      monacoRef.current = monaco;
+      setActiveMonaco(monaco);
+      const editor = monaco.editor.create(containerRef.current, {
+        value: content,
+        language: languageFor(path),
+        theme: currentTheme(),
+        automaticLayout: true,
+        fontSize: 14,
+        lineNumbers: "on",
+        minimap: { enabled: false },
+        readOnly: false,
+        scrollBeyondLastLine: false,
+        wordWrap: "off",
+        tabSize: 2,
+        // 不框全角标点（（），等被判定为「易混淆字符」）；零宽字符继续框。
+        unicodeHighlight: { ambiguousCharacters: false, invisibleCharacters: true }
+      });
+      editorRef.current = editor;
+      setMountedEditor(fileKey, editor);
+      changeSub = editor.onDidChangeModelContent(() => {
+        if (suppressChangeRef.current) return;
+        const s = getFileByKey(sessionId, fileKey);
+        if (s !== null && !s.dirty) updateFileByKey(sessionId, fileKey, { dirty: true, notice: null });
+      });
+      setReady(true);
+    }).catch((error) => {
+      if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+    });
+    return () => {
+      cancelled = true;
+      changeSub == null ? void 0 : changeSub.dispose();
+      changeSub = null;
+      const editor = editorRef.current;
+      editorRef.current = null;
+      if (editor !== null) {
+        commitFileContent(sessionId, fileKey, editor.getValue());
+        editor.dispose();
+      }
+      if (getMountedEditorKey() === fileKey) setMountedEditor(null, null);
+      monacoRef.current = null;
+    };
+  }, []);
+  React3.useEffect(() => {
+    if (!ready) return;
+    const editor = editorRef.current;
+    if (editor === null) return;
+    if (editor.getValue() !== content) {
+      suppressChangeRef.current = true;
+      editor.setValue(content);
+      suppressChangeRef.current = false;
+      const s = getFileByKey(sessionId, fileKey);
+      if (s !== null && s.dirty) updateFileByKey(sessionId, fileKey, { dirty: false });
+    }
+    const monaco = monacoRef.current;
+    if (monaco !== null) {
+      const model = editor.getModel();
+      if (model !== null && model !== void 0) monaco.editor.setModelLanguage(model, languageFor(path));
+    }
+  }, [content, path, ready, sessionId, fileKey]);
+  React3.useEffect(() => {
+    if (!ready || line === void 0) return;
+    if (revealedRef.current === revision) return;
+    revealedRef.current = revision;
+    const editor = editorRef.current;
+    if (editor === null) return;
+    editor.setPosition({ lineNumber: line, column: 1 });
+    editor.revealLineInCenter(line);
+  }, [ready, line, revision]);
+  if (loadError !== null) {
+    return React3.createElement(
+      "div",
+      { className: "dsh-te-note" },
+      `Monaco \u52A0\u8F7D\u5931\u8D25\uFF1A${loadError}`
+    );
+  }
+  return React3.createElement(
+    "div",
+    { className: "dsh-te-monaco" },
+    React3.createElement("div", { ref: containerRef, className: "dsh-te-monaco-host" }),
+    !ready ? React3.createElement("div", { className: "dsh-te-note" }, "\u52A0\u8F7D Monaco \u7F16\u8F91\u5668\u2026") : null
+  );
+}
+
 // src/client.ts
-var inject = ["slots", "sessions"];
+var inject = ["slots", "sessions", "sidebarRightTabs", "sidebarRight"];
 var name = "dsh-text-editor";
 function apply(ctx) {
   const slots = ctx.get("slots");
+  const sidebarRightTabs = ctx.get("sidebarRightTabs");
   if (slots === null || slots === void 0) return;
+  if (sidebarRightTabs === null || sidebarRightTabs === void 0) return;
   ctx.effect(() => {
     const tag = document.createElement("style");
     tag.dataset.plugin = "dsh-text-editor";
     tag.textContent = CSS;
     document.head.appendChild(tag);
     const sessions = ctx.get("sessions");
+    const sidebarRight = ctx.get("sidebarRight");
     const unbind = bind(slots, sessions);
+    const stopSidebar = registerSidebarEditor(slots, sidebarRightTabs);
     const stopProvide = ctx.provide(TEXT_EDITOR_SERVICE, {
-      openFile: (request) => {
-        var _a;
-        return openInEditor(request.path, (_a = request.cwd) != null ? _a : "", request.sessionId);
-      },
+      openFile: (request) => openFileInSidebar(sidebarRight, request),
       showDiff: (request) => showDiffInTab(request)
     });
     return () => {
       stopProvide();
+      stopSidebar();
       unbind();
       tag.remove();
     };
   });
+}
+function openFileInSidebar(sidebarRight, request) {
+  var _a;
+  if (sidebarRight === null || sidebarRight === void 0) return;
+  const sessionId = (_a = request.sessionId) != null ? _a : getActiveSessionId();
+  if (sessionId === void 0) return;
+  const address = fileAddressFor(sessionId, request.cwd, request.path);
+  try {
+    if (request.sessionId !== void 0 && typeof sidebarRight.openResourceIn === "function") {
+      sidebarRight.openResourceIn(sessionId, address);
+      return;
+    }
+    sidebarRight.openResource(address);
+  } catch {
+  }
 }
 return module.exports; } });

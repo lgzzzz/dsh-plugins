@@ -1,19 +1,20 @@
 /**
- * 模块级状态 store：按会话维护「已打开的编辑器 tab」（每会话至多 5 个）+ 按会话的差异视图。
- * 用 useSyncExternalStore(subscribe, getSnapshot) 反应式驱动视图。
+ * 模块级状态 store，分两块、互不影响：
  *
- * 会话作用域规则：当前活动会话由 controller 从 sessions 服务观察并写入
- * （setActiveSessionId）；标签注册（controller.reconcile）只反映「当前活动会话」
- * 的打开文件 —— 因此切走会话时编辑器 tab 消失、切回时重新出现。
+ *   1. 文件状态（filesBySession）：右栏编辑器 tab 的内容/脏标记/错误等。条目由
+ *      pane 正文挂载时 `ensureFile` 按需创建，tab 被关闭（AbortSignal 中止）时
+ *      `forgetFile` 丢弃；正文卸载时 `commitFileContent` 回写内容并保留脏标记，
+ *      于是同一右栏里切换 tab 再切回来不会丢未保存修改。
+ *   2. 差异状态（diffBySession）：`showDiff` 能力在会话主区「差异」tab 里展示的
+ *      一组文件 diff（与右栏编辑器无关）。
+ *
+ * 视图用 useSyncExternalStore(subscribe, getSnapshot) 反应式驱动。
  */
 import type { DiffFile } from './api.ts'
 import { basename } from './path.ts'
 
-/** 同一会话可同时打开的编辑器 tab 上限。 */
-export const MAX_EDITOR_TABS = 5
-
 export interface FileState {
-  /** 稳定标识（path 的哈希）：注册 id / DOM 定位 / store 查找统一用它。 */
+  /** 稳定标识（path 的哈希）：store 查找 / 编辑器登记统一用它。 */
   key: string
   path: string
   label: string
@@ -26,18 +27,20 @@ export interface FileState {
   truncated: boolean
   error: string | null
   notice: string | null
+  /** 解析相对路径用的工作区根（宿主读取/保存路由的 cwd 参数）。 */
   cwd: string
+  /** 保存时解析沙箱策略所用的会话 id。 */
   sessionId: string | undefined
 }
 
-/** 会话作用域的差异视图状态（与编辑器 tab 相互独立）。 */
+/** 会话作用域的差异视图状态（与右栏编辑器相互独立）。 */
 export interface DiffState {
   files: DiffFile[]
   index: number
   sessionId: string | undefined
 }
 
-/** path → 稳定短哈希（双种子 djb2；同会话内 ≤5 个文件，碰撞可忽略）。 */
+/** path → 稳定短哈希（双种子 djb2）。 */
 export function hashKey(path: string): string {
   let h1 = 5381
   let h2 = 52711
@@ -51,9 +54,6 @@ export function hashKey(path: string): string {
 
 let activeSessionId: string | undefined = undefined
 const filesBySession = new Map<string, FileState[]>()
-const activeIndexBySession = new Map<string, number>()
-/** 每个会话的最近活跃顺序（file key，最近者在前）——容量满时用于驱逐。 */
-const recencyBySession = new Map<string, string[]>()
 const diffBySession = new Map<string, DiffState>()
 const listeners = new Set<() => void>()
 
@@ -66,7 +66,7 @@ export function subscribe(fn: () => void): () => void {
   return () => { listeners.delete(fn) }
 }
 
-// ── 活动会话 ────────────────────────────────────────────────────────────────
+// ── 活动会话（差异 tab 的会话作用域 + openFile 的缺省会话） ────────────────────
 
 export function getActiveSessionId(): string | undefined {
   return activeSessionId
@@ -78,118 +78,29 @@ export function setActiveSessionId(id: string | undefined): void {
   emit()
 }
 
-// ── 文件列表 ─────────────────────────────────────────────────────────────────
+// ── 文件状态 ─────────────────────────────────────────────────────────────────
 
-export function filesOf(sessionId: string | undefined): FileState[] {
-  if (sessionId === undefined) return []
-  return filesBySession.get(sessionId) ?? []
-}
-
-export function getActiveFiles(): FileState[] {
-  return filesOf(activeSessionId)
-}
-
-export function getFileAt(index: number): FileState | null {
-  const files = getActiveFiles()
-  return index >= 0 && index < files.length ? files[index]! : null
-}
-
-/** 当前活动会话正在查看的文件下标（无文件时 -1）。 */
-export function getActiveIndex(): number {
-  const files = getActiveFiles()
-  if (files.length === 0) return -1
-  const stored = activeSessionId !== undefined ? activeIndexBySession.get(activeSessionId) : undefined
-  if (stored === undefined || stored < 0 || stored >= files.length) return 0
-  return stored
-}
-
-export function getFileIndexByKey(sessionId: string | undefined, key: string): number {
-  const files = filesOf(sessionId)
-  return files.findIndex((f) => f.key === key)
-}
-
-export function getFileByKey(sessionId: string | undefined, key: string): FileState | null {
-  const index = getFileIndexByKey(sessionId, key)
-  return index === -1 ? null : filesOf(sessionId)[index]!
-}
-
-function touchRecency(sessionId: string, key: string): void {
-  let rec = recencyBySession.get(sessionId)
-  if (rec === undefined) { rec = []; recencyBySession.set(sessionId, rec) }
-  const at = rec.indexOf(key)
-  if (at !== -1) rec.splice(at, 1)
-  rec.unshift(key)
-}
-
-/** 视图挂载时上报「当前正在看哪个文件」（FileView mount 时调用）。 */
-export function noteActiveFile(sessionId: string, key: string): void {
-  const index = getFileIndexByKey(sessionId, key)
-  if (index === -1) return
-  activeIndexBySession.set(sessionId, index)
-  touchRecency(sessionId, key)
-  emit()
-}
-
-export interface OpenResult {
-  ok: boolean
+export interface EnsureResult {
   key: string
-  index: number
-  alreadyOpen: boolean
-  /** 容量满时被驱逐的 tab 下标（无则 null）。 */
-  evictedIndex: number | null
-  /** 失败原因：'limit'（满 5 且全部有未保存修改）等。 */
-  reason: string | null
+  /** 本次调用是否新建了条目（新建即需要发起首次读取）。 */
+  created: boolean
+  file: FileState
 }
 
 /**
- * 在指定会话打开一个文件：
- * - 已打开 → 选中它（不重复开）；
- * - 未满 5 个 → 追加新 tab；
- * - 已满 → 驱逐「最近未使用的非脏」tab；全脏则拒绝（reason: 'limit'）。
+ * 确保指定会话里存在某路径的条目（不存在则以 loading 态新建）。
+ * 右栏 tab 的数目由右栏自己的标签系统管理，这里不再做容量驱逐。
  */
-export function openFileInSession(
-  sessionId: string,
-  path: string,
-  cwd: string,
-  fileSessionId: string | undefined,
-): OpenResult {
+export function ensureFile(sessionId: string, path: string, cwd: string): EnsureResult {
   const key = hashKey(path)
   let files = filesBySession.get(sessionId)
-  if (files === undefined) { files = []; filesBySession.set(sessionId, files) }
-  const existing = files.findIndex((f) => f.key === key)
-  if (existing !== -1) {
-    activeIndexBySession.set(sessionId, existing)
-    touchRecency(sessionId, key)
-    emit()
-    return { ok: true, key, index: existing, alreadyOpen: true, evictedIndex: null, reason: null }
+  if (files === undefined) {
+    files = []
+    filesBySession.set(sessionId, files)
   }
-  let evictedIndex: number | null = null
-  if (files.length >= MAX_EDITOR_TABS) {
-    const rec = recencyBySession.get(sessionId) ?? []
-    const candidates = files
-      .map((f, i) => ({ f, i }))
-      .filter(({ f }) => !f.dirty)
-    if (candidates.length === 0) {
-      emit()
-      return { ok: false, key, index: -1, alreadyOpen: false, evictedIndex: null, reason: 'limit' }
-    }
-    candidates.sort((a, b) => {
-      const ra = rec.indexOf(a.f.key)
-      const rb = rec.indexOf(b.f.key)
-      const sa = ra === -1 ? Number.MAX_SAFE_INTEGER : ra
-      const sb = rb === -1 ? Number.MAX_SAFE_INTEGER : rb
-      return sb - sa // 越不常用越靠前 → 优先驱逐
-    })
-    evictedIndex = candidates[0]!.i
-    files.splice(evictedIndex, 1)
-    const activeIdx = activeIndexBySession.get(sessionId)
-    if (activeIdx !== undefined) {
-      if (activeIdx === evictedIndex) activeIndexBySession.delete(sessionId)
-      else if (activeIdx > evictedIndex) activeIndexBySession.set(sessionId, activeIdx - 1)
-    }
-  }
-  const newIndex = files.length
-  files.push({
+  const existing = files.find((f) => f.key === key)
+  if (existing !== undefined) return { key, created: false, file: existing }
+  const file: FileState = {
     key,
     path,
     label: basename(path),
@@ -202,51 +113,48 @@ export function openFileInSession(
     error: null,
     notice: null,
     cwd,
-    sessionId: fileSessionId ?? sessionId,
-  })
-  activeIndexBySession.set(sessionId, newIndex)
-  touchRecency(sessionId, key)
-  emit()
-  return { ok: true, key, index: newIndex, alreadyOpen: false, evictedIndex, reason: null }
-}
-
-/** 关闭指定会话的某个文件 tab。返回是否关掉了「当前正在查看」的 tab。 */
-export function closeFileInSession(sessionId: string, index: number): boolean {
-  const files = filesBySession.get(sessionId)
-  if (files === undefined || index < 0 || index >= files.length) return false
-  const wasActive = activeIndexBySession.get(sessionId) === index
-  files.splice(index, 1)
-  const activeIdx = activeIndexBySession.get(sessionId)
-  if (activeIdx !== undefined) {
-    if (activeIdx === index) activeIndexBySession.delete(sessionId)
-    else if (activeIdx > index) activeIndexBySession.set(sessionId, activeIdx - 1)
+    sessionId,
   }
+  files.push(file)
   emit()
-  return wasActive
+  return { key, created: true, file }
 }
 
-export function updateFileAt(sessionId: string, index: number, patch: Partial<FileState>): void {
-  const files = filesOf(sessionId)
-  if (index < 0 || index >= files.length) return
-  files[index] = { ...files[index]!, ...patch }
-  emit()
+export function getFileByKey(sessionId: string | undefined, key: string): FileState | null {
+  if (sessionId === undefined || key === '') return null
+  const files = filesBySession.get(sessionId)
+  if (files === undefined) return null
+  return files.find((f) => f.key === key) ?? null
 }
 
 export function updateFileByKey(sessionId: string | undefined, key: string, patch: Partial<FileState>): void {
   if (sessionId === undefined) return
-  const index = getFileIndexByKey(sessionId, key)
+  const files = filesBySession.get(sessionId)
+  if (files === undefined) return
+  const index = files.findIndex((f) => f.key === key)
   if (index === -1) return
-  updateFileAt(sessionId, index, patch)
+  files[index] = { ...files[index]!, ...patch }
+  emit()
 }
 
-/** Monaco 卸载时把当前编辑内容回写 store（保留脏标记；文件已关闭则忽略）。 */
+/**
+ * Monaco 卸载时把当前编辑内容回写 store；脏标记按「与上次加载/保存的内容是否
+ * 相同」重算，于是改回原样不算未保存（文件已关闭则忽略）。
+ */
 export function commitFileContent(sessionId: string, key: string, content: string): void {
-  const index = getFileIndexByKey(sessionId, key)
+  const file = getFileByKey(sessionId, key)
+  if (file === null) return
+  updateFileByKey(sessionId, key, { content, dirty: content !== file.content })
+}
+
+/** 忘掉一个文件的状态（右栏 tab 关闭时经 tab 的 AbortSignal 调用）。 */
+export function forgetFile(sessionId: string, key: string): void {
+  const files = filesBySession.get(sessionId)
+  if (files === undefined) return
+  const index = files.findIndex((f) => f.key === key)
   if (index === -1) return
-  const files = filesOf(sessionId)
-  const file = files[index]!
-  const dirty = content !== file.content
-  files[index] = { ...file, content, dirty }
+  files.splice(index, 1)
+  if (files.length === 0) filesBySession.delete(sessionId)
   emit()
 }
 

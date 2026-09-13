@@ -3,11 +3,18 @@
  */
 export const CSS = [
   '.dsh-te-root{display:flex;flex-direction:column;flex:1;min-height:0;background:var(--dsw-alias-bg-base,#1e1e1e);color:var(--dsw-alias-label-primary,#e6e6e6);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:13px;line-height:1.5;}',
+  // 右栏 pane 的容器：贴满 dockkit 给的格，正文内部各自滚动。
+  '.dsh-te-pane{display:flex;flex-direction:column;flex:1 1 auto;height:100%;min-height:0;min-width:0;overflow:hidden;}',
+  '.dsh-te-pane .dsh-te-toolbar{flex-wrap:wrap;row-gap:4px;}',
   '.dsh-te-empty{justify-content:center;align-items:center;}',
   '.dsh-te-toolbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.25));background:var(--dsw-alias-bg-layer-1,#252526);flex:none;}',
   '.dsh-te-path{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;max-width:60%;}',
   '.dsh-te-status{color:var(--dsw-alias-label-secondary,#9d9d9d);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;}',
   '.dsh-te-status-error{color:var(--dsw-alias-state-error-primary,#f48771);}',
+  '.dsh-te-actions{display:flex;gap:8px;padding:8px 12px;flex:none;}',
+  // chip 标题：右栏 tab 条里的文件名（未保存时加亮）。
+  '.dsh-te-chip{white-space:nowrap;}',
+  '.dsh-te-chip-dirty{color:#dcdcaa;}',
   '.dsh-te-save{border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.35));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.15));color:var(--dsw-alias-label-primary,#e6e6e6);font-size:12px;line-height:1;cursor:pointer;padding:5px 12px;border-radius:6px;flex:none;}',
   '.dsh-te-save:hover{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.3));}',
   '.dsh-te-save:disabled{opacity:.5;cursor:default;}',
