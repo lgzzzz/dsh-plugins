@@ -1,0 +1,35 @@
+{
+  "name": "dsh-rightbar-split-open",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web plugin: open a file clicked in the right sidebar's file browser into a second pane beside it, with the tree pane at 20% and the file pane at 80%.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test-split-open.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

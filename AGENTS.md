@@ -21,13 +21,15 @@
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
 进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 10 个插件目录（见下节插件清单），
-web Profile 已挂载全部 10 个。
+Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 11 个插件目录（见下节插件清单），
+web Profile 已挂载其中 10 个（`dsh-rightbar-split-open` 的源码已从会话记录逐字恢复，
+其挂载行需由用户重新执行 `dsh plugin --profile web add link:<目录>` 装回）。
 `dsh-change-summary`、`dsh-kbd-nav-focus`（提交 6499dd9）、`dsh-no-right-sidebar`、
 `dsh-left-dock` 已从仓库移除，仅存于
 git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本次按其根因分析
-重写后重新纳入仓库）；`dsh-rightbar-files-guard`、`dsh-rightbar-split-open` 亦已移除
-（该两目录当时均未纳入版本控制，git 历史中没有它们）。仓库根不提供集合
+重写后重新纳入仓库）；`dsh-rightbar-files-guard` 亦已移除（该目录当时未纳入版本控制，
+git 历史中没有它）；`dsh-rightbar-split-open` 曾于 e3f6153 移除、随后按 `~/.dsh/sessions`
+会话记录逐字恢复（该目录亦从未纳入版本控制）。仓库根不提供集合
 安装 / 卸载脚本：每个插件由用户逐个执行
 `dsh plugin --profile web add link:<目录>`（详见仓库根 README「安装」）。
 
@@ -50,6 +52,7 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `dsh-rightbar-tab-width` | Client only（TS） | `index.ts`（空宿主） | `src/`（client.ts + css.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 右栏 tab 胶囊定宽补丁：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」（border-box 分支直接返回该值；空 pane 或 `min-width<=0` 才回落到 `SPLIT_MINIMUMS.chip = 100`），进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（`canSplitPane`），决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏。取值 100 与兜底常量同值 ⇒ 分栏判定与上游默认逐字相同、无偏移；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2）。右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染（不是禁用）。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；见其 README |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
 | `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/sidebar-tabs/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、右栏当前面板标签切换（⌘/Ctrl+Alt+←/→ → 读右栏会话级 slot store 的 `layout.activePaneId` 面板标签顺序 + `sidebarRight.focus(tabId)`，循环、单标签不吞键）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
+| `dsh-rightbar-split-open` | Client only（TS） | `index.ts`（空宿主） | `src/`（client.ts + rightbar.ts + split-open.ts + session-split.ts + types.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check`；`node test-split-open.mjs` | **右栏「树 \| 文件」分栏打开**：在右侧栏文件浏览器里点开一个文件时，把它开在文件树**旁边的另一个分栏**里，宽度比 = **文件树 20% : 文件 80%（1:4）**。上游把树里点开的文件落进**当前停靠面板**（标签自身的动作走 `TabDomain` 的 `openResourceIn` → store `openContent`，`paneId` 缺省即「该标签所在面板」），故本插件不做包装、只**观察**：包装一次 `uiSession.resolve`（上游唯一能观察到「某会话右栏 store 何时可解析」的公开信号）→ slot store 三步范式取会话级右栏 store → 订阅其提交，与基线比对认出「文件树面板里刚多出 `dsh-resource://file/…` 标签」→ ① `sidebarRight.split(树面板)`（**唯一带实测空间判定的入口**，返回 `undefined` 即不动作、文件留在原处）② store `placeTab(sid, 文件标签, 新格, 0)`（与标签拖拽同一入口，dockkit 落地为 `moveTab`，标签不销毁、正文不重挂载）③ store `closeTab(sid, seed 标签)`（**收掉上游给新分栏 seed 的默认页** —— `planSettle` 会给展开态下空着的停靠格补默认页，而当前组合的默认页就是文件树本身：`defaultSeed` 取唯一引导入口，`files` 恰好是唯一入口；只清理本插件这次新建的格，用户自己分的栏 / 自己放的标签一律不碰）④ store `resizeSplit(sid, 分栏, [0.2, 0.8])`（与分隔条拖拽同一落点）⑤ store `focusTab(sid, 树标签)` 回焦。比例 0.2/0.8 与上游 `minPaneFraction = 0.2`／`planResizeSplit(…, .2)` 同源，不需私有实现或样式注入（另加 `1e-3` 余量把浮点边界变成严格不等式）。**落点用兄弟格**：上游给新分栏 seed 的默认页恰是文件树本身（`defaultSeed` 只有一个引导入口时选它），故「哪个格是文件面板」不能靠内容判定，一律取 `siblingPaneOf`（回退才是内容判定）。**硬约束**：可行性按「对半分」评估 `(面板宽-分隔条)/2 ≥ 固定chrome + 胶囊宽(≥100px)` ⇒ 面板实测宽 ≳540px 才分得动（右栏默认 = 视口 45%，1440px 下约 648px 勉强可用），窄时安静退回上游默认行为。**基线**：store `subscribe` 不为当前快照回调一次，故订阅后立刻主动读一次建基线（否则首次提交被当成基线、永不触发）。**已知限制**：图片/PDF 由 documentpreview 以 fallback 档接管、按本插件判定不会搬动；用户拖动分隔条会覆盖比例（不再纠正）；在右格连续开文件会堆标签（不替换已有文件标签）；刷新后右栏回单格需重新观察；见其 README |
 | `dsh-rightbar-files-float` | Client only（TS） | `index.ts`（空宿主） | `src/`（client.ts + config.ts + sidebar-float.ts + float-rect.ts + composer-box.ts + types.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check`；`node test-float.mjs` | **右栏文件浏览器浮窗开关**（⌘/Ctrl+Alt+`\`，从 `dsh-kbd-hotkeys` 搬出来的独立插件）：① 浮窗里已有文件浏览器标签 → 同一份会话级 store **活实例**的 `actions.closeTab(sessionId, tabId)` 只关浮窗（`host === 'float'` 判定，停靠面板里的副本一律不碰）；② 浮窗里没有但停靠面板里有 → 同一活实例的 `actions.floatTab(sessionId, tabId, rect)` 直接浮出（**不调 `openTab`**，故不顺手展开右栏）；③ 两处都没有 → 公开的 `sidebarRight.openTab('files')` 打开（上游 `openContent` 恒先 `planSetExpanded(true)`），再在**同一个同步调用链**里用同一活实例浮出（**不走**公开的 `sidebarRight.float`——它按 seat 上次渲染的布局校验标签，会把本轮才提交的标签静默丢掉；**不订阅、不重试**）。活实例缺 `actions.floatTab`（没有浮窗时）→ 连打开都不做且不吞键；缺 `closeTab` → 浮窗与副本都不动；其余取数环不可用 → 退化为「打开」或 no-op（不吞键）。`rect` 是**一次性落点**（`float-rect.ts`）：右栏可见时 `x = viewportWidth − 右栏宽 − 280`（右缘贴右栏左缘）、`y = 0`、`height = 渲染视口高`，右栏收起 / 全屏 / 窄帧挤不下则贴窗口右缘；**宽度恒为左栏的预设宽度 280px**（上游 `createLayoutStore` 的 `layoutInfo.sidebar` 初值 / `toggleSidebar()` 恢复值，不随用户拖动左栏变化）；**高度按输入框让位**（`composer-box.ts`：只读量 composer 外框顶边与其还能长高的余量，居中布局只让一半；量不到 / 横向不重叠 / 顶边 ≤ 0 时保持整屏高），保证输入框长到上限也不与浮窗重叠。键位可经 `localStorage["dsh-rightbar-files-float:v1"]` 覆盖，忽略 `event.repeat`；**不订阅、不跟随**、不写 `moveFloat`/`resizeFloat`；见其 README |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
@@ -169,7 +172,10 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
   用于读侧栏视图 store 的会话顺序、问答卡片草稿 store 与右栏标签 store
   （`rightbar.session` 注册项：读标签顺序），`layout` / `sidebarRight` 分别用于
   开关左右栏与（右栏）标签切换，`conversation` 用于 ⌘/Ctrl+I 聚焦输入框
-  （取 composer 的 editor 宿主元素））；
+  （取 composer 的 editor 宿主元素））；`dsh-rightbar-split-open`：
+  `['uiSession','slots','sidebarRight']`——`uiSession` 用于取会话物化时机并在该时机解析
+  右栏 store，`slots` 走 slot store 三步范式（`entries('rightbar.session')` +
+  `resolveStore`），`sidebarRight` 只用公开的 `split(paneId?)`（带实测空间判定）；
   `dsh-rightbar-files-float`：`['sessions','uiSession','sidebarRight','slots','conversation']`
   ——`sessions` / `uiSession` / `slots` 走 slot store 三步范式读右栏会话级 store
   （现场 + 动作面 `actions.floatTab` / `actions.closeTab`），`sessions` 还供
@@ -263,6 +269,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-rightbar-tab-width` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。其构建脚本**直接执行 esbuild 的平台二进制**（`@esbuild/<platform>-<arch>`，`stdio: 'inherit'`）而非 `import 'esbuild'` 的 `buildSync`：esbuild 的 JS API 以 stdin/stdout 管道与子进程通信，在受限沙箱下 `spawn` 报 `EPERM`；同组 flag 下产物一致 |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check`；`node test-services.mjs`；`node test-dispatch.mjs` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。其构建脚本与 `dsh-rightbar-tab-width` 同一做法：**直接执行 esbuild 的平台二进制**（`@esbuild/<platform>-<arch>`，`stdio: 'inherit'`）而非 `import 'esbuild'` 的 `buildSync`（后者以 stdin/stdout 管道与子进程通信，受限沙箱下 `spawn` 报 `EPERM`；同组 flag 下产物一致） |
+| `dsh-rightbar-split-open` | `npm run typecheck && npm run build && npm run check`；`node test-split-open.mjs` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。同样**直接执行 esbuild 的平台二进制**（受限沙箱下 `buildSync` 的 stdio 管道会 `EPERM`）。`test-split-open.mjs` 以 Type Stripping 直载 `src/*.ts`，用桩 store / 桩 `uiSession` / 桩 `slots` 断言：树面板里新开文件才触发、基线只记不动作、已分栏时只搬不重分（且落点为**兄弟格**）、比例恰为 `[0.2, 0.8]` 且不低于上游 `minPaneFraction`、树侧不在首位不写比例、分栏被上游拒绝时不搬不写、文件标签已被关掉时不误搬、缺动作面时静默跳过、`resolveStore` 各条不可用路径一律 no-op、`resolve` 只包装一次且 `dispose` 可还原、store 句柄晚注册时有界微任务重试能接上；其桩 `sidebarRight.split` 按上游 `planSettle`/`defaultSeed` 的真实行为给新格 seed 一枚文件树标签，据此断言该 seed 被 `closeTab` 收掉（文件面板只剩自己打开的那一个标签）、已分栏路径不多关任何标签 |
 | `dsh-rightbar-files-float` | `npm run typecheck && npm run build && npm run check`；`node test-float.mjs` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。同样**直接执行 esbuild 的平台二进制**（受限沙箱下 `buildSync` 的 stdio 管道会 `EPERM`）。`test-float.mjs` 用最小 DOM 桩 + 假右栏 store（复刻上游 `planSettle` 给清空停靠面板补默认页、`floatTab` 要求标签停靠否则抛错）断言 95 条：①②③ 三条路径（停靠中不重复打开、浮窗 + 停靠副本只关浮窗、两处都没有时**同一次按键内**完成打开 + 浮出、再按只关浮窗、第三次直接浮出右栏那一枚）、一次性落点（几何变化后不再产生新的 floatTab 调用）、落点几何（右栏收起 / 全屏 / 窄帧 / 挤不下 / 窄屏图标轨、**宽度不跟随左栏当前宽**、根 layout store 与视口高读不到时不传 rect）、输入框让位（贴底 / 居中只让一半 / 已到上限 / 上限属性读不到退回常量 / 横向不重叠 / 找不到外框 / 顶边 ≤ 0 / 取不到元素）、无降级各条（服务与 store 缺失、`resolveStore` 抛错、缺 `getSnapshot`/`bySession`、无作用域绑定、无当前会话、缺 `floatTab`/`closeTab`、`openTab` 与 `floatTab` 抛错）、键位分发（裸 `\` / 位移键 / 长按重复 / 输入法组合 / macOS ⌘+Alt、localStorage 覆盖与损坏回退）与 `dispose` 摘监听 |
 | 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
 
