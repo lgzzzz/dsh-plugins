@@ -21,8 +21,8 @@
 
 本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
 进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 8 个插件目录（见下节插件清单），
-web Profile 当前已挂载其中 7 个（`dsh-fork-inbox-guard` 未挂载）。
+Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 9 个插件目录（见下节插件清单），
+web Profile 当前已挂载其中 7 个（`dsh-fork-inbox-guard`、`dsh-rightbar-tab-width` 未挂载）。
 `dsh-change-summary`、`dsh-kbd-nav-focus`（提交 6499dd9）、`dsh-no-right-sidebar`、
 `dsh-left-dock` 已从仓库移除，仅存于
 git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本次按其根因分析
@@ -46,6 +46,7 @@ git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | 无 | `/new` 新建会话命令 |
 | `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
+| `dsh-rightbar-tab-width` | Client only（TS） | `index.ts`（空宿主） | `src/`（client.ts + css.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 右栏 tab 胶囊定宽补丁：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」（border-box 分支直接返回该值；空 pane 或 `min-width<=0` 才回落到 `SPLIT_MINIMUMS.chip = 100`），进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（`canSplitPane`），决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏。取值 100 与兜底常量同值 ⇒ 分栏判定与上游默认逐字相同、无偏移；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2）。右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染（不是禁用）。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；见其 README |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
 | `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/sidebar-tabs/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、右栏当前面板标签切换（⌘/Ctrl+Alt+←/→ → 读右栏会话级 slot store 的 `layout.activePaneId` 面板标签顺序 + `sidebarRight.focus(tabId)`，循环、单标签不吞键）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
 | `dsh-text-editor` | Host + Client（TS） | `index.ts` + `host/*.ts`（注册 read/write/monaco 路由；挂载行 `inject: [webServer, fs]`） | `src/`（client.ts + sidebar.ts + file-io.ts + address.ts + controller.ts + ui.ts + monaco.ts + state.ts + commands.ts + routes.ts + path.ts + faces.ts + css.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && node test-address.mjs && npm run build && npm run check` | 应用内 Monaco 文本编辑器：**文件面在右侧栏**——浏览器半部以未声明 `priority`（= 上游最高档 `extension`）注册右栏资源 tab 类型 `dsh-text-editor/editor`（`kind: dsh-text-editor`、`patterns: ['dsh-resource://file/**']`、`canOpen` 否决图片/PDF），于是**右栏文件树的行与对话区的文件链接**都开进右栏的 Monaco pane（可编辑、可保存，未保存修改跨 tab 保留、关 tab 丢弃）；图片/PDF 仍由内置 `ui-sidebar-documentpreview` 渲染；会话主区不再出现文件 tab（只剩 `showDiff` 的「差异」tab）。另经 `ctx.provide('dsh-text-editor')` 暴露 `openFile`（开进右栏）与 `showDiff`（会话主区差异 tab，手动推进）；构建依赖 `monaco-editor`（Monaco 复制到不入仓的 `vendor/monaco/`）；详见其 README |
@@ -202,7 +203,8 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 
 - `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（当前 7 个：
   code-card-fonts / directory-picker-browse / fullwidth-chat / git-guard /
-  kbd-hotkeys / new-session / text-editor；`dsh-fork-inbox-guard` 未挂载）；
+  kbd-hotkeys / new-session / text-editor；`dsh-fork-inbox-guard`、
+  `dsh-rightbar-tab-width` 未挂载）；
 - `dsh.profile.bundles` 共 9 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
   及上述 7 个本地插件；
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
@@ -255,6 +257,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
 | `dsh-fork-inbox-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 用真实 `@deepseek-ai/dsh-session` 构造 seeded 子会话，验证前缀折叠、移除幂等、子代理 balanced 前缀零改动、异常不外逸 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
+| `dsh-rightbar-tab-width` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。其构建脚本**直接执行 esbuild 的平台二进制**（`@esbuild/<platform>-<arch>`，`stdio: 'inherit'`）而非 `import 'esbuild'` 的 `buildSync`：esbuild 的 JS API 以 stdin/stdout 管道与子进程通信，在受限沙箱下 `spawn` 报 `EPERM`；同组 flag 下产物一致 |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-text-editor` | `npm run typecheck && node test-address.mjs && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`；`test-address.mjs` 以 Type Stripping 直载 `src/address.ts`，验证地址解析/构造与「文本接管域」（canOpen 谓词）共 15 项断言；构建依赖 `monaco-editor`（复制到不入仓的 `vendor/monaco/`）。`vendor/monaco/` 缺失时右栏编辑器报 `Monaco 加载失败：Monaco loader failed to load`（宿主 `/dsh-text-editor/monaco/*` 路由 404），`npm install && npm run build` 即恢复，无需重启 |
 | 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
