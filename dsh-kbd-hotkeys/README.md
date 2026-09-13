@@ -21,12 +21,14 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 | `⌘/Ctrl+/` | 快捷键速查表 | 任意 |
 | `⌘/Ctrl+B` | 开关**左**侧栏（主键；走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+B` | 开关**右**侧栏（派生键；走 `sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
+| `⌘/Ctrl+Alt+←` / `→` | **右侧栏**当前面板的标签：上一个 / 下一个（循环；只有一个标签时不吞键） | 任意 |
 | `⌘/Ctrl+I` | 聚焦对话**输入框**（走 `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`） | `browse` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
 
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
-> 两个侧栏开关均为 `['browse','editing']`：输入框聚焦时同样生效（带修饰键的组合不
-> 干扰文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）。
+> 两个侧栏开关为 `['browse','editing']`：输入框聚焦时同样生效（带修饰键的组合不干扰
+> 文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）；右栏标签切换是
+> **任意态**（含 `card`）——卡片占用的是**裸** `←` / `→`，与带 `mod+alt` 的组合键不冲突。
 > **聚焦输入框只放行 `browse`**：焦点已经在输入框里时该动作没有意义（`editing`），
 > 且 contenteditable 里的 `⌘/Ctrl+I` 是浏览器「斜体」默认行为（`execCommand`，
 > 绕过 Lexical 直接改 DOM），放行会与编辑器状态打架；卡片态同理（卡片自己的输入框
@@ -45,6 +47,15 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > 更基础的左栏；`Alt` 这一档留给上下文面板（右栏）。
 > 若实际用下来右栏更常用，互换只需改 `src/config.ts` 的两行 `DEFAULT_BINDINGS`，或用
 > `localStorage` 覆盖单个动作的键位（见「自定义键位」）。
+>
+> **右栏标签切换为什么是 `⌘/Ctrl+Alt+←` / `→`**：它属于右栏（`rightbar`）这一档，
+> 所以沿用右栏的 `mod+alt` 修饰键档；方向键天然表达「上一个 / 下一个」，与
+> `⌘/Ctrl+Alt+↑/↓`（**活跃会话**跳转）同族但不同轴——会话轴在左栏、标签轴在右栏，
+> 左右配对。右栏标签**循环**：末个按 `→` 回到第一个、首个按 `←` 到最后一个
+> （标签条 chip 点击是任意跳，热键是「轮到下一个」，循环才闭合滚动语义）；
+> 面板只有一个标签时**不循环回自身**——no-op 且不吞键，把按键交回页面，
+> 避免「按了没反应还吃掉按键」。三态均生效（含 `card`）：卡片打开时同样能切右栏标签，
+> 因为卡片占用的是**裸** `←` / `→`，带 `mod+alt` 的组合键与它不冲突，本动作无需让路。
 >
 > 审批与问答的 `Enter` / `Esc` / 数字键 / 方向键是**固定分发的单键**，不参与
 > `bindings` 自定义（见「自定义键位」）。
@@ -109,6 +120,27 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   插件无需自己调右栏那两个 layout 方法。
   控制器在无挂载会话面（空白/hero 会话、右栏插件缺席）时 `require()` 抛错，插件兜住
   → **no-op 且不吞键**（无降级：不碰 DOM 里那个折叠按钮）。
+- 右栏标签切换（`⌘/Ctrl+Alt+←` / `→` → `sidebarRight.focus(tabId)`，见
+  `src/sidebar-tabs.ts`）：上游右栏的公开面只有 `active()`（当前标签）与
+  `focus(tabId)`（聚焦某标签），**没有** next/prev 动词、也无法枚举标签；标签顺序只
+  存在于右栏自己的**会话级 slot store**里（`createSidebarRightStore`，快照
+  `{ bySession: { <sessionId>: { layout } } }`，`layout` 为 docking kit 的 `LayoutState`）。
+  于是切标签 = 「读权威 store 拿顺序 + 调公开的 `focus`」，与标签条（chip）点击**同一
+  入口**；取数即 AGENTS.md 的 slot store 三步范式：
+  `slots.entries('rightbar.session')` 注册项上的 store handle
+  （seat 行注册：`ctx.slots.register({ name: 'rightbar.session', …, store })`）
+  → `uiSession.resolve(sessionId)` 作用域绑定 → `slots.resolveStore(handle, binding)`
+  活实例 → `getSnapshot().bySession[sessionId].layout`；
+  顺序与当前项取自 `layout.nodes[layout.activePaneId]`（即**当前面板**，与上游
+  `active()` 同源）的 `tabs` / `activeTabId`，落点 id 取自 `layout.tabs[tabId].id`。
+  **只在当前面板内切**（分屏的其它面板不参与）、**循环**（`(active ± 1 + n) % n`）、
+  面板只有一个标签 / 无标签 / `activePaneId` 非 pane 节点 / 该会话尚无面板一律
+  no-op 且**不吞键**；**无降级**：任一环不可用（`sidebarRight` 或 `slots` 或
+  `uiSession.resolve` 缺失、注册项无 store、`resolveStore` 抛
+  `store handle is not registered`、快照缺 `bySession`）即 no-op，不猜顺序、不碰 DOM。
+  态闸门为**任意态**：问答卡片只用**裸** `←` / `→`（固定分发，见上面的
+  `question.prev` / `question.next`），带 `mod+alt` 的组合键与它不在同一个 combo 上，
+  所以卡片打开时本动作照常生效。
 - 聚焦输入框（`⌘/Ctrl+I`）：**上游没有可触发的「聚焦 composer」服务面**——`conversation`
   契约（`send` / `updateQueue` / `cancel` / `loadOlder` / `input` / `blocks`）与
   `SessionInput` 契约（`setDraft` / `submit` / `state` …）都没有聚焦动词；
@@ -191,10 +223,23 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   就是上游为此预留的注册口（注释写的是「overlay wiring binds the textarea focus
   here」），当前构建里没有任何调用方；等上游补上「触发侧」或新增
   `conversation.focusComposer()` 之后，本动作可退化为一次纯服务调用。
+- **右栏标签切换只覆盖「当前面板」**：`←` / `→` 在 `layout.activePaneId` 指向的那块
+  面板内轮转（与上游 `active()` / 标签条的「当前」同源）；分屏出来的第二块面板需要
+  先点它（或点它的标签）成为当前面板，热键才会切它。浮层面板（float）不参与轮转。
+- **右栏标签切换依赖右栏插件已挂载且该会话开过面板**：`rightbar.session` 注册项
+  （`slots.entries` 找不到）、右栏自己那份会话级 store（`slots.resolveStore` 抛
+  `store handle is not registered`）、或该会话尚无 `bySession[sessionId]`
+  （从未展开过右栏、空白/hero 会话）时动作 no-op 且**不吞键**（无降级：不猜顺序、
+  不碰 DOM）。此时 `⌘/Ctrl+Alt+B` 先展开右栏即可。
+- **单个标签时不吞键**：面板只有一个标签（或没有标签）时 `←` / `→` 不循环回自身，
+  no-op 并把按键交回页面——避免「按了没反应还吃掉按键」。
+- **`card` 态下右栏标签照常可切**：卡片占用的方向键是**裸** `←` / `→`（问答翻题），
+  `⌘/Ctrl+Alt+←/→` 是另一个 combo，两者互不影响；同理输入框聚焦（`editing`）时也生效。
 
 服务注入：`['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation']`
-（全部判空后才消费；`slots` 用于读侧栏视图 store（会话跳转顺序）与问答草稿 store，
-`layout` 用于 `⌘/Ctrl+B` 开关左栏，`sidebarRight` 用于 `⌘/Ctrl+Alt+B` 开关右栏，
+（全部判空后才消费；`slots` 用于读侧栏视图 store（会话跳转顺序）、问答草稿 store
+与右栏标签 store（`rightbar.session`），`layout` 用于 `⌘/Ctrl+B` 开关左栏，
+`sidebarRight` 用于 `⌘/Ctrl+Alt+B` 开关右栏与 `⌘/Ctrl+Alt+←/→` 聚焦右栏标签，
 `conversation` 用于 `⌘/Ctrl+I` 取 composer 的 editor 宿主元素）。
 无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表为纯 DOM 浮层）。
 
@@ -213,7 +258,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 
 - `bindings` 与默认表**浅合并**：只写想覆盖的动作 id（动作 id 见
   `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；两个侧栏动作
-  （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）与聚焦输入框
+  （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）、右栏标签切换
+  （`sidebarRight.tabPrev` / `sidebarRight.tabNext`）与聚焦输入框
   （`composer.focus`）各自独立可覆盖。
   > 未注册的动作 id 写在 `bindings` 里不会触发：分发前先查动作注册表
   > （`ACTION_BY_ID`），未注册即忽略。
@@ -245,6 +291,10 @@ node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/ca
                          # 问答断言直接落在卡片草稿 store 上——数字键必须写入 store、Enter 必须取自 store；
                          # 另含 ⌘/Ctrl+B → layout.toggleSidebar（左栏）/ ⌘/Ctrl+Alt+B →
                          # sidebarRight.toggleExpanded（右栏）的两态调用、互不串场、自定义键位与无降级；
+                         # 以及 ⌘/Ctrl+Alt+←/→ 右栏标签切换：标签顺序必须取自
+                         # rightbar.session 注册项的会话级 store（bySession[sessionId].layout
+                         # 的 activePaneId 面板）、切换必须调 sidebarRight.focus，首末标签循环、
+                         # 单标签与任一环不可用一律 no-op 不吞键、card 态仍生效（裸方向键归卡片）；
                          # 以及 ⌘/Ctrl+I 聚焦输入框：binding.ctx 原样传给 input.for、只认 browse 态、
                          # for 缺席回退 shell(id)、任一环缺失/抛错一律 no-op 不吞键）
 node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序跳转（分组 / flat / 来源不可用 no-op）

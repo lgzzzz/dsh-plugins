@@ -616,6 +616,11 @@ var ACTIONS = [
   // 「只保留带修饰键的全局组合」一致。
   { id: "sidebar.toggle", label: "\u5F00\u5173\u5DE6\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "sidebarRight.toggle", label: "\u5F00\u5173\u53F3\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
+  // 右栏标签切换与右栏开关同为「派生面板」的键位档(mod+alt+方向键),三态均放行:
+  // 焦点在输入框(editing)时带修饰键的组合不干扰文本编辑;card 态下 ← / → 虽归
+  // 问答卡片,但那是**裸**方向键(固定分发),与带 mod+alt 的组合键不冲突,故无需让路。
+  { id: "sidebarRight.tabPrev", label: "\u53F3\u4FA7\u680F:\u4E0A\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  { id: "sidebarRight.tabNext", label: "\u53F3\u4FA7\u680F:\u4E0B\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义,且 contenteditable
   // 里 ⌘/Ctrl+I 是浏览器「斜体」默认行为(execCommand,绕过 Lexical),card 态则归卡片
   // 自己的输入框。
@@ -642,6 +647,11 @@ var DEFAULT_BINDINGS = {
   //   是派生面板,拿"左栏 + alt"这一档栈式修饰键。
   "sidebar.toggle": "mod+b",
   "sidebarRight.toggle": "mod+alt+b",
+  // 右栏标签切换 = ⌘/Ctrl+Alt+← / →:与右栏开关同一档修饰键(mod+alt),方向键
+  // 表达「上一个 / 下一个」;与 ⌘/Ctrl+Alt+↑/↓ 的活跃会话跳转同族但不同轴
+  // (会话轴 vs 右栏标签轴)。边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
+  "sidebarRight.tabPrev": "mod+alt+arrowleft",
+  "sidebarRight.tabNext": "mod+alt+arrowright",
   // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
   // macOS 上 ⌃I 与 ⌘I 都能触发(用户要的 Ctrl+I 在 mac 上按 ⌃I 即可),Win/Linux
   // 就是 Ctrl+I;两平台的浏览器 DevTools 都带 Shift(⌘⌥I / Ctrl+Shift+I),不冲突。
@@ -871,6 +881,126 @@ function createOverlays(deps) {
   return { isOpen, contains, handleKey, toggleHelp, destroy };
 }
 
+// src/sidebar-tabs.ts
+var RIGHTBAR_SLOT = "rightbar.session";
+function cycleRightSidebarTab(services, delta) {
+  const sidebarRight = services.sidebarRight;
+  if (sidebarRight === null || sidebarRight === void 0) return false;
+  if (typeof sidebarRight.focus !== "function") return false;
+  const axis = currentPaneTabs(services);
+  if (axis === void 0 || axis.ids.length <= 1) return false;
+  const step = delta < 0 ? -1 : 1;
+  const index = axis.active < 0 ? 0 : (axis.active + step + axis.ids.length) % axis.ids.length;
+  const target = axis.ids[index];
+  if (target === void 0 || target === axis.ids[axis.active]) return false;
+  try {
+    sidebarRight.focus(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function currentPaneTabs(services) {
+  var _a, _b, _c;
+  const layout = currentLayout(services);
+  if (layout === void 0) return void 0;
+  const pane = paneOf(layout, layout.activePaneId);
+  if (pane === void 0) return void 0;
+  const ids = [];
+  for (const tabId of (_a = pane.tabs) != null ? _a : []) {
+    if (typeof tabId !== "string" || tabId === "") continue;
+    const id = (_c = (_b = layout.tabs) == null ? void 0 : _b[tabId]) == null ? void 0 : _c.id;
+    ids.push(typeof id === "string" && id !== "" ? id : tabId);
+  }
+  if (ids.length === 0) return void 0;
+  const activeTabId = pane.activeTabId;
+  return {
+    ids,
+    active: typeof activeTabId === "string" ? ids.indexOf(activeTabId) : -1
+  };
+}
+function currentLayout(services) {
+  var _a, _b;
+  const state = rightbarTabsState(services);
+  if (state === void 0) return void 0;
+  const sessionId = currentSessionId2(services);
+  if (sessionId === void 0) return void 0;
+  return (_b = (_a = state.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
+}
+function currentSessionId2(services) {
+  var _a, _b, _c, _d;
+  const current = (_d = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.current;
+  return current === void 0 || current === "" ? void 0 : current;
+}
+function rightbarTabsState(services) {
+  const slots = services.slots;
+  const uiSession = services.uiSession;
+  if (slots === null || slots === void 0 || uiSession === null || uiSession === void 0) return void 0;
+  if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
+  const sessionId = currentSessionId2(services);
+  if (sessionId === void 0) return void 0;
+  const binding = resolveBinding2(uiSession, sessionId);
+  if (binding === void 0) return void 0;
+  for (const entry of entriesOf3(slots)) {
+    const handle = entry == null ? void 0 : entry.store;
+    if (handle === void 0 || handle === null) continue;
+    let instance;
+    try {
+      instance = slots.resolveStore(handle, binding);
+    } catch {
+      continue;
+    }
+    const state = asTabsState(instance);
+    if (state !== void 0) return state;
+  }
+  return void 0;
+}
+function entriesOf3(slots) {
+  var _a;
+  try {
+    const entries = (_a = slots.entries) == null ? void 0 : _a.call(slots, RIGHTBAR_SLOT);
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+function resolveBinding2(uiSession, sessionId) {
+  const resolve = uiSession.resolve;
+  if (typeof resolve !== "function") return void 0;
+  let binding;
+  try {
+    binding = resolve.call(uiSession, sessionId);
+  } catch {
+    return void 0;
+  }
+  if (typeof binding !== "object" || binding === null) return void 0;
+  const key = binding.key;
+  return typeof key === "string" && key !== "" ? binding : void 0;
+}
+function asTabsState(instance) {
+  if (typeof instance !== "object" || instance === null) return void 0;
+  const getSnapshot = instance.getSnapshot;
+  if (typeof getSnapshot !== "function") return void 0;
+  let snapshot;
+  try {
+    snapshot = getSnapshot.call(instance);
+  } catch {
+    return void 0;
+  }
+  if (typeof snapshot !== "object" || snapshot === null) return void 0;
+  const bySession = snapshot.bySession;
+  if (typeof bySession !== "object" || bySession === null || Array.isArray(bySession)) return void 0;
+  return snapshot;
+}
+function paneOf(layout, paneId) {
+  var _a;
+  if (typeof paneId !== "string" || paneId === "") return void 0;
+  const node = (_a = layout.nodes) == null ? void 0 : _a[paneId];
+  if (node === void 0 || node === null) return void 0;
+  if (node.kind !== "pane") return void 0;
+  return node;
+}
+
 // src/client.ts
 var name = "dsh-kbd-hotkeys";
 var inject = ["sessions", "uiSession", "layout", "sidebarRight", "workspaces", "slots", "conversation"];
@@ -891,6 +1021,10 @@ function runAction(id, services, overlays) {
         return toggleSidebar(services);
       case "sidebarRight.toggle":
         return toggleRightSidebar(services);
+      case "sidebarRight.tabPrev":
+        return cycleRightSidebarTab(services, -1);
+      case "sidebarRight.tabNext":
+        return cycleRightSidebarTab(services, 1);
       case "composer.focus":
         return focusComposer(services);
       case "session.prev":

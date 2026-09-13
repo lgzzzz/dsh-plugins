@@ -274,6 +274,65 @@ export interface LayoutLike {
 export interface SidebarRightLike {
   toggleExpanded?(): void
   isExpanded?(): boolean
+  /** 取当前激活标签的记录(`active()`);无挂载会话面时返回 undefined。 */
+  active?(): SidebarRightTabRecordLike | undefined
+  /**
+   * 聚焦一个标签(并聚焦其所在面板)。与标签条 chip 点击同一入口;
+   * 标签不存在时上游静默跳过,无挂载会话面时 `require()` 抛错(调用方兜住 → no-op)。
+   */
+  focus?(tabId: string): void
+}
+
+/* ------------------------------------------------------------------ *
+ * 右侧栏标签切换(⌘/Ctrl+Alt+← / →):docking 面板状态的会话级 slot store
+ * ------------------------------------------------------------------ */
+
+/** 一个标签的记录(见 dsh-client-ui-dockkit 的 TabRecord;只消费 id)。 */
+export interface SidebarRightTabRecordLike {
+  id: string
+  kind?: string
+  title?: string
+  contentId?: string
+}
+
+/**
+ * 布局里的一个节点(见 dsh-client-ui-dockkit 的 LayoutState.nodes)。
+ * 只消费 pane 分支:`kind==='pane'` 时 `tabs` 是面板内的标签顺序、`activeTabId`
+ * 是当前激活标签(dockkit `getPane` 同形)。
+ */
+export interface SidebarRightLayoutNodeLike {
+  kind?: string
+  host?: string
+  id?: string
+  tabs?: readonly string[]
+  activeTabId?: string
+}
+
+/**
+ * 一个会话的 docking 布局(见 dsh-client-ui-dockkit 的 LayoutState)。
+ * `activePaneId` 指向当前面板;`tabs` 是布局内全部标签记录的字典。
+ */
+export interface SidebarRightLayoutLike {
+  nodes?: Readonly<Record<string, SidebarRightLayoutNodeLike | undefined>>
+  tabs?: Readonly<Record<string, SidebarRightTabRecordLike | undefined>>
+  activePaneId?: string
+  rootId?: string
+  expanded?: boolean
+}
+
+/** 一个会话的面板状态(dockkit SurfaceState;只消费 layout)。 */
+export interface SidebarRightSurfaceLike {
+  layout?: SidebarRightLayoutLike
+}
+
+/**
+ * `createSidebarRightStore()` 的 store 快照(见
+ * dsh-client-ui-sidebar-right 的 SidebarRightState):会话 id → 该会话的面板状态。
+ * 取自 `slots.entries('rightbar.session')` 注册项上的 store handle
+ * (会话级,需 `uiSession.resolve(sessionId)` 作用域绑定后 `slots.resolveStore`)。
+ */
+export interface SidebarRightTabsStateLike {
+  bySession?: Readonly<Record<string, SidebarRightSurfaceLike | undefined>>
 }
 
 /* ------------------------------------------------------------------ *

@@ -11,7 +11,9 @@
  *   刚完成未查看,按**侧栏可见顺序**定位)、
  *   Esc 停止当前会话的整棵运行中交互树(自身 + 直系子代理,one-shot 跳过);
  * - `browse` 浏览态(输入框失焦)与 `editing` 输入态:⌘B 开关左侧栏、
- *   ⌘⌥B 开关右侧栏;
+ *   ⌘⌥B 开关右侧栏、⌘⌥←/→ 在右侧栏当前面板的标签之间循环切换
+ *   (标签顺序读右栏自己的会话级 slot store,切换调公开的 `sidebarRight.focus`,
+ *   见 sidebar-tabs.ts;单个标签时不吞键);
  * - `browse` 浏览态:⌘/Ctrl+I 聚焦对话输入框(上游无聚焦服务面,经
  *   conversation.input 取 shell.editor 的宿主元素后调 focus(),见 actions.ts
  *   的 focusComposer;不做选择器查询 / DOM 遍历 / 事件合成)。
@@ -21,6 +23,9 @@
  * workspaces / slots / conversation 既有服务,会话跳转 = 活跃会话扫描(running ∪
  * pending 交互 ∪ completed,锚点定向跳跃),导航轴为侧栏顺序(工作区分组 + slots 中
  * workspace 视图 store 的本地会话顺序,每次按键重新取数);
+ * 右栏标签切换 = `slots.entries('rightbar.session')` 注册项上的 store handle
+ * (`uiSession.resolve` 作用域绑定 → `slots.resolveStore`)读 `layout.activePaneId`
+ * 面板的标签顺序 + `sidebarRight.focus(tabId)`(见 sidebar-tabs.ts,无降级);
  * 审批与问答/计划评审全部走 uiSession 待处理交互的服务级 answer()/cancel(),
  * 通用问答的选项/切题/提交直接读写**卡片自己的 Session 级 slot store**
  * (`conversation.composer` 注册项,见 question-drafts.ts),卡片实时高亮并翻题;
@@ -43,14 +48,16 @@ import {
 } from './actions.ts'
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
+import { cycleRightSidebarTab } from './sidebar-tabs.ts'
 import type { ClientContext, ConversationLike, LayoutLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, WorkspacesLike } from './types.ts'
 
 export const name = 'dsh-kbd-hotkeys'
 
 /**
  * 浏览器半部注入的服务(模块加载器读取)。
- * workspaces 供会话切换复刻侧栏分组,slots 供读取侧栏视图 store(会话顺序),
- * layout 供 ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+Alt+B 开关右侧栏,
+ * workspaces 供会话切换复刻侧栏分组,slots 供读取侧栏视图 store(会话顺序)与
+ * 右栏标签 store(标签顺序),layout 供 ⌘/Ctrl+B 开关左侧栏,sidebarRight 供
+ * ⌘/Ctrl+Alt+B 开关右侧栏、⌘/Ctrl+Alt+←/→ 聚焦右栏标签,
  * conversation 供 ⌘/Ctrl+I 取 composer 的 editor 宿主元素(聚焦输入框)。
  */
 export const inject = ['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation']
@@ -74,6 +81,10 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return toggleSidebar(services)
       case 'sidebarRight.toggle':
         return toggleRightSidebar(services)
+      case 'sidebarRight.tabPrev':
+        return cycleRightSidebarTab(services, -1)
+      case 'sidebarRight.tabNext':
+        return cycleRightSidebarTab(services, 1)
       case 'composer.focus':
         return focusComposer(services)
       case 'session.prev':

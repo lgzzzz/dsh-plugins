@@ -52,6 +52,11 @@ export const ACTIONS: readonly ActionDef[] = [
   // 「只保留带修饰键的全局组合」一致。
   { id: 'sidebar.toggle', label: '开关左侧栏', group: '会话', states: ['browse', 'editing'] },
   { id: 'sidebarRight.toggle', label: '开关右侧栏', group: '会话', states: ['browse', 'editing'] },
+  // 右栏标签切换与右栏开关同为「派生面板」的键位档(mod+alt+方向键),三态均放行:
+  // 焦点在输入框(editing)时带修饰键的组合不干扰文本编辑;card 态下 ← / → 虽归
+  // 问答卡片,但那是**裸**方向键(固定分发),与带 mod+alt 的组合键不冲突,故无需让路。
+  { id: 'sidebarRight.tabPrev', label: '右侧栏:上一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
+  { id: 'sidebarRight.tabNext', label: '右侧栏:下一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
   // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义,且 contenteditable
   // 里 ⌘/Ctrl+I 是浏览器「斜体」默认行为(execCommand,绕过 Lexical),card 态则归卡片
   // 自己的输入框。
@@ -88,6 +93,11 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   //   是派生面板,拿"左栏 + alt"这一档栈式修饰键。
   'sidebar.toggle': 'mod+b',
   'sidebarRight.toggle': 'mod+alt+b',
+  // 右栏标签切换 = ⌘/Ctrl+Alt+← / →:与右栏开关同一档修饰键(mod+alt),方向键
+  // 表达「上一个 / 下一个」;与 ⌘/Ctrl+Alt+↑/↓ 的活跃会话跳转同族但不同轴
+  // (会话轴 vs 右栏标签轴)。边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
+  'sidebarRight.tabPrev': 'mod+alt+arrowleft',
+  'sidebarRight.tabNext': 'mod+alt+arrowright',
   // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
   // macOS 上 ⌃I 与 ⌘I 都能触发(用户要的 Ctrl+I 在 mac 上按 ⌃I 即可),Win/Linux
   // 就是 Ctrl+I;两平台的浏览器 DevTools 都带 Shift(⌘⌥I / Ctrl+Shift+I),不冲突。
