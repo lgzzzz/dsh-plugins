@@ -1,6 +1,6 @@
 /**
- * dsh-kbd-hotkeys — 轻量浮层:快捷键速查表(⌘/)、工作区切换浮窗(⌘/Ctrl+Alt+K)
- * 与模型浮窗(⌘/Ctrl+Alt+M)。
+ * dsh-kbd-hotkeys — 轻量浮层:快捷键速查表(⌘/)、工作区切换浮窗(⌘/Ctrl+K)
+ * 与模型浮窗(⌘/Ctrl+M)。
  *
  * 纯 DOM 实现(不消费 react,与 dsh-code-card-fonts 同策略):样式走 <style>
  * 标签 + 主题变量(--dsw-*),卸载时随 ctx.effect disposer 一并回收。

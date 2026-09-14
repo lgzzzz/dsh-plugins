@@ -365,7 +365,7 @@ export function toggleSidebar(services: Services): boolean {
 }
 
 /**
- * 开关右侧栏(`sidebarRight.toggleExpanded()`,⌘/Ctrl+Alt+B,
+ * 开关右侧栏(`sidebarRight.toggleExpanded()`,⌘/Ctrl+N,
  * 与右栏头部的折叠按钮同一入口)。
  *
  * 一次调用即完成「面板 + AppFrame 右栏轨道」的开合:展开态是会话级 slot store

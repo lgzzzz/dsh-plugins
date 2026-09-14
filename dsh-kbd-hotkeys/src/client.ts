@@ -11,18 +11,18 @@
  *   刚完成未查看,按**侧栏可见顺序**定位)、
  *   Esc 停止当前会话的整棵运行中交互树(自身 + 直系子代理,one-shot 跳过);
  * - `browse` 浏览态(输入框失焦)与 `editing` 输入态:⌘B 开关左侧栏、
- *   ⌘⌥B 开关右侧栏、⌘⌥←/→ 在右侧栏当前面板的标签之间循环切换
+ *   ⌘N 开关右侧栏、⌘⌥←/→ 在右侧栏当前面板的标签之间循环切换
  *   (标签顺序读右栏自己的会话级 slot store,切换调公开的 `sidebarRight.focus`,
  *   见 sidebar-tabs.ts;单个标签时不吞键)、
- *   ⌘⌥\ 打开右栏文件浏览器并把它置于所在标签栏首位(公开的
+ *   ⌘\ 打开右栏文件浏览器并把它置于所在标签栏首位(公开的
  *   `sidebarRight.openTab('files')` + 同一份 store 的 `actions.placeTab(…, 0)`,
  *   见 sidebar-tabs.ts 的 revealRightSidebarFiles);
- * - 全态:⌘/Ctrl+Alt+K 打开**工作区浮窗**(浮窗内 ↑/↓ 移动高亮、Enter 切换、
+ * - 全态:⌘/Ctrl+K 打开**工作区浮窗**(浮窗内 ↑/↓ 移动高亮、Enter 切换、
  *   Esc 关闭),列表取自 `workspaces.list` 快照(宿主顺序),切换调公开的
  *   `uiWorkspace.openWorkspace(workspaceId)`(连接工作区:复用该工作区的空白
  *   会话、没有就新建一个再打开,与侧栏工作区分组的「+」同一条路径),
  *   见 workspace-switcher.ts 与 overlay.ts;
- * - 全态:⌘/Ctrl+Alt+M 打开**模型浮窗**(浮窗内 ↑/↓ 选择、Enter 切换、
+ * - 全态:⌘/Ctrl+M 打开**模型浮窗**(浮窗内 ↑/↓ 选择、Enter 切换、
  *   ⇧Tab 调强度、Esc 关闭),列表 / 当前选择 / 切换都走上游**同一个** per-session
  *   模型目录(`ctx.modelDirectories.directoryFor(sessionId)`——与 `/model` 弹层、
  *   composer 模型座位共用同一份状态),见 model-picker.ts 与 overlay.ts;
@@ -76,12 +76,12 @@ export const name = 'dsh-kbd-hotkeys'
  * 浏览器半部注入的服务(模块加载器读取)。
  * workspaces 供会话切换复刻侧栏分组、工作区浮窗取列表,slots 供读取侧栏视图
  * store(会话顺序)与右栏标签 store(标签顺序 + 置顶用的 actions),layout 供
- * ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+Alt+B 开关右侧栏、
- * ⌘/Ctrl+Alt+←/→ 聚焦右栏标签、⌘/Ctrl+Alt+\ 打开文件浏览器,
+ * ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+N 开关右侧栏、
+ * ⌘/Ctrl+Alt+←/→ 聚焦右栏标签、⌘/Ctrl+\ 打开文件浏览器,
  * conversation 供 ⌘/Ctrl+I 取 composer 的 editor 宿主元素(聚焦输入框)与
  * ⇧Tab 的编辑态门闸(宿主元素 contains 事件目标),
- * uiWorkspace 供 ⌘/Ctrl+Alt+K 工作区浮窗确认时连接/切换工作区,
- * modelDirectories 供 ⌘/Ctrl+Alt+M 模型浮窗与 ⇧Tab 循环思考强度
+ * uiWorkspace 供 ⌘/Ctrl+K 工作区浮窗确认时连接/切换工作区,
+ * modelDirectories 供 ⌘/Ctrl+M 模型浮窗与 ⇧Tab 循环思考强度
  * (上游 `/model` 弹层、composer 模型座位的**同一份** per-session 目录实例)。
  */
 export const inject = ['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation', 'uiWorkspace', 'modelDirectories']

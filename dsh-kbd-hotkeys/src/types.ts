@@ -113,7 +113,7 @@ export interface WorkspacesLike {
 }
 
 /* ------------------------------------------------------------------ *
- * 工作区浮窗(⌘/Ctrl+Alt+K):列表取数 + 切换落点
+ * 工作区浮窗(⌘/Ctrl+K):列表取数 + 切换落点
  * ------------------------------------------------------------------ */
 
 /** 工作区浮窗的一行(纯展示数据,由 workspace-switcher.ts 从服务快照派生)。 */
@@ -397,7 +397,7 @@ export interface SidebarRightTabsStateLike {
 }
 
 /* ------------------------------------------------------------------ *
- * 右侧栏会话级 store 的**写**面(⌘/Ctrl+Alt+\ 把文件浏览器置于首位)
+ * 右侧栏会话级 store 的**写**面(⌘/Ctrl+\ 把文件浏览器置于首位)
  * ------------------------------------------------------------------ */
 
 /**
@@ -501,7 +501,7 @@ export interface Services {
   uiSession: UiSessionLike | undefined
   /** layout 服务:只用于开关左侧栏(⌘/Ctrl+B)。 */
   layout: LayoutLike | undefined
-  /** sidebarRight 服务:只用于开关右侧栏(⌘/Ctrl+Alt+B)。 */
+  /** sidebarRight 服务:只用于开关右侧栏(⌘/Ctrl+N)。 */
   sidebarRight: SidebarRightLike | undefined
   workspaces: WorkspacesLike | undefined
   /** slots 服务:只用于读侧栏视图 store(会话跳转顺序的权威来源)。 */
@@ -509,12 +509,12 @@ export interface Services {
   /** conversation 服务:只用于取 composer 的 editor 宿主元素(⌘/Ctrl+I 聚焦输入框)。 */
   conversation: ConversationLike | undefined
   /**
-   * uiWorkspace 服务:只用于工作区浮窗的切换动作(⌘/Ctrl+Alt+K 选中后 Enter
+   * uiWorkspace 服务:只用于工作区浮窗的切换动作(⌘/Ctrl+K 选中后 Enter
    * 调 openWorkspace,与侧栏「+」同一条连接工作区的路径)。
    */
   uiWorkspace: UiWorkspaceLike | undefined
   /**
-   * modelDirectories 服务:模型浮窗(⌘/Ctrl+Alt+M)取会话级模型目录、
+   * modelDirectories 服务:模型浮窗(⌘/Ctrl+M)取会话级模型目录、
    * ⇧Tab 循环思考强度(`load()` / `select()`)——与上游 `/model` 弹层、
    * composer 模型座位共用**同一份** per-session 目录实例。
    */
@@ -522,7 +522,7 @@ export interface Services {
 }
 
 /* ------------------------------------------------------------------ *
- * 模型浮窗(⌘/Ctrl+Alt+M)与思考强度循环(⇧Tab):会话级模型目录
+ * 模型浮窗(⌘/Ctrl+M)与思考强度循环(⇧Tab):会话级模型目录
  * ------------------------------------------------------------------ */
 
 /** 一次完整模型选择(见 dsh-api-session-controller …/types.d.ts 的 ModelSelection)。 */

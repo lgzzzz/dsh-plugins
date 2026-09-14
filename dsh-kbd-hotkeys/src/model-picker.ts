@@ -1,5 +1,5 @@
 /**
- * dsh-kbd-hotkeys — 模型浮窗(⌘/Ctrl+Alt+M)与思考强度循环(⇧Tab)的数据面与动作。
+ * dsh-kbd-hotkeys — 模型浮窗(⌘/Ctrl+M)与思考强度循环(⇧Tab)的数据面与动作。
  *
  * 两个动作共用**同一份** per-session 模型目录:上游 dsh-client-ui-model-selection
  * 把 `/model` 弹层与 composer 的模型座位都挂在 `ctx.modelDirectories`

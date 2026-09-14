@@ -1,9 +1,14 @@
 /**
  * dsh-kbd-hotkeys — 键位表、组合键归一化与用户配置(localStorage)。
  *
- * 键位取向:尽量贴合跨应用肌肉记忆(`⌘/Ctrl+B` 开关侧栏、`⌘/Ctrl+I` 聚焦输入框等),
- * 并与上游语义同源(动作名 / 服务方法名与键位一一对应),浏览器自带快捷键冲突的键位
- * 一律避开:
+ * 键位取向:尽量贴合跨应用肌肉记忆(`⌘/Ctrl+B` 开关左栏、`⌘/Ctrl+N` 开关右栏等),
+ * 并与上游语义同源(动作名 / 服务方法名与键位一一对应)。
+ * 分档:**单修饰键 `mod+键` 给全局动作**(左栏 `B`、工作区 `K`、模型 `M`、
+ * 文件浏览器 `\`、输入框 `I`、速查表 `/`),**`mod+alt` 这一档留给右栏的导航类**
+ * (右栏开关 `N`、标签 `←`/`→`、会话跳转 `↑`/`↓`);两档都取 `event.code` 的物理键位。
+ * 需要留意的是浏览器自带快捷键:本插件在 document 捕获阶段先 `preventDefault`,
+ * 但 `⌘/Ctrl+N`(新窗口)、`⌘/Ctrl+K`(地址栏搜索)属浏览器保留键,详见 README
+ * 「已知限制」。
  * - `mod` 在 macOS = ⌘(Cmd),Win/Linux = Ctrl——`comboOf` 同时吸收 ctrlKey 与
  *   metaKey,故 macOS 上 `mod+i` 的 ⌃I 与 ⌘I 都能触发;
  * - 三态分发:`card` 卡片态(审批/问答/计划评审卡片打开)、`editing` 输入态
@@ -47,18 +52,21 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'question.next', label: '问题:→ 下一题', group: '问答卡片', states: ['card'] },
   { id: 'question.submit', label: '问题:Enter 下一题 / 末题提交', group: '问答卡片', states: ['card'] },
   // 会话级
-  // 左栏为主键(⌘/Ctrl+B,跨应用肌肉记忆),右栏为派生键(⌘/Ctrl+Alt+B,叠加 alt);
+  // 左栏为 ⌘/Ctrl+B、右栏为 ⌘/Ctrl+N(`N` = 右栏导航面板,navigation panel;
+  // 也避免把右栏塞进 `mod+alt` 那一档而占用方向键族的语义)。
   // 两者都额外放行 editing:带修饰键的组合不干扰文本编辑,与 `editing` 态
   // 「只保留带修饰键的全局组合」一致。
   { id: 'sidebar.toggle', label: '开关左侧栏', group: '会话', states: ['browse', 'editing'] },
   { id: 'sidebarRight.toggle', label: '开关右侧栏', group: '会话', states: ['browse', 'editing'] },
-  // 右栏标签切换与右栏开关同为「派生面板」的键位档(mod+alt+方向键),三态均放行:
+  // 右栏标签切换 = ⌘/Ctrl+Alt+← / →:走 mod+alt 这一档(与右栏开关、文件浏览器的
+  // 单修饰键区分开),因为方向键在 `mod+alt` 里已成体系——←/→ 是右栏内的标签轴,
+  // ↑/↓ 是左栏里的会话轴,两者都放行三态:
   // 焦点在输入框(editing)时带修饰键的组合不干扰文本编辑;card 态下 ← / → 虽归
   // 问答卡片,但那是**裸**方向键(固定分发),与带 mod+alt 的组合键不冲突,故无需让路。
   { id: 'sidebarRight.tabPrev', label: '右侧栏:上一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'sidebarRight.tabNext', label: '右侧栏:下一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
-  // 定位右栏文件浏览器(⌘/Ctrl+Alt+\):与右栏开关 / 标签切换同属 rightbar 这一档
-  // (mod+alt),同样三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,
+  // 定位右栏文件浏览器(⌘/Ctrl+\):与右栏开关(⌘/Ctrl+N)同为「右栏」这一族
+  // (单修饰键),同样三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,
   // 也不干扰文本编辑。语义是「定位」而非「开关」:该面板已有文件浏览器页就聚焦它,
   // 没有就在面板末尾创建(上游 openTab 按目标面板去重),再加一步置顶。
   { id: 'sidebarRight.files', label: '右侧栏:定位文件浏览器(不存在则创建)并置顶', group: '会话', states: ['card', 'editing', 'browse'] },
@@ -68,12 +76,12 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'composer.focus', label: '聚焦输入框', group: '会话', states: ['browse'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'session.next', label: '下一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
-  // 工作区切换浮窗(⌘/Ctrl+Alt+K):与右栏那一档同族(mod+alt,不抢裸键),
-  // 三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,也不干扰文本编辑。
+  // 工作区切换浮窗(⌘/Ctrl+K):单修饰键这一档(`K` = Work-space),三态放行——
+  // 带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,也不干扰文本编辑。
   // 浮窗打开后 ↑/↓ 只在列表里移动高亮、Enter 才调 uiWorkspace.openWorkspace
   // (连接工作区),故这一个动作 id 同时覆盖「开关浮窗」与「浮窗内导航」。
   { id: 'workspace.pick', label: '切换工作区(浮窗:↑↓ 选择、Enter 切换)', group: '会话', states: ['card', 'editing', 'browse'] },
-  // 模型浮窗(⌘/Ctrl+Alt+M):同属 mod+alt 这一档(`M` = Model),三态放行。
+  // 模型浮窗(⌘/Ctrl+M):同属单修饰键这一档(`M` = Model),三态放行。
   // 列表 / 切换都走**上游同一个** per-session 模型目录(ctx.modelDirectories 的
   // directoryFor,与 `/model` 弹层、composer 模型座位同一份状态),
   // 故浮窗里的切换与两个上游入口完全同步(见 model-picker.ts)。
@@ -107,42 +115,41 @@ export const FIXED_KEYS: Readonly<Record<string, string>> = {
 
 /** 默认键位(动作 id → 归一化组合键);固定分发的动作(见 FIXED_KEYS)不在此表。 */
 export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
-  // 侧栏开关的两个键位按「主键给主面板」分配:
+  // 侧栏开关按「主面板 = 主键、次面板 = 邻键」分配:
   // - 左栏 = ⌘/Ctrl+B:与 VS Code / Slack / 各类编辑器的侧栏开关一致,也是上游
   //   `layout.toggleSidebar()` 的本名(sidebar / sidebarCol 不带限定词就指左栏);
-  // - 右栏 = ⌘/Ctrl+Alt+B:右栏在上游叫 rightbar(rightbarShown / rightbarTrack),
-  //   是派生面板,拿"左栏 + alt"这一档栈式修饰键。
+  // - 右栏 = ⌘/Ctrl+N:同属单修饰键这一档,`N` 取「右栏导航面板」联想(上游把右栏
+  //   叫 rightbar,rightbarShown / rightbarTrack);与左栏的 `B` 同档不同键。
   'sidebar.toggle': 'mod+b',
-  'sidebarRight.toggle': 'mod+alt+b',
-  // 右栏标签切换 = ⌘/Ctrl+Alt+← / →:与右栏开关同一档修饰键(mod+alt),方向键
-  // 表达「上一个 / 下一个」;与 ⌘/Ctrl+Alt+↑/↓ 的活跃会话跳转同族但不同轴
-  // (会话轴 vs 右栏标签轴)。边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
+  'sidebarRight.toggle': 'mod+n',
+  // 右栏标签切换 = ⌘/Ctrl+Alt+← / →:方向键表达「上一个 / 下一个」;与
+  // ⌘/Ctrl+Alt+↑/↓ 的活跃会话跳转同族但不同轴(会话轴在左栏、标签轴在右栏)。
+  // 边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
   'sidebarRight.tabPrev': 'mod+alt+arrowleft',
   'sidebarRight.tabNext': 'mod+alt+arrowright',
-  // 定位右栏文件浏览器并置顶 = ⌘/Ctrl+Alt+\:反斜杠在主键区右端,与右栏那一档
-  // (mod+alt)同族。键名走 `comboOf` 的 e.code 归一化(`Backslash` → `\`),
-  // 与布局产出什么字符无关;JIS 等把 `\` 放在别的物理键上的键盘由 e.key 回退兜住。
-  // 注意 Win/Linux 上 Ctrl+Alt 即 AltGr(见 README「已知限制」)。
-  'sidebarRight.files': 'mod+alt+\\',
+  // 定位右栏文件浏览器并置顶 = ⌘/Ctrl+\:反斜杠在主键区右端,与右栏开关
+  // (⌘/Ctrl+N)同为「右栏」这一族。键名走 `comboOf` 的 e.code 归一化
+  // (`Backslash` → `\`),与布局产出什么字符无关;JIS 等把 `\` 放在别的物理键上的
+  // 键盘由 e.key 回退兜住。本键不再带 alt,故 Win/Linux 上「Ctrl+Alt 即 AltGr」
+  // 的老问题在这里不存在(AltGr 层单独打出的 `\` 只会命中 `alt+\\`,不是本组合)。
+  'sidebarRight.files': 'mod+\\',
   // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
   // macOS 上 ⌃I 与 ⌘I 都能触发(用户要的 Ctrl+I 在 mac 上按 ⌃I 即可),Win/Linux
   // 就是 Ctrl+I;两平台的浏览器 DevTools 都带 Shift(⌘⌥I / Ctrl+Shift+I),不冲突。
   'composer.focus': 'mod+i',
   'session.prev': 'mod+alt+arrowup',
   'session.next': 'mod+alt+arrowdown',
-  // 工作区切换浮窗 = ⌘/Ctrl+Alt+K:同属 mod+alt 这一档(右栏开关 / 右栏标签 /
-  // 文件浏览器 / 活跃会话跳转都在这一档),`K` 取「工作区(Work-space)」联想;
-  // `mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,故用户要的 Ctrl+Alt+K 在
-  // macOS 上按 ⌃⌥K 即可(Win/Linux 就是 Ctrl+Alt+K,注意 Ctrl+Alt 即 AltGr)。
+  // 工作区切换浮窗 = ⌘/Ctrl+K:属「单修饰键」这一档,`K` 取「工作区(Work-space)」
+  // 联想;`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,故 macOS 上按 ⌃K 或 ⌘K
+  // 均可(Win/Linux 就是 Ctrl+K)。
   // 打开后 ↑/↓ 移动高亮、Enter 切换、Esc 关闭(见 overlay.ts)。
-  'workspace.pick': 'mod+alt+k',
-  // 模型浮窗 = ⌘/Ctrl+Alt+M:同属 mod+alt 这一档(右栏开关 / 右栏标签 /
-  // 文件浏览器 / 活跃会话跳转 / 工作区浮窗都在这一档),`M` 取「模型(Model)」联想,
-  // 与 ⌘/Ctrl+Alt+K(工作区)并列且不抢同档的方向键 / `B` / `\`。`mod` 在 comboOf 里
-  // 同时吸收 ctrlKey 与 metaKey,故用户要的 Ctrl+Alt+M 在 macOS 上按 ⌃⌥M 即可
-  // (Win/Linux 就是 Ctrl+Alt+M,注意 Ctrl+Alt 即 AltGr)。浮窗内 ↑/↓ 选择、
+  // 注意 Ctrl+K 是浏览器保留键(地址栏搜索),详见 README「已知限制」。
+  'workspace.pick': 'mod+k',
+  // 模型浮窗 = ⌘/Ctrl+M:同为「单修饰键」这一档,`M` 取「模型(Model)」联想,
+  // 与 ⌘/Ctrl+K(工作区)并列。`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
+  // 故 macOS 上按 ⌃M 或 ⌘M 均可(Win/Linux 就是 Ctrl+M)。浮窗内 ↑/↓ 选择、
   // Enter 切换、⇧Tab 调强度、Esc 关闭。
-  'model.pick': 'mod+alt+m',
+  'model.pick': 'mod+m',
   // 思考强度循环 = ⇧Tab:上游 composer 座位把强度档收在「模型菜单 → Effort」二级
   // 面板里(没有默认键位),这里给一个免鼠标的循环键。Shift 单独作修饰键不与任何
   // 已有组合冲突(bindings 里没有其它 shift+ 项);`comboOf` 走 e.code 归一化

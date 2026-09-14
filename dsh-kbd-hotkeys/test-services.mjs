@@ -15,7 +15,7 @@
  * Enter 必须从这份 store 取草稿(非末题推进、末题结算)——插件内不另存镜像状态。
  *
  * 另含侧栏开关断言:⌘/Ctrl+B → `layout.toggleSidebar()`(左栏)、
- * ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`(右栏),两者在 browse / editing
+ * ⌘/Ctrl+N → `sidebarRight.toggleExpanded()`(右栏),两者在 browse / editing
  * 两态都生效且互不串场;服务缺席或抛错(无挂载会话面)时 no-op 且不吞键;左栏键位
  * 可经 localStorage 自定义且不影响右栏默认键位。
  *
@@ -608,10 +608,10 @@ console.log('\n--- 兼容回退:仅 pendingSnapshot ---')
 }
 
 // ===========================================================================
-// 阶段 3:⌘/Ctrl+B → 左栏(layout.toggleSidebar)、⌘/Ctrl+Alt+B → 右栏
+// 阶段 3:⌘/Ctrl+B → 左栏(layout.toggleSidebar)、⌘/Ctrl+N → 右栏
 //          (sidebarRight.toggleExpanded);两键互不串场,服务缺席一律不吞键
 // ===========================================================================
-console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+Alt+B → 左右栏开关 ---')
+console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+N → 左右栏开关 ---')
 {
   const base = {
     sessions,
@@ -632,18 +632,18 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+Alt+B → 左右栏开关 ---')
   check('browse 态 ⌘/Ctrl+B → layout.toggleSidebar(左栏)', same([left, right], [1, 0]), `${left},${right}`)
   check('browse 态 ⌘/Ctrl+B 被吞', event.propagationStopped === true)
 
-  // ⌘/Ctrl+Alt+B:只打右栏
-  event = both({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })
-  check('browse 态 ⌘/Ctrl+Alt+B → sidebarRight.toggleExpanded(右栏)', same([left, right], [1, 1]), `${left},${right}`)
-  check('browse 态 ⌘/Ctrl+Alt+B 被吞', event.propagationStopped === true)
+  // ⌘/Ctrl+N:只打右栏
+  event = both({ key: 'n', code: 'KeyN', ctrlKey: true })
+  check('browse 态 ⌘/Ctrl+N → sidebarRight.toggleExpanded(右栏)', same([left, right], [1, 1]), `${left},${right}`)
+  check('browse 态 ⌘/Ctrl+N 被吞', event.propagationStopped === true)
 
   // editing 态(焦点在输入框)两个键位同样生效
   event = both({ key: 'b', code: 'KeyB', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
   check('editing 态 ⌘/Ctrl+B → 左栏', same([left, right], [2, 1]), `${left},${right}`)
   check('editing 态 ⌘/Ctrl+B 被吞', event.propagationStopped === true)
-  event = both({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true, target: new FakeHTMLElement('TEXTAREA') })
-  check('editing 态 ⌘/Ctrl+Alt+B → 右栏', same([left, right], [2, 2]), `${left},${right}`)
-  check('editing 态 ⌘/Ctrl+Alt+B 被吞', event.propagationStopped === true)
+  event = both({ key: 'n', code: 'KeyN', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 ⌘/Ctrl+N → 右栏', same([left, right], [2, 2]), `${left},${right}`)
+  check('editing 态 ⌘/Ctrl+N 被吞', event.propagationStopped === true)
 
   // bindings 覆盖:sidebar.toggle 是左栏的合法动作 id(键位可自定义)
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'sidebar.toggle': 'mod+alt+s' } }))
@@ -658,7 +658,7 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+Alt+B → 左右栏开关 ---')
   check('左栏自定义键位后 ⌘/Ctrl+B 不再触发左栏', same([customLeft, customRight], [0, 0]), `${customLeft},${customRight}`)
   event = custom({ key: 's', code: 'KeyS', ctrlKey: true, altKey: true })
   check('自定义 ⌘/Ctrl+Alt+S → 左栏', same([customLeft, customRight], [1, 0]), `${customLeft},${customRight}`)
-  event = custom({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })
+  event = custom({ key: 'n', code: 'KeyN', ctrlKey: true })
   check('右栏默认键位不受左栏自定义影响', same([customLeft, customRight], [1, 1]), `${customLeft},${customRight}`)
   storage.delete('dsh-kbd-hotkeys:v1')
 
@@ -666,8 +666,8 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+Alt+B → 左右栏开关 ---')
   const missing = loadPlugin(base)
   event = missing({ key: 'b', code: 'KeyB', ctrlKey: true })
   check('layout 缺席 → ⌘/Ctrl+B 不吞键', event.propagationStopped !== true)
-  event = missing({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })
-  check('sidebarRight 缺席 → ⌘/Ctrl+Alt+B 不吞键', event.propagationStopped !== true)
+  event = missing({ key: 'n', code: 'KeyN', ctrlKey: true })
+  check('sidebarRight 缺席 → ⌘/Ctrl+N 不吞键', event.propagationStopped !== true)
 
   const dead = loadPlugin({
     ...base,
@@ -676,8 +676,8 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+Alt+B → 左右栏开关 ---')
   })
   event = dead({ key: 'b', code: 'KeyB', ctrlKey: true })
   check('layout 抛错 → ⌘/Ctrl+B 不吞键', event.propagationStopped !== true)
-  event = dead({ key: 'b', code: 'KeyB', ctrlKey: true, altKey: true })
-  check('无挂载会话面(抛错)→ ⌘/Ctrl+Alt+B 不吞键', event.propagationStopped !== true)
+  event = dead({ key: 'n', code: 'KeyN', ctrlKey: true })
+  check('无挂载会话面(抛错)→ ⌘/Ctrl+N 不吞键', event.propagationStopped !== true)
 }
 
 // ===========================================================================
@@ -826,7 +826,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
   }
 
   // 键位可经 localStorage 覆盖(与左右栏同一套 bindings 机制;
-  // 这里刻意避开新默认键位 ⌘/Ctrl+Alt+K = 工作区浮窗,改用 ⌘/Ctrl+Alt+J)
+  // 这里刻意避开默认键位 ⌘/Ctrl+K = 工作区浮窗,改用 ⌘/Ctrl+Alt+J)
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'composer.focus': 'mod+alt+j' } }))
   const customRoot = makeRoot()
   const custom = loadPlugin({
@@ -1046,13 +1046,13 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
 }
 
 // ===========================================================================
-// 阶段 6:⌘/Ctrl+Alt+\ → 右侧栏打开文件浏览器并置于首位
+// 阶段 6:⌘/Ctrl+\ → 右侧栏打开文件浏览器并置于首位
 //         打开必须走公开的 `sidebarRight.openTab('files')`;
 //         置顶必须走**同一份**会话级 slot store 实例的动作面
 //         `actions.placeTab(sessionId, tabId, paneId, 0)`(与标签拖拽同一入口)。
 //         DOM 桩没有任何标签元素:任何选择器式实现都拿不到标签顺序。
 // ===========================================================================
-console.log('\n--- ⌘/Ctrl+Alt+\\ → 右栏打开文件浏览器并置于首位 ---')
+console.log('\n--- ⌘/Ctrl+\\ → 右栏打开文件浏览器并置于首位 ---')
 {
   const FILES_KIND = 'files'
 
@@ -1143,7 +1143,7 @@ console.log('\n--- ⌘/Ctrl+Alt+\\ → 右栏打开文件浏览器并置于首�
     })
     return { press, opened }
   }
-  const combo = { key: '\\', code: 'Backslash', ctrlKey: true, altKey: true }
+  const combo = { key: '\\', code: 'Backslash', ctrlKey: true }
 
   // ① 已有文件浏览器 tab 但不在首位 → 打开(聚焦) + placeTab(…, 0)
   const tabs = makeFilesStore()
@@ -1153,12 +1153,12 @@ console.log('\n--- ⌘/Ctrl+Alt+\\ → 右栏打开文件浏览器并置于首�
   }))
   const first = env(tabs)
   let event = first.press(combo)
-  check('⌘/Ctrl+Alt+\\ → 调 openTab("files")', same(first.opened, ['files']), JSON.stringify(first.opened))
+  check('⌘/Ctrl+\\ → 调 openTab("files")', same(first.opened, ['files']), JSON.stringify(first.opened))
   check('置顶 → placeTab(sess-b, t3, pane-1, 0)',
     same(tabs.calls, [['sess-b', 't3', 'pane-1', 0]]), JSON.stringify(tabs.calls))
   check('置顶后标签顺序 = [t3, t1, t2]',
     same(tabs.layout().nodes['pane-1'].tabs, ['t3', 't1', 't2']), JSON.stringify(tabs.layout().nodes['pane-1'].tabs))
-  check('⌘/Ctrl+Alt+\\ 被吞', event.propagationStopped === true)
+  check('⌘/Ctrl+\\ 被吞', event.propagationStopped === true)
 
   // ② 面板里没有文件浏览器 tab → openTab 新建(末尾)→ 再置顶到首位
   const fresh = makeFilesStore()
@@ -1287,7 +1287,7 @@ console.log('\n--- ⌘/Ctrl+Alt+\\ → 右栏打开文件浏览器并置于首�
   editable.seed(singlePane(['t1']))
   const editableEnv = env(editable)
   event = editableEnv.press({ ...combo, target: new FakeHTMLElement('TEXTAREA') })
-  check('editing 态 ⌘/Ctrl+Alt+\\ 仍打开并置顶', same(editable.calls, [['sess-b', 'files-1', 'pane-1', 0]]), JSON.stringify(editable.calls))
+  check('editing 态 ⌘/Ctrl+\\ 仍打开并置顶', same(editable.calls, [['sess-b', 'files-1', 'pane-1', 0]]), JSON.stringify(editable.calls))
   check('editing 态被吞', event.propagationStopped === true)
 
   const cardFiles = makeFilesStore()
@@ -1299,10 +1299,10 @@ console.log('\n--- ⌘/Ctrl+Alt+\\ → 右栏打开文件浏览器并置于首�
     },
   })
   event = cardFilesEnv.press(combo)
-  check('card 态 ⌘/Ctrl+Alt+\\ 仍打开并置顶', cardFiles.calls.length === 1, JSON.stringify(cardFiles.calls))
+  check('card 态 ⌘/Ctrl+\\ 仍打开并置顶', cardFiles.calls.length === 1, JSON.stringify(cardFiles.calls))
   check('card 态被吞', event.propagationStopped === true)
 
-  // ⑩ 裸 \ 不触发(mod+alt 才触发)
+  // ⑩ 裸 \ 不触发(mod 才触发)
   const bare = makeFilesStore()
   bare.seed(singlePane(['t1']))
   const bareEnv = env(bare)
@@ -1311,30 +1311,30 @@ console.log('\n--- ⌘/Ctrl+Alt+\\ → 右栏打开文件浏览器并置于首�
   check('裸 \\ 不吞键', event.propagationStopped !== true)
 
   // ⑪ 键位可独立覆盖(与左右栏 / 标签切换 / 聚焦输入框同一套 bindings 机制)
-  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'sidebarRight.files': 'mod+alt+7' } }))
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'sidebarRight.files': 'mod+7' } }))
   const custom = makeFilesStore()
   custom.seed(singlePane(['t1']))
   const customEnv = env(custom)
   event = customEnv.press(combo)
-  check('覆盖键位后 ⌘/Ctrl+Alt+\\ 不再打开', same(customEnv.opened, []), JSON.stringify(customEnv.opened))
-  check('覆盖键位后 ⌘/Ctrl+Alt+\\ 不吞键', event.propagationStopped !== true)
-  event = customEnv.press({ key: '7', code: 'Digit7', ctrlKey: true, altKey: true })
-  check('自定义 ⌘/Ctrl+Alt+7 → 打开并置顶', same(custom.calls, [['sess-b', 'files-1', 'pane-1', 0]]), JSON.stringify(custom.calls))
+  check('覆盖键位后 ⌘/Ctrl+\\ 不再打开', same(customEnv.opened, []), JSON.stringify(customEnv.opened))
+  check('覆盖键位后 ⌘/Ctrl+\\ 不吞键', event.propagationStopped !== true)
+  event = customEnv.press({ key: '7', code: 'Digit7', ctrlKey: true })
+  check('自定义 ⌘/Ctrl+7 → 打开并置顶', same(custom.calls, [['sess-b', 'files-1', 'pane-1', 0]]), JSON.stringify(custom.calls))
   check('自定义键位被吞', event.propagationStopped === true)
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
 // ===========================================================================
-// 阶段 5:⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 高亮 + Enter 切换)
+// 阶段 5:⌘/Ctrl+K → 工作区浮窗(↑↓ 高亮 + Enter 切换)
 //         列表 = workspaces.list 快照(宿主顺序,不重排);切换 = 公开的
 //         uiWorkspace.openWorkspace(workspaceId)(连接工作区:复用空白会话 /
 //         新建一个再打开)。浮窗内 ↑/↓ 只移动高亮、**不触发导航**;Enter(或点击
 //         行)才切换;Esc / 再按一次组合键关闭;⌘/ 直接换成速查表。
 //         浮层 DOM 由插件自建,故这里只读它自己的子树(业务代码仍然不读 DOM)。
 // ===========================================================================
-console.log('\n--- ⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 选择 + Enter 切换) ---')
+console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) ---')
 {
-  const combo = { key: 'k', code: 'KeyK', ctrlKey: true, altKey: true }
+  const combo = { key: 'k', code: 'KeyK', ctrlKey: true }
   const item = (workspaceId, title, path, sessionIds = []) => ({
     workspaceId, title, path, sessionIds,
     createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z',
@@ -1378,7 +1378,7 @@ console.log('\n--- ⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 选择 + Enter 切�
   // ① 打开浮窗:列表按宿主顺序渲染,初始高亮 = 当前会话所属工作区(w2)
   const first = env()
   let event = first.press(combo)
-  check('⌘/Ctrl+Alt+K 打开工作区浮窗并吞键', event.propagationStopped === true)
+  check('⌘/Ctrl+K 打开工作区浮窗并吞键', event.propagationStopped === true)
   check(
     '浮窗按宿主顺序渲染工作区行(标题 / 路径 / 当前标记 / 会话数)',
     same(pickerRows().map(nodeText), [
@@ -1418,7 +1418,7 @@ console.log('\n--- ⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 选择 + Enter 切�
   check('Esc 关闭浮窗并吞键', event.propagationStopped === true && pickerRows().length === 0)
   first.press(combo)
   event = first.press(combo)
-  check('再按一次 ⌘/Ctrl+Alt+K 关闭(开关语义)', pickerRows().length === 0, String(pickerRows().length))
+  check('再按一次 ⌘/Ctrl+K 关闭(开关语义)', pickerRows().length === 0, String(pickerRows().length))
   check('同组合键关闭被吞', event.propagationStopped === true)
   first.press(combo)
   event = first.press({ key: '/', code: 'Slash', ctrlKey: true })
@@ -1481,18 +1481,18 @@ console.log('\n--- ⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 选择 + Enter 切�
     },
   })
   event = carded.press(combo)
-  check('card 态 ⌘/Ctrl+Alt+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 4)
+  check('card 态 ⌘/Ctrl+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 4)
   carded.press({ key: 'Escape', code: 'Escape' })
   const editing = env()
   event = editing.press({ ...combo, target: new FakeHTMLElement('TEXTAREA') })
-  check('editing 态 ⌘/Ctrl+Alt+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 4)
+  check('editing 态 ⌘/Ctrl+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 4)
   editing.press({ key: 'Escape', code: 'Escape' })
 
   // ⑧ 键位可独立覆盖(与其它动作同一套 bindings 机制)
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'workspace.pick': 'mod+alt+9' } }))
   const custom = env()
   event = custom.press(combo)
-  check('覆盖键位后 ⌘/Ctrl+Alt+K 不再打开', event.propagationStopped !== true && pickerRows().length === 0)
+  check('覆盖键位后 ⌘/Ctrl+K 不再打开', event.propagationStopped !== true && pickerRows().length === 0)
   event = custom.press({ key: '9', code: 'Digit9', ctrlKey: true, altKey: true })
   check('自定义 ⌘/Ctrl+Alt+9 打开浮窗并吞键', event.propagationStopped === true && pickerRows().length === 4)
   custom.press({ key: 'Enter', code: 'Enter' })
@@ -1501,7 +1501,7 @@ console.log('\n--- ⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 选择 + Enter 切�
 }
 
 // ===========================================================================
-// 阶段 6:⌘/Ctrl+Alt+M → 模型浮窗(↑↓ 选择 + Enter 切换)
+// 阶段 6:⌘/Ctrl+M → 模型浮窗(↑↓ 选择 + Enter 切换)
 //         与 ⇧Tab → 循环切换当前模型的思考强度
 //         取数与提交都必须走上游**同一个** per-session 模型目录
 //         (ctx.modelDirectories.directoryFor(sessionId)):`/model` 弹层与 composer
@@ -1511,9 +1511,9 @@ console.log('\n--- ⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 选择 + Enter 切�
 //         (有 defaultEffort 时不含 Default 档),当前档 = current.reasoningEffort
 //         ?? reasoning.defaultEffort。
 // ===========================================================================
-console.log('\n--- ⌘/Ctrl+Alt+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
+console.log('\n--- ⌘/Ctrl+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
 {
-  const combo = { key: 'm', code: 'KeyM', ctrlKey: true, altKey: true }
+  const combo = { key: 'm', code: 'KeyM', ctrlKey: true }
   const shiftTab = { key: 'Tab', code: 'Tab', shiftKey: true }
   /** 等一次宏任务:浮窗的列表是异步取的(先绘制「加载中」,落地后重画)。 */
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -1603,7 +1603,7 @@ console.log('\n--- ⌘/Ctrl+Alt+M → 模型浮窗 + ⇧Tab 循环思考强度 -
   // ① 打开浮窗:先绘制加载态,异步落地后按宿主顺序渲染行 + 提供方分组标题
   const first = env()
   let event = first.press(combo)
-  check('⌘/Ctrl+Alt+M 打开模型浮窗并吞键', event.propagationStopped === true)
+  check('⌘/Ctrl+M 打开模型浮窗并吞键', event.propagationStopped === true)
   check('首次绘制 = 「正在加载模型目录…」', same(emptyNotices(), ['正在加载模型目录…']), JSON.stringify(emptyNotices()))
   await flush()
   check('目录按当前会话 id 取(directoryFor(sess-b))', same(first.seen, ['sess-b']), JSON.stringify(first.seen))
@@ -1797,7 +1797,7 @@ console.log('\n--- ⌘/Ctrl+Alt+M → 模型浮窗 + ⇧Tab 循环思考强度 -
   })
   event = cardEnv.press(combo)
   await flush()
-  check('card 态 ⌘/Ctrl+Alt+M 仍打开模型浮窗', event.propagationStopped === true && pickerRows().length === 3)
+  check('card 态 ⌘/Ctrl+M 仍打开模型浮窗', event.propagationStopped === true && pickerRows().length === 3)
   cardEnv.press({ key: 'Escape', code: 'Escape' })
   event = cardEnv.press(shiftTab)
   check('card 态 ⇧Tab 不接管(交回卡片)', event.propagationStopped !== true && cardEnv.directory.calls.length === 0)
@@ -1806,7 +1806,7 @@ console.log('\n--- ⌘/Ctrl+Alt+M → 模型浮窗 + ⇧Tab 循环思考强度 -
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'model.pick': 'mod+alt+8', 'model.effortNext': 'mod+alt+u' } }))
   const custom = env()
   event = custom.press(combo)
-  check('覆盖键位后 ⌘/Ctrl+Alt+M 不再打开', event.propagationStopped !== true && pickerRows().length === 0)
+  check('覆盖键位后 ⌘/Ctrl+M 不再打开', event.propagationStopped !== true && pickerRows().length === 0)
   event = custom.press({ key: '8', code: 'Digit8', ctrlKey: true, altKey: true })
   await flush()
   check('自定义 ⌘/Ctrl+Alt+8 打开模型浮窗并吞键', event.propagationStopped === true && pickerRows().length === 3)

@@ -2,7 +2,7 @@
  * dsh-kbd-hotkeys — 右侧侧边栏访问层。
  * 两个动作:
  * - `cycleRightSidebarTab`(⌘/Ctrl+Alt+← / →):在当前面板的标签之间循环切换;
- * - `revealRightSidebarFiles`(⌘/Ctrl+Alt+\):打开文件浏览器页并把它置于所在
+ * - `revealRightSidebarFiles`(⌘/Ctrl+\):打开文件浏览器页并把它置于所在
  *   标签栏首位。
  *
  * 为什么需要这一层:右侧栏(`dsh-client-ui-sidebar-right`)的公开服务面
@@ -110,7 +110,7 @@ export function cycleRightSidebarTab(services: Services, delta: number): boolean
 }
 
 /* ------------------------------------------------------------------ *
- * 文件浏览器:打开并置于首位(⌘/Ctrl+Alt+\)
+ * 文件浏览器:打开并置于首位(⌘/Ctrl+\)
  * ------------------------------------------------------------------ */
 
 /** 一个文件浏览器 tab 的现场:它在哪个停靠面板、是哪个标签、第几位。 */
@@ -121,7 +121,7 @@ interface FilesTab {
 }
 
 /**
- * 在右侧栏打开文件浏览器,并把它置于所在标签栏的**首位**(⌘/Ctrl+Alt+\)。
+ * 在右侧栏打开文件浏览器,并把它置于所在标签栏的**首位**(⌘/Ctrl+\)。
  *
  * 两步,分别对应上游两个不同的入口:
  *

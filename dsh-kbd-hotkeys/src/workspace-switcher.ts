@@ -1,5 +1,5 @@
 /**
- * dsh-kbd-hotkeys — 工作区浮窗(⌘/Ctrl+Alt+K)的数据面与切换动作。
+ * dsh-kbd-hotkeys — 工作区浮窗(⌘/Ctrl+K)的数据面与切换动作。
  *
  * 两条服务级路径,均不触碰 DOM(浮窗本身的 DOM 在 overlay.ts):
  *
