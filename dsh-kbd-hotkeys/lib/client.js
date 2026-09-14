@@ -621,10 +621,11 @@ var ACTIONS = [
   // 问答卡片,但那是**裸**方向键(固定分发),与带 mod+alt 的组合键不冲突,故无需让路。
   { id: "sidebarRight.tabPrev", label: "\u53F3\u4FA7\u680F:\u4E0A\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "sidebarRight.tabNext", label: "\u53F3\u4FA7\u680F:\u4E0B\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 打开文件浏览器并置顶(⌘/Ctrl+Alt+\):与右栏开关 / 标签切换同属 rightbar 这一档
+  // 定位右栏文件浏览器(⌘/Ctrl+Alt+\):与右栏开关 / 标签切换同属 rightbar 这一档
   // (mod+alt),同样三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,
-  // 也不干扰文本编辑。
-  { id: "sidebarRight.files", label: "\u53F3\u4FA7\u680F:\u6253\u5F00\u6587\u4EF6\u6D4F\u89C8\u5668\u5E76\u7F6E\u4E8E\u9996\u4F4D", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 也不干扰文本编辑。语义是「定位」而非「开关」:该面板已有文件浏览器页就聚焦它,
+  // 没有就在面板末尾创建(上游 openTab 按目标面板去重),再加一步置顶。
+  { id: "sidebarRight.files", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u6587\u4EF6\u6D4F\u89C8\u5668(\u4E0D\u5B58\u5728\u5219\u521B\u5EFA)\u5E76\u7F6E\u9876", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义,且 contenteditable
   // 里 ⌘/Ctrl+I 是浏览器「斜体」默认行为(execCommand,绕过 Lexical),card 态则归卡片
   // 自己的输入框。
@@ -656,7 +657,7 @@ var DEFAULT_BINDINGS = {
   // (会话轴 vs 右栏标签轴)。边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
   "sidebarRight.tabPrev": "mod+alt+arrowleft",
   "sidebarRight.tabNext": "mod+alt+arrowright",
-  // 打开右栏文件浏览器并置顶 = ⌘/Ctrl+Alt+\:反斜杠在主键区右端,与右栏那一档
+  // 定位右栏文件浏览器并置顶 = ⌘/Ctrl+Alt+\:反斜杠在主键区右端,与右栏那一档
   // (mod+alt)同族。键名走 `comboOf` 的 e.code 归一化(`Backslash` → `\`),
   // 与布局产出什么字符无关;JIS 等把 `\` 放在别的物理键上的键盘由 e.key 回退兜住。
   // 注意 Win/Linux 上 Ctrl+Alt 即 AltGr(见 README「已知限制」)。
