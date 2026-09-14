@@ -8,8 +8,8 @@
 | `/new` | 创建并跳转到一个新的空白会话（等同"新建会话"按钮），无多余提示 |
 | 命令行抑制 | 隐藏 `/new` 的 "new 已完成" 生命周期行（命令仍持久记录，只是不渲染 UI 文本） |
 
-> `Esc` 停止当前会话交互树的能力已迁移至 `dsh-kbd-hotkeys`（动作
-> `session.stop`，默认绑定 `escape`），本插件不再监听键盘事件。
+> `Esc` 停止当前会话交互树由 `dsh-kbd-hotkeys` 提供（动作 `session.stop`，默认绑定
+> `escape`）；本插件不监听键盘事件。
 
 ## 结构
 
@@ -57,7 +57,7 @@ dsh plugin --profile web remove dsh-new-session
   `uiWorkspace`，由 `dsh-client-ui-workspace` 提供）——注意不是 `workspaces` 服务
   （那是纯 Workspace Controller，没有 `startSession`）。
 - 本插件注入 `['slots', 'uiWorkspace']`；会话服务 `sessions`（`binding(id).session`
-  → `getSnapshot()` / `cancel()`）现由 `dsh-kbd-hotkeys` 消费（Esc 停止会话）。
+  → `getSnapshot()` / `cancel()`）由 `dsh-kbd-hotkeys` 消费（Esc 停止会话）。
 
 ## 修改说明
 

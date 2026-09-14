@@ -42,9 +42,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > Ctrl+I；两平台浏览器 DevTools 都带 `Shift`（⌘⌥I / Ctrl+Shift+I），不冲突。
 >
 > **为什么左栏拿 `⌘/Ctrl+B`、右栏拿 `⌘/Ctrl+Alt+B`**（主键给主面板）：
-> ① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器一致），也是本
-> 插件最初就有的默认——把「已经被训练过的反射」留给最基础的左栏（导航主面板），
-> 右栏只需要多记一个 `Alt`；
+> ① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器一致）——把
+> 「已经被训练过的反射」留给最基础的左栏（导航主面板），右栏只需要多记一个 `Alt`；
 > ② 命名同源：上游不带限定词的 `sidebar` / `sidebarCol` 就指左栏
 > （`layout.toggleSidebar()`），右栏是派生的 `rightbar`（`rightbarShown` /
 > `rightbarTrack`）——主键给「本名」，叠加修饰键给「限定名」；
@@ -106,9 +105,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 >
 > 审批与问答的 `Enter` / `Esc` / 数字键 / 方向键是**固定分发的单键**，不参与
 > `bindings` 自定义（见「自定义键位」）。
-> 独立插件 **`dsh-rightbar-files-float`**（右栏文件浏览器**浮窗开关**）此前按用户要求被整体
-> 删除，本插件不含浮窗相关代码；`⌘/Ctrl+Alt+\` 绑定的是**停靠面板**里的文件浏览器页
-> （不存在则创建、已存在则聚焦并置顶），与已删除的浮窗开关不是同一个功能。
+> `⌘/Ctrl+Alt+\` 绑定的是**停靠面板**里的文件浏览器页（不存在则创建、已存在则聚焦并
+> 置顶），本插件不含任何浮窗形态的文件浏览器。
 > 审批卡片的 `Enter` / `Esc` 只要当前会话有审批卡片就生效，**不受焦点位置影响**
 > （审批卡片自身没有输入框）；问答卡片的单键在焦点位于输入框时交回输入框。
 > 没有审批卡片时 `Esc` 保持原行为：停止当前会话树且不吞键。
@@ -457,7 +455,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   `"Cmd+Alt+M"`；`model.effortNext` 的默认值 `"shift+tab"` 是本插件**唯一**使用
   `shift` 作修饰键的默认键位（解析器一直兼容 `shift` 写法：`"cmd+shift+m"` 等）。
   配置中其他字段一律忽略：快捷键默认启用、无总开关。
-- 未实现（方案 P2，预留后续）：readline 编辑键（`Ctrl+A/E/K/U`、`Alt+B/F/D`）、
+- 未实现（预留后续）：readline 编辑键（`Ctrl+A/E/K/U`、`Alt+B/F/D`）、
   `Esc Esc` 清空草稿、输入框历史反查、单键 `o`/`t`、权限模式循环（预留，默认不绑定）、
   Leader 前缀集。
 
@@ -511,7 +509,7 @@ node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序�
 ## 加载（用户操作）
 
 ```sh
-cd /Users/lz/dsh-plugins/dsh-kbd-hotkeys
+cd <仓库根>/dsh-kbd-hotkeys
 dsh plugin --profile web add link:.
 # 首次挂载（组合变更）需重启 App 生效
 ```

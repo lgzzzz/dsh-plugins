@@ -5,7 +5,7 @@
 - 卡片标题 14px,与「字号大小」设置项无关,统一写死。
 - 卡片表头摘要(标题右侧的单行预览:工具结果摘要、思考首行、命令/上下文摘要等)与卡片展开后的内容(工具输入/输出、思考正文、命令正文、上下文/系统提示词正文、代码块、内联代码等)统一为 14px。
 - **Markdown 表格单元格(th/td)为 14px**:表格字号 token(`--dsw-font-markdown-table` / `-head`)取自 `--dsh-content-font-size-secondary`(内容字号 - 1px),比正文小一档;本插件把单元格字号提升到与卡片其余文本一致的 14px。行高、字重(th 500 / td 400)与字体族仍由应用侧 `font:` 简写提供,未改写;表格内行内代码本就由内联代码规则统一为 14px,现在与单元格正文同号。
-- **不再使用 `[data-x], [data-x] * { ... }` 这类全量覆盖选择器**:每条规则都精确命中目标元素;摘要行以外的元信息(inspect 按钮 11px、时间戳、卡片内其他小字)以及用户/助手正文,都保持组件自身的字号,不再被压成同一档。
+- **不使用 `[data-x], [data-x] * { ... }` 这类全量覆盖选择器**:每条规则都精确命中目标元素;摘要行以外的元信息(inspect 按钮 11px、时间戳、卡片内其他小字)以及用户/助手正文,都保持组件自身的字号,不再被压成同一档。
 - 保留 `!important`:作用是压过卡片内部子元素自带的显式 `font-size`(`.summary`、`.ioText`、`.ioCard`、`font:` 简写、内联代码的 `.875em !important` 等),保证"标题、摘要与内容统一 14px"的核心效果。
 
 ## 内容字号不再锁定(设置可调)
@@ -15,14 +15,14 @@
 本插件**不覆盖**该变量,也不改写 theme 服务的 `setFontSize`:设置行 `+/-` 正常生效、持久化值保持用户选择,正文与行高随设置变化。卡片标题、摘要、展开正文、代码块、内联代码与表格单元格仍写死 14px,因此调整设置会影响用户/助手正文等未被本插件写死字号的部分,卡片内文本字号恒为 14px。
 
 - 服务缺席不影响补丁:本插件**不声明 `inject`**,样式注入无条件执行。
-- 若要让卡片字号也随设置变化:把 `src/css.ts` 中所有 `14px` 换成 `var(--dsh-content-font-size)`(工具/bash 卡片的 `14px/…` token 与表格单元格同理),`npm run build` 后重启 App。
+- 若要让卡片字号也随设置变化:把 `src/css.ts` 中所有 `14px` 换成 `var(--dsh-content-font-size)`(工具/bash 卡片的 `14px/…` token 与表格单元格同理),`npm run build` 重建即可(产物 mtime 变化后由 client-hmr 在 500ms 内热推送,页面无需刷新/重启)。
 
 ## 消息卡片间距(calc(14px * 0.5) = 7px)
 
 - 聊天列(`dsh-client-ui-chat`)用 `margin-top: var(--dsh-chat-flow-gap, 16px)` 控制相邻卡片间距,默认回退 16px,全局无其他定义。本插件在 `body` 上声明 `--dsh-chat-flow-gap: calc(14px * 0.5)`,即间距 = 14px × 0.5 = **7px**。
 - 覆盖声明在 `body` 而非 `:root`:自定义属性内部的 `var()` 在**声明元素**上求值,而 `--dsh-content-font-size` 是主题插件以**内联样式**设在 `<body>` 上的——放 `:root` 会取不到实际设置值、恒用回退 14px。
 - 紧凑回答卡自带元素级规则 `.flowItem[data-turn-process-answer]{--dsh-chat-flow-gap:8px}`,元素级声明优先于继承,该例外(8px)保持不变。
-- 调整间距:改 `src/css.ts` 中 `--dsh-chat-flow-gap` 的 `calc(14px * 0.5)` 为目标值,`npm run build` 重建后重启 App 即可。
+- 调整间距:改 `src/css.ts` 中 `--dsh-chat-flow-gap` 的 `calc(14px * 0.5)` 为目标值,`npm run build` 重建即可(产物变化由 client-hmr 热推送,无需重启)。
 
 ## 解决的问题
 
@@ -91,7 +91,9 @@ dsh plugin --profile web remove dsh-code-card-fonts
 
 1. 包结构:`package.json`(`dsh.client.platform=web` + `dsh.bundle.patch`)、`index.ts`(空 Host 半部,TypeScript)、`src/client.ts` + `src/css.ts`(浏览器半部 TypeScript 真源)、`lib/client.js`(浏览器半部构建产物)、`cordis.patch.yml`(挂载行)。
 2. 浏览器半部由 `dsh.client.platform: "web"` + `immediately: true` 注册进浏览器 roster，随 Web 一起加载。
-3. 改动后需**重启 App** 生效(组成为常驻挂载,不做热重载)。
+3. 改动生效:改 `src/`(浏览器半部)后 `npm run build`,产物 mtime 变化即由 client-hmr
+   在 500ms 内热推送,页面无需刷新/重启;宿主半部(`index.ts`,当前为空宿主)或 Profile
+   组合变更才需重启 App。
 
 ## 工程结构(TypeScript)
 
@@ -108,4 +110,4 @@ dsh plugin --profile web remove dsh-code-card-fonts
 
 - 标题、摘要行与内容(卡片展开内容、代码块、内联代码、Markdown 表格单元格)均写死为 **14px**;内容字号轴不再覆盖,卡片间距为 `calc(14px * 0.5)` = 7px。
 - 若要调整卡片字号:替换 `src/css.ts` 中所有 `14px`(标题、摘要行、代码块、内联代码、表格单元格、卡片正文)与工具/bash 卡片 token 的 `14px/…`;卡片间距为独立的 `--dsh-chat-flow-gap: calc(14px * 0.5)`,如需保持 7px 请同步改为固定值。
-- 改完执行 `npm run typecheck && npm run build`,重启 App 生效。
+- 改完执行 `npm run typecheck && npm run build`,产物变化由 client-hmr 热推送(无需重启)。

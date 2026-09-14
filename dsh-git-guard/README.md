@@ -44,12 +44,12 @@
   的 `Events` 做本地声明合并（DSH 插件惯用写法），因此无需依赖
   dsh-tools 包即可通过类型检查；`ctx.systemPrompt` 同样以本地结构切片
   接入，不依赖 `@deepseek-ai/dsh-system-prompt` 包。
-- **入口门禁与工具名解耦**：不再以 `exec.name === 'bash'` 为条件，而是只要
+- **入口门禁与工具名解耦**：不以 `exec.name === 'bash'` 为条件，而是只要
   工具参数里出现非空字符串 `command`（bash / pwsh / cmd 及各 shell 工具的
   统一字段）即进入检测；非 shell 工具（无 `command` 字段）直接放行。因为只有
   在真正命中 git 敏感子命令时才产生决定，先宽后紧不会误拦截。
-- **引号感知的词法分析**：不再是 `\s+` 切词与 `&&|\|\||[;|\n]` 正则拆分，而是
-  一次引号感知的 tokenizer，把 `"a b"` / `'a b'` 视为单个 token，再逐段递归识别
+- **引号感知的词法分析**：用一次引号感知的 tokenizer（而不是 `\s+` 切词 +
+  `&&|\|\||[;|\n]` 正则拆分），把 `"a b"` / `'a b'` 视为单个 token，再逐段递归识别
   git 调用：
   - 语句段按引号外的 `;`、`&&`、`||`、`|`、换行切分；单个 `&`（PowerShell
     调用符 / bash 后台符）保留在段内。
@@ -117,6 +117,6 @@ npm run typecheck
 
 ```sh
 node test.mjs
-# 或用 App 自带运行时：
-ELECTRON_RUN_AS_NODE=1 "/Applications/.../DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" test.mjs
+# 或用 App 自带运行时（把路径换成本机实际的可执行文件）：
+ELECTRON_RUN_AS_NODE=1 "<App 可执行文件>" test.mjs
 ```

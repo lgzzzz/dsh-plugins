@@ -5,7 +5,7 @@
 这是一个纯 **bundle patch** 插件：自身没有任何宿主或浏览器代码，只通过
 `package.json` 的 `dsh.bundle.patch` 声明一个 `cordis.patch.yml` 覆盖层。
 安装后它会被加入 web profile 的 `dsh.profile.bundles`，随每个 bundle 层一起
-挂载，实现与原先手写在 `profiles/web/cordis.patch.yml` 里完全相同的效果：
+挂载；覆盖内容如下：
 
 - `disabled: true` 关闭默认的 `directory-picker`
   （`@deepseek-ai/dsh-host-directory-picker-auto`）与 `ui-deliverables`
@@ -48,7 +48,7 @@ dsh plugin --profile web remove dsh-directory-picker-browse
 
 ## 说明
 
-- 补丁内容与 `profiles/web/cordis.patch.yml` 完全一致；该文件本身若不再使用，
-  可以清理，避免与插件补丁重复应用（幂等，但重复无害）。
+- 覆盖层只由本插件的 `cordis.patch.yml` 提供；Profile 自身的 `cordis.patch.yml`
+  当前为空（`[]`），无需再在其中重复声明这些行。
 - `dsh.profile.patchReload: live` 只热重载 profile 自身的 `cordis.patch.yml`；
   bundle 层是常驻挂载，改动本插件后需重启 App 生效。

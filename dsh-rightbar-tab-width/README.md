@@ -44,7 +44,8 @@
 
 ## 加载（用户操作）
 
-本插件持久化在仓库内、尚未挂载；加载是用户操作，代理不代做：
+本插件是仓库内的本地 npm 包，经 web Profile 的 `link:` 依赖挂载（见仓库根 `AGENTS.md`
+「挂载与激活」）。重新装入 / 换 Profile 属用户操作，代理不代做：
 
 ```sh
 cd <仓库根>/dsh-rightbar-tab-width
@@ -58,7 +59,7 @@ dsh plugin --profile web add link:.
 dsh plugin --profile web remove dsh-rightbar-tab-width
 ```
 
-挂载后**再改宽度不需要重启**：只动 CSS 常量 → `npm run build` → `dsh-client-hmr` 在
+**改宽度不需要重启**：只动 CSS 常量 → `npm run build` → `dsh-client-hmr` 在
 500ms 内热替换浏览器半部，页面无需刷新。
 
 ## 构建与验证
