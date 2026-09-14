@@ -1,68 +1,237 @@
 # AGENTS.md — DSH 本地插件工作区
 
-仓库内每个插件均为独立、自包含的本地 npm 包。本文档仅记录跨插件的共性约定
-（包结构、挂载与激活、变更生效机制、构建与验证、注意事项）；各插件的功能说明
-见其 `README.md`。
+本仓库是 DSH（DeepSeek Harness）Web 的本地持久化插件集合：每个插件目录都是一个独立、
+自包含的本地 npm 包，经本机 web Profile 的 `link:` 依赖挂载进正在运行的应用。动态 Cordis
+定义只存在于进程内存、重启即失效，需要长期保留的行为因此固化为仓库内的本地包。
+
+本文档只记录**跨插件的共性约定**（仓库布局、包结构与挂载、变更生效机制、构建与验证、
+共性坑与排查）；单个插件的功能、实现依据与已知限制见其目录内 `README.md`。
 
 ## 强制规范
 
-1. **插件持久化完成后，代理不得自行加载插件。** 加载属于用户操作，不属于代码交付
-   范围：不得修改 `~/.dsh/profiles/web/package.json`（`dependencies` /
-   `dsh.profile.bundles`）、不得执行 `pnpm install`、不得重启 App / dsh web。
-2. **新持久化插件必须使用 TypeScript，并提供构建命令。** 浏览器半部以 TypeScript
-   源码（`src/`，入口 `src/client.ts`）编写，`package.json` 须提供 `build` 脚本
-   （产出 `lib/client.js`）与 `typecheck` 脚本；`lib/*.js` 为构建产物，不得作为手写
-   源文件。宿主半部为 TypeScript 源码 `index.ts`（由 Node 22 Type Stripping 直接加载，
-   无需编译），但须提供 `typecheck` 脚本。现有纯 JavaScript 插件（`dsh-fullwidth-chat`、
-   `dsh-new-session`）为历史遗留，维持现状；新增或重构插件
-   一律适用本条规范。
+1. **插件交付后，代理不得自行加载插件。** 加载属于用户操作，不属于代码交付范围：不得
+   修改 `~/.dsh/profiles/web/package.json`（`dependencies` / `dsh.profile.bundles`）、
+   不得执行 `dsh plugin add` 或 `pnpm install`、不得重启 App / `dsh web`。代理只交付
+   代码、构建产物与加载说明，由用户执行加载。
+2. **新增或重构插件一律使用 TypeScript，并提供构建与类型检查命令。** 浏览器半部以
+   TypeScript 写在 `src/`（入口 `src/client.ts`），`package.json` 必须提供 `build`
+   脚本（产出 `lib/client.js`）与 `typecheck` 脚本；宿主半部以 TypeScript 写在
+   `index.ts`（Node 22 Type Stripping 直接加载，无需编译），同样必须能通过 `typecheck`。
+   `lib/*.js` 是构建产物，不得手改。现有两个纯 JavaScript 插件
+   （`dsh-fullwidth-chat`、`dsh-new-session`）保持现状，不要求迁移。
 
-## 仓库概述
+## 仓库布局与版本控制
 
-本仓库为 DSH（DeepSeek Harness）Web 的本地持久化插件集合。动态 Cordis 定义仅存在于
-进程内存、重启即失效，因此将需长期保留的插件固化为仓库内的本地 npm 包，经 Web
-Profile 的 `link:` 依赖挂载至运行中的应用。仓库内含 9 个插件目录（见下节插件清单），
-web Profile 已全部挂载；`dsh-rightbar-split-open` 本次按用户要求从仓库移除，Profile 里
-残留的挂载行需由用户执行
-`dsh plugin --profile web remove dsh-rightbar-split-open` 摘除（摘除后仓库与 Profile 一致）。
-`dsh-change-summary`、`dsh-kbd-nav-focus`（提交 6499dd9）、`dsh-no-right-sidebar`、
-`dsh-left-dock` 已从仓库移除，仅存于
-git 历史（`dsh-fork-inbox-guard` 曾于 29ddb9e 引入、2d0f985 移除，本次按其根因分析
-重写后重新纳入仓库）；`dsh-rightbar-files-guard` 亦已移除（该目录当时未纳入版本控制，
-git 历史中没有它）；`dsh-rightbar-split-open`（右栏「树 | 文件」分栏打开）曾于 e3f6153
-移除、随后按 `~/.dsh/sessions` 会话记录逐字恢复并于 0681490 首次纳入版本控制，本次按
-用户要求再次移除 —— 移除时工作树内含约 1758 行未提交改动（`src/*.ts`、`test-split-open.mjs`、
-`README.md` 等），这些未提交内容随目录一并丢弃，git 中只保留提交 0681490 的版本
-（`git show 0681490:<路径>` 可取回）；`dsh-rightbar-files-float`
-（右栏文件浏览器浮窗开关）此前按用户要求移除，其源码同样从未纳入版本控制，
-Profile 里的挂载行已由用户摘除 —— 它是**独立于本仓库**的浮窗开关，删除它不影响
-`dsh-kbd-hotkeys` 的动作表；本次按用户要求把 ⌘/Ctrl+Alt+\ 加回 `dsh-kbd-hotkeys`
-（`sidebarRight.files`：定位右栏文件浏览器页，**不存在则创建**、已存在则聚焦并置顶）。
-仓库根不提供集合
-安装 / 卸载脚本：每个插件由用户逐个执行
-`dsh plugin --profile web add link:<目录>`（详见仓库根 README「安装」）。
-
-- 版本控制采用黑名单：`.gitignore` 默认放行全部内容，仅忽略系统/编辑器文件
-  （`.DS_Store`、`.idea/`）、包管理器缓存（`.pnpm-store/`、`.npm-cache/`、
-  `node_modules/`）与 TypeScript 增量缓存（`*.tsbuildinfo`）。
-  新增插件目录默认即受版本控制，无需额外配置；若其 `lib/` 为不入仓的构建产物，
-  需在 `.gitignore` 单独追加忽略项（当前所有插件的 `lib/*.js` 均入仓）。
-- 优先查阅各插件的 `README.md` 获取加载与构建信息，本文档仅描述共性约定。
+- 仓库根**不是「一个插件」**：没有集合包、也没有根 `cordis.patch.yml`，不提供集合
+  安装 / 卸载脚本。每个插件在 Profile 中是独立的 `link:` 依赖，经其自身的
+  `cordis.patch.yml` 独立挂载。
+- 版本控制采用**黑名单**：根 `.gitignore` 只忽略系统 / 编辑器文件（`.DS_Store`、
+  `.idea/`）、包管理器缓存（`.pnpm-store/`、`.npm-cache/`、`node_modules/`）与
+  TypeScript 增量缓存（`*.tsbuildinfo`）。新增插件目录默认即受版本控制，无需额外配置。
+- 构建产物默认**入仓**以保证离线可加载：当前所有插件的 `lib/*.js` 都已入仓；目前没有任何插件存在不入仓的构建产物。
+- 各插件目录内可另有 `.gitignore`（如 `dsh-git-guard`、`dsh-fork-inbox-guard` 忽略
+  `node_modules/`、`.npm-cache/`、`*.log`）。
 
 ## 插件清单
 
-| 目录 | 形态 | 宿主半部 | 浏览器半部 | 构建 | 说明 |
-| --- | --- | --- | --- | --- | --- |
-| `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`：监听 `agent/created`，折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，与当前 pending 求交后 `inbox.remove()` | — | `npm run typecheck`；`node test.mjs` | 分叉子会话丢弃「继承自源会话、仍 pending」的输入；子代理（有 runtime owner）显式跳过，普通/非 seeded 会话不动作 |
-| `dsh-git-guard` | Host only（TS） | `index.ts`，钩挂 `tools/pre-execute` | — | `npm run typecheck`；`node test.mjs` | 拦截 `git push`（deny）/ `git commit`（ask） |
-| `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令 | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | 无 | `/new` 新建会话命令 |
-| `dsh-fullwidth-chat` | Client only（纯 JS） | `lib/index.js`（空宿主） | `lib/client.js`：注入样式 | 无 | 对话列全宽展示 |
-| `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
-| `dsh-rightbar-tab-width` | Client only（TS） | `index.ts`（空宿主） | `src/`（client.ts + css.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 右栏 tab 胶囊定宽补丁：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」（border-box 分支直接返回该值；空 pane 或 `min-width<=0` 才回落到 `SPLIT_MINIMUMS.chip = 100`），进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（`canSplitPane`），决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏。取值 100 与兜底常量同值 ⇒ 分栏判定与上游默认逐字相同、无偏移；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2）。右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染（不是禁用）。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；见其 README |
-| `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/model-picker/question-drafts/sidebar-order/sidebar-tabs/workspace-switcher/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、右栏当前面板标签切换（⌘/Ctrl+Alt+←/→ → 读右栏会话级 slot store 的 `layout.activePaneId` 面板标签顺序 + `sidebarRight.focus(tabId)`，循环、单标签不吞键）、右栏文件浏览器定位（⌘/Ctrl+Alt+\ → `sidebarRight.openTab('files')`：该面板没有文件浏览器页就**创建**、已有就聚焦，同一步展开右栏；再经同一份会话级 store 的 `actions.placeTab(…, 0)` 把它置于标签栏首位）、工作区浮窗（⌘/Ctrl+Alt+K → 浮窗内 ↑↓ 选、Enter 调 `uiWorkspace.openWorkspace(workspaceId)` 连接/切换工作区）、模型浮窗（⌘/Ctrl+Alt+M → 浮窗内 ↑↓ 选、Enter 调**上游同一份** per-session 模型目录 `ctx.modelDirectories.directoryFor(sessionId).select(...)`——即 `/model` 弹层与 composer 模型座位用的那一份）、思考强度循环（⇧Tab → 同一目录上按上游 `effortChoices` 的候选档循环 `reasoningEffort`；`editing` 态另需焦点落在 composer 内）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
+仓库内含 **9 个插件目录**，本机 web Profile 已全部挂载（`dependencies` 9 条 `link:`、
+`dsh.profile.bundles` 11 项，与仓库目录一一对应、无多余项；`node_modules` 下 9 条
+Junction 目标均有效）。核对命令见「挂载与激活（Web Profile）」。
 
-### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
+| 目录 | 形态 | 宿主半部 | 浏览器半部 | 说明 |
+| --- | --- | --- | --- | --- |
+| `dsh-code-card-fonts` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/client.ts` + `src/css.ts` → esbuild → `lib/client.js` | 卡片标题 / 摘要行 / 展开内容 / 代码块 / 内联代码 / Markdown 表格单元格字号补丁（统一 14px）与卡片间距 `calc(14px * 0.5)` = 7px；**不覆盖**内容字号轴 `--dsh-content-font-size`，设置里的「字号大小」仍可调 |
+| `dsh-directory-picker-browse` | Patch only（无代码） | — | — | `cordis.patch.yml` 覆盖层：`disabled` 停用上游 `directory-picker`（auto 目录选择器）与 `ui-deliverables`（产物行），`insert` 挂载 browse 变体的宿主 / 浏览器两个 in-box 包 |
+| `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`：监听 `agent/created`，折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，与当前 pending 求交后 `inbox.remove()` | — | 分叉子会话丢弃「继承自源会话、仍 pending」的输入；有 runtime owner 的子代理显式跳过，普通 / 非 seeded 会话不动作 |
+| `dsh-fullwidth-chat` | Client only（纯 JS；宿主占位） | `lib/index.js`：空宿主（仅供组合行解析、供 client-modules 扫描） | `lib/client.js`：注入样式 | 对话列全宽展示 |
+| `dsh-git-guard` | Host only（TS） | `index.ts`：钩挂 `tools/pre-execute`；另经 `ctx.systemPrompt.section()` 注入约束区段 | — | `git commit` 与非 force `git push` → `ask`；force push 及 rebase / merge / cherry-pick / reset --hard 等破坏性历史改写 → `deny`；约束同时以系统提示词告知模型 |
+| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏文件浏览器定位、工作区浮窗、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
+| `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令（`inject: ['commands']`） | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | `/new` 新建并跳转空白会话 |
+| `dsh-rightbar-tab-width` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/client.ts` + `src/css.ts` → esbuild → `lib/client.js` | 右栏 tab 胶囊定宽：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」，进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏）。取值 100 与兜底常量 `SPLIT_MINIMUMS.chip` 同值 ⇒ 分栏判定与上游默认逐字相同；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2），右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；详见其 README |
+
+## 包结构与约定
+
+标准插件结构：
+
+```
+<workspace>/<package-name>/
+├── package.json      # type=module；exports["."]→宿主入口、["./client"]→浏览器入口
+├── index.ts          # 宿主半部（TypeScript，Node 22 Type Stripping 直接加载）
+├── src/              # 浏览器半部源码（TypeScript，入口 src/client.ts）
+├── scripts/          # 浏览器半部构建脚本（esbuild）
+├── lib/client.js     # 浏览器半部构建产物（由 build 脚本生成，禁止手改）
+├── cordis.patch.yml  # Web 组合补丁：挂载行（insert / disabled）
+└── README.md         # 功能、加载与构建说明
+```
+
+`package.json` 关键字段：
+
+- `"type": "module"`；`exports` 分别映射 `"."`（宿主入口）与 `"./client"`（浏览器入口）；
+- `dsh.client.platform: "web"` + `dsh.client.immediately: true`：浏览器半部据此注册至
+  浏览器 roster；
+- `dsh.bundle.patch: "./cordis.patch.yml"`：挂载行随 bundle 层应用；
+- 宿主入口也可以是 `main`（如 `dsh-git-guard`、`dsh-fork-inbox-guard` 的
+  `"main": "index.ts"`）。
+
+`cordis.patch.yml`：
+
+- 每个插件都必须带 `insert` 挂载行；纯补丁插件还可以直接 `disabled` / `insert` 修改
+  组合（见 `dsh-directory-picker-browse`）。
+- **宿主入口必须存在且可解析**：即使插件是纯浏览器半部（`dsh-code-card-fonts`、
+  `dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`），其 `exports["."]` 指向的
+  `index.ts` 也必须是合法加载项（当前为空宿主 `apply() {}`），`dsh-client-modules`
+  靠扫描这些 Loader 条目发现声明了 `dsh.client.platform: "web"` 的包。
+- 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务由挂载行 `inject`
+  声明；浏览器半部按需 `export const inject = [...]`（由模块加载器读取）。遗留纯 JS
+  宿主（`dsh-new-session` 的 `lib/index.js`）仍在代码中
+  `export inject = ['commands']`。不消费服务的客户端（`dsh-code-card-fonts`、
+  `dsh-rightbar-tab-width`）不声明任何注入。
+
+宿主半部：以 TypeScript 编写 `index.ts`（可拆分多文件），由 Node 22 Type Stripping 直接加载，无需编译；相对导入须携带 `.ts` 扩展名；
+仅允许可擦除语法（不使用 enum、命名空间、参数属性），`tsconfig.json` 以
+`erasableSyntaxOnly` 强制约束。最小示例：`dsh-git-guard`（单文件）。
+
+浏览器半部：以 TypeScript 编写，`src/` 为源码（入口 `src/client.ts`），`scripts/`
+提供构建脚本（统一为 esbuild），产物是经 `window.__ModuleLoader__.load({ id, factory })`
+包装的单文件 `lib/client.js`（入仓）。**浏览器运行时不支持 Type Stripping**：
+`lib/client.js` 为构建产物、禁止手改，源码变更后必须重新构建——「改了插件看不到效果」
+最常见的原因就是漏了这一步。
+
+- external 依赖按各插件实际 import 配置，由 ModuleLoader 的模块表提供、不打包进产物：
+  其余插件的浏览器半部不消费 react 等 external（业务模块全部内联）。
+- 客户端源码中的 `@deepseek-ai/*` import 均为 type-only，编译时擦除；运行时服务一律
+  经 `ctx.get(name)` 取用。
+- 两个构建流派（产物等价，按插件现状保持）：
+  - `import { buildSync } from 'esbuild'` 的 JS API（`dsh-code-card-fonts`）；
+  - **直接执行 esbuild 的平台二进制**（`@esbuild/<platform>-<arch>`，`stdio: 'inherit'`；
+    `dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`）——esbuild 的 JS API 以 stdin/stdout
+    管道与子进程通信，在受限沙箱下 `spawn` 报 `EPERM`。
+
+## 挂载与激活（Web Profile）
+
+`~/.dsh/profiles/web/package.json` 当前配置：
+
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件，共 **9 条**，与仓库内插件
+  目录一一对应；`~/.dsh/profiles/web/node_modules` 下 9 条 Junction 目标均有效
+  （另有 `monaco-editor` 一条，指向 Profile 的模块回退目录）；
+- `dsh.profile.bundles` 共 **11 项**：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
+  及上述 9 个本地插件（与 `dependencies` 逐项对应，无多余项）；
+- `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
+  （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
+
+核对仓库与 Profile 是否一致：
+
+```powershell
+Get-Content "$env:USERPROFILE\.dsh\profiles\web\package.json"                        # dependencies / dsh.profile.bundles
+Get-ChildItem "$env:USERPROFILE\.dsh\profiles\web\node_modules" |
+  Select-Object Name, LinkType, Target                                               # Junction 是否存在、指向是否有效
+```
+
+挂载新插件或重新启用某个插件（`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会自动
+核对 `dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，无需手动
+改 `package.json`）：
+
+```sh
+# 方式一：从仓库内插件目录执行（相对 link: 由 pnpm 锚定到当前目录）
+cd <仓库根>/<name> && dsh plugin --profile web add link:.
+# 方式二：从任意目录用绝对路径
+dsh plugin --profile web add link:<仓库根>/<name>
+# 重启 App 生效
+```
+
+卸载：
+
+```sh
+dsh plugin --profile web remove <name>
+```
+
+> 上述步骤属于用户操作：依据强制规范第 1 条，代理交付插件后不得自行执行加载步骤
+> （`dsh plugin add`、`pnpm install`、重启 App）；应将步骤写入插件 README 并告知用户。
+> `link:` 依赖已存在时重复执行是幂等 no-op；由于 `link:` 实时指向仓库目录，之后修改
+> 插件代码无需重装。
+
+## 变更生效机制
+
+1. **浏览器半部（`lib/client.js`）重新构建后自动热加载**：`dsh-client-hmr` 行在 Web 组合
+   里**无条件挂载**（`dsh-web-app/cordis.patch.yml` 的 `client-hmr`），其 node 半部每
+   500ms stat 轮询每个插件产物的 mtime/size，变化即 `clientModuleHost.rebuilt(id)`
+   重新哈希、重发图并沿 `/plugins/events` SSE 广播 `rebuilt` 帧，浏览器半部做 fiber
+   替换——**无需重启、无需刷新**（只要页面处于打开状态）。因此「改了插件看不到效果」
+   首先要确认 `npm run build` 是否真的跑过、产物是否已落盘。
+2. **宿主半部（`index.ts` / `host/*` / 组合变更）仍需重启 App**：宿主行由 Loader 常驻
+   挂载，`dsh.profile.patchReload: live` 只热重载 Profile 自身的 `cordis.patch.yml`；
+   bundle 层（含各插件的 `cordis.patch.yml`）不支持热重载。若代理自身运行于 dsh web
+   进程内，重启会终止当前会话，应先交付说明、再由用户触发。
+3. 状态验证（读取宿主**当前公告**的插件图与产物字节；`/plugins/events` 为公开 SSE
+   端点，单个 `/plugins/<name>/client.js` 不在公告组合内会 404）：
+
+```bash
+curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 首帧含 graph(各行 id/rev/url)
+# 再按公告 url 取字节：curl -s "http://127.0.0.1:3080/plugins/??<id>/client.js&rev=<rev>" | wc -c
+```
+
+## 构建与验证
+
+| 插件 | 命令 | 说明 |
+| --- | --- | --- |
+| `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild（JS API）→ `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
+| `dsh-directory-picker-browse` | 无 | 纯补丁插件，无源码与产物 |
+| `dsh-fork-inbox-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 用真实 `@deepseek-ai/dsh-session` 构造 seeded 子会话，验证前缀折叠、移除幂等、子代理 balanced 前缀零改动、异常不外逸 |
+| `dsh-fullwidth-chat` | 无 | 纯 JS 插件，`lib/*.js` 即源码 |
+| `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny / ask / 放行各分支（含工具名解耦、引号与包装词、破坏性操作回归） |
+| `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check`；`node test-services.mjs`；`node test-dispatch.mjs` | esbuild（平台二进制）→ `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。两个诊断脚本是纯 Node + 最小 DOM 桩，无需浏览器（覆盖范围见其 README「构建」） |
+| `dsh-new-session` | 无 | 纯 JS 插件，`lib/*.js` 即源码 |
+| `dsh-rightbar-tab-width` | `npm run typecheck && npm run build && npm run check` | esbuild（平台二进制）→ `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
+
+`node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
+缓存目录（`npm_config_cache=<writable-dir>`）或使用仓库根的 `.pnpm-store`。
+
+## 类型解析约定
+
+- `@deepseek-ai/*` 为预发布包，不经 registry 安装；插件的 `node_modules/@deepseek-ai`
+  是指向全局 dsh 包内置 bundled scope 的 junction / 符号链接
+  （`<npm root>/@deepseek-ai/dsh/node_modules/@deepseek-ai`，含 `lib/types` 声明）。
+  重装或迁移全局 dsh 包后须重建该 junction（示例命令见 `dsh-fork-inbox-guard/README.md`）。
+- 部分类型包（`dsh-client-ui-slots`、`dsh-client-ui-primitives`）不在内置 bundle 中，
+  故启用 `skipLibCheck`，并在源码中自行声明结构切片类型（模板：
+  `dsh-kbd-hotkeys/src/types.ts`，仅覆盖实际消费的
+  字段，以上游 `lib` 源码为准）。
+- 宿主 TypeScript 中 `import type` 在 Type Stripping 下被擦除，运行时无 cordis 依赖；
+  `devDependencies` 仅供语言服务器与类型检查使用。
+
+## 上游源码定位
+
+- DSH 实现 checkout：位于全局 npm 安装目录下的 `@deepseek-ai/dsh`
+  （可用 `npm root -g` 或 `npm ls -g @deepseek-ai/dsh` 定位）。
+- 内置 UI / 服务包：`<dsh>/node_modules/@deepseek-ai/dsh-client-ui-*` 等——通过其
+  `lib/client.js` 核实 DOM 结构与服务接口。编写选择器或接口前须以源码为准，不得凭
+  经验臆断。
+
+## 无服务面 UI 状态的取数范式（slot store）
+
+有些 UI 状态上游**没有** cordis 服务方法，只存在于某个 slot 注册项挂载的 per-session
+store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本仓库的问答卡片草稿
+`dsh-kbd-hotkeys/src/question-drafts.ts`、侧栏视图顺序 `src/sidebar-order.ts`
+与右栏标签顺序 `src/sidebar-tabs.ts` 已在用；后两者的作用域不同——`sidebar-tabs.ts`
+的 handle 是 **session 作用域**（必须传第 2 步的绑定），`sidebar-order.ts` 的是
+**root 作用域**（传 `undefined`））：
+
+1. `slots.entries('<slot 名>')` → 该 slot 的注册项；带 `store` 字段的那一项即承载
+   目标状态的 store handle（`SlotsService.entries` 与注册项的 `store` 都是公开面）；
+2. `uiSession.resolve(sessionId)` → 该会话**已物化的作用域绑定**
+   `{ key: sessionId, ctx, hooks, keyedHooks, props }`（`uiSession.resolve` →
+   `createMaterializedBinding` → `materialize`，其内部就调了 `slots.bindStoreScope`）；
+3. `slots.resolveStore(handle, binding)` → **活实例**：`getSnapshot()` / `actions` /
+   `subscribe`。
+
+渲染端组件拿到的 `useStore` / `actions` 也来自同一句
+`resolveStore(entry.store, scopeBinding)`（`dsh-client-ui-renderer` 的 `standardKit`），
+因此外部写入与鼠标操作共用**同一份内存态**、React 订阅者立即重渲染，不是镜像。
+**无降级**：任一环节不可用（注册项未挂载 / 无该 handle / `uiSession.resolve` 返回
+`undefined` / `resolveStore` 抛 `store handle is not registered`）即 no-op，
+不得回退到 DOM 点击。
+
+## `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
 动作**全部走服务触发**（不触碰 DOM）；DOM 只有三处：`document` 上的 `keydown`
 捕获监听（全部快捷键的入口）、`editing` 态的事件目标判定（`isEditableTarget`），
@@ -94,286 +263,91 @@ Profile 里的挂载行已由用户摘除 —— 它是**独立于本仓库**的
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
 侧栏开关的键位分配：**左栏 = ⌘/Ctrl+B（主键）**、**右栏 = ⌘/Ctrl+Alt+B（派生键）**。
-理由三条：① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器），
-把已被训练过的反射留给最基础的左栏（导航主面板）；② 上游命名同源——
-不带限定词的 `sidebar` / `sidebarCol` 就指左栏（`layout.toggleSidebar()`），右栏是派生的
-`rightbar`（`rightbarShown` / `rightbarTrack`），主键给「本名」、叠加修饰键给「限定名」；
-③ 越常用越省力——更短更好按的 `⌘/Ctrl+B` 给频率更高的左栏，`Alt` 这一档留给上下文面板
-（右栏）。两个动作 id 各自独立可经 localStorage 覆盖，互换只改 `src/config.ts` 两行
-`DEFAULT_BINDINGS`。**右栏标签切换 = ⌘/Ctrl+Alt+←/→**：与右栏开关同属 `rightbar`
-这一档（`mod+alt`），方向键天然表达「上一个 / 下一个」；与 ⌘/Ctrl+Alt+↑/↓ 的活跃会话
-跳转同族但不同轴（会话轴在左栏、标签轴在右栏）。标签**循环**（末个 → 回到第一个），
-只有一个标签时 no-op 且不吞键；两个动作 id（`sidebarRight.tabPrev` /
-`sidebarRight.tabNext`）同样各自独立可覆盖。**右栏文件浏览器定位 = ⌘/Ctrl+Alt+\**：
-同属 `rightbar` 这一档（`mod+alt`），反斜杠在主键区右端、不与同档的方向键抢位，
-且按 `event.code` 的物理键位 `Backslash` 命中（Win/Linux 上 `Ctrl+Alt` 即 AltGr，
-按字符判定会被布局坑掉）；语义是「**定位**」而非「开关」——`sidebarRight.openTab('files')`
-按**目标面板**去重（该面板已有文件浏览器页只聚焦，**没有就创建**），同一步展开右栏，
-再经同一份会话级 store 的 `actions.placeTab(sessionId, tabId, paneId, 0)`
-（与**标签拖拽**同一入口，**不用** `replaceTab`，避免关掉被顶掉的 tab）置顶；
-动作 id `sidebarRight.files` 独立可覆盖。**工作区浮窗 = ⌘/Ctrl+Alt+K**：同属
-`mod+alt` 这一档（`K` = Work-space 联想，不抢同档的方向键 / `B` / `\`），语义是
-「列表 → 选中 → 切换」——↑/↓ **只移动高亮**（不触发导航，避免连按就连开多个空白会话），
-Enter / 点击行才调 `uiWorkspace.openWorkspace(workspaceId)`（连接工作区：复用该工作区的
-空白会话、没有就新建一个再打开，与侧栏分组「＋」同一条路径）；Esc 或同组合键关闭，
-浮窗内 `⌘/` 与速查表互切；列表取自 `workspaces.list` 快照的**宿主顺序**（与侧栏分组
-顺序同源），初始高亮 = 当前会话所属工作区。动作 id `workspace.pick` 独立可覆盖。
+理由两条：① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器），
+把已被训练过的反射留给最基础的左栏（导航主面板）；② 上游命名同源——不带限定词的
+`sidebar` / `sidebarCol` 就指左栏（`layout.toggleSidebar()`），右栏是派生的 `rightbar`
+（`rightbarShown` / `rightbarTrack`），主键给「本名」、叠加修饰键给「限定名」。
+两个动作 id 各自独立可经 localStorage 覆盖，互换只改 `src/config.ts` 两行
+`DEFAULT_BINDINGS`。
+
+**右栏标签切换 = ⌘/Ctrl+Alt+←/→**：与右栏开关同属 `rightbar` 这一档（`mod+alt`），
+方向键天然表达「上一个 / 下一个」；与 ⌘/Ctrl+Alt+↑/↓ 的活跃会话跳转同族但不同轴
+（会话轴在左栏、标签轴在右栏）。标签**循环**（末个 → 回到第一个），只有一个标签时
+no-op 且不吞键；两个动作 id（`sidebarRight.tabPrev` / `sidebarRight.tabNext`）同样各自
+独立可覆盖。
+
+**右栏文件浏览器定位 = ⌘/Ctrl+Alt+\\**：同属 `rightbar` 这一档，反斜杠在主键区右端、
+不与同档的方向键抢位，且按 `event.code` 的物理键位 `Backslash` 命中（Win/Linux 上
+`Ctrl+Alt` 即 AltGr，按字符判定会被布局坑掉）；语义是「**定位**」而非「开关」——
+`sidebarRight.openTab('files')` 按**目标面板**去重（该面板已有文件浏览器页只聚焦，
+**没有就创建**），同一步展开右栏，再经同一份会话级 store 的
+`actions.placeTab(sessionId, tabId, paneId, 0)`（与**标签拖拽**同一入口，**不用**
+`replaceTab`，避免关掉被顶掉的 tab）置顶；动作 id `sidebarRight.files` 独立可覆盖。
+
+**工作区浮窗 = ⌘/Ctrl+Alt+K**：同属 `mod+alt` 这一档（`K` = Work-space 联想，不抢同档的
+方向键 / `B` / `\`），语义是「列表 → 选中 → 切换」——↑/↓ **只移动高亮**（不触发导航，
+避免连按就连开多个空白会话），Enter / 点击行才调 `uiWorkspace.openWorkspace(workspaceId)`
+（连接工作区：复用该工作区的空白会话、没有就新建一个再打开，与侧栏分组「＋」同一条
+路径）；Esc 或同组合键关闭，浮窗内 `⌘/` 与速查表互切；列表取自 `workspaces.list` 快照的
+**宿主顺序**（与侧栏分组顺序同源），初始高亮 = 当前会话所属工作区。动作 id
+`workspace.pick` 独立可覆盖。
+
 **模型浮窗 = ⌘/Ctrl+Alt+M**：同属 `mod+alt` 这一档（`M` = Model 联想，不抢同档的
 方向键 / `B` / `\` / `K`），语义与工作区浮窗同形（列表 → 选中 → 提交），而**取数与提交
 都与两个上游入口同源**——`ctx.modelDirectories` 的 per-session 目录实例正是 `/model`
 弹层与 composer 模型座位共用的那一份，所以浮窗里切换后 composer 的模型标签同步变化，
-反之亦然。**思考强度循环 = ⇧Tab**：上游把强度档收在「模型菜单 → Effort」二级面板里、
-**没有默认键位**，而「在模型上按 Tab 循环档位」是既有习惯；候选档与当前档都逐字复刻
-上游 composer 座位的 `effortChoices` / `effectiveEffort`。它只放行 `browse` / `editing`，
-且 `editing` 态多一道**元素级门闸**（`contains` 焦点是否在 composer 内）——⇧Tab 是文本
-编辑的核心键（反向移动焦点 / Monaco 反向缩进），不能全局抢。两个动作 id
-（`model.pick` / `model.effortNext`）各自独立可覆盖。
+反之亦然。
+
+**思考强度循环 = ⇧Tab**：上游把强度档收在「模型菜单 → Effort」二级面板里、**没有默认
+键位**，而「在模型上按 Tab 循环档位」是既有习惯；候选档与当前档都逐字复刻上游 composer
+座位的 `effortChoices` / `effectiveEffort`。它只放行 `browse` / `editing`，且 `editing`
+态多一道**元素级门闸**（`contains` 焦点是否在 composer 内）——⇧Tab 是文本编辑的核心键
+（反向移动焦点 / Monaco 反向缩进），不能全局抢。两个动作 id（`model.pick` /
+`model.effortNext`）各自独立可覆盖。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
 `pendingSnapshot` 为同源私有字段，仅作兼容回退）；审批为**固定单键** `Enter`（允许）/
 `Esc`（拒绝），当前会话有待审批卡片时不受焦点位置影响（审批卡片自身无输入框），
-无审批卡片时 `Esc` 继续走 `session.stop`；通用问答的草稿以**卡片自身的 slot
-store** 为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slots.resolveStore`），
-卡片实时高亮、与鼠标点选可自由混用，**翻题入口是 `←`/`→` 与 `Enter`**（数字键选中后
-不跳题；`Enter` 保留非末题推进、末题仅在全部题目完成后结算，未完成即 no-op 且不跳回），
-焦点在卡片自定义输入框时
-数字键 / `←` `→` / `Enter` 不接管（交回卡片，`←` `→` 用于移动光标）——详见
-`dsh-kbd-hotkeys/README.md`「服务化后的已知限制」与 `src/question-drafts.ts`。
+无审批卡片时 `Esc` 继续走 `session.stop`；通用问答的草稿以**卡片自身的 slot store**
+为唯一真源（注册项 → `uiSession.resolve(sessionId)` → `slots.resolveStore`），卡片实时
+高亮、与鼠标点选可自由混用，**翻题入口是 `←`/`→` 与 `Enter`**（数字键选中后不跳题；
+`Enter` 保留非末题推进、末题仅在全部题目完成后结算，未完成即 no-op 且不跳回），焦点在
+卡片自定义输入框时数字键 / `←` `→` / `Enter` 不接管（交回卡片，`←` `→` 用于移动光标）
+——详见 `dsh-kbd-hotkeys/README.md`「服务化后的已知限制」与 `src/question-drafts.ts`。
+
 验证：`node test-services.mjs`（最小 DOM 桩不提供任何卡片，断言服务路径与草稿 store
-写入，含数字键不翻题、`←`/`→` 只改题号、首末题不循环、Enter 非末题推进 / 末题未完成不结算，
-以及 ⌘/Ctrl+B / ⌘/Ctrl+Alt+B 分别打左/右栏、互不串场、自定义键位与无降级；另有
-⌘/Ctrl+Alt+←/→ 右栏标签切换：标签顺序必须取自 `rightbar.session` 注册项的**会话级
-store**（`bySession[sessionId].layout` 的 `activePaneId` 面板）、切换必须调
-`sidebarRight.focus`，首末标签循环、单标签 / 无面板 / 任一环不可用一律 no-op 不吞键、
-`card` 态仍生效而裸 `←`/`→` 仍归卡片；
-以及 ⌘/Ctrl+Alt+\ 定位右栏文件浏览器并置顶：必须调公开的 `sidebarRight.openTab('files')`
-（该面板已有该页只聚焦、**没有就创建**）、置顶必须调同一份会话级 store **实例**的
-`actions.placeTab(sessionId, tabId, paneId, 0)`（与标签拖拽同一入口）、已在首位不调
-`placeTab`、只作用于停靠面板且优先当前面板（浮窗 / 别的分屏面板不搬）、`openTab`
-抛错时 no-op 不吞键、置顶取数环不可用只跳过置顶而打开本身照旧吞键；
-以及
-⌘/Ctrl+I 聚焦输入框：`binding.ctx` 原样传给 `conversation.input.for`、只认 `browse` 态、
-`for` 缺席回退 `shell(id)`、任一环缺失/抛错一律 no-op 不吞键；
-以及 ⌘/Ctrl+Alt+K 工作区浮窗：列表按宿主顺序渲染（`title` / 路径末段 / `当前` 标记 /
-会话数）、初始高亮 = 当前会话所属工作区、`↑`/`↓` 只移动高亮（不触发导航）且越界 clamp、
-`Enter` / 行内 mousedown 才调 `uiWorkspace.openWorkspace`、`Esc` 与同组合键关闭、
-`⌘/` 换成速查表、空列表与 `workspaces` 缺席为空态、`uiWorkspace` 缺席或抛错时确认
-no-op、`card`/`editing` 态仍可用、键位可覆盖；
-以及 ⌘/Ctrl+Alt+M 模型浮窗 + ⇧Tab 循环思考强度：目录必须按
-`ctx.modelDirectories.directoryFor(当前会话)` 取（与两个上游入口同一份实例）、行按
-宿主顺序展开（提供方分组标题 / 当前标记 / 初始高亮）、每行完整选择复刻上游弹层
-`selectionOf`（无 `defaultEffort` 时不带 `reasoningEffort`）、Enter 调 `directory.select`；
-⇧Tab 的候选档复刻上游座位 `effortChoices`（有 `defaultEffort` 时不含 Default 档）、
-当前档 = `current.reasoningEffort ?? defaultEffort`、末档回到首档、浮窗内 ⇧Tab 只更新
-「当前」行；模型无推理元数据 / 只有一档 / 服务缺席 / 无当前会话 / 被寻址子代理 /
-`directoryFor` 抛错 → no-op 且不吞键；`load()` 拒绝 → 空态 + 失败小字、`select()` 拒绝 →
-浮窗照关；`editing` 态另需焦点落在 composer 内（`isComposerTarget` 的 `contains` 门闸），
-`card` 态不接管）与
-`node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，
-覆盖分组 / flat / 权威来源不可用时 no-op——**无降级**）。
-
-## 无服务面 UI 状态的取数范式（slot store）
-
-有些 UI 状态上游**没有** cordis 服务方法，只存在于某个 slot 注册项挂载的 per-session
-store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本仓库的问答卡片草稿
-`dsh-kbd-hotkeys/src/question-drafts.ts`、侧栏视图顺序 `src/sidebar-order.ts`
-与右栏标签顺序 `src/sidebar-tabs.ts` 已在用；后两者的作用域不同——`sidebar-tabs.ts`
-的 handle 是 **session 作用域**（必须传第 2 步的绑定），`sidebar-order.ts` 的是
-**root 作用域**（传 `undefined`））：
-
-1. `slots.entries('<slot 名>')` → 该 slot 的注册项；带 `store` 字段的那一项即承载
-   目标状态的 store handle（`SlotsService.entries` 与注册项的 `store` 都是公开面）；
-2. `uiSession.resolve(sessionId)` → 该会话**已物化的作用域绑定**
-   `{ key: sessionId, ctx, hooks, keyedHooks, props }`（`uiSession.resolve` →
-   `createMaterializedBinding` → `materialize`，其内部就调了 `slots.bindStoreScope`）；
-3. `slots.resolveStore(handle, binding)` → **活实例**：`getSnapshot()` / `actions` /
-   `subscribe`。
-
-渲染端组件拿到的 `useStore` / `actions` 也来自同一句
-`resolveStore(entry.store, scopeBinding)`（`dsh-client-ui-renderer` 的 `standardKit`），
-因此外部写入与鼠标操作共用**同一份内存态**、React 订阅者立即重渲染，不是镜像。
-**无降级**：任一环节不可用（注册项未挂载 / 无该 handle / `uiSession.resolve` 返回
-`undefined` / `resolveStore` 抛 `store handle is not registered`）即 no-op，
-不得回退到 DOM 点击。
-
-## 包结构与约定
-
-标准插件结构：
-
-```
-<workspace>/<package-name>/
-├── package.json      # type=module；exports["."]→宿主入口、["./client"]→浏览器入口
-├── index.ts          # 宿主半部（TypeScript，Node 22 Type Stripping 直接加载）
-├── src/              # 浏览器半部源码（TypeScript，入口 src/client.ts）
-├── scripts/          # 浏览器半部构建脚本（esbuild / tsc / tsdown）
-├── lib/client.js     # 浏览器半部构建产物（由 build 脚本生成，禁止手改）
-├── cordis.patch.yml  # Web 组合补丁：挂载行（insert / disabled）
-└── README.md         # 功能、加载与构建说明
-```
-
-`package.json` 关键字段：
-
-- `"type": "module"`；`exports` 分别映射 `"."`（宿主入口）与 `"./client"`（浏览器入口）；
-- `dsh.client.platform: "web"` + `dsh.client.immediately: true`：浏览器半部据此注册至
-  浏览器 roster；
-- `dsh.bundle.patch: "./cordis.patch.yml"`：挂载行随 bundle 层应用；
-- 无 `exports` 时使用 `main`（如 `dsh-git-guard` 的 `"main": "index.ts"`）。
-
-`cordis.patch.yml`：
-
-- 每个插件均须声明挂载行 `- insert: [{id, name}]`；纯补丁插件直接以 `disabled` /
-  `insert` 修改组合（参见 `dsh-directory-picker-browse`）。
-- 宿主半部依赖宿主服务时，在该行声明 `inject`（当前没有插件需要；各插件的宿主半部均为空宿主或不消费宿主服务）。
-- 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务改由挂载行 `inject`
-  声明；浏览器半部则按需 `export const inject = [...]`（由模块加载器读取注入，如
-  `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','sidebarRight','workspaces','slots','conversation','uiWorkspace','modelDirectories']`——`slots`
-  用于读侧栏视图 store 的会话顺序、问答卡片草稿 store 与右栏标签 store
-  （`rightbar.session` 注册项：读标签顺序），`layout` / `sidebarRight` 分别用于
-  开关左右栏与（右栏）标签切换，`conversation` 用于 ⌘/Ctrl+I 聚焦输入框
-  （取 composer 的 editor 宿主元素）与 ⇧Tab 的编辑态门闸（宿主元素 `contains`），
-  `uiWorkspace` 用于 ⌘/Ctrl+Alt+K 工作区浮窗确认时连接/切换工作区
-  （`uiWorkspace.openWorkspace`），`modelDirectories` 用于 ⌘/Ctrl+Alt+M 模型浮窗
-  与 ⇧Tab 循环思考强度（`dsh-client-ui-model-selection` 的
-  `directoryFor(sessionId)`，与 `/model` 弹层、composer 模型座位同一份实例）。
-  不消费服务的客户端（纯样式补丁 `dsh-code-card-fonts`）无需声明。遗留纯 JS 宿主
-  （`dsh-new-session` 的 `lib/index.js`）维持现状：仍在代码中
-  `export inject = ['commands']`。
-
-宿主半部：以 TypeScript 编写 `index.ts`（可拆分多文件），由 Node 22 Type Stripping
-直接加载，无需编译；相对导入须携带 `.ts` 扩展名；仅允许可擦除语法（不使用 enum、
-命名空间、参数属性），`tsconfig.json` 以 `erasableSyntaxOnly` 强制约束。最小示例：
-`dsh-git-guard`（单文件）。遗留的纯 JavaScript 宿主（`dsh-fullwidth-chat`、`dsh-new-session`
-的 `lib/index.js`）维持现状，不要求迁移。
-
-浏览器半部：以 TypeScript 编写，`src/` 为源码（入口 `src/client.ts`），`scripts/`
-提供构建脚本（esbuild / tsc / tsdown 均可，参照现有插件），产物为经
-`window.__ModuleLoader__.load({...})` 包装的 `lib/client.js`。可参照的工程模板：
-
-- `dsh-kbd-hotkeys` / `dsh-code-card-fonts`：`src/` → esbuild 单文件 →
-  `lib/client.js`（入仓）。
-- 遗留纯 JavaScript 浏览器半部（`dsh-fullwidth-chat`、
-  `dsh-new-session` 的 `lib/client.js`）维持现状，不要求迁移。
-- 浏览器运行时不支持 Type Stripping：`lib/client.js` 为构建产物、禁止手改；源码变更
-  后必须重新构建，未重新构建是插件改动未生效的最常见原因。产物一律入仓，
-  以保证离线可加载。
-- bundle 的 external 依赖按各插件实际 import 配置（由框架注入、不打包进产物）：
-  `dsh-kbd-hotkeys`、`dsh-code-card-fonts` 的浏览器半部不消费 react 等 external
-  （业务模块全部内联）。客户端源码中的 `@deepseek-ai/*` import 均为
-  type-only、编译时擦除。
-
-## 挂载与激活（Web Profile）
-
-`~/.dsh/profiles/web/package.json` 当前配置：
-
-- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件（本机当前 10 个：
-  code-card-fonts / directory-picker-browse / fork-inbox-guard / fullwidth-chat /
-  git-guard / kbd-hotkeys / new-session / rightbar-split-open / rightbar-tab-width /
-  text-editor）——其中 `rightbar-split-open` 已从仓库移除，该 `link:` 指向缺失目录，
-  需由用户执行 `dsh plugin --profile web remove dsh-rightbar-split-open` 摘除
-  （摘除后 9 个，与仓库内插件目录一一对应）；
-- `dsh.profile.bundles` 共 12 项：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
-  及上述 10 个本地插件（摘除 `dsh-rightbar-split-open` 后为 11 项 / 9 个本地插件）；
-- `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
-  （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
-
-挂载新插件或启用未挂载插件（`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会
-自动核对 `dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
-无需手动改 `package.json`）：
-
-```sh
-# 方式一：从仓库内插件目录执行（相对 link: 由 pnpm 锚定到当前目录）
-cd <仓库根>/<name> && dsh plugin --profile web add link:.
-# 方式二：从任意目录用绝对路径
-dsh plugin --profile web add link:<仓库根>/<name>
-# 重启 App 生效
-```
-
-卸载：
-
-```sh
-dsh plugin --profile web remove <name>
-```
-
-> 上述步骤属于用户操作：依据强制规范第 1 条，代理交付插件后不得自行执行加载步骤
-> （`dsh plugin add`、`pnpm install`、重启 App）；应将步骤写入插件 README 并告知用户。
-
-## 变更生效机制
-
-1. **浏览器半部（`lib/client.js`）重新构建后自动热加载**：`dsh-client-hmr` 行在 Web 组合里
-   **无条件挂载**（`dsh-web-app/cordis.patch.yml` 的 `client-hmr`），其 node 半部每 500ms
-   stat 轮询每个插件产物的 mtime/size，变化即 `clientModuleHost.rebuilt(id)` 重新哈希、
-   重发图并沿 `/plugins/events` SSE 广播 `rebuilt` 帧，浏览器半部做 fiber 替换——
-   **无需重启、无需刷新**（只要页面处于打开状态）。因此「改了插件看不到效果」首先要
-   确认 `npm run build` 是否真的跑过、产物是否已落盘，而不是先怀疑没重启。
-2. **宿主半部（`index.ts` / 组合变更）仍需重启 App**：宿主行由 Loader 常驻挂载，
-   `dsh.profile.patchReload: live` 只热重载 Profile 自身的 `cordis.patch.yml`。
-   若代理自身运行于 dsh web 进程内，重启会终止当前会话，应先交付说明、再由用户触发。
-3. 状态验证（读取宿主**当前公告**的插件图与产物字节；`/plugins/events` 为公开 SSE 端点，
-   单个 `/plugins/<name>/client.js` 不在公告组合内会 404）：
-
-```bash
-curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 首帧含 graph(各行 id/rev/url)
-# 再按公告 url 取字节：curl -s "http://127.0.0.1:3080/plugins/??<id>/client.js&rev=<rev>" | wc -c
-```
-
-## 构建与验证
-
-| 插件 | 命令 | 说明 |
-| --- | --- | --- |
-| `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 deny/ask/放行各分支 |
-| `dsh-fork-inbox-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 用真实 `@deepseek-ai/dsh-session` 构造 seeded 子会话，验证前缀折叠、移除幂等、子代理 balanced 前缀零改动、异常不外逸 |
-| `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
-| `dsh-rightbar-tab-width` | `npm run typecheck && npm run build && npm run check` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。其构建脚本**直接执行 esbuild 的平台二进制**（`@esbuild/<platform>-<arch>`，`stdio: 'inherit'`）而非 `import 'esbuild'` 的 `buildSync`：esbuild 的 JS API 以 stdin/stdout 管道与子进程通信，在受限沙箱下 `spawn` 报 `EPERM`；同组 flag 下产物一致 |
-| `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check`；`node test-services.mjs`；`node test-dispatch.mjs` | esbuild → `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。其构建脚本与 `dsh-rightbar-tab-width` 同一做法：**直接执行 esbuild 的平台二进制**（`@esbuild/<platform>-<arch>`，`stdio: 'inherit'`）而非 `import 'esbuild'` 的 `buildSync`（后者以 stdin/stdout 管道与子进程通信，受限沙箱下 `spawn` 报 `EPERM`；同组 flag 下产物一致） |
-| 纯 JS / patch-only | 无构建步骤 | fullwidth-chat、new-session、directory-picker-browse |
-
-`node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
-缓存目录（`npm_config_cache=<writable-dir>`）或使用仓库根的 `.pnpm-store`。
-
-## 类型解析约定
-
-- `@deepseek-ai/*` 为预发布包，不经 registry 安装；插件的 `node_modules/@deepseek-ai`
-  是指向全局 dsh 包内置 bundled scope 的 junction / 符号链接
-  （`<npm root>/@deepseek-ai/dsh/node_modules/@deepseek-ai`，含 `lib/types` 声明）。
-  重装或迁移全局 dsh 包后须重建该 junction。
-- 部分类型包（`dsh-client-ui-slots`、`dsh-client-ui-primitives`）不在内置 bundle 中，
-  故启用 `skipLibCheck`，并在源码中自行声明结构切片类型（模板：
-  `dsh-kbd-hotkeys/src/types.ts`，仅覆盖实际消费的字段，以上游 `lib` 源码为准）。
-- 宿主 TypeScript 中 `import type` 在 Type Stripping 下被擦除，运行时无 cordis 依赖；
-  `devDependencies` 仅供语言服务器与类型检查使用。
-
-## 上游源码定位
-
-- DSH 实现 checkout：位于全局 npm 安装目录下的 `@deepseek-ai/dsh`
-  （可用 `npm root -g` 或 `npm ls -g @deepseek-ai/dsh` 定位）。
-- 内置 UI / 服务包：`<dsh>/node_modules/@deepseek-ai/dsh-client-ui-*` 等——通过其
-  `lib/client.js` 核实 DOM 结构与服务接口。编写选择器或接口前须以源码为准，不得凭
-  经验臆断。
+写入，含数字键不翻题、`←`/`→` 只改题号、首末题不循环、Enter 非末题推进 / 末题未完成不
+结算；左右栏开关分别打各自服务、互不串场、自定义键位与无降级；右栏标签切换与文件浏览器
+定位 / 置顶的取数入口与边界；⌘/Ctrl+I 聚焦输入框的取数链路；工作区浮窗与模型浮窗的列表
+顺序、高亮 clamp、确认路径与空态；`⇧Tab` 的候选档与编辑态门闸）与
+`node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，覆盖分组 / flat / 权威来源不可用时
+no-op——**无降级**）。
 
 ## 注意事项与常见问题
 
-1. 本仓库采用黑名单式 `.gitignore`，插件目录默认受版本控制；仅当某插件
-   `lib/` 为不入仓的构建产物时，才需在 `.gitignore` 单独追加忽略项。
-2. 插件变更未生效时应首先排查：浏览器半部是否已重新构建；宿主半部是否已重启。
+1. 本仓库采用黑名单式 `.gitignore`，插件目录默认受版本控制；仅当某插件 `lib/` 或
+   其他目录为不入仓的构建产物时，才需在其 `.gitignore` 单独追加忽略项（当前没有插件需要）。
+2. 插件变更未生效时应首先排查：浏览器半部是否已重新构建；宿主半部 / 组合是否已重启。
 3. 浏览器半部未声明所需依赖（如 `slots`）即 apply → `ctx.get(...)` 返回 `undefined`，
    导致 Web 启动失败 / HARNESS 面板报 failed to apply loader entry；判空须使用
    `=== null || === undefined` 双重判断。
 4. Node 宿主 TypeScript（Type Stripping 直载者）仅使用可擦除语法
    （`erasableSyntaxOnly`）。
-5. 浏览器 bundle 仅将框架依赖（react 等）设为 external，业务模块全部内联。
+5. 浏览器 bundle 仅将框架依赖（如 `react`）设为 external，业务模块全部内联。
 6. 向 `~/.dsh/` 写入文件需 danger-full-access 沙箱授权；系统提示声明
    approval=never 时不得设置 `sandbox_permissions`。
 7. 插件改动未生效时按此顺序排查：①浏览器半部是否已 `npm run build`（产物 mtime 变化后
-   client-hmr 会在 500ms 内热推送，页面无需重启/刷新）；②宿主半部（`index.ts`）改动是否
-   重启了 App；③产物是否被手改覆盖（`lib/client.js` 禁手改）。
+   client-hmr 会在 500ms 内热推送，页面无需重启/刷新）；②宿主半部（`index.ts` /
+   `host/*`）或组合变更是否重启了 App；③产物是否被手改覆盖（`lib/client.js` 禁手改）。
 8. 交付后自行加载插件（修改 Profile、`pnpm install`、重启 App）违反强制规范第 1 条；
    加载由用户执行，代理仅交付代码与加载说明。
-9. 新插件浏览器半部采用手写 JavaScript、未提供 `build` 脚本，违反强制规范第 2 条；
+9. 新增插件若浏览器半部为手写 JavaScript、未提供 `build` 脚本，即违反强制规范第 2 条；
    浏览器不支持 Type Stripping，TypeScript 源码必须经构建产出 `lib/client.js` 才能加载。
 
 ## 文档索引
 
 | 路径 | 内容 |
 | --- | --- |
-| `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、挂载与激活、生效机制、共性约定与注意事项，以及「无服务面 UI 状态的取数范式（slot store）」 |
-| 各插件 `README.md` | 功能说明、加载方式与构建说明（`dsh-fullwidth-chat` 暂无 README，功能见其 `package.json` 的 `description` 与本文档插件清单） |
+| `AGENTS.md`（本文档） | 仓库工程规范总纲：插件清单、包结构与挂载、生效机制、构建与验证、slot store 取数范式、`dsh-kbd-hotkeys` 动作路径与共性注意事项 |
+| `README.md` | 仓库根说明：插件清单、安装 / 卸载 / 新增插件的用户操作 |
+| 各插件 `README.md` | 该插件的功能说明、实现依据、已知限制、加载方式与构建说明（`dsh-fullwidth-chat` 暂无 README，功能见其 `package.json` 的 `description` 与本文档插件清单） |
