@@ -25,12 +25,15 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 | `⌘/Ctrl+Alt+\` | **右侧栏**定位文件浏览器：打开（不存在时创建）/ 聚焦该页并置顶（`openTab('files')`，同时展开右栏） | 任意 |
 | `⌘/Ctrl+I` | 聚焦对话**输入框**（走 `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`） | `browse` |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
+| `⌘/Ctrl+Alt+K` | 打开**工作区浮窗**（浮窗内 `↑`/`↓` 选择、`Enter` 切换、`Esc` 关闭） | 任意 |
+| `⌘/Ctrl+Alt+M` | 打开**模型浮窗**：选择本会话使用的模型（浮窗内 `↑`/`↓` 选择、`Enter` 切换、`⇧Tab` 调思考强度、`Esc` 关闭） | 任意 |
+| `⇧Tab` | 循环切换当前模型的**思考强度**（模型无强度档 / 只有一档 / 目录不可用时 no-op 且不吞键） | `browse` / `editing`（`editing` 时需焦点在 composer 内） |
 
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
 > 两个侧栏开关为 `['browse','editing']`：输入框聚焦时同样生效（带修饰键的组合不干扰
-> 文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）；右栏标签切换与
-> 文件浏览器定位都是**任意态**（含 `card`）——卡片占用的是**裸** `←` / `→`，
-> 与带 `mod+alt` 的组合键不冲突。
+> 文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）；右栏标签切换、
+> 文件浏览器定位、工作区浮窗与模型浮窗都是**任意态**（含 `card`）——卡片占用的是**裸**
+> `←` / `→` / 数字键，与带 `mod+alt` 的组合键不冲突。
 > **聚焦输入框只放行 `browse`**：焦点已经在输入框里时该动作没有意义（`editing`），
 > 且 contenteditable 里的 `⌘/Ctrl+I` 是浏览器「斜体」默认行为（`execCommand`，
 > 绕过 Lexical 直接改 DOM），放行会与编辑器状态打架；卡片态同理（卡片自己的输入框
@@ -70,6 +73,36 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > 已知限制：Win/Linux 上 `Ctrl+Alt` 即 AltGr（本插件按 `event.code` 的**物理键位**
 > `Backslash` 命中，与布局产出什么字符无关）；极窄窗口下上游会把「挤不下」的右栏
 > 再折叠回去（与右栏头部展开按钮同一条路）。
+>
+> **工作区浮窗为什么是 `⌘/Ctrl+Alt+K`**：它同样属于 `mod+alt` 这一档（右栏开关 /
+> 右栏标签 / 文件浏览器 / 活跃会话跳转都在这一档），`K` 取「工作区（Work-space）」联想，
+> 不与同档的方向键、`B`、`\` 抢位。语义是「**列表 → 选中 → 切换**」三步：
+> 打开后 `↑`/`↓` **只移动高亮**（不触发导航，避免每按一次就连接一个工作区），
+> `Enter`（或鼠标点行）才调 `uiWorkspace.openWorkspace(workspaceId)`——
+> 也就是侧栏工作区分组上「＋」新建会话走的**同一条**「连接工作区」路径：
+> 复用该工作区已有的空白会话，没有就新建一个再打开（详见「已知限制」）；
+> `Esc` 关闭，再按一次 `⌘/Ctrl+Alt+K` 也关闭（开关语义），浮窗内按 `⌘/Ctrl+/`
+> 直接换成速查表。列表取自 `workspaces.list` 快照的**宿主顺序**（与侧栏分组顺序同源，
+> 不重排），初始高亮 = 当前会话所属工作区，该行带「当前」标记。
+> 三态均生效：`mod+alt` 与卡片的裸键、与文本编辑都不冲突。
+>
+> **模型浮窗为什么是 `⌘/Ctrl+Alt+M`**：与工作区浮窗同属 `mod+alt` 这一档，
+> `M` 取「模型（Model）」联想，不与同档的方向键、`B`、`\`、`K` 抢位。语义与工作区浮窗
+> 同形：`↑`/`↓` 只移动高亮，`Enter`（或鼠标点行）才提交，`Esc` / 再按一次同组合键关闭。
+> 关键点是**同源**——列表、当前选择与提交都走 `/model` 弹层、composer 模型座位用的
+> **同一个** per-session 模型目录（`ctx.modelDirectories.directoryFor(sessionId)`），
+> 所以浮窗里切换之后，composer 上的模型标签会同步变化，反之亦然（见「实现要点」）。
+> 浮窗内 `⇧Tab` 也能调强度（只更新顶部「当前」行，不重画列表）。
+>
+> **思考强度循环为什么是 `⇧Tab`**：上游 composer 座位把强度档收在「模型菜单 →
+> Effort」二级面板里，**没有默认键位**；`⇧Tab` 空着、且「在模型上按 Tab 循环档位」
+> 是不少 Agent 客户端的既有习惯。循环集合与上游座位的 `effortChoices` **逐字一致**
+> （模型有 `defaultEffort` 时不含「提供方默认档」），当前档 = `reasoningEffort ??
+> defaultEffort`。它只放行 `browse` / `editing`，且 `editing` 态还有一道**元素级门闸**：
+> 只有焦点落在 **composer 自己的编辑区内**才接管——`⇧Tab` 是文本编辑的核心键
+> （反向移动焦点；右侧栏 Monaco 里是反向缩进），焦点在设置面板输入框、Monaco 的隐藏
+> `textarea` 等其它可编辑元素时一律放行、交回该处默认行为。
+> no-op（模型无推理元数据 / 只有一档 / 目录不可用 / 子代理会话）时**不吞键**。
 >
 > 审批与问答的 `Enter` / `Esc` / 数字键 / 方向键是**固定分发的单键**，不参与
 > `bindings` 自定义（见「自定义键位」）。
@@ -185,6 +218,61 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   → no-op 且**不吞键**；打开成功但任一取数环不可用（无 `slots`、无作用域绑定、
   `resolveStore` 抛错、实例无 `actions.placeTab`）→ 只静默跳过置顶，**不回退**到 DOM
   或 `replaceTab`，打开本身照旧吞键（该按键确实做了事）。
+- 工作区浮窗（`⌘/Ctrl+Alt+K` → `src/workspace-switcher.ts` + `src/overlay.ts`）：
+  列表与切换各走一个**公开服务面**，浮窗 DOM 由插件自建自管（纯 DOM，不消费 react）。
+  ① **列表** = `workspaces.list.getSnapshot().items`，按**宿主顺序**原样展开
+  （`dsh-client-ui-workspace` 的 `groupByWorkspace` 就是逐项遍历同一份 `items`，
+  侧栏分组顺序与它同源）；主标签 = 工作区 `title`，为空时回退路径末段
+  （复刻上游 `workspaceTitleOf` 的「最后一个非空段」，同时接受 `/` 与 `\`），
+  次行 = 规范路径（与主标签相同时省略），`当前` 标记 = 当前会话在该工作区的
+  `sessionIds` 名下（与侧栏高亮当前会话所属分组同一判据），右侧显示会话数。
+  ② **切换** = 公开的 `uiWorkspace.openWorkspace(workspaceId)`（服务由
+  `dsh-client-ui-workspace` 提供）——「连接工作区」的规范路径：复用该工作区已挂载的
+  空白会话，没有就 `sessions.create({ workspaceId })` 新建一个再打开，与侧栏分组上的
+  「＋」、首屏工作区导航**同一条代码路径**。
+  ③ **浮窗交互**（`overlay.ts`）：`↑`/`↓` 只在列表内移动高亮（越界 clamp，不循环，
+  **不触发导航**），`Enter` / 行内 `mousedown` 才确认（先关浮窗再切，导航是异步的），
+  `Esc` 或再按一次同组合键关闭；同一时刻只有一个浮层（`help` | `workspace`），
+  互切直接换面板；浮层打开时按键进入**模态分发**（未处理的按键一律吞掉，避免误触
+  页面快捷键）。列表**每次打开时重新取数**（工作区增删、当前工作区变化即时反映）。
+  **无降级**：`workspaces` 服务缺席 / 快照缺 `items` → 空态浮窗（Enter 不切换）；
+  `uiWorkspace` 缺席或 `openWorkspace` 抛错（未知 workspaceId / 无挂载会话面）→
+  确认时 no-op，**不回退**到 DOM 点击侧栏分组。
+- 模型浮窗（`⌘/Ctrl+Alt+M`）与思考强度循环（`⇧Tab`，`src/model-picker.ts` +
+  `src/overlay.ts`）：两个动作共用**上游同一个** per-session 模型目录实例。
+  ① **服务面**：`ctx.modelDirectories`（`ModelDirectoryResolver`，由 `dsh-web-app`
+  bundle 常驻挂载的 `@deepseek-ai/dsh-client-ui-model-selection` 提供）的
+  `directoryFor(sessionId)`。上游 `/model` 弹层（`commandUi` 的 `popupSelect`
+  贡献）与 composer 的 `conversation.input.model` 座位**都**经它取目录
+  （该包 `service.d.ts`：*the ONE state both selection entries share*），所以本插件
+  的切换与两个上游入口共用同一份内存态、同一条 `session.selectModel` 提交路径，
+  不是镜像。
+  ② **列表 / 当前选择** = `directory.load()` 拉一次宿主代数目录后读
+  `directory.store.getSnapshot()`；行 = `state.groups` 按**宿主顺序原样展开**
+  （提供方分组标题 + 组内模型顺序都不重排），行主标签 = 模型名、次行 = 提供方名，
+  当前行带「当前」标记且为初始高亮；`state.failures`（目录加载失败的提供方）
+  **不占行**，只折成列表下方的小字计数。
+  ③ **每行的完整选择** = 上游弹层 `selectionOf` 的**同一条规则**：`provider` /
+  `model` 取自所在分组，`reasoningEffort` 取「当前选择已落在该模型上时的
+  `current.reasoningEffort`」否则取 `model.reasoning.defaultEffort`
+  （无 `defaultEffort` 时**省略**该字段）——不自行发明默认档。
+  ④ **⇧Tab 的循环集合** = 上游座位 `effortChoices` 的同一条规则：
+  `[Default（仅当模型没有 defaultEffort 时才是一个可选档）] + reasoning.efforts`；
+  当前档 = `current.reasoningEffort ?? reasoning.defaultEffort`（上游 `effectiveEffort`，
+  不在候选里时从候选首项重新开始）；只改 `reasoningEffort`、`provider` / `model` 沿用
+  当前选择（与上游 `chooseEffort` 同形）。
+  ⑤ **浮窗交互**（`overlay.ts`）：`↑`/`↓` 越界 clamp（不循环），`Enter` / 行内
+  `mousedown` 才提交（先关浮窗再提交，提交是异步的），`Esc` 或再按一次同组合键关闭，
+  浮窗内 `⇧Tab` 就地循环（只更新顶部「当前」行，列表与高亮不动）。同一时刻只有一个
+  浮层（`help` | `workspace` | `model`），互切直接换面板；列表是**异步**取的
+  （先绘制「正在加载模型目录…」），落地时用**渲染序号守卫**丢弃过期结果
+  （浮窗已关闭 / 已换成别的浮层的那次渲染作废）。
+  **无降级**：`modelDirectories` 服务缺席 / 无当前会话 / 当前会话是被寻址的子代理
+  （上游 `available` 的判据 `sessions.subagentAddress(id) === undefined`）/
+  `directoryFor` 抛错（未知会话、无挂载会话面）→ 浮窗显示空态、`⇧Tab` no-op 且
+  **不吞键**；`load()` 拒绝 → 浮窗照常打开、底部小字给出原因；`select()` 拒绝 →
+  浮窗照常关闭（失败详情落在目录 store 上，与两个上游入口共用同一份错误态）。
+  全程不碰 DOM 取模型数据、**不回退**到点击 composer 的模型标签。
 - 聚焦输入框（`⌘/Ctrl+I`）：**上游没有可触发的「聚焦 composer」服务面**——`conversation`
   契约（`send` / `updateQueue` / `cancel` / `loadOlder` / `input` / `blocks`）与
   `SessionInput` 契约（`setDraft` / `submit` / `state` …）都没有聚焦动词；
@@ -263,6 +351,18 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 - **聚焦输入框依赖 composer 已渲染**：目标会话的输入框从未挂载（例如该会话从未在
   当前布局里显示过）时 `editor.getRootElement()` 为 `null`，动作 no-op（不吞键）；
   空白/hero 会话、composer 被 block 停用时同理。
+- **工作区浮窗的「切换」= 连接工作区，不一定是「打开上一次的对话」**：
+  `uiWorkspace.openWorkspace` 的语义是复用该工作区**已挂载的空白会话**，没有就
+  `sessions.create({ workspaceId })` **新建一个空白会话**再打开（这正是侧栏分组上
+  「＋」的行为）。所以从一个有历史对话的工作区切过去，落点是它的空白新会话而不是
+  最近那次对话；最近的对话仍在侧栏该分组里，点一下即可。
+- **工作区浮窗只列已登记的工作区**：`workspaces.list` 快照的宿主顺序（侧栏分组的
+  同一份数据）。侧栏末尾那个「未分组（Ungrouped）」桶**不是工作区**，没有
+  `workspaceId`，故不在浮窗里，也无法被「切换」。
+- **工作区浮窗依赖 `uiWorkspace` 服务**：它由 `dsh-web-app` bundle 常驻挂载的
+  `dsh-client-ui-workspace` 提供。该服务缺席时浮窗仍可打开（列表照常），但确认
+  切换为 no-op（不崩、不回退 DOM）；宿主侧工作区列表还在 `pending`（首屏未拿到基线）
+  时列表为空态，稍后重开即可。
 - **上游把 composer 聚焦接上后本插件可再简化**：`commandUi.bindComposerFocus(id, fn)`
   就是上游为此预留的注册口（注释写的是「overlay wiring binds the textarea focus
   here」），当前构建里没有任何调用方；等上游补上「触发侧」或新增
@@ -289,15 +389,42 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   两个已知的上游行为沿用：Win/Linux 上 `Ctrl+Alt` 即 AltGr（按物理键位 `Backslash`
   命中）；极窄窗口下右栏会被上游按「挤不下」的规则再折叠回去（与右栏头部展开按钮
   同一条路，见 `dsh-client-ui-layout` 的 `canShow: normal.rightbar > 0`）。
+- **模型浮窗只对「普通会话」可用**：上游 `directoryFor` 要求该会话有已挂载的 scope
+  与 binding，且模型选择 RPC 只对**非子代理**会话开放（`subagentAddress(id) ===
+  undefined`）。被寻址的子代理会话（继续对话的子会话）打开浮窗显示空态、
+  `⇧Tab` no-op 且不吞键——这与上游两个入口一致：`/model` 命令对子代理会话
+  `available: false`，composer 座位同样不暴露。
+- **模型浮窗的目录是「宿主代数」的共享目录**：`groups` / `failures` 来自
+  `ModelCatalogDirectory`（按宿主连接代数缓存，`llm/adapters-updated`、
+  `settings/document-updated`、`credentials/reference-updated` 时刷新）。目录成员
+  资格是**参考性**的（上游 `routable` 与目录成员无关），所以浮窗只列公告出来的模型；
+  某个路由在服务但没被公告时不会出现在列表里（但与两个上游入口看到的是同一份数据）。
+- **模型浮窗不显示模型描述**：上游 `/model` 弹层会给两个内置 DeepSeek 模型做
+  **本地化描述**（它把宿主描述串与自己的英文词典逐字比对后换成中文），本插件不复制
+  那份词典，因此浮窗只显示「模型名 + 提供方名」——要读描述请用 `/model`。
+- **`⇧Tab` 在 `editing` 态只在 composer 内接管**：焦点在设置面板的输入框、右侧栏
+  Monaco 的隐藏 `textarea` 等其它可编辑元素时，`⇧Tab` 一律交回该处默认行为
+  （反向移动焦点 / 反向缩进），不会切模型强度。若在 composer 内按了没反应，说明当前
+  模型没有推理元数据或只有一档（此时按键同样不被吞掉）。
+- **`⇧Tab` 的方向是单向的**：只在候选档里**向前**循环（末档回到首档）。要反向
+  （或换成别的键）请用 `localStorage` 覆盖 `model.effortNext`，本插件暂不提供
+  「上一档」动作。
+- **模型浮窗依赖 `modelDirectories` 服务**：它由 `dsh-web-app` bundle 常驻挂载的
+  `@deepseek-ai/dsh-client-ui-model-selection` 提供。该行缺席（服务未注册）时
+  浮窗仍可打开但显示空态，`⇧Tab` no-op（不崩、不回退 DOM）。
 
-服务注入：`['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation']`
+服务注入：`['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation', 'uiWorkspace', 'modelDirectories']`
 （全部判空后才消费；`slots` 用于读侧栏视图 store（会话跳转顺序）、问答草稿 store
 与右栏标签 store（`rightbar.session` 的标签顺序 + 置顶用的 `actions.placeTab`），
 `layout` 用于 `⌘/Ctrl+B` 开关左栏，
 `sidebarRight` 用于 `⌘/Ctrl+Alt+B` 开关右栏、`⌘/Ctrl+Alt+←/→` 聚焦右栏标签与
 `⌘/Ctrl+Alt+\` 定位（打开/创建/置顶）文件浏览器，
-`conversation` 用于 `⌘/Ctrl+I` 取 composer 的 editor 宿主元素）。
-无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表为纯 DOM 浮层）。
+`conversation` 用于 `⌘/Ctrl+I` 取 composer 的 editor 宿主元素与 `⇧Tab` 的编辑态门闸，
+`uiWorkspace` 用于 `⌘/Ctrl+Alt+K` 工作区浮窗确认时连接/切换工作区，
+`modelDirectories` 用于 `⌘/Ctrl+Alt+M` 模型浮窗取目录与 `⇧Tab` 循环思考强度——
+与 `/model` 弹层、composer 模型座位共用**同一份** per-session 目录实例）。
+无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表、工作区浮窗与模型浮窗
+都是纯 DOM 浮层）。
 
 ## 自定义键位
 
@@ -316,7 +443,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；两个侧栏动作
   （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）、右栏标签切换
   （`sidebarRight.tabPrev` / `sidebarRight.tabNext`）、定位文件浏览器并置顶
-  （`sidebarRight.files`）与聚焦输入框
+  （`sidebarRight.files`）、工作区浮窗（`workspace.pick`）、模型浮窗
+  （`model.pick`）、思考强度循环（`model.effortNext`）与聚焦输入框
   （`composer.focus`）各自独立可覆盖。
   > 未注册的动作 id 写在 `bindings` 里不会触发：分发前先查动作注册表
   > （`ACTION_BY_ID`），未注册即忽略。
@@ -325,8 +453,9 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   （见 `src/config.ts` 的 `FIXED_KEYS`）由分发器按卡片类型固定分发，`bindings`
   里的同名键位会被 `loadConfig` 剔除，固定单键改不回来，也不需要手动清理。
 - 组合键写法：`mod`（⌘/Ctrl）+ `alt` + 键名（字母/数字/`enter`/
-  `backspace`/`escape`/`arrow*`/`pageup`/`pagedown`/`;` 等），如 `"Cmd+Alt+M"`；
-  默认键位一律不使用 `shift` 作为修饰键（解析器兼容 `shift` 写法，可自定义使用）。
+  `backspace`/`escape`/`tab`/`arrow*`/`pageup`/`pagedown`/`;` 等），如
+  `"Cmd+Alt+M"`；`model.effortNext` 的默认值 `"shift+tab"` 是本插件**唯一**使用
+  `shift` 作修饰键的默认键位（解析器一直兼容 `shift` 写法：`"cmd+shift+m"` 等）。
   配置中其他字段一律忽略：快捷键默认启用、无总开关。
 - 未实现（方案 P2，预留后续）：readline 编辑键（`Ctrl+A/E/K/U`、`Alt+B/F/D`）、
   `Esc Esc` 清空草稿、输入框历史反查、单键 `o`/`t`、权限模式循环（预留，默认不绑定）、
@@ -359,7 +488,22 @@ node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/ca
                          # 已在首位不调 placeTab、只作用于停靠面板且优先当前面板（浮窗与别的
                          # 分屏面板不搬动）、openTab 抛错时 no-op 不吞键、取数失败只跳过置顶；
                          # 以及 ⌘/Ctrl+I 聚焦输入框：binding.ctx 原样传给 input.for、只认 browse 态、
-                         # for 缺席回退 shell(id)、任一环缺失/抛错一律 no-op 不吞键）
+                         # for 缺席回退 shell(id)、任一环缺失/抛错一律 no-op 不吞键；
+                         # 以及 ⌘/Ctrl+Alt+K 工作区浮窗：列表按宿主顺序渲染（title / 路径末段 /
+                         # 当前标记 / 会话数）、初始高亮 = 当前会话所属工作区、↑↓ 只移动高亮
+                         # （不触发导航）且越界 clamp、Enter/点击才调 uiWorkspace.openWorkspace、
+                         # Esc 与同组合键关闭、⌘/ 换成速查表、空列表与 workspaces 缺席为空态、
+                         # uiWorkspace 缺席或抛错时确认 no-op、card/editing 态仍可用、键位可覆盖）
+                         # 以及 ⌘/Ctrl+Alt+M 模型浮窗 + ⇧Tab 循环思考强度：目录必须按
+                         # ctx.modelDirectories.directoryFor(当前会话) 取、行按宿主顺序展开
+                         # （提供方分组标题 + 当前标记 + 初始高亮）、每行完整选择复刻上游
+                         # selectionOf（无 defaultEffort 时不带 reasoningEffort）、Enter 调
+                         # directory.select；⇧Tab 的循环集合复刻上游 effortChoices（有
+                         # defaultEffort 时不含 Default 档）、当前档 = current.reasoningEffort
+                         # ?? defaultEffort、末档回到首档、浮窗内 ⇧Tab 只更新「当前」行；
+                         # 无推理元数据 / 只有一档 / 服务或缺 / 无会话 / 子代理 / directoryFor
+                         # 抛错一律 no-op 且不吞键；load() 拒绝 → 空态 + 失败小字、select()
+                         # 拒绝 → 浮窗照关；editing 态另需焦点落在 composer 内（isComposerTarget）
 node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序跳转（分组 / flat / 来源不可用 no-op）
                          # 与两个侧栏开关的键位 / browse·editing 态闸门
 ```

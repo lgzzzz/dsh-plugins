@@ -17,15 +17,28 @@
  *   ⌘⌥\ 打开右栏文件浏览器并把它置于所在标签栏首位(公开的
  *   `sidebarRight.openTab('files')` + 同一份 store 的 `actions.placeTab(…, 0)`,
  *   见 sidebar-tabs.ts 的 revealRightSidebarFiles);
+ * - 全态:⌘/Ctrl+Alt+K 打开**工作区浮窗**(浮窗内 ↑/↓ 移动高亮、Enter 切换、
+ *   Esc 关闭),列表取自 `workspaces.list` 快照(宿主顺序),切换调公开的
+ *   `uiWorkspace.openWorkspace(workspaceId)`(连接工作区:复用该工作区的空白
+ *   会话、没有就新建一个再打开,与侧栏工作区分组的「+」同一条路径),
+ *   见 workspace-switcher.ts 与 overlay.ts;
+ * - 全态:⌘/Ctrl+Alt+M 打开**模型浮窗**(浮窗内 ↑/↓ 选择、Enter 切换、
+ *   ⇧Tab 调强度、Esc 关闭),列表 / 当前选择 / 切换都走上游**同一个** per-session
+ *   模型目录(`ctx.modelDirectories.directoryFor(sessionId)`——与 `/model` 弹层、
+ *   composer 模型座位共用同一份状态),见 model-picker.ts 与 overlay.ts;
+ * - `browse` / `editing`:⇧Tab **循环切换当前模型的思考强度**(循环集合 = 上游
+ *   composer 座位的 `effortChoices`;模型无推理元数据 / 只有一档 / 目录不可用时
+ *   no-op 且不吞键)。`editing` 态另有一道元素级门闸:只有焦点在 composer 自己的
+ *   编辑区内才接管(⇧Tab 在别处仍是反向移动焦点 / 反向缩进),见 isComposerTarget;
  * - `browse` 浏览态:⌘/Ctrl+I 聚焦对话输入框(上游无聚焦服务面,经
  *   conversation.input 取 shell.editor 的宿主元素后调 focus(),见 actions.ts
  *   的 focusComposer;不做选择器查询 / DOM 遍历 / 事件合成)。
  *
  * 实现:document 捕获阶段单一 keydown 监听,按三态分发(`card` 卡片 → `editing`
  * 输入框 → `browse` 浏览),消费 sessions / uiSession / layout / sidebarRight /
- * workspaces / slots / conversation 既有服务,会话跳转 = 活跃会话扫描(running ∪
- * pending 交互 ∪ completed,锚点定向跳跃),导航轴为侧栏顺序(工作区分组 + slots 中
- * workspace 视图 store 的本地会话顺序,每次按键重新取数);
+ * workspaces / slots / conversation / uiWorkspace 既有服务,会话跳转 = 活跃会话扫描
+ * (running ∪ pending 交互 ∪ completed,锚点定向跳跃),导航轴为侧栏顺序(工作区分组 +
+ * slots 中 workspace 视图 store 的本地会话顺序,每次按键重新取数);
  * 右栏标签切换 = `slots.entries('rightbar.session')` 注册项上的 store handle
  * (`uiSession.resolve` 作用域绑定 → `slots.resolveStore`)读 `layout.activePaneId`
  * 面板的标签顺序 + `sidebarRight.focus(tabId)`(见 sidebar-tabs.ts,无降级);
@@ -40,6 +53,7 @@ import {
   answerApproval,
   focusComposer,
   hasPendingCard,
+  isComposerTarget,
   isEditableTarget,
   moveQuestion,
   openNeighborSession,
@@ -50,21 +64,27 @@ import {
   toggleSidebar,
 } from './actions.ts'
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
+import { cycleEffort, modelPickerView, selectModel } from './model-picker.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
 import { cycleRightSidebarTab, revealRightSidebarFiles } from './sidebar-tabs.ts'
-import type { ClientContext, ConversationLike, LayoutLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, WorkspacesLike } from './types.ts'
+import { switchWorkspace, workspaceRows } from './workspace-switcher.ts'
+import type { ClientContext, ConversationLike, LayoutLike, ModelDirectoryResolverLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, UiWorkspaceLike, WorkspacesLike } from './types.ts'
 
 export const name = 'dsh-kbd-hotkeys'
 
 /**
  * 浏览器半部注入的服务(模块加载器读取)。
- * workspaces 供会话切换复刻侧栏分组,slots 供读取侧栏视图 store(会话顺序)与
- * 右栏标签 store(标签顺序 + 置顶用的 actions),layout 供 ⌘/Ctrl+B 开关左侧栏,
- * sidebarRight 供 ⌘/Ctrl+Alt+B 开关右侧栏、⌘/Ctrl+Alt+←/→ 聚焦右栏标签、
- * ⌘/Ctrl+Alt+\ 打开文件浏览器,
- * conversation 供 ⌘/Ctrl+I 取 composer 的 editor 宿主元素(聚焦输入框)。
+ * workspaces 供会话切换复刻侧栏分组、工作区浮窗取列表,slots 供读取侧栏视图
+ * store(会话顺序)与右栏标签 store(标签顺序 + 置顶用的 actions),layout 供
+ * ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+Alt+B 开关右侧栏、
+ * ⌘/Ctrl+Alt+←/→ 聚焦右栏标签、⌘/Ctrl+Alt+\ 打开文件浏览器,
+ * conversation 供 ⌘/Ctrl+I 取 composer 的 editor 宿主元素(聚焦输入框)与
+ * ⇧Tab 的编辑态门闸(宿主元素 contains 事件目标),
+ * uiWorkspace 供 ⌘/Ctrl+Alt+K 工作区浮窗确认时连接/切换工作区,
+ * modelDirectories 供 ⌘/Ctrl+Alt+M 模型浮窗与 ⇧Tab 循环思考强度
+ * (上游 `/model` 弹层、composer 模型座位的**同一份** per-session 目录实例)。
  */
-export const inject = ['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation']
+export const inject = ['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots', 'conversation', 'uiWorkspace', 'modelDirectories']
 
 /** null 与 undefined 双重判空后取服务(缺失时返回 undefined)。 */
 function getService(ctx: ClientContext, serviceName: string): unknown {
@@ -95,6 +115,18 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return revealRightSidebarFiles(services)
       case 'composer.focus':
         return focusComposer(services)
+      case 'workspace.pick':
+        // 工作区浮窗:打开时按当前快照现取列表(↑/↓ 与 Enter 在 overlay 内处理)
+        overlays.toggleWorkspacePicker()
+        return true
+      case 'model.pick':
+        // 模型浮窗:打开时现取当前会话的模型目录(↑/↓ 与 Enter 在 overlay 内处理)
+        overlays.toggleModelPicker()
+        return true
+      case 'model.effortNext':
+        // ⇧Tab:循环切换当前模型的思考强度;no-op(无强度档 / 只有一档 /
+        // 目录不可用)返回 false → 不吞键,⇧Tab 交回页面默认行为。
+        return cycleEffort(services).ok
       case 'session.prev':
         return openNeighborSession(services, -1)
       case 'session.next':
@@ -131,6 +163,8 @@ export function apply(ctx: ClientContext): void {
     workspaces: getService(ctx, 'workspaces') as WorkspacesLike | undefined,
     slots: getService(ctx, 'slots') as SlotsLike | undefined,
     conversation: getService(ctx, 'conversation') as ConversationLike | undefined,
+    uiWorkspace: getService(ctx, 'uiWorkspace') as UiWorkspaceLike | undefined,
+    modelDirectories: getService(ctx, 'modelDirectories') as ModelDirectoryResolverLike | undefined,
   }
 
   const config: HotkeyConfig = loadConfig()
@@ -140,6 +174,18 @@ export function apply(ctx: ClientContext): void {
   const actionByCombo: Map<string, string> = comboActionMap(config.bindings)
   const overlays = createOverlays({
     getConfig: () => config,
+    // 工作区浮窗:数据每次打开时现取(宿主顺序),确认走 uiWorkspace.openWorkspace
+    listWorkspaces: () => workspaceRows(services),
+    selectWorkspace: (workspaceId) => {
+      switchWorkspace(services, workspaceId)
+    },
+    // 模型浮窗:列表每次打开时现取当前会话的模型目录(与 `/model` 弹层、
+    // composer 模型座位同一份状态);确认走同一个 directory.select。
+    listModels: () => modelPickerView(services),
+    selectModel: (selection) => {
+      selectModel(services, selection)
+    },
+    cycleEffort: () => cycleEffort(services),
   })
 
   const swallow = (event: KeyboardEvent): void => {
@@ -213,6 +259,12 @@ export function apply(ctx: ClientContext): void {
     if (def === undefined) return
     // 态闸门:动作声明允许的状态里才触发
     if (!def.states.includes(state)) return
+    // ⇧Tab 的**元素级**门闸:⇧Tab 是文本编辑的核心键(反向移动焦点;右侧栏 Monaco
+    // 里是反向缩进),所以 `editing` 态只在焦点落在 **composer 自己的编辑区内**时接管
+    // ——焦点在设置面板的 input、Monaco 的隐藏 textarea 等其它可编辑元素时一律放行,
+    // 交回该处默认行为。判据 = 服务链路取来的宿主元素上做一次 contains
+    // (见 actions.ts 的 isComposerTarget),零选择器 / 零 DOM 遍历。
+    if (actionId === 'model.effortNext' && state === 'editing' && !isComposerTarget(services, event.target)) return
     if (runAction(actionId, services, overlays)) swallow(event)
   }
 

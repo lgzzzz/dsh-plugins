@@ -103,11 +103,43 @@ export interface WorkspaceItemLike {
 export interface WorkspaceSnapshotLike {
   items?: readonly WorkspaceItemLike[]
   archivedSessionIds?: readonly string[]
+  /** 列表到达生命周期:`pending`(宿主尚未给出基线) / `ready`。 */
+  phase?: string
 }
 
 /** workspaces(workspace 控制器)服务消费面。 */
 export interface WorkspacesLike {
   list?: { getSnapshot?(): WorkspaceSnapshotLike }
+}
+
+/* ------------------------------------------------------------------ *
+ * 工作区浮窗(⌘/Ctrl+Alt+K):列表取数 + 切换落点
+ * ------------------------------------------------------------------ */
+
+/** 工作区浮窗的一行(纯展示数据,由 workspace-switcher.ts 从服务快照派生)。 */
+export interface WorkspaceRowLike {
+  workspaceId: string
+  /** 主标签:工作区 title(为空时回退路径末段 / 原路径)。 */
+  label: string
+  /** 次行:工作区规范路径(与 label 相同时留空)。 */
+  detail: string
+  /** 该工作区名下(未归档)的会话数。 */
+  sessionCount: number
+  /** 当前会话是否属于该工作区。 */
+  current: boolean
+}
+
+/**
+ * UiWorkspace 服务消费面(见 dsh-client-ui-workspace/lib/types/client/navigation.d.ts
+ * 的 `UiWorkspace`;模块声明 `Context.uiWorkspace`)。
+ *
+ * 只消费 `openWorkspace`:工作区导航的**规范路径**——「连接工作区」= 复用该工作区
+ * 已挂载的空白会话,没有就 `sessions.create({ workspaceId })` 新建一个再打开;
+ * 与侧栏工作区分组上的「+」新建会话、以及首屏工作区导航是同一条路径。
+ * 无挂载会话面 / 未知 workspaceId 时抛错(调用方兜住 → no-op)。
+ */
+export interface UiWorkspaceLike {
+  openWorkspace?(workspaceId: string, beforeOpen?: (sessionId: string) => void): Promise<void> | void
 }
 
 /* ------------------------------------------------------------------ *
@@ -250,6 +282,12 @@ export interface SessionsLike {
   list?: { getSnapshot?(): SessionListSnapshotLike }
   open?(sessionId: string): void
   binding?(sessionId: string): SessionBindingLike | undefined
+  /**
+   * 该会话的子代理地址(普通会话 = undefined)。
+   * 上游以「`subagentAddress(id) === undefined`」判定会话可否使用 Agent 绑定的
+   * 模型选择 RPC(见 dsh-client-ui-model-selection/lib/client.js 的 available)。
+   */
+  subagentAddress?(sessionId: string): unknown
 }
 
 /**
@@ -403,6 +441,12 @@ export interface SidebarRightStoreLike extends StoreInstanceLike {
  */
 export interface ComposerEditableLike {
   focus?(options?: { preventScroll?: boolean }): void
+  /**
+   * 事件目标是否落在该宿主元素内(⇧Tab 的 `editing` 态门闸用)。
+   * 结构切片:上游绑定的是真实 contenteditable div,`contains` 是标准 Node 方法;
+   * 这里只做**包含判定**(与 overlay 的 `contains` 同一判据),不查询 / 不遍历。
+   */
+  contains?(node: unknown): boolean
 }
 
 /**
@@ -464,4 +508,143 @@ export interface Services {
   slots: SlotsLike | undefined
   /** conversation 服务:只用于取 composer 的 editor 宿主元素(⌘/Ctrl+I 聚焦输入框)。 */
   conversation: ConversationLike | undefined
+  /**
+   * uiWorkspace 服务:只用于工作区浮窗的切换动作(⌘/Ctrl+Alt+K 选中后 Enter
+   * 调 openWorkspace,与侧栏「+」同一条连接工作区的路径)。
+   */
+  uiWorkspace: UiWorkspaceLike | undefined
+  /**
+   * modelDirectories 服务:模型浮窗(⌘/Ctrl+Alt+M)取会话级模型目录、
+   * ⇧Tab 循环思考强度(`load()` / `select()`)——与上游 `/model` 弹层、
+   * composer 模型座位共用**同一份** per-session 目录实例。
+   */
+  modelDirectories: ModelDirectoryResolverLike | undefined
+}
+
+/* ------------------------------------------------------------------ *
+ * 模型浮窗(⌘/Ctrl+Alt+M)与思考强度循环(⇧Tab):会话级模型目录
+ * ------------------------------------------------------------------ */
+
+/** 一次完整模型选择(见 dsh-api-session-controller …/types.d.ts 的 ModelSelection)。 */
+export interface ModelSelectionLike {
+  provider: string
+  model: string
+  reasoningEffort?: string
+}
+
+/** 一档推理强度(适配器自报;见 ModelReasoningEffort)。 */
+export interface ModelReasoningEffortLike {
+  id: string
+  name?: string
+  description?: string
+}
+
+/** 某个确切模型路由的推理元数据(见 ModelReasoning)。 */
+export interface ModelReasoningLike {
+  efforts?: readonly ModelReasoningEffortLike[]
+  defaultEffort?: string
+}
+
+/** 目录里的一个模型(见 ModelCatalogModel)。 */
+export interface ModelCatalogModelLike {
+  id: string
+  name?: string
+  description?: string
+  reasoning?: ModelReasoningLike
+}
+
+/** 一个提供方分组(见 ModelProviderGroup)。 */
+export interface ModelProviderGroupLike {
+  id: string
+  name?: string
+  models?: readonly ModelCatalogModelLike[]
+}
+
+/** 目录加载失败的提供方(见 ModelCatalogFailure;只用于底部小字提示,不可选中)。 */
+export interface ModelCatalogFailureLike {
+  id: string
+  name?: string
+  message?: string
+}
+
+/**
+ * 会话级模型目录快照(见 dsh-client-ui-model-selection 的 ModelDirectoryState)。
+ * `current` = 「下一次请求」的有效选择(durable 投影优先,否则宿主默认);
+ * `groups` / `failures` 来自当前宿主代数的共享目录(目录成员资格仅供参考)。
+ */
+export interface ModelDirectoryStateLike {
+  current?: ModelSelectionLike | null
+  routable?: boolean | null
+  groups?: readonly ModelProviderGroupLike[]
+  failures?: readonly ModelCatalogFailureLike[]
+  status?: string
+  error?: string | null
+}
+
+/** 目录的共享快照 store(createSnapshotStore 产物;上游两个入口渲染的同一份)。 */
+export interface ModelDirectoryStoreLike {
+  getSnapshot?(): ModelDirectoryStateLike
+}
+
+/**
+ * 一个会话的共享模型目录(见 ModelDirectory)。
+ * `load()` 拉一次宿主代数目录并回读快照;`select()` 提交完整选择
+ * (失败落在 store 上并 reject)。被寻址的子代理会话两者都抛错。
+ */
+export interface ModelDirectoryLike {
+  store?: ModelDirectoryStoreLike
+  load?(): Promise<ModelDirectoryStateLike>
+  select?(selection: ModelSelectionLike): Promise<void>
+}
+
+/**
+ * `ctx.modelDirectories`(ModelDirectoryResolver)消费面。
+ * 上游 `/model` 弹层与 composer 模型座位都经 `directoryFor(sessionId)` 取同一个
+ * per-session 实例(service.d.ts:「the ONE state both selection entries share」),
+ * 本插件走同一条路,所以浮窗里的切换与两个上游入口共用同一状态与同一条
+ * `session.selectModel` 提交路径——不是镜像。
+ * 未知会话 / 无挂载会话面时上游 `directoryFor` **抛错**,调用方兜住。
+ */
+export interface ModelDirectoryResolverLike {
+  directoryFor?(sessionId: string): ModelDirectoryLike | undefined
+}
+
+/** 模型浮窗的一行(可选中)。 */
+export interface ModelPickerRowLike {
+  /** 该行对应的**完整**选择(含该模型当前的 / 默认的推理强度)。 */
+  selection: ModelSelectionLike
+  /** 主标签:模型名。 */
+  label: string
+  /** 次行:提供方名(与分组标题同源)。 */
+  detail: string
+  /** 提供方分组显示名(相邻同组行共用一个分组标题)。 */
+  provider: string
+  /** 是否为当前会话的有效选择(初始高亮 + 「当前」标记)。 */
+  current: boolean
+}
+
+/** 浮窗顶部「当前」行。 */
+export interface ModelPickerCurrentLike {
+  /** 模型名(目录里找不到时回退 `provider/model`)。 */
+  label: string
+  /** 推理等级显示名('' = 该模型不提供强度档)。 */
+  effort: string
+}
+
+/** 模型浮窗的一次完整渲染数据(由 model-picker.ts 从目录快照派生)。 */
+export interface ModelPickerViewLike {
+  current: ModelPickerCurrentLike | null
+  rows: readonly ModelPickerRowLike[]
+  /** 无行时的提示文本('' = 有行,不显示)。 */
+  notice: string
+  /** 列表下方的小字(加载失败的提供方数 / 错误详情;'' = 无)。 */
+  footnote: string
+}
+
+/** ⇧Tab 循环思考强度的结果。 */
+export interface EffortCycleResultLike {
+  /** 是否真的提交了新的强度选择(no-op 时 false,分发器据此决定是否吞键)。 */
+  ok: boolean
+  /** 切换后的强度显示名('' = 未切换,或该模型不提供强度档)。 */
+  effortLabel: string
 }

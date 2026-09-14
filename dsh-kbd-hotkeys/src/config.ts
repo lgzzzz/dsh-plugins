@@ -68,6 +68,22 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'composer.focus', label: '聚焦输入框', group: '会话', states: ['browse'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'session.next', label: '下一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 工作区切换浮窗(⌘/Ctrl+Alt+K):与右栏那一档同族(mod+alt,不抢裸键),
+  // 三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,也不干扰文本编辑。
+  // 浮窗打开后 ↑/↓ 只在列表里移动高亮、Enter 才调 uiWorkspace.openWorkspace
+  // (连接工作区),故这一个动作 id 同时覆盖「开关浮窗」与「浮窗内导航」。
+  { id: 'workspace.pick', label: '切换工作区(浮窗:↑↓ 选择、Enter 切换)', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 模型浮窗(⌘/Ctrl+Alt+M):同属 mod+alt 这一档(`M` = Model),三态放行。
+  // 列表 / 切换都走**上游同一个** per-session 模型目录(ctx.modelDirectories 的
+  // directoryFor,与 `/model` 弹层、composer 模型座位同一份状态),
+  // 故浮窗里的切换与两个上游入口完全同步(见 model-picker.ts)。
+  { id: 'model.pick', label: '切换模型(浮窗:↑↓ 选择、Enter 切换)', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 思考强度循环(⇧Tab)只放行 browse / editing:card 态下 ⇧Tab 归卡片自己
+  // (问答卡片的输入框仍需要正向/反向移动焦点)。editing 态另有一道**元素级门闸**
+  // (见 client.ts 的 isComposerTarget):只有焦点在 composer 自己的编辑区内才接管,
+  // 焦点在设置面板输入框 / Monaco 隐藏 textarea 等其它可编辑元素时一律放行——
+  // ⇧Tab 是文本编辑的核心键(反向移动焦点 / 反向缩进),不能全局抢。
+  { id: 'model.effortNext', label: '循环切换思考强度(⇧Tab;仅输入框/浏览态)', group: '会话', states: ['browse', 'editing'] },
   { id: 'session.stop', label: '停止当前会话(无审批卡片时;含运行中子代理)', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'help.toggle', label: '快捷键速查表', group: '面板', states: ['card', 'editing', 'browse'] },
 ]
@@ -114,6 +130,25 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'composer.focus': 'mod+i',
   'session.prev': 'mod+alt+arrowup',
   'session.next': 'mod+alt+arrowdown',
+  // 工作区切换浮窗 = ⌘/Ctrl+Alt+K:同属 mod+alt 这一档(右栏开关 / 右栏标签 /
+  // 文件浏览器 / 活跃会话跳转都在这一档),`K` 取「工作区(Work-space)」联想;
+  // `mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,故用户要的 Ctrl+Alt+K 在
+  // macOS 上按 ⌃⌥K 即可(Win/Linux 就是 Ctrl+Alt+K,注意 Ctrl+Alt 即 AltGr)。
+  // 打开后 ↑/↓ 移动高亮、Enter 切换、Esc 关闭(见 overlay.ts)。
+  'workspace.pick': 'mod+alt+k',
+  // 模型浮窗 = ⌘/Ctrl+Alt+M:同属 mod+alt 这一档(右栏开关 / 右栏标签 /
+  // 文件浏览器 / 活跃会话跳转 / 工作区浮窗都在这一档),`M` 取「模型(Model)」联想,
+  // 与 ⌘/Ctrl+Alt+K(工作区)并列且不抢同档的方向键 / `B` / `\`。`mod` 在 comboOf 里
+  // 同时吸收 ctrlKey 与 metaKey,故用户要的 Ctrl+Alt+M 在 macOS 上按 ⌃⌥M 即可
+  // (Win/Linux 就是 Ctrl+Alt+M,注意 Ctrl+Alt 即 AltGr)。浮窗内 ↑/↓ 选择、
+  // Enter 切换、⇧Tab 调强度、Esc 关闭。
+  'model.pick': 'mod+alt+m',
+  // 思考强度循环 = ⇧Tab:上游 composer 座位把强度档收在「模型菜单 → Effort」二级
+  // 面板里(没有默认键位),这里给一个免鼠标的循环键。Shift 单独作修饰键不与任何
+  // 已有组合冲突(bindings 里没有其它 shift+ 项);`comboOf` 走 e.code 归一化
+  // (`Tab` → `tab`),不随布局漂移。no-op(模型无强度档 / 只有一档 / 目录不可用)时
+  // **不吞键**,页面默认的 ⇧Tab 行为照常;editing 态另需焦点落在 composer 内(见 client.ts)。
+  'model.effortNext': 'shift+tab',
   // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。
   // 无运行中会话时不消费该键,页面默认 Esc 行为保留(浮层打开时由浮层优先处理)。
   'session.stop': 'escape',

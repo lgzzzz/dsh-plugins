@@ -60,15 +60,19 @@ Profile 里的挂载行已由用户摘除 —— 它是**独立于本仓库**的
 | `dsh-code-card-fonts` | Client only（TS） | `index.ts`（空宿主） | `src/` → esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 卡片标题/摘要行/展开内容与代码块字号补丁 |
 | `dsh-rightbar-tab-width` | Client only（TS） | `index.ts`（空宿主） | `src/`（client.ts + css.ts）→ esbuild → `lib/client.js`（入仓） | `npm run typecheck && npm run build && npm run check` | 右栏 tab 胶囊定宽补丁：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」（border-box 分支直接返回该值；空 pane 或 `min-width<=0` 才回落到 `SPLIT_MINIMUMS.chip = 100`），进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（`canSplitPane`），决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏。取值 100 与兜底常量同值 ⇒ 分栏判定与上游默认逐字相同、无偏移；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2）。右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染（不是禁用）。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；见其 README |
 | `dsh-directory-picker-browse` | Patch only | 无 | 无 | 无 | `cordis.patch.yml` 覆盖层：停用 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/question-drafts/sidebar-order/sidebar-tabs/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、右栏当前面板标签切换（⌘/Ctrl+Alt+←/→ → 读右栏会话级 slot store 的 `layout.activePaneId` 面板标签顺序 + `sidebarRight.focus(tabId)`，循环、单标签不吞键）、右栏文件浏览器定位（⌘/Ctrl+Alt+\ → `sidebarRight.openTab('files')`：该面板没有文件浏览器页就**创建**、已有就聚焦，同一步展开右栏；再经同一份会话级 store 的 `actions.placeTab(…, 0)` 把它置于标签栏首位）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
+| `dsh-kbd-hotkeys` | Host + Client（TS） | `index.ts`（空宿主） | `src/`（client.ts + config/actions/model-picker/question-drafts/sidebar-order/sidebar-tabs/workspace-switcher/overlay/types）→ esbuild → `lib/client.js` | `npm run typecheck && npm run build && npm run check` | 全局快捷键（三态分发：`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批/问答键盘化（审批卡片 Enter 同意 / Esc 拒绝，固定单键、不受焦点影响；通用问答直接读写卡片自身的 slot 草稿 store，卡片实时高亮；`1`–`9` 只选不翻题、`←`/`→` 切题、Enter 非末题推进）、活跃会话切换（按侧栏可见顺序，来源不可读则 no-op、无降级）、Esc 停止当前会话交互树（无审批卡片时）、左右栏开关（左栏 ⌘/Ctrl+B → `layout.toggleSidebar()`；右栏 ⌘/Ctrl+Alt+B → `sidebarRight.toggleExpanded()`）、右栏当前面板标签切换（⌘/Ctrl+Alt+←/→ → 读右栏会话级 slot store 的 `layout.activePaneId` 面板标签顺序 + `sidebarRight.focus(tabId)`，循环、单标签不吞键）、右栏文件浏览器定位（⌘/Ctrl+Alt+\ → `sidebarRight.openTab('files')`：该面板没有文件浏览器页就**创建**、已有就聚焦，同一步展开右栏；再经同一份会话级 store 的 `actions.placeTab(…, 0)` 把它置于标签栏首位）、工作区浮窗（⌘/Ctrl+Alt+K → 浮窗内 ↑↓ 选、Enter 调 `uiWorkspace.openWorkspace(workspaceId)` 连接/切换工作区）、模型浮窗（⌘/Ctrl+Alt+M → 浮窗内 ↑↓ 选、Enter 调**上游同一份** per-session 模型目录 `ctx.modelDirectories.directoryFor(sessionId).select(...)`——即 `/model` 弹层与 composer 模型座位用的那一份）、思考强度循环（⇧Tab → 同一目录上按上游 `effortChoices` 的候选档循环 `reasoningEffort`；`editing` 态另需焦点落在 composer 内）、聚焦输入框（⌘/Ctrl+I → `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`；上游无可触发聚焦服务面）与 ⌘/ 速查表；功能与键位见其 README |
 
 ### `dsh-kbd-hotkeys` 动作触发路径（服务 / DOM）
 
 动作**全部走服务触发**（不触碰 DOM）；DOM 只有三处：`document` 上的 `keydown`
 捕获监听（全部快捷键的入口）、`editing` 态的事件目标判定（`isEditableTarget`），
-以及插件自建自管的速查表浮层（`overlay.ts`，不消费上游服务）。
-唯一一次元素级调用是 `composer.focus`：对**服务链路给出的** composer 宿主元素调
-`focus({preventScroll:true})`（无选择器查询 / DOM 遍历 / 事件合成，见下表该行）。
+以及插件自建自管的浮层（`overlay.ts`：⌘/ 速查表、⌘/Ctrl+Alt+K 工作区浮窗与
+⌘/Ctrl+Alt+M 模型浮窗，不消费上游服务）。浮层打开时按键进入**模态分发**
+（浮层未处理的按键一律吞掉）。
+另有**两次元素级调用**，都只对**服务链路给出的** composer 宿主元素操作
+（无选择器查询 / DOM 遍历 / 事件合成）：`composer.focus` 对它调
+`focus({preventScroll:true})`；`model.effortNext` 在 `editing` 态用它的
+`contains` 判「焦点是否落在 composer 内」（见下表该行）。
 逐项源码依据见该插件 `README.md`「实现要点」与 `src/actions.ts` 头部注释。
 
 | 动作 | 键位（默认） | 触发路径 | 服务接口 / DOM 选择器 |
@@ -83,6 +87,9 @@ Profile 里的挂载行已由用户摘除 —— 它是**独立于本仓库**的
 | `sidebarRight.files` | ⌘/Ctrl+Alt+`\` | **服务** | 定位右栏文件浏览器页：公开的 `sidebarRight.openTab('files')`（`kind` 来自常驻挂载的 `@deepseek-ai/dsh-client-ui-sidebar-files`）——页类型按**目标面板**（`activeDockPaneId`）去重，该面板已有文件浏览器页就只聚焦、**没有就创建**（上游 `openContent` 恒先 `planSetExpanded(true)` ⇒ 同一步展开右栏）；随后经同一份会话级 slot store 的**活实例** `actions.placeTab(sessionId, tabId, paneId, 0)`（与**标签拖拽**同一入口，**不用** `replaceTab`——那会关掉被顶掉的 tab）把它置于标签栏首位，**已在首位则零提交**。只认停靠面板（浮窗 / 别的分屏面板里的同页不搬）。**任意态**（`card` / `editing` / `browse`）；`openTab` 抛错（无挂载会话面 / `files` 类型未注册）或置顶任一取数环不可用一律 **no-op 不吞键**，且**只跳过置顶**、绝不回退 DOM |
 | `composer.focus` | ⌘/Ctrl+I（`mod+i`；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃I 与 ⌘I 均可） | **服务取元素 + 一次 `focus()`** | `sessions.list` 快照 `current` → `sessions.binding(id).ctx` → `conversation.input.for(actx)`（`for` 缺席回退 `InputHub.shell(id)`，同一 `SessionInputShell`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。仅 `browse` 态；上游无可触发的聚焦服务面（`commandUi.bindComposerFocus` 只 bind 不 trigger，全仓无人调用；`editor.focus()` 非 DOM 聚焦原语），任一环缺失即 no-op 不吞键、不回退 DOM 查询 |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
+| `workspace.pick` | ⌘/Ctrl+Alt+K | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：列表 = `workspaces.list.getSnapshot().items` 的**宿主顺序**（与侧栏工作区分组同源；`title` → 路径末段 → 原路径 作主标签，`当前` = 当前会话在该工作区 `sessionIds` 名下）；`↑`/`↓` 只移动高亮（clamp 不循环，**不触发导航**），`Enter` / 行内 `mousedown` 才调公开的 `uiWorkspace.openWorkspace(workspaceId)`（`dsh-client-ui-workspace` 的 `UiWorkspace` 服务：复用该工作区已挂载的空白会话，没有就 `sessions.create({workspaceId})` 新建再打开——与侧栏分组「＋」同一条「连接工作区」路径）；`Esc` 或同组合键关闭，同层内 `⌘/` 互切速查表。**任意态**；`workspaces` 缺席/无 `items` → 空态浮窗，`uiWorkspace` 缺席或 `openWorkspace` 抛错 → 确认 no-op，**不回退 DOM 点击侧栏分组** |
+| `model.pick` | ⌘/Ctrl+Alt+M | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：目录 = `ctx.modelDirectories.directoryFor(当前会话)`——与 `/model` 弹层、composer 模型座位是**同一份** per-session 实例；列表 = `load()` 后读 `store.getSnapshot()` 的 `groups` **按宿主顺序展开**（提供方分组标题 + 组内顺序都不重排，失败提供方折成底部小字不占行），每行完整选择复刻上游弹层 `selectionOf`（`reasoningEffort` = 当前选择落在该模型时的 `current.reasoningEffort`，否则 `model.reasoning.defaultEffort`，无则省略）；`↑`/`↓` 只移动高亮（clamp 不循环），`Enter` / 行内 `mousedown` 才调 `directory.select(selection)`（与两个上游入口同一条 `session.selectModel` 提交路径），浮窗内 `⇧Tab` 就地循环强度（只更新顶部「当前」行）。列表异步取、渲染带序号守卫（过期结果丢弃）。**任意态**；`modelDirectories` 缺席 / 无当前会话 / 被寻址的子代理会话（`sessions.subagentAddress(id) !== undefined`）/ `directoryFor` 抛错 → 空态浮窗，`load()` 拒绝 → 空态 + 失败小字，`select()` 拒绝 → 浮窗照关（错误落在共享 store 上），**不回退 DOM 点 composer 模型标签** |
+| `model.effortNext` | `⇧Tab` | **服务（+ 一次 `contains` 门闸）** | 同一目录实例上循环 `reasoningEffort`：候选档复刻上游座位 `effortChoices`（`[Default（仅当模型无 defaultEffort 时）] + reasoning.efforts`），当前档 = `current.reasoningEffort ?? reasoning.defaultEffort`（不在候选里时从首项开始），`select` 只改强度、provider/model 沿用。**`browse` / `editing`**；`editing` 态另有元素级门闸——对服务链路取来的 composer 宿主元素调 `contains(event.target)`（`isComposerTarget`，与 `composer.focus` 同一条取元素链路），焦点在设置面板输入框 / Monaco 隐藏 textarea 等别处可编辑元素时不接管（`⇧Tab` 在别处仍是反向移动焦点 / 反向缩进）。模型无推理元数据 / 只有一档 / 目录不可用 / 取元素环缺失 → **no-op 不吞键**；`card` 态不接管（归卡片） |
 | `session.stop` | `Esc`（仅当前会话无待审批卡片时） | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
@@ -104,7 +111,23 @@ Profile 里的挂载行已由用户摘除 —— 它是**独立于本仓库**的
 按**目标面板**去重（该面板已有文件浏览器页只聚焦，**没有就创建**），同一步展开右栏，
 再经同一份会话级 store 的 `actions.placeTab(sessionId, tabId, paneId, 0)`
 （与**标签拖拽**同一入口，**不用** `replaceTab`，避免关掉被顶掉的 tab）置顶；
-动作 id `sidebarRight.files` 独立可覆盖。
+动作 id `sidebarRight.files` 独立可覆盖。**工作区浮窗 = ⌘/Ctrl+Alt+K**：同属
+`mod+alt` 这一档（`K` = Work-space 联想，不抢同档的方向键 / `B` / `\`），语义是
+「列表 → 选中 → 切换」——↑/↓ **只移动高亮**（不触发导航，避免连按就连开多个空白会话），
+Enter / 点击行才调 `uiWorkspace.openWorkspace(workspaceId)`（连接工作区：复用该工作区的
+空白会话、没有就新建一个再打开，与侧栏分组「＋」同一条路径）；Esc 或同组合键关闭，
+浮窗内 `⌘/` 与速查表互切；列表取自 `workspaces.list` 快照的**宿主顺序**（与侧栏分组
+顺序同源），初始高亮 = 当前会话所属工作区。动作 id `workspace.pick` 独立可覆盖。
+**模型浮窗 = ⌘/Ctrl+Alt+M**：同属 `mod+alt` 这一档（`M` = Model 联想，不抢同档的
+方向键 / `B` / `\` / `K`），语义与工作区浮窗同形（列表 → 选中 → 提交），而**取数与提交
+都与两个上游入口同源**——`ctx.modelDirectories` 的 per-session 目录实例正是 `/model`
+弹层与 composer 模型座位共用的那一份，所以浮窗里切换后 composer 的模型标签同步变化，
+反之亦然。**思考强度循环 = ⇧Tab**：上游把强度档收在「模型菜单 → Effort」二级面板里、
+**没有默认键位**，而「在模型上按 Tab 循环档位」是既有习惯；候选档与当前档都逐字复刻
+上游 composer 座位的 `effortChoices` / `effectiveEffort`。它只放行 `browse` / `editing`，
+且 `editing` 态多一道**元素级门闸**（`contains` 焦点是否在 composer 内）——⇧Tab 是文本
+编辑的核心键（反向移动焦点 / Monaco 反向缩进），不能全局抢。两个动作 id
+（`model.pick` / `model.effortNext`）各自独立可覆盖。
 
 取数入口与已知限制：服务路径读 `uiSession.pendingInteractions.getSnapshot()`（公开面；
 `pendingSnapshot` 为同源私有字段，仅作兼容回退）；审批为**固定单键** `Enter`（允许）/
@@ -130,7 +153,22 @@ store**（`bySession[sessionId].layout` 的 `activePaneId` 面板）、切换必
 抛错时 no-op 不吞键、置顶取数环不可用只跳过置顶而打开本身照旧吞键；
 以及
 ⌘/Ctrl+I 聚焦输入框：`binding.ctx` 原样传给 `conversation.input.for`、只认 `browse` 态、
-`for` 缺席回退 `shell(id)`、任一环缺失/抛错一律 no-op 不吞键）与
+`for` 缺席回退 `shell(id)`、任一环缺失/抛错一律 no-op 不吞键；
+以及 ⌘/Ctrl+Alt+K 工作区浮窗：列表按宿主顺序渲染（`title` / 路径末段 / `当前` 标记 /
+会话数）、初始高亮 = 当前会话所属工作区、`↑`/`↓` 只移动高亮（不触发导航）且越界 clamp、
+`Enter` / 行内 mousedown 才调 `uiWorkspace.openWorkspace`、`Esc` 与同组合键关闭、
+`⌘/` 换成速查表、空列表与 `workspaces` 缺席为空态、`uiWorkspace` 缺席或抛错时确认
+no-op、`card`/`editing` 态仍可用、键位可覆盖；
+以及 ⌘/Ctrl+Alt+M 模型浮窗 + ⇧Tab 循环思考强度：目录必须按
+`ctx.modelDirectories.directoryFor(当前会话)` 取（与两个上游入口同一份实例）、行按
+宿主顺序展开（提供方分组标题 / 当前标记 / 初始高亮）、每行完整选择复刻上游弹层
+`selectionOf`（无 `defaultEffort` 时不带 `reasoningEffort`）、Enter 调 `directory.select`；
+⇧Tab 的候选档复刻上游座位 `effortChoices`（有 `defaultEffort` 时不含 Default 档）、
+当前档 = `current.reasoningEffort ?? defaultEffort`、末档回到首档、浮窗内 ⇧Tab 只更新
+「当前」行；模型无推理元数据 / 只有一档 / 服务缺席 / 无当前会话 / 被寻址子代理 /
+`directoryFor` 抛错 → no-op 且不吞键；`load()` 拒绝 → 空态 + 失败小字、`select()` 拒绝 →
+浮窗照关；`editing` 态另需焦点落在 composer 内（`isComposerTarget` 的 `contains` 门闸），
+`card` 态不接管）与
 `node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，
 覆盖分组 / flat / 权威来源不可用时 no-op——**无降级**）。
 
@@ -188,11 +226,15 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 - 宿主半部依赖宿主服务时，在该行声明 `inject`（当前没有插件需要；各插件的宿主半部均为空宿主或不消费宿主服务）。
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务改由挂载行 `inject`
   声明；浏览器半部则按需 `export const inject = [...]`（由模块加载器读取注入，如
-  `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','sidebarRight','workspaces','slots','conversation']`——`slots`
+  `dsh-kbd-hotkeys`：`['sessions','uiSession','layout','sidebarRight','workspaces','slots','conversation','uiWorkspace','modelDirectories']`——`slots`
   用于读侧栏视图 store 的会话顺序、问答卡片草稿 store 与右栏标签 store
   （`rightbar.session` 注册项：读标签顺序），`layout` / `sidebarRight` 分别用于
   开关左右栏与（右栏）标签切换，`conversation` 用于 ⌘/Ctrl+I 聚焦输入框
-  （取 composer 的 editor 宿主元素））。
+  （取 composer 的 editor 宿主元素）与 ⇧Tab 的编辑态门闸（宿主元素 `contains`），
+  `uiWorkspace` 用于 ⌘/Ctrl+Alt+K 工作区浮窗确认时连接/切换工作区
+  （`uiWorkspace.openWorkspace`），`modelDirectories` 用于 ⌘/Ctrl+Alt+M 模型浮窗
+  与 ⇧Tab 循环思考强度（`dsh-client-ui-model-selection` 的
+  `directoryFor(sessionId)`，与 `/model` 弹层、composer 模型座位同一份实例）。
   不消费服务的客户端（纯样式补丁 `dsh-code-card-fonts`）无需声明。遗留纯 JS 宿主
   （`dsh-new-session` 的 `lib/index.js`）维持现状：仍在代码中
   `export inject = ['commands']`。

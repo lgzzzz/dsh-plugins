@@ -29,8 +29,10 @@
  * DOM 级:三处判定/入口(均不是点击型动作)——`editing` 态判定消耗 DOM
  * (isEditableTarget,事件目标判定);`document` 上的 `keydown` 捕获监听是全部
  * 快捷键的入口;速查表浮层是插件自建自管的 DOM(overlay.ts)。
- * 另有**唯一一次元素级调用**:聚焦输入框时对服务给出的宿主元素调 `focus()`
- * (见 focusComposer——不做选择器查询 / 遍历 / 事件合成,元素来自服务链路)。
+ * 另有**两次元素级调用**(都只对服务链路取来的元素操作,零选择器 / 零遍历 /
+ * 零事件合成):聚焦输入框时对宿主元素调 `focus()`(见 focusComposer);`⇧Tab`
+ * 在 `editing` 态用宿主元素的 `contains` 判「焦点是否落在 composer 内」
+ * (见 isComposerTarget)。
  *
  * 源码事实依据(以 <dsh>/node_modules/@deepseek-ai 各包 lib/client.js 为准):
  * - uiSession.pendingInteractions.getSnapshot():sessionId → 待处理交互(公开面;
@@ -45,6 +47,7 @@
  * - 计划评审键位按 intent.approve 标签判定,与卡片底部按钮顺序无关。
  */
 import type {
+  ComposerEditableLike,
   PendingInteractionLike,
   QuestionDraftLike,
   QuestionDraftStoreLike,
@@ -73,8 +76,8 @@ function pendingMap(services: Services): ReadonlyMap<string, PendingInteractionL
   return uiSession.pendingSnapshot
 }
 
-/** 当前会话 id(无当前会话时 undefined)。 */
-function currentSessionId(services: Services): string | undefined {
+/** 当前会话 id(无当前会话时 undefined)。模型浮窗 / ⇧Tab 亦复用同一判据。 */
+export function currentSessionId(services: Services): string | undefined {
   const current = services.sessions?.list?.getSnapshot?.()?.current
   return current === undefined || current === '' ? undefined : current
 }
@@ -409,14 +412,32 @@ export function toggleRightSidebar(services: Services): boolean {
  * **不回退到 DOM 查询**。
  */
 export function focusComposer(services: Services): boolean {
+  const root = composerRoot(services)
+  if (root === undefined || typeof root.focus !== 'function') return false
+  try {
+    root.focus({ preventScroll: true })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 取当前会话 composer 的 contenteditable 宿主元素(服务链路,零选择器)。
+ *
+ * 解析顺序 = `sessions.binding(current).ctx` → `conversation.input.for(actx)`;
+ * `for` 缺席或抛错(未传会话作用域 ctx)时回退公开的 `shell(id)`——两者返回同一个
+ * `SessionInputShell`。任一环缺失返回 undefined,不回退 DOM 查询。
+ */
+function composerRoot(services: Services): ComposerEditableLike | undefined {
   const sessions = services.sessions
   const conversation = services.conversation
-  if (sessions === null || sessions === undefined) return false
-  if (conversation === null || conversation === undefined) return false
+  if (sessions === null || sessions === undefined) return undefined
+  if (conversation === null || conversation === undefined) return undefined
   const input = conversation.input
-  if (input === null || input === undefined) return false
+  if (input === null || input === undefined) return undefined
   const current = currentSessionId(services)
-  if (current === undefined) return false
+  if (current === undefined) return undefined
 
   let shell: SessionInputShellLike | undefined
   let actx: unknown
@@ -441,16 +462,33 @@ export function focusComposer(services: Services): boolean {
       shell = undefined
     }
   }
-  if (shell === null || shell === undefined) return false
-
+  if (shell === null || shell === undefined) return undefined
   const editor = shell.editor
-  if (editor === null || editor === undefined) return false
-  if (typeof editor.getRootElement !== 'function') return false
+  if (editor === null || editor === undefined) return undefined
+  if (typeof editor.getRootElement !== 'function') return undefined
   const root = editor.getRootElement()
-  if (root === null || root === undefined) return false
-  if (typeof root.focus !== 'function') return false
-  root.focus({ preventScroll: true })
-  return true
+  return root === null || root === undefined ? undefined : root
+}
+
+/**
+ * 事件目标是否落在 **composer 自己的编辑区内**(⇧Tab 的 `editing` 态门闸)。
+ *
+ * ⇧Tab 是文本编辑的**核心键**(反向移动焦点;Monaco 里是反向缩进),因此焦点在
+ * 别的可编辑元素上(设置面板的 input、右侧栏 Monaco 的隐藏 textarea 等)时一律
+ * 不接管、交回该处默认行为。判据 = 对 composerRoot(服务链路取来的宿主元素)调
+ * **标准 Node.contains**——只做包含判定,零选择器 / 零 DOM 遍历 / 零事件合成,
+ * 与 overlay 的 `contains(target)` 同一范式。
+ */
+export function isComposerTarget(services: Services, target: EventTarget | null | undefined): boolean {
+  if (target === null || target === undefined) return false
+  const root = composerRoot(services)
+  if (root === undefined) return false
+  if (typeof root.contains !== 'function') return false
+  try {
+    return root.contains(target)
+  } catch {
+    return false
+  }
 }
 
 /**

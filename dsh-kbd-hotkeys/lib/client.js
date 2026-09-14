@@ -476,15 +476,25 @@ function toggleRightSidebar(services) {
   }
 }
 function focusComposer(services) {
+  const root = composerRoot(services);
+  if (root === void 0 || typeof root.focus !== "function") return false;
+  try {
+    root.focus({ preventScroll: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function composerRoot(services) {
   var _a, _b, _c, _d;
   const sessions = services.sessions;
   const conversation = services.conversation;
-  if (sessions === null || sessions === void 0) return false;
-  if (conversation === null || conversation === void 0) return false;
+  if (sessions === null || sessions === void 0) return void 0;
+  if (conversation === null || conversation === void 0) return void 0;
   const input = conversation.input;
-  if (input === null || input === void 0) return false;
+  if (input === null || input === void 0) return void 0;
   const current = currentSessionId(services);
-  if (current === void 0) return false;
+  if (current === void 0) return void 0;
   let shell;
   let actx;
   try {
@@ -506,15 +516,23 @@ function focusComposer(services) {
       shell = void 0;
     }
   }
-  if (shell === null || shell === void 0) return false;
+  if (shell === null || shell === void 0) return void 0;
   const editor = shell.editor;
-  if (editor === null || editor === void 0) return false;
-  if (typeof editor.getRootElement !== "function") return false;
+  if (editor === null || editor === void 0) return void 0;
+  if (typeof editor.getRootElement !== "function") return void 0;
   const root = editor.getRootElement();
-  if (root === null || root === void 0) return false;
-  if (typeof root.focus !== "function") return false;
-  root.focus({ preventScroll: true });
-  return true;
+  return root === null || root === void 0 ? void 0 : root;
+}
+function isComposerTarget(services, target) {
+  if (target === null || target === void 0) return false;
+  const root = composerRoot(services);
+  if (root === void 0) return false;
+  if (typeof root.contains !== "function") return false;
+  try {
+    return root.contains(target);
+  } catch {
+    return false;
+  }
 }
 function stopCurrentSessionTree(services) {
   var _a, _b;
@@ -632,6 +650,22 @@ var ACTIONS = [
   { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u4F1A\u8BDD", states: ["browse"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 工作区切换浮窗(⌘/Ctrl+Alt+K):与右栏那一档同族(mod+alt,不抢裸键),
+  // 三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,也不干扰文本编辑。
+  // 浮窗打开后 ↑/↓ 只在列表里移动高亮、Enter 才调 uiWorkspace.openWorkspace
+  // (连接工作区),故这一个动作 id 同时覆盖「开关浮窗」与「浮窗内导航」。
+  { id: "workspace.pick", label: "\u5207\u6362\u5DE5\u4F5C\u533A(\u6D6E\u7A97:\u2191\u2193 \u9009\u62E9\u3001Enter \u5207\u6362)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 模型浮窗(⌘/Ctrl+Alt+M):同属 mod+alt 这一档(`M` = Model),三态放行。
+  // 列表 / 切换都走**上游同一个** per-session 模型目录(ctx.modelDirectories 的
+  // directoryFor,与 `/model` 弹层、composer 模型座位同一份状态),
+  // 故浮窗里的切换与两个上游入口完全同步(见 model-picker.ts)。
+  { id: "model.pick", label: "\u5207\u6362\u6A21\u578B(\u6D6E\u7A97:\u2191\u2193 \u9009\u62E9\u3001Enter \u5207\u6362)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 思考强度循环(⇧Tab)只放行 browse / editing:card 态下 ⇧Tab 归卡片自己
+  // (问答卡片的输入框仍需要正向/反向移动焦点)。editing 态另有一道**元素级门闸**
+  // (见 client.ts 的 isComposerTarget):只有焦点在 composer 自己的编辑区内才接管,
+  // 焦点在设置面板输入框 / Monaco 隐藏 textarea 等其它可编辑元素时一律放行——
+  // ⇧Tab 是文本编辑的核心键(反向移动焦点 / 反向缩进),不能全局抢。
+  { id: "model.effortNext", label: "\u5FAA\u73AF\u5207\u6362\u601D\u8003\u5F3A\u5EA6(\u21E7Tab;\u4EC5\u8F93\u5165\u6846/\u6D4F\u89C8\u6001)", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u65E0\u5BA1\u6279\u5361\u7247\u65F6;\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F", states: ["card", "editing", "browse"] }
 ];
@@ -668,6 +702,25 @@ var DEFAULT_BINDINGS = {
   "composer.focus": "mod+i",
   "session.prev": "mod+alt+arrowup",
   "session.next": "mod+alt+arrowdown",
+  // 工作区切换浮窗 = ⌘/Ctrl+Alt+K:同属 mod+alt 这一档(右栏开关 / 右栏标签 /
+  // 文件浏览器 / 活跃会话跳转都在这一档),`K` 取「工作区(Work-space)」联想;
+  // `mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,故用户要的 Ctrl+Alt+K 在
+  // macOS 上按 ⌃⌥K 即可(Win/Linux 就是 Ctrl+Alt+K,注意 Ctrl+Alt 即 AltGr)。
+  // 打开后 ↑/↓ 移动高亮、Enter 切换、Esc 关闭(见 overlay.ts)。
+  "workspace.pick": "mod+alt+k",
+  // 模型浮窗 = ⌘/Ctrl+Alt+M:同属 mod+alt 这一档(右栏开关 / 右栏标签 /
+  // 文件浏览器 / 活跃会话跳转 / 工作区浮窗都在这一档),`M` 取「模型(Model)」联想,
+  // 与 ⌘/Ctrl+Alt+K(工作区)并列且不抢同档的方向键 / `B` / `\`。`mod` 在 comboOf 里
+  // 同时吸收 ctrlKey 与 metaKey,故用户要的 Ctrl+Alt+M 在 macOS 上按 ⌃⌥M 即可
+  // (Win/Linux 就是 Ctrl+Alt+M,注意 Ctrl+Alt 即 AltGr)。浮窗内 ↑/↓ 选择、
+  // Enter 切换、⇧Tab 调强度、Esc 关闭。
+  "model.pick": "mod+alt+m",
+  // 思考强度循环 = ⇧Tab:上游 composer 座位把强度档收在「模型菜单 → Effort」二级
+  // 面板里(没有默认键位),这里给一个免鼠标的循环键。Shift 单独作修饰键不与任何
+  // 已有组合冲突(bindings 里没有其它 shift+ 项);`comboOf` 走 e.code 归一化
+  // (`Tab` → `tab`),不随布局漂移。no-op(模型无强度档 / 只有一档 / 目录不可用)时
+  // **不吞键**,页面默认的 ⇧Tab 行为照常;editing 态另需焦点落在 composer 内(见 client.ts)。
+  "model.effortNext": "shift+tab",
   // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。
   // 无运行中会话时不消费该键,页面默认 Esc 行为保留(浮层打开时由浮层优先处理)。
   "session.stop": "escape",
@@ -789,6 +842,177 @@ function prettyCombo(combo) {
   }).join(mac ? "" : "+");
 }
 
+// src/model-picker.ts
+var PROVIDER_DEFAULT = "Default";
+var NO_SESSION_NOTICE = "\u5F53\u524D\u6CA1\u6709\u53EF\u5207\u6362\u6A21\u578B\u7684\u4F1A\u8BDD";
+function subagentAddressOf(services, sessionId) {
+  const sessions = services.sessions;
+  const fn = sessions == null ? void 0 : sessions.subagentAddress;
+  if (typeof fn !== "function") return void 0;
+  try {
+    return fn.call(sessions, sessionId);
+  } catch {
+    return void 0;
+  }
+}
+function directoryOf(services) {
+  const resolver = services.modelDirectories;
+  if (resolver === null || resolver === void 0) return void 0;
+  if (typeof resolver.directoryFor !== "function") return void 0;
+  const sessionId = currentSessionId(services);
+  if (sessionId === void 0) return void 0;
+  if (subagentAddressOf(services, sessionId) !== void 0) return void 0;
+  try {
+    const directory = resolver.directoryFor(sessionId);
+    return directory === null || directory === void 0 ? void 0 : directory;
+  } catch {
+    return void 0;
+  }
+}
+function stateOf(directory) {
+  var _a, _b;
+  try {
+    const state = (_b = (_a = directory.store) == null ? void 0 : _a.getSnapshot) == null ? void 0 : _b.call(_a);
+    return state === null || state === void 0 ? {} : state;
+  } catch {
+    return {};
+  }
+}
+function modelOf(state, provider, model) {
+  var _a, _b;
+  for (const group of (_a = state.groups) != null ? _a : []) {
+    if (group === null || group === void 0 || group.id !== provider) continue;
+    for (const item of (_b = group.models) != null ? _b : []) {
+      if (item !== null && item !== void 0 && item.id === model) return item;
+    }
+  }
+  return void 0;
+}
+function isSameModel(selection, provider, model) {
+  return selection !== null && selection !== void 0 && selection.provider === provider && selection.model === model;
+}
+function rowSelectionOf(group, model, current) {
+  var _a, _b, _c;
+  const reasoningEffort = isSameModel(current, group.id, model.id) ? (_b = current == null ? void 0 : current.reasoningEffort) != null ? _b : (_a = model.reasoning) == null ? void 0 : _a.defaultEffort : (_c = model.reasoning) == null ? void 0 : _c.defaultEffort;
+  return {
+    provider: group.id,
+    model: model.id,
+    ...reasoningEffort === void 0 ? {} : { reasoningEffort }
+  };
+}
+function effortLabelOf(reasoning, effort) {
+  var _a;
+  if (effort === void 0 || effort === "") return PROVIDER_DEFAULT;
+  for (const level of (_a = reasoning.efforts) != null ? _a : []) {
+    if (level === null || level === void 0 || level.id !== effort) continue;
+    return typeof level.name === "string" && level.name !== "" ? level.name : level.id;
+  }
+  return effort;
+}
+function currentViewOf(state) {
+  var _a;
+  const current = state.current;
+  if (current === null || current === void 0) return null;
+  const model = modelOf(state, current.provider, current.model);
+  const name2 = model == null ? void 0 : model.name;
+  const label = typeof name2 === "string" && name2 !== "" ? name2 : `${current.provider}/${current.model}`;
+  const reasoning = model == null ? void 0 : model.reasoning;
+  if (reasoning === void 0) return { label, effort: "" };
+  return { label, effort: effortLabelOf(reasoning, (_a = current.reasoningEffort) != null ? _a : reasoning.defaultEffort) };
+}
+function defaultNotice(state) {
+  if (state.status === "error" && typeof state.error === "string" && state.error !== "") {
+    return `\u6A21\u578B\u76EE\u5F55\u52A0\u8F7D\u5931\u8D25\uFF1A${state.error}`;
+  }
+  if (state.status === void 0 || state.status === "idle" || state.status === "loading") {
+    return "\u6B63\u5728\u52A0\u8F7D\u6A21\u578B\u76EE\u5F55\u2026";
+  }
+  return "\u5F53\u524D\u6CA1\u6709\u53EF\u7528\u7684\u6A21\u578B";
+}
+function viewOf(state, notice = "", footnote = "") {
+  var _a, _b, _c, _d;
+  const rows = [];
+  for (const group of (_a = state.groups) != null ? _a : []) {
+    if (group === null || group === void 0) continue;
+    const provider = typeof group.name === "string" && group.name !== "" ? group.name : group.id;
+    for (const model of (_b = group.models) != null ? _b : []) {
+      if (model === null || model === void 0) continue;
+      rows.push({
+        selection: rowSelectionOf(group, model, state.current),
+        label: typeof model.name === "string" && model.name !== "" ? model.name : model.id,
+        detail: provider,
+        provider,
+        current: isSameModel(state.current, group.id, model.id)
+      });
+    }
+  }
+  const failed = (_d = (_c = state.failures) == null ? void 0 : _c.length) != null ? _d : 0;
+  const notes = [footnote];
+  if (failed > 0) notes.push(`${String(failed)} \u4E2A\u63D0\u4F9B\u65B9\u7684\u76EE\u5F55\u52A0\u8F7D\u5931\u8D25`);
+  return {
+    current: currentViewOf(state),
+    rows,
+    notice: rows.length > 0 ? "" : notice !== "" ? notice : defaultNotice(state),
+    footnote: notes.filter((text) => text !== "").join(" \xB7 ")
+  };
+}
+async function modelPickerView(services) {
+  const directory = directoryOf(services);
+  if (directory === void 0) return viewOf({}, NO_SESSION_NOTICE);
+  const state = stateOf(directory);
+  if (typeof directory.load !== "function") return viewOf(state);
+  try {
+    const loaded = await directory.load();
+    return viewOf(loaded === null || loaded === void 0 ? state : loaded);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return viewOf(state, "", `\u6A21\u578B\u76EE\u5F55\u52A0\u8F7D\u5931\u8D25\uFF1A${message}`);
+  }
+}
+function selectModel(services, selection) {
+  const directory = directoryOf(services);
+  if (directory === void 0) return false;
+  return fireSelect(directory, selection);
+}
+function fireSelect(directory, selection) {
+  if (typeof directory.select !== "function") return false;
+  if (typeof selection.provider !== "string" || selection.provider === "") return false;
+  if (typeof selection.model !== "string" || selection.model === "") return false;
+  try {
+    void Promise.resolve(directory.select(selection)).catch(() => {
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function cycleEffort(services) {
+  var _a, _b, _c;
+  const miss = { ok: false, effortLabel: "" };
+  const directory = directoryOf(services);
+  if (directory === void 0) return miss;
+  const state = stateOf(directory);
+  const current = state.current;
+  if (current === null || current === void 0) return miss;
+  const reasoning = (_a = modelOf(state, current.provider, current.model)) == null ? void 0 : _a.reasoning;
+  if (reasoning === void 0) return miss;
+  const choices = [
+    ...reasoning.defaultEffort === void 0 ? [void 0] : [],
+    ...((_b = reasoning.efforts) != null ? _b : []).map((level) => level.id)
+  ];
+  if (choices.length <= 1) return miss;
+  const effective = (_c = current.reasoningEffort) != null ? _c : reasoning.defaultEffort;
+  const at = choices.indexOf(effective);
+  const next = choices[(at + 1) % choices.length];
+  const selection = {
+    provider: current.provider,
+    model: current.model,
+    ...next === void 0 ? {} : { reasoningEffort: next }
+  };
+  if (!fireSelect(directory, selection)) return miss;
+  return { ok: true, effortLabel: effortLabelOf(reasoning, next) };
+}
+
 // src/overlay.ts
 var STYLE_ID = "dsh-kbd-hotkeys/style";
 var STYLE = [
@@ -799,7 +1023,20 @@ var STYLE = [
   ".dsh-kbd-help h3:first-child{margin-top:0}",
   ".dsh-kbd-helpRow{display:flex;align-items:center;gap:12px;padding:5px 0;font-size:13px}",
   ".dsh-kbd-helpRow .dsh-kbd-itemLabel{flex:1}",
-  ".dsh-kbd-help kbd{font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:11px;line-height:18px;padding:1px 6px;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.12));border-bottom-width:2px;border-radius:6px;background:var(--dsw-alias-bg-base,transparent)}"
+  ".dsh-kbd-help kbd{font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:11px;line-height:18px;padding:1px 6px;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.12));border-bottom-width:2px;border-radius:6px;background:var(--dsw-alias-bg-base,transparent)}",
+  ".dsh-kbd-panelHeading{padding:14px 18px 8px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-tertiary,#999)}",
+  ".dsh-kbd-list{display:flex;flex-direction:column;gap:2px;padding:0 8px;overflow-y:auto}",
+  ".dsh-kbd-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:13px;line-height:18px}",
+  ".dsh-kbd-row.isActive{background:var(--dsw-specific-sidebar-nav-item-active,var(--dsw-alias-interactive-bg-active,rgba(127,127,127,.18)))}",
+  ".dsh-kbd-rowMain{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}",
+  ".dsh-kbd-rowLabel,.dsh-kbd-rowDetail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".dsh-kbd-rowDetail{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}",
+  ".dsh-kbd-rowBadge{flex:none;font-size:11px;color:var(--dsw-alias-brand-primary,#4a6cf7)}",
+  ".dsh-kbd-rowCount{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}",
+  ".dsh-kbd-empty{padding:4px 18px 16px;font-size:13px;color:var(--dsw-alias-label-tertiary,#999)}",
+  ".dsh-kbd-hint{padding:10px 18px 14px;font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}",
+  ".dsh-kbd-current{padding:0 18px 6px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#999)}",
+  ".dsh-kbd-group{padding:8px 10px 4px;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary,#999)}"
 ].join("\n");
 function ensureStyle() {
   if (document.getElementById(STYLE_ID) !== null) return;
@@ -811,9 +1048,18 @@ function ensureStyle() {
 function createOverlays(deps) {
   ensureStyle();
   let root = null;
-  let open = false;
+  let kind = null;
+  let rowEls = [];
+  let rowIds = [];
+  let rowSelections = [];
+  let cursor = 0;
+  let modelList = null;
+  let modelCurrentEl = null;
+  let modelLabel = "";
+  let modelEffort = "";
+  let modelSeq = 0;
   function isOpen() {
-    return open;
+    return kind !== null;
   }
   function contains(target) {
     return root !== null && target !== null && root.contains(target);
@@ -821,23 +1067,34 @@ function createOverlays(deps) {
   function close() {
     if (root !== null) root.remove();
     root = null;
-    open = false;
+    kind = null;
+    rowEls = [];
+    rowIds = [];
+    rowSelections = [];
+    cursor = 0;
+    modelList = null;
+    modelCurrentEl = null;
+    modelLabel = "";
+    modelEffort = "";
+    modelSeq += 1;
   }
-  function mount() {
+  function mount(next) {
     close();
     ensureStyle();
     const backdrop = document.createElement("div");
     backdrop.className = "dsh-kbd-backdrop";
     const panel = document.createElement("div");
     panel.className = "dsh-kbd-panel";
-    panel.appendChild(renderHelp());
+    if (next === "help") panel.appendChild(renderHelp());
+    else if (next === "workspace") renderWorkspacePicker(panel);
+    else renderModelPicker(panel);
     backdrop.appendChild(panel);
     backdrop.addEventListener("mousedown", (event) => {
       if (event.target === backdrop) close();
     });
     document.body.appendChild(backdrop);
     root = backdrop;
-    open = true;
+    kind = next;
   }
   function renderHelp() {
     const container = document.createElement("div");
@@ -866,19 +1123,276 @@ function createOverlays(deps) {
     }
     return container;
   }
+  function renderWorkspacePicker(panel) {
+    const heading = document.createElement("div");
+    heading.className = "dsh-kbd-panelHeading";
+    heading.textContent = "\u5207\u6362\u5DE5\u4F5C\u533A";
+    panel.appendChild(heading);
+    const rows = deps.listWorkspaces();
+    if (rows.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "dsh-kbd-empty";
+      empty.textContent = "\u5F53\u524D\u6CA1\u6709\u5DF2\u767B\u8BB0\u7684\u5DE5\u4F5C\u533A";
+      panel.appendChild(empty);
+      panel.appendChild(renderHint());
+      return;
+    }
+    const list = document.createElement("div");
+    list.className = "dsh-kbd-list";
+    const els = [];
+    const ids = [];
+    rows.forEach((row, index) => {
+      const el = document.createElement("div");
+      el.className = "dsh-kbd-row";
+      el.appendChild(renderRowMain(row));
+      if (row.current) {
+        const badge = document.createElement("span");
+        badge.className = "dsh-kbd-rowBadge";
+        badge.textContent = "\u5F53\u524D";
+        el.appendChild(badge);
+      }
+      const count = document.createElement("span");
+      count.className = "dsh-kbd-rowCount";
+      count.textContent = `${String(row.sessionCount)} \u4E2A\u4F1A\u8BDD`;
+      el.appendChild(count);
+      el.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        choose(index);
+      });
+      el.addEventListener("mouseenter", () => {
+        setCursor(index);
+      });
+      list.appendChild(el);
+      els.push(el);
+      ids.push(row.workspaceId);
+    });
+    panel.appendChild(list);
+    panel.appendChild(renderHint());
+    rowEls = els;
+    rowIds = ids;
+    setCursor(Math.max(0, rows.findIndex((row) => row.current)));
+  }
+  function renderRowMain(row) {
+    const main = document.createElement("div");
+    main.className = "dsh-kbd-rowMain";
+    const label = document.createElement("div");
+    label.className = "dsh-kbd-rowLabel";
+    label.textContent = row.label;
+    main.appendChild(label);
+    if (row.detail !== "") {
+      const detail = document.createElement("div");
+      detail.className = "dsh-kbd-rowDetail";
+      detail.textContent = row.detail;
+      main.appendChild(detail);
+    }
+    return main;
+  }
+  function renderHint() {
+    const hint = document.createElement("div");
+    hint.className = "dsh-kbd-hint";
+    hint.textContent = "\u2191 \u2193 \u9009\u62E9 \xB7 Enter \u5207\u6362 \xB7 Esc \u5173\u95ED";
+    return hint;
+  }
+  function renderModelPicker(panel) {
+    const heading = document.createElement("div");
+    heading.className = "dsh-kbd-panelHeading";
+    heading.textContent = "\u9009\u62E9\u6A21\u578B";
+    panel.appendChild(heading);
+    const current = document.createElement("div");
+    current.className = "dsh-kbd-current";
+    panel.appendChild(current);
+    modelCurrentEl = current;
+    const list = document.createElement("div");
+    list.className = "dsh-kbd-list";
+    const loading = document.createElement("div");
+    loading.className = "dsh-kbd-empty";
+    loading.textContent = "\u6B63\u5728\u52A0\u8F7D\u6A21\u578B\u76EE\u5F55\u2026";
+    list.appendChild(loading);
+    panel.appendChild(list);
+    modelList = list;
+    const hint = document.createElement("div");
+    hint.className = "dsh-kbd-hint";
+    hint.textContent = "\u2191 \u2193 \u9009\u62E9 \xB7 Enter \u5207\u6362 \xB7 \u21E7Tab \u8C03\u6574\u601D\u8003\u5F3A\u5EA6 \xB7 Esc \u5173\u95ED";
+    panel.appendChild(hint);
+    const seq = ++modelSeq;
+    const stale = () => kind !== "model" || seq !== modelSeq;
+    void Promise.resolve().then(() => deps.listModels()).then(
+      (view) => {
+        if (!stale()) paintModelView(view);
+      },
+      () => {
+        if (!stale()) paintModelView({ current: null, rows: [], notice: "\u6A21\u578B\u76EE\u5F55\u4E0D\u53EF\u7528", footnote: "" });
+      }
+    );
+  }
+  function paintModelView(view) {
+    var _a, _b, _c, _d;
+    const list = modelList;
+    if (list === null) return;
+    modelLabel = (_b = (_a = view.current) == null ? void 0 : _a.label) != null ? _b : "";
+    modelEffort = (_d = (_c = view.current) == null ? void 0 : _c.effort) != null ? _d : "";
+    paintModelCurrent();
+    for (const child of [...list.children]) child.remove();
+    const rows = view.rows;
+    if (rows.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "dsh-kbd-empty";
+      empty.textContent = view.notice !== "" ? view.notice : "\u5F53\u524D\u6CA1\u6709\u53EF\u7528\u7684\u6A21\u578B";
+      list.appendChild(empty);
+      if (view.footnote !== "") list.appendChild(renderFootnote(view.footnote));
+      rowEls = [];
+      rowSelections = [];
+      return;
+    }
+    const els = [];
+    const selections = [];
+    let lastProvider = "";
+    rows.forEach((row, index) => {
+      if (row.provider !== lastProvider) {
+        lastProvider = row.provider;
+        list.appendChild(renderGroupHeading(row));
+      }
+      const el = document.createElement("div");
+      el.className = "dsh-kbd-row";
+      el.appendChild(renderRowMain(row));
+      if (row.current) {
+        const badge = document.createElement("span");
+        badge.className = "dsh-kbd-rowBadge";
+        badge.textContent = "\u5F53\u524D";
+        el.appendChild(badge);
+      }
+      el.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        choose(index);
+      });
+      el.addEventListener("mouseenter", () => {
+        setCursor(index);
+      });
+      list.appendChild(el);
+      els.push(el);
+      selections.push({ ...row.selection });
+    });
+    if (view.footnote !== "") list.appendChild(renderFootnote(view.footnote));
+    rowEls = els;
+    rowSelections = selections;
+    setCursor(Math.max(0, rows.findIndex((row) => row.current)));
+  }
+  function renderFootnote(text) {
+    const footnote = document.createElement("div");
+    footnote.className = "dsh-kbd-hint";
+    footnote.textContent = text;
+    return footnote;
+  }
+  function renderGroupHeading(row) {
+    const heading = document.createElement("div");
+    heading.className = "dsh-kbd-group";
+    heading.textContent = row.provider;
+    return heading;
+  }
+  function paintModelCurrent() {
+    if (modelCurrentEl === null) return;
+    if (modelLabel === "") {
+      modelCurrentEl.textContent = "";
+      return;
+    }
+    modelCurrentEl.textContent = modelEffort === "" ? `\u5F53\u524D\uFF1A${modelLabel}` : `\u5F53\u524D\uFF1A${modelLabel} \xB7 ${modelEffort}`;
+  }
+  function setCursor(index) {
+    if (rowEls.length === 0) return;
+    const next = Math.max(0, Math.min(index, rowEls.length - 1));
+    cursor = next;
+    rowEls.forEach((el, i) => {
+      el.className = i === next ? "dsh-kbd-row isActive" : "dsh-kbd-row";
+    });
+    const active = rowEls[next];
+    if (active !== void 0 && typeof active.scrollIntoView === "function") {
+      active.scrollIntoView({ block: "nearest" });
+    }
+  }
+  function choose(index) {
+    if (kind === "model") {
+      const selection = rowSelections[index];
+      if (selection === void 0) return;
+      const target = { ...selection };
+      close();
+      deps.selectModel(target);
+      return;
+    }
+    const workspaceId = rowIds[index];
+    if (workspaceId === void 0) return;
+    close();
+    deps.selectWorkspace(workspaceId);
+  }
+  function bindingOf(actionId) {
+    return deps.getConfig().bindings[actionId];
+  }
   function toggleHelp() {
-    if (open) close();
-    else mount();
+    if (kind === "help") close();
+    else mount("help");
+  }
+  function toggleWorkspacePicker() {
+    if (kind === "workspace") close();
+    else mount("workspace");
+  }
+  function toggleModelPicker() {
+    if (kind === "model") close();
+    else mount("model");
   }
   function handleKey(event) {
-    if (!open) return false;
+    if (kind === null) return false;
     if (event.key === "Escape") {
       close();
       return true;
     }
-    const combo = `${event.ctrlKey || event.metaKey ? "mod+" : ""}${event.altKey ? "alt+" : ""}${event.shiftKey ? "shift+" : ""}${event.key.toLowerCase()}`;
-    if (combo === "mod+/") {
-      close();
+    const combo = comboOf(event);
+    if (kind === "workspace") {
+      if (combo === "arrowup") {
+        setCursor(cursor - 1);
+        return true;
+      }
+      if (combo === "arrowdown") {
+        setCursor(cursor + 1);
+        return true;
+      }
+      if (combo === "enter" && rowIds.length > 0) {
+        choose(cursor);
+        return true;
+      }
+    }
+    if (kind === "model") {
+      if (combo === "arrowup") {
+        setCursor(cursor - 1);
+        return true;
+      }
+      if (combo === "arrowdown") {
+        setCursor(cursor + 1);
+        return true;
+      }
+      if (combo === "enter" && rowSelections.length > 0) {
+        choose(cursor);
+        return true;
+      }
+      if (combo === bindingOf("model.effortNext")) {
+        const result = deps.cycleEffort();
+        if (result.ok) {
+          modelEffort = result.effortLabel;
+          paintModelCurrent();
+        }
+        return true;
+      }
+    }
+    if (combo === bindingOf("model.pick")) {
+      toggleModelPicker();
+      return true;
+    }
+    if (combo === bindingOf("workspace.pick")) {
+      toggleWorkspacePicker();
+      return true;
+    }
+    if (combo === bindingOf("help.toggle")) {
+      toggleHelp();
       return true;
     }
     return false;
@@ -888,7 +1402,7 @@ function createOverlays(deps) {
     close();
     (_a = document.getElementById(STYLE_ID)) == null ? void 0 : _a.remove();
   }
-  return { isOpen, contains, handleKey, toggleHelp, destroy };
+  return { isOpen, contains, handleKey, toggleHelp, toggleWorkspacePicker, toggleModelPicker, destroy };
 }
 
 // src/sidebar-tabs.ts
@@ -1070,9 +1584,60 @@ function paneOf(layout, paneId) {
   return node;
 }
 
+// src/workspace-switcher.ts
+function workspaceRows(services) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+  const snapshot = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
+  const items = snapshot == null ? void 0 : snapshot.items;
+  if (!Array.isArray(items)) return [];
+  const current = (_g = (_f = (_e = (_d = services.sessions) == null ? void 0 : _d.list) == null ? void 0 : _e.getSnapshot) == null ? void 0 : _f.call(_e)) == null ? void 0 : _g.current;
+  const rows = [];
+  for (const item of items) {
+    if (item === null || item === void 0) continue;
+    const id = item.workspaceId;
+    if (typeof id !== "string" || id === "") continue;
+    rows.push({
+      workspaceId: id,
+      label: workspaceLabel(item),
+      detail: typeof item.path === "string" ? item.path : "",
+      sessionCount: (_i = (_h = item.sessionIds) == null ? void 0 : _h.length) != null ? _i : 0,
+      current: current !== void 0 && current !== "" && ((_k = (_j = item.sessionIds) == null ? void 0 : _j.includes(current)) != null ? _k : false)
+    });
+  }
+  for (const row of rows) {
+    if (row.detail === row.label) row.detail = "";
+  }
+  return rows;
+}
+function switchWorkspace(services, workspaceId) {
+  const uiWorkspace = services.uiWorkspace;
+  if (uiWorkspace === null || uiWorkspace === void 0) return false;
+  if (typeof uiWorkspace.openWorkspace !== "function") return false;
+  if (typeof workspaceId !== "string" || workspaceId === "") return false;
+  try {
+    void Promise.resolve(uiWorkspace.openWorkspace(workspaceId)).catch(() => {
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function workspaceLabel(item) {
+  const title = typeof item.title === "string" ? item.title.trim() : "";
+  if (title !== "") return title;
+  const path = typeof item.path === "string" ? item.path : "";
+  const base = pathBasename(path);
+  return base !== "" ? base : path;
+}
+function pathBasename(path) {
+  const trimmed = path.replace(/[/\\]+$/, "");
+  const separator = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  return trimmed.slice(separator + 1);
+}
+
 // src/client.ts
 var name = "dsh-kbd-hotkeys";
-var inject = ["sessions", "uiSession", "layout", "sidebarRight", "workspaces", "slots", "conversation"];
+var inject = ["sessions", "uiSession", "layout", "sidebarRight", "workspaces", "slots", "conversation", "uiWorkspace", "modelDirectories"];
 function getService(ctx, serviceName) {
   if (ctx.get === void 0 || ctx.get === null) return void 0;
   const value = ctx.get(serviceName);
@@ -1098,6 +1663,14 @@ function runAction(id, services, overlays) {
         return revealRightSidebarFiles(services);
       case "composer.focus":
         return focusComposer(services);
+      case "workspace.pick":
+        overlays.toggleWorkspacePicker();
+        return true;
+      case "model.pick":
+        overlays.toggleModelPicker();
+        return true;
+      case "model.effortNext":
+        return cycleEffort(services).ok;
       case "session.prev":
         return openNeighborSession(services, -1);
       case "session.next":
@@ -1125,12 +1698,26 @@ function apply(ctx) {
     sidebarRight: getService(ctx, "sidebarRight"),
     workspaces: getService(ctx, "workspaces"),
     slots: getService(ctx, "slots"),
-    conversation: getService(ctx, "conversation")
+    conversation: getService(ctx, "conversation"),
+    uiWorkspace: getService(ctx, "uiWorkspace"),
+    modelDirectories: getService(ctx, "modelDirectories")
   };
   const config = loadConfig();
   const actionByCombo = comboActionMap(config.bindings);
   const overlays = createOverlays({
-    getConfig: () => config
+    getConfig: () => config,
+    // 工作区浮窗:数据每次打开时现取(宿主顺序),确认走 uiWorkspace.openWorkspace
+    listWorkspaces: () => workspaceRows(services),
+    selectWorkspace: (workspaceId) => {
+      switchWorkspace(services, workspaceId);
+    },
+    // 模型浮窗:列表每次打开时现取当前会话的模型目录(与 `/model` 弹层、
+    // composer 模型座位同一份状态);确认走同一个 directory.select。
+    listModels: () => modelPickerView(services),
+    selectModel: (selection) => {
+      selectModel(services, selection);
+    },
+    cycleEffort: () => cycleEffort(services)
   });
   const swallow = (event) => {
     event.preventDefault();
@@ -1190,6 +1777,7 @@ function apply(ctx) {
     const def = ACTION_BY_ID.get(actionId);
     if (def === void 0) return;
     if (!def.states.includes(state)) return;
+    if (actionId === "model.effortNext" && state === "editing" && !isComposerTarget(services, event.target)) return;
     if (runAction(actionId, services, overlays)) swallow(event);
   };
   document.addEventListener("keydown", onKeyDown, true);

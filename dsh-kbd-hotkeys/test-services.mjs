@@ -33,7 +33,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// ---- 最小 DOM 桩(刻意不提供任何卡片元素) --------------------------------
+// ---- 最小 DOM 桩(刻意不提供任何卡片元素;仅记录浮层自建的 DOM 子树) ----
 class FakeNode {}
 class FakeHTMLElement extends FakeNode {
   constructor(tag = 'DIV') {
@@ -41,6 +41,11 @@ class FakeHTMLElement extends FakeNode {
     this.tagName = tag
     this.isContentEditable = false
     this.disabled = false
+    // 仅用于观察插件浮层(overlay.ts)自建的子树:appendChild/remove 维护父子关系,
+    // textContent 由浮层赋值。业务代码不读 DOM(卡片元素一律不存在)。
+    this.children = []
+    this.parent = null
+    this.textContent = null
   }
   focus() { this.focused = true }
   click() { this.clicked = true }
@@ -49,12 +54,20 @@ class FakeHTMLElement extends FakeNode {
   querySelectorAll() { return [] }
   closest() { return null }
   contains() { return false }
-  remove() {}
-  appendChild() {}
+  remove() {
+    if (this.parent !== null) this.parent.children = this.parent.children.filter((child) => child !== this)
+    this.parent = null
+  }
+  appendChild(child) { this.children.push(child); child.parent = this; return child }
   addEventListener() {}
 }
 class FakeDocument {
-  constructor() { this.listeners = new Map() }
+  constructor() {
+    this.listeners = new Map()
+    // body / head 必须是稳定实例,浮层挂载点才可观察(每次返回新实例会丢掉子树)
+    this._body = new FakeHTMLElement('BODY')
+    this._head = new FakeHTMLElement('HEAD')
+  }
   addEventListener(type, fn, capture) {
     if (!this.listeners.has(type)) this.listeners.set(type, [])
     this.listeners.get(type).push({ fn, capture })
@@ -64,8 +77,8 @@ class FakeDocument {
   querySelectorAll() { return [] }
   createElement(tag) { return new FakeHTMLElement(tag.toUpperCase()) }
   getElementById() { return null }
-  get body() { return new FakeHTMLElement('BODY') }
-  get head() { return new FakeHTMLElement('HEAD') }
+  get body() { return this._body }
+  get head() { return this._head }
 }
 class FakeKeyboardEvent {
   constructor(init) {
@@ -105,6 +118,26 @@ function check(label, condition, detail) {
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const clone = (value) => JSON.parse(JSON.stringify(value))
+
+// ---- 浮层观察工具(只读插件自建的 DOM 子树,业务代码不读 DOM) --------------
+/** 深度优先收集满足条件的元素。 */
+function collectNodes(node, predicate, out = []) {
+  for (const child of node.children ?? []) {
+    if (predicate(child)) out.push(child)
+    collectNodes(child, predicate, out)
+  }
+  return out
+}
+const classHas = (el, name) => typeof el.className === 'string' && el.className.split(' ').includes(name)
+/** 当前浮层渲染的工作区行(按 DOM 顺序)。 */
+const pickerRows = () => collectNodes(globalThis.document.body, (el) => classHas(el, 'dsh-kbd-row'))
+/** 高亮行下标(-1 = 无高亮)。 */
+const activeRowIndex = () => pickerRows().findIndex((el) => classHas(el, 'isActive'))
+/** 一行/一个节点的全部文本(自带 textContent + 子树,压缩空白)。 */
+function nodeText(node) {
+  const own = typeof node.textContent === 'string' ? node.textContent : ''
+  return [own, ...(node.children ?? []).map(nodeText)].join(' ').replace(/\s+/g, ' ').trim()
+}
 
 // ---- 通用装配 -------------------------------------------------------------
 function loadPlugin(services) {
@@ -792,8 +825,9 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
     check(`${label} → Ctrl+I 不吞键`, event.propagationStopped !== true)
   }
 
-  // 键位可经 localStorage 覆盖(与左右栏同一套 bindings 机制)
-  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'composer.focus': 'mod+alt+k' } }))
+  // 键位可经 localStorage 覆盖(与左右栏同一套 bindings 机制;
+  // 这里刻意避开新默认键位 ⌘/Ctrl+Alt+K = 工作区浮窗,改用 ⌘/Ctrl+Alt+J)
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'composer.focus': 'mod+alt+j' } }))
   const customRoot = makeRoot()
   const custom = loadPlugin({
     ...base,
@@ -802,8 +836,8 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
   })
   event = custom({ key: 'i', code: 'KeyI', ctrlKey: true })
   check('覆盖键位后 ⌘/Ctrl+I 不再聚焦', customRoot.focused !== true)
-  event = custom({ key: 'k', code: 'KeyK', ctrlKey: true, altKey: true })
-  check('自定义 ⌘/Ctrl+Alt+K → 聚焦', customRoot.focused === true)
+  event = custom({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: true })
+  check('自定义 ⌘/Ctrl+Alt+J → 聚焦', customRoot.focused === true)
   check('自定义键位被吞', event.propagationStopped === true)
   storage.delete('dsh-kbd-hotkeys:v1')
 }
@@ -1287,6 +1321,500 @@ console.log('\n--- ⌘/Ctrl+Alt+\\ → 右栏打开文件浏览器并置于首�
   event = customEnv.press({ key: '7', code: 'Digit7', ctrlKey: true, altKey: true })
   check('自定义 ⌘/Ctrl+Alt+7 → 打开并置顶', same(custom.calls, [['sess-b', 'files-1', 'pane-1', 0]]), JSON.stringify(custom.calls))
   check('自定义键位被吞', event.propagationStopped === true)
+  storage.delete('dsh-kbd-hotkeys:v1')
+}
+
+// ===========================================================================
+// 阶段 5:⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 高亮 + Enter 切换)
+//         列表 = workspaces.list 快照(宿主顺序,不重排);切换 = 公开的
+//         uiWorkspace.openWorkspace(workspaceId)(连接工作区:复用空白会话 /
+//         新建一个再打开)。浮窗内 ↑/↓ 只移动高亮、**不触发导航**;Enter(或点击
+//         行)才切换;Esc / 再按一次组合键关闭;⌘/ 直接换成速查表。
+//         浮层 DOM 由插件自建,故这里只读它自己的子树(业务代码仍然不读 DOM)。
+// ===========================================================================
+console.log('\n--- ⌘/Ctrl+Alt+K → 工作区浮窗(↑↓ 选择 + Enter 切换) ---')
+{
+  const combo = { key: 'k', code: 'KeyK', ctrlKey: true, altKey: true }
+  const item = (workspaceId, title, path, sessionIds = []) => ({
+    workspaceId, title, path, sessionIds,
+    createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z',
+  })
+  const items = [
+    item('w1', 'alpha', '/work/alpha', ['sess-a']),
+    item('w2', 'beta', '/work/beta', ['sess-b']),
+    item('w3', '', '/work/gamma'), // 无 title → 回退路径末段
+    item('w4', '', 'plain'), // 末段 = 原路径 → 次行省略
+  ]
+  const workspaces = { list: { getSnapshot: () => ({ items, archivedSessionIds: [], phase: 'ready' }) } }
+
+  /** 假 uiWorkspace:记录 openWorkspace 调用;可配置同步抛错 / 异步拒绝。 */
+  function makeUiWorkspace(mode = 'ok') {
+    const calls = []
+    return {
+      calls,
+      openWorkspace(workspaceId) {
+        calls.push(workspaceId)
+        if (mode === 'throw') throw new Error('uiWorkspace: no mounted session surface')
+        if (mode === 'reject') return Promise.reject(new Error('uiWorkspace: connect failed'))
+        return Promise.resolve()
+      },
+    }
+  }
+  /** 装配:默认「服务齐全、当前会话 sess-b(属于 w2)」。 */
+  function env(over = {}) {
+    const uiWorkspace = over.uiWorkspace !== undefined ? over.uiWorkspace : makeUiWorkspace(over.mode)
+    // 显式传 { workspaces: undefined } 表示「服务缺席」,不能用 `=== undefined` 兜底
+    const workspacesService = 'workspaces' in over ? over.workspaces : workspaces
+    const press = loadPlugin({
+      sessions: over.sessions ?? { ...sessions, binding: () => undefined },
+      uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, resolve: () => undefined },
+      workspaces: workspacesService,
+      uiWorkspace,
+      ...over.extra,
+    })
+    return { press, uiWorkspace }
+  }
+
+  // ① 打开浮窗:列表按宿主顺序渲染,初始高亮 = 当前会话所属工作区(w2)
+  const first = env()
+  let event = first.press(combo)
+  check('⌘/Ctrl+Alt+K 打开工作区浮窗并吞键', event.propagationStopped === true)
+  check(
+    '浮窗按宿主顺序渲染工作区行(标题 / 路径 / 当前标记 / 会话数)',
+    same(pickerRows().map(nodeText), [
+      'alpha /work/alpha 1 个会话',
+      'beta /work/beta 当前 1 个会话',
+      'gamma /work/gamma 0 个会话',
+      'plain 0 个会话',
+    ]),
+    JSON.stringify(pickerRows().map(nodeText)),
+  )
+  check('初始高亮 = 当前会话所属工作区(第 2 行)', activeRowIndex() === 1, String(activeRowIndex()))
+
+  // ② ↑ / ↓ 只移动高亮(不触发导航),Enter 才切换
+  event = first.press({ key: 'ArrowDown', code: 'ArrowDown' })
+  check('↓ 移动高亮到第 3 行', activeRowIndex() === 2, String(activeRowIndex()))
+  check('↓ 被浮窗吞掉', event.propagationStopped === true)
+  check('↓ 不触发切换(只有 Enter 才调 openWorkspace)', same(first.uiWorkspace.calls, []), JSON.stringify(first.uiWorkspace.calls))
+  first.press({ key: 'ArrowUp', code: 'ArrowUp' })
+  check('↑ 移回第 2 行', activeRowIndex() === 1, String(activeRowIndex()))
+  first.press({ key: 'ArrowUp', code: 'ArrowUp' })
+  first.press({ key: 'ArrowUp', code: 'ArrowUp' })
+  check('首行 clamp(不循环,仍停在第 1 行)', activeRowIndex() === 0, String(activeRowIndex()))
+  first.press({ key: 'ArrowDown', code: 'ArrowDown' })
+  check('高亮回到当前工作区行', activeRowIndex() === 1, String(activeRowIndex()))
+  event = first.press({ key: 'Enter', code: 'Enter' })
+  check('Enter → uiWorkspace.openWorkspace(高亮工作区)', same(first.uiWorkspace.calls, ['w2']), JSON.stringify(first.uiWorkspace.calls))
+  check('Enter 被吞', event.propagationStopped === true)
+  check('切换后浮窗关闭(工作区行清空)', pickerRows().length === 0, String(pickerRows().length))
+  event = first.press({ key: 'ArrowDown', code: 'ArrowDown' })
+  check('浮窗关闭后裸 ↓ 不吞键', event.propagationStopped !== true)
+
+  // ③ Esc 关闭 / 同组合键再按一次关闭(开关语义)/ ⌘/ 直接换成速查表
+  first.press(combo)
+  check('可再次打开', pickerRows().length === 4, String(pickerRows().length))
+  first.press({ key: 'ArrowDown', code: 'ArrowDown' })
+  event = first.press({ key: 'Escape', code: 'Escape' })
+  check('Esc 关闭浮窗并吞键', event.propagationStopped === true && pickerRows().length === 0)
+  first.press(combo)
+  event = first.press(combo)
+  check('再按一次 ⌘/Ctrl+Alt+K 关闭(开关语义)', pickerRows().length === 0, String(pickerRows().length))
+  check('同组合键关闭被吞', event.propagationStopped === true)
+  first.press(combo)
+  event = first.press({ key: '/', code: 'Slash', ctrlKey: true })
+  check('浮窗内按 ⌘/ 直接换成速查表(工作区行消失)', event.propagationStopped === true && pickerRows().length === 0)
+  event = first.press({ key: '/', code: 'Slash', ctrlKey: true })
+  check('速查表再按 ⌘/ 关闭', event.propagationStopped === true)
+
+  // ④ 初始高亮:当前会话不属于任何工作区 → 首行;↑ 在首行 clamp
+  const stray = env({
+    sessions: { list: { getSnapshot: () => ({ ...snapshot, current: 'sess-x' }) }, open() {}, binding: () => undefined },
+  })
+  stray.press(combo)
+  check('当前会话无归属 → 初始高亮第 1 行', activeRowIndex() === 0, String(activeRowIndex()))
+  stray.press({ key: 'ArrowUp', code: 'ArrowUp' })
+  check('首行再按 ↑ 仍停在第 1 行', activeRowIndex() === 0, String(activeRowIndex()))
+  stray.press({ key: 'Enter', code: 'Enter' })
+  check('Enter → openWorkspace(w1)', same(stray.uiWorkspace.calls, ['w1']), JSON.stringify(stray.uiWorkspace.calls))
+
+  // ⑤ 空列表 / workspaces 服务缺席:浮窗照样打开(空态),Enter 不切换、不崩
+  const empty = env({ workspaces: { list: { getSnapshot: () => ({ items: [], archivedSessionIds: [], phase: 'ready' }) } } })
+  event = empty.press(combo)
+  check('无工作区时仍打开浮窗(空态)并吞键', event.propagationStopped === true && pickerRows().length === 0)
+  event = empty.press({ key: 'Enter', code: 'Enter' })
+  check('空态 Enter 不触发 openWorkspace', same(empty.uiWorkspace.calls, []), JSON.stringify(empty.uiWorkspace.calls))
+  check('空态 Enter 仍被模态吞掉', event.propagationStopped === true)
+  empty.press({ key: 'Escape', code: 'Escape' })
+
+  const noService = env({ workspaces: undefined })
+  event = noService.press(combo)
+  check('workspaces 服务缺席 → 浮窗空态、不崩、吞键', event.propagationStopped === true && pickerRows().length === 0)
+  event = noService.press({ key: 'Enter', code: 'Enter' })
+  check('workspaces 缺席时 Enter 不切换、不抛错', same(noService.uiWorkspace.calls, []), JSON.stringify(noService.uiWorkspace.calls))
+  noService.press({ key: 'Escape', code: 'Escape' })
+
+  // ⑥ uiWorkspace 缺席 / 抛错:浮窗照常开关,确认时 no-op(不崩、不回退 DOM)
+  for (const [label, over] of [
+    ['uiWorkspace 缺席', { uiWorkspace: null }],
+    ['openWorkspace 同步抛错', { mode: 'throw' }],
+    ['openWorkspace 异步拒绝', { mode: 'reject' }],
+  ]) {
+    const target = env(over)
+    target.press(combo)
+    target.press({ key: 'ArrowDown', code: 'ArrowDown' })
+    event = target.press({ key: 'Enter', code: 'Enter' })
+    check(`${label} → 确认时 no-op、不崩、浮窗关闭`, event.propagationStopped === true && pickerRows().length === 0)
+    if (over.mode !== undefined) {
+      check(`${label} → 仍如实调用了 openWorkspace`, target.uiWorkspace.calls.length === 1, JSON.stringify(target.uiWorkspace.calls))
+    }
+  }
+
+  // ⑦ card / editing 态同样可用(带修饰键的组合不与卡片裸键、文本编辑冲突)
+  const carded = env({
+    extra: {
+      uiSession: {
+        pendingInteractions: {
+          getSnapshot: () => new Map([['sess-b', { kind: 'question', key: 'question:9', sessionId: 'sess-b', questions: [{ id: 'q1', options: [{ label: 'A' }] }] }]]),
+        },
+        resolve: () => undefined,
+      },
+    },
+  })
+  event = carded.press(combo)
+  check('card 态 ⌘/Ctrl+Alt+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 4)
+  carded.press({ key: 'Escape', code: 'Escape' })
+  const editing = env()
+  event = editing.press({ ...combo, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 ⌘/Ctrl+Alt+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 4)
+  editing.press({ key: 'Escape', code: 'Escape' })
+
+  // ⑧ 键位可独立覆盖(与其它动作同一套 bindings 机制)
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'workspace.pick': 'mod+alt+9' } }))
+  const custom = env()
+  event = custom.press(combo)
+  check('覆盖键位后 ⌘/Ctrl+Alt+K 不再打开', event.propagationStopped !== true && pickerRows().length === 0)
+  event = custom.press({ key: '9', code: 'Digit9', ctrlKey: true, altKey: true })
+  check('自定义 ⌘/Ctrl+Alt+9 打开浮窗并吞键', event.propagationStopped === true && pickerRows().length === 4)
+  custom.press({ key: 'Enter', code: 'Enter' })
+  check('自定义键位下 Enter 切换当前工作区', same(custom.uiWorkspace.calls, ['w2']), JSON.stringify(custom.uiWorkspace.calls))
+  storage.delete('dsh-kbd-hotkeys:v1')
+}
+
+// ===========================================================================
+// 阶段 6:⌘/Ctrl+Alt+M → 模型浮窗(↑↓ 选择 + Enter 切换)
+//         与 ⇧Tab → 循环切换当前模型的思考强度
+//         取数与提交都必须走上游**同一个** per-session 模型目录
+//         (ctx.modelDirectories.directoryFor(sessionId)):`/model` 弹层与 composer
+//         模型座位共用它,所以浮窗里的切换与两个上游入口同源、同一份状态。
+//         行的完整选择必须复刻上游弹层 selectionOf(无 defaultEffort 时省略
+//         reasoningEffort);⇧Tab 的循环集合必须复刻上游座位的 effortChoices
+//         (有 defaultEffort 时不含 Default 档),当前档 = current.reasoningEffort
+//         ?? reasoning.defaultEffort。
+// ===========================================================================
+console.log('\n--- ⌘/Ctrl+Alt+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
+{
+  const combo = { key: 'm', code: 'KeyM', ctrlKey: true, altKey: true }
+  const shiftTab = { key: 'Tab', code: 'Tab', shiftKey: true }
+  /** 等一次宏任务:浮窗的列表是异步取的(先绘制「加载中」,落地后重画)。 */
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  const groupHeadings = () =>
+    collectNodes(globalThis.document.body, (el) => classHas(el, 'dsh-kbd-group')).map(nodeText)
+  const currentLines = () =>
+    collectNodes(globalThis.document.body, (el) => classHas(el, 'dsh-kbd-current')).map(nodeText)
+  const emptyNotices = () =>
+    collectNodes(globalThis.document.body, (el) => classHas(el, 'dsh-kbd-empty')).map(nodeText)
+  const hintTexts = () =>
+    collectNodes(globalThis.document.body, (el) => classHas(el, 'dsh-kbd-hint')).map(nodeText)
+
+  /** 目录行夹具:两个提供方 / 三种模型(有默认档 / 无默认档 / 无推理元数据)。 */
+  const groups = [
+    {
+      id: 'deepseek-official',
+      name: 'DeepSeek',
+      models: [
+        {
+          id: 'deepseek-v4-flash',
+          name: 'DeepSeek V4 Flash',
+          reasoning: { efforts: [{ id: 'off', name: 'Off' }, { id: 'low', name: 'Low' }, { id: 'high', name: 'High' }] },
+        },
+        {
+          id: 'deepseek-v4-pro',
+          name: 'DeepSeek V4 Pro',
+          reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' },
+        },
+      ],
+    },
+    { id: 'other', name: 'Other Provider', models: [{ id: 'plain', name: 'Plain Model' }] },
+  ]
+  const proCurrent = { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' }
+
+  /**
+   * 假模型目录:复刻上游 ModelDirectory 的 store / load / select 语义。
+   * select 成功时把 current 换成新选择(durable 投影帧的效果),失败时 reject。
+   */
+  function makeDirectory(over = {}) {
+    const state = {
+      current: over.current !== undefined ? over.current : proCurrent,
+      routable: true,
+      groups: over.groups !== undefined ? over.groups : groups,
+      failures: over.failures !== undefined ? over.failures : [],
+      status: 'ready',
+      error: null,
+    }
+    const calls = []
+    return {
+      calls,
+      state,
+      store: { getSnapshot: () => state },
+      load() {
+        if (over.loadError !== undefined) return Promise.reject(new Error(over.loadError))
+        return Promise.resolve(state)
+      },
+      select(selection) {
+        calls.push({ ...selection })
+        if (over.selectError !== undefined) return Promise.reject(new Error(over.selectError))
+        state.current = { ...selection }
+        return Promise.resolve()
+      },
+    }
+  }
+
+  /** 装配:默认「模型目录齐全、当前会话 sess-b」。 */
+  function env(over = {}) {
+    const directory = over.directory !== undefined ? over.directory : makeDirectory()
+    const seen = []
+    let resolver
+    if ('modelDirectories' in over) resolver = over.modelDirectories
+    else if (over.throwOnDirectory === true) {
+      resolver = { directoryFor() { throw new Error('ui-model-selection: session resolved no scope') } }
+    } else {
+      resolver = { directoryFor(sessionId) { seen.push(sessionId); return directory } }
+    }
+    const press = loadPlugin({
+      sessions: over.sessions ?? { ...sessions, binding: () => undefined },
+      uiSession: over.uiSession ?? { pendingInteractions: { getSnapshot: () => new Map() } },
+      modelDirectories: resolver,
+      conversation: over.conversation,
+    })
+    return { press, directory, seen }
+  }
+
+  // ① 打开浮窗:先绘制加载态,异步落地后按宿主顺序渲染行 + 提供方分组标题
+  const first = env()
+  let event = first.press(combo)
+  check('⌘/Ctrl+Alt+M 打开模型浮窗并吞键', event.propagationStopped === true)
+  check('首次绘制 = 「正在加载模型目录…」', same(emptyNotices(), ['正在加载模型目录…']), JSON.stringify(emptyNotices()))
+  await flush()
+  check('目录按当前会话 id 取(directoryFor(sess-b))', same(first.seen, ['sess-b']), JSON.stringify(first.seen))
+  check(
+    '行按宿主顺序展开(模型名 / 提供方,当前行带标记)',
+    same(pickerRows().map(nodeText), [
+      'DeepSeek V4 Flash DeepSeek',
+      'DeepSeek V4 Pro DeepSeek 当前',
+      'Plain Model Other Provider',
+    ]),
+    JSON.stringify(pickerRows().map(nodeText)),
+  )
+  check('提供方分组标题按相邻同组行插入', same(groupHeadings(), ['DeepSeek', 'Other Provider']), JSON.stringify(groupHeadings()))
+  check('「当前」行 = 当前模型 + 当前强度档', same(currentLines(), ['当前：DeepSeek V4 Pro · High']), JSON.stringify(currentLines()))
+  check('初始高亮 = 当前选择所在行', activeRowIndex() === 1, String(activeRowIndex()))
+
+  // ② ↑/↓ clamp + Enter 提交**完整**选择(无 defaultEffort 的模型省略 reasoningEffort)
+  first.press({ key: 'ArrowUp', code: 'ArrowUp' })
+  check('↑ 移到第 1 行', activeRowIndex() === 0, String(activeRowIndex()))
+  first.press({ key: 'ArrowUp', code: 'ArrowUp' })
+  check('首行 clamp(不循环)', activeRowIndex() === 0, String(activeRowIndex()))
+  event = first.press({ key: 'Enter', code: 'Enter' })
+  check(
+    'Enter → directory.select(该行完整选择;无 defaultEffort 时不带 reasoningEffort)',
+    same(first.directory.calls, [{ provider: 'deepseek-official', model: 'deepseek-v4-flash' }]),
+    JSON.stringify(first.directory.calls),
+  )
+  check('确认后浮窗关闭', event.propagationStopped === true && pickerRows().length === 0)
+
+  // ③ 重新打开:高亮跟随目录里的新 current(store 是唯一真源),↓ 到末行 clamp
+  first.press(combo)
+  await flush()
+  check('重开后高亮 = 新 current 所在行', activeRowIndex() === 0, String(activeRowIndex()))
+  check('重开后「当前」行 = 新模型(无 defaultEffort 时显示提供方默认档)', same(currentLines(), ['当前：DeepSeek V4 Flash · Default']), JSON.stringify(currentLines()))
+  first.press({ key: 'ArrowDown', code: 'ArrowDown' })
+  first.press({ key: 'ArrowDown', code: 'ArrowDown' })
+  check('↓ 移到最后一行', activeRowIndex() === 2, String(activeRowIndex()))
+  first.press({ key: 'ArrowDown', code: 'ArrowDown' })
+  check('末行 clamp', activeRowIndex() === 2, String(activeRowIndex()))
+  first.press({ key: 'Enter', code: 'Enter' })
+  check(
+    'Enter → 选中别的提供方的模型',
+    same(first.directory.calls.at(-1), { provider: 'other', model: 'plain' }),
+    JSON.stringify(first.directory.calls),
+  )
+
+  // ④ ⇧Tab 全局循环:有 defaultEffort 时候选 = efforts(不含 Default 档),循环回绕
+  const cyc = env()
+  event = cyc.press(shiftTab)
+  check(
+    '⇧Tab → 同模型的下一档(high → low)',
+    same(cyc.directory.calls, [{ provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'low' }]),
+    JSON.stringify(cyc.directory.calls),
+  )
+  check('⇧Tab 生效时吞键', event.propagationStopped === true)
+  cyc.press(shiftTab)
+  check(
+    '再按 ⇧Tab 循环到末档后回到首档(low → high)',
+    same(cyc.directory.calls[1], { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' }),
+    JSON.stringify(cyc.directory.calls),
+  )
+
+  // ⑤ 无 defaultEffort:候选首项是「提供方默认档」,故当前档缺席时从第一档开始
+  const flash = env({ directory: makeDirectory({ current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } }) })
+  flash.press(shiftTab)
+  check(
+    '无 defaultEffort + 当前档缺席 → 切到第一档(Default → off)',
+    same(flash.directory.calls, [{ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'off' }]),
+    JSON.stringify(flash.directory.calls),
+  )
+  flash.press(shiftTab)
+  check('再按一次进入下一档(off → low)', flash.directory.calls[1]?.reasoningEffort === 'low', JSON.stringify(flash.directory.calls))
+
+  // ⑥ no-op:模型无推理元数据 / 只有一档 → 不切换、不吞键(⇧Tab 交回页面)
+  const plainDir = makeDirectory({ current: { provider: 'other', model: 'plain' } })
+  const plain = env({ directory: plainDir })
+  event = plain.press(shiftTab)
+  check('模型无推理元数据 → ⇧Tab no-op 且不吞键', event.propagationStopped !== true && plainDir.calls.length === 0)
+  const oneDir = makeDirectory({
+    current: { provider: 'x', model: 'y', reasoningEffort: 'only' },
+    groups: [{ id: 'x', name: 'X', models: [{ id: 'y', name: 'Y', reasoning: { efforts: [{ id: 'only', name: 'Only' }], defaultEffort: 'only' } }] }],
+  })
+  const one = env({ directory: oneDir })
+  event = one.press(shiftTab)
+  check('只有一档强度 → ⇧Tab no-op 且不吞键', event.propagationStopped !== true && oneDir.calls.length === 0)
+
+  // ⑦ 无降级:服务 / 会话 / 子代理 / directoryFor 抛错 → 浮窗空态、⇧Tab no-op
+  for (const [label, over] of [
+    ['modelDirectories 服务缺席', { modelDirectories: undefined }],
+    ['directoryFor 抛错(未知会话 / 无挂载会话面)', { throwOnDirectory: true }],
+    ['无当前会话', { sessions: { list: { getSnapshot: () => ({ ...snapshot, current: undefined }) }, binding: () => undefined } }],
+    [
+      '被寻址的子代理会话',
+      {
+        sessions: {
+          ...sessions,
+          binding: () => undefined,
+          subagentAddress: () => ({ mode: 'continuation', parentSessionId: 'sess-a', childSessionId: 'sess-b' }),
+        },
+      },
+    ],
+  ]) {
+    const target = env(over)
+    event = target.press(combo)
+    await flush()
+    check(`${label} → 浮窗显示空态、不崩、吞键`, event.propagationStopped === true && pickerRows().length === 0, JSON.stringify(emptyNotices()))
+    check(`${label} → 空态文案 = 没有可切换模型的会话`, same(emptyNotices(), ['当前没有可切换模型的会话']), JSON.stringify(emptyNotices()))
+    // 先关浮窗:浮窗打开时按 ⇧Tab 归浮层模态分发(见 ⑩),测的是浮窗外的全局行为
+    target.press({ key: 'Escape', code: 'Escape' })
+    event = target.press(shiftTab)
+    check(`${label} → ⇧Tab no-op 且不吞键`, event.propagationStopped !== true)
+  }
+
+  // ⑧ load() 拒绝 / select() 拒绝:浮窗照常开关,失败只落在提示与 store 上
+  const broken = env({ directory: makeDirectory({ loadError: 'host catalog unavailable' }) })
+  event = broken.press(combo)
+  await flush()
+  check('load() 拒绝 → 浮窗仍打开并吞键(加载失败提示)', event.propagationStopped === true)
+  check(
+    'load() 拒绝 → 底部小字给出失败原因',
+    hintTexts().some((text) => text.includes('模型目录加载失败：host catalog unavailable')),
+    JSON.stringify(hintTexts()),
+  )
+  broken.press({ key: 'Escape', code: 'Escape' })
+  const rejectSelect = env({ directory: makeDirectory({ selectError: 'session.selectModel failed' }) })
+  rejectSelect.press(combo)
+  await flush()
+  event = rejectSelect.press({ key: 'Enter', code: 'Enter' })
+  check('select() 拒绝 → 浮窗仍关闭、不崩、吞键', event.propagationStopped === true && pickerRows().length === 0)
+  rejectSelect.press(shiftTab)
+  check('select() 拒绝的 ⇧Tab 仍算已发出(吞键)', rejectSelect.press(shiftTab).propagationStopped === true)
+
+  // ⑨ 失败提供方只做底部小字提示(不可选中,不占行)
+  const withFailure = env({
+    directory: makeDirectory({ failures: [{ id: 'broken-provider', name: 'Broken', message: 'unauthorized' }] }),
+  })
+  withFailure.press(combo)
+  await flush()
+  check('失败提供方不占行,只出现在底部小字', pickerRows().length === 3, String(pickerRows().length))
+  check(
+    '底部小字含失败提供方计数',
+    hintTexts().some((text) => text.includes('1 个提供方的目录加载失败')),
+    JSON.stringify(hintTexts()),
+  )
+  withFailure.press({ key: 'Escape', code: 'Escape' })
+
+  // ⑩ 浮窗内按 ⇧Tab:提交切换并**原地**更新「当前」行(列表与高亮都不动)
+  const inside = env()
+  inside.press(combo)
+  await flush()
+  event = inside.press(shiftTab)
+  check(
+    '浮窗内 ⇧Tab → 提交切换并吞键',
+    event.propagationStopped === true &&
+      same(inside.directory.calls, [{ provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'low' }]),
+    JSON.stringify(inside.directory.calls),
+  )
+  check('浮窗内 ⇧Tab 后「当前」行就地更新为 Low', same(currentLines(), ['当前：DeepSeek V4 Pro · Low']), JSON.stringify(currentLines()))
+  check('浮窗内 ⇧Tab 不改变列表与高亮', pickerRows().length === 3 && activeRowIndex() === 1, String(activeRowIndex()))
+  inside.press({ key: 'Escape', code: 'Escape' })
+
+  // ⑪ ⇧Tab 的 editing 态门闸:只在 composer 自己的编辑区内接管
+  const composerTarget = new FakeHTMLElement('DIV')
+  composerTarget.isContentEditable = true
+  const composerRoot = new FakeHTMLElement('DIV')
+  composerRoot.contains = (node) => node === composerTarget
+  const elsewhere = new FakeHTMLElement('TEXTAREA')
+  const conversation = { input: { shell: () => ({ editor: { getRootElement: () => composerRoot } }) } }
+  const gated = env({ conversation })
+  event = gated.press({ ...shiftTab, target: composerTarget })
+  check(
+    'editing 态 + 焦点在 composer 内 → ⇧Tab 生效并吞键',
+    event.propagationStopped === true && gated.directory.calls.length === 1,
+    JSON.stringify(gated.directory.calls),
+  )
+  const outside = env({ conversation })
+  event = outside.press({ ...shiftTab, target: elsewhere })
+  check('editing 态 + 焦点在别处可编辑元素 → ⇧Tab 不吞键', event.propagationStopped !== true)
+  check('editing 态 + 焦点在别处 → 不改模型强度', outside.directory.calls.length === 0)
+  const noConversation = env()
+  event = noConversation.press({ ...shiftTab, target: elsewhere })
+  check('conversation 服务缺席 → editing 态 ⇧Tab no-op 不吞键', event.propagationStopped !== true && noConversation.directory.calls.length === 0)
+
+  // ⑫ card 态:模型浮窗照开(带修饰键),⇧Tab 归卡片自己
+  const cardEnv = env({
+    uiSession: {
+      pendingInteractions: {
+        getSnapshot: () => new Map([['sess-b', { kind: 'question', key: 'question:9', sessionId: 'sess-b', questions: [{ id: 'q1', options: [{ label: 'A' }] }] }]]),
+      },
+    },
+  })
+  event = cardEnv.press(combo)
+  await flush()
+  check('card 态 ⌘/Ctrl+Alt+M 仍打开模型浮窗', event.propagationStopped === true && pickerRows().length === 3)
+  cardEnv.press({ key: 'Escape', code: 'Escape' })
+  event = cardEnv.press(shiftTab)
+  check('card 态 ⇧Tab 不接管(交回卡片)', event.propagationStopped !== true && cardEnv.directory.calls.length === 0)
+
+  // ⑬ 两个动作 id 的键位各自独立可覆盖
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'model.pick': 'mod+alt+8', 'model.effortNext': 'mod+alt+u' } }))
+  const custom = env()
+  event = custom.press(combo)
+  check('覆盖键位后 ⌘/Ctrl+Alt+M 不再打开', event.propagationStopped !== true && pickerRows().length === 0)
+  event = custom.press({ key: '8', code: 'Digit8', ctrlKey: true, altKey: true })
+  await flush()
+  check('自定义 ⌘/Ctrl+Alt+8 打开模型浮窗并吞键', event.propagationStopped === true && pickerRows().length === 3)
+  custom.press({ key: 'Escape', code: 'Escape' })
+  event = custom.press(shiftTab)
+  check('覆盖后 ⇧Tab 不再切换强度', event.propagationStopped !== true && custom.directory.calls.length === 0)
+  event = custom.press({ key: 'u', code: 'KeyU', ctrlKey: true, altKey: true })
+  check('自定义 ⌘/Ctrl+Alt+U → 切换强度并吞键', event.propagationStopped === true && custom.directory.calls.length === 1)
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
