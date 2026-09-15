@@ -29,101 +29,79 @@ module.exports = __toCommonJS(client_exports);
 
 // src/css.ts
 var CSS = `
-/* ===== \u6D88\u606F\u5361\u7247\u95F4\u8DDD \u2014 calc(14px * 0.5) = 7px =====
- * \u804A\u5929\u5217(dsh-client-ui-chat)\u7528 margin-top: var(--dsh-chat-flow-gap, 16px);
- * \u58F0\u660E\u5728 body \u800C\u975E :root:\u81EA\u5B9A\u4E49\u5C5E\u6027\u5185\u90E8\u7684 var() \u5728**\u58F0\u660E\u5143\u7D20**\u4E0A\u6C42\u503C,\u800C
- * --dsh-content-font-size \u7531\u4E3B\u9898\u4EE5**\u5185\u8054\u6837\u5F0F**\u8BBE\u5728 body \u4E0A,\u653E :root \u4F1A\u53D6\u4E0D\u5230
- * \u5B9E\u9645\u503C\u3001\u6052\u7528\u56DE\u9000 14px\u3002 */
+/* \u6D88\u606F\u5361\u7247\u95F4\u8DDD 7px;\u987B\u8BBE\u5728 body(\u5B57\u53F7\u8F74\u662F body \u4E0A\u7684\u5185\u8054\u6837\u5F0F) */
 body {
   --dsh-chat-flow-gap: calc(14px * 0.5);
 }
 
-/* ===== \u5361\u7247\u6807\u9898 \u2014 14px(\u5199\u6B7B,\u4E0E\u5B57\u53F7\u8BBE\u7F6E\u65E0\u5173)===== */
-/* DisclosureRow \u7CFB\u5361\u7247:\u8868\u5934\u884C\u7B2C 2 \u4E2A\u76F4\u5C5E\u5B50\u5143\u7D20\u6052\u4E3A\u6807\u9898\u3002 */
+/* \u5361\u7247\u6807\u9898 14px \u2014 DisclosureRow \u8868\u5934\u7B2C 2 \u4E2A\u76F4\u5C5E\u5B50\u5143\u7D20 */
 [data-chat-flow-kind] [data-disclosure-row] > span:nth-child(2) {
   font-size: 14px !important;
 }
 
-/* Bash \u5361\u7247([data-sample],\u4E0D\u8D70 DisclosureRow):\u6807\u9898\u4E3A\u8868\u5934\u5012\u6570\u7B2C 3 \u4E2A span\u3002 */
+/* Bash \u5361\u7247([data-sample]):\u6807\u9898 = \u8868\u5934\u5012\u6570\u7B2C 3 \u4E2A span */
 [data-sample] > span:nth-last-child(3) {
   font-size: 14px !important;
 }
 
-/* \u538B\u7F29\u6807\u8BB0(auto/manual):\u6807\u9898\u4F4D\u4E8E\u8868\u5934 <button> \u5185,\u5012\u6570\u7B2C 3 \u4E2A span\u3002 */
+/* \u538B\u7F29\u6807\u8BB0:\u6807\u9898 = \u8868\u5934 button \u5185\u5012\u6570\u7B2C 3 \u4E2A span */
 [data-chat-flow-kind="compaction"] button > span:nth-last-child(3),
 [data-chat-flow-kind="manual-compaction"] button > span:nth-last-child(3) {
   font-size: 14px !important;
 }
 
-/* ===== \u5361\u7247\u8868\u5934\u6458\u8981\u884C \u2014 14px ===== */
-/* DisclosureRow \u7CFB:\u6807\u9898(\u7B2C 2 \u5B50\u5143\u7D20)\u4E4B\u540E\u7684\u6240\u6709\u76F4\u5C5E\u5B50\u5143\u7D20\u5373\u6574\u6761\u6458\u8981\u884C\u3002 */
+/* \u6458\u8981\u884C 14px:\u6807\u9898\u4E4B\u540E\u7684\u76F4\u5C5E\u5B50\u5143\u7D20(\u7B2C 3 \u4E2A\u8D77) */
 [data-chat-flow-kind] [data-disclosure-row] > :nth-child(n+3) {
   font-size: 14px !important;
 }
 
-/* Bash \u5361\u7247:\u6458\u8981\u4E3A\u8868\u5934\u6700\u540E\u4E00\u4E2A span\u3002 */
+/* Bash \u5361\u7247\u6458\u8981 = \u8868\u5934\u6700\u540E\u4E00\u4E2A span */
 [data-sample] > span:last-child {
   font-size: 14px !important;
 }
 
-/* \u538B\u7F29\u6807\u8BB0:\u6458\u8981\u4E3A\u8868\u5934 <button> \u6700\u540E\u4E00\u4E2A span\u3002 */
+/* \u538B\u7F29\u6807\u8BB0\u6458\u8981 = button \u5185\u6700\u540E\u4E00\u4E2A span */
 [data-chat-flow-kind="compaction"] button > span:last-child,
 [data-chat-flow-kind="manual-compaction"] button > span:last-child {
   font-size: 14px !important;
 }
 
-/* ===== \u4EE3\u7801\u5757\u4E0E\u5185\u8054\u4EE3\u7801 \u2014 14px ===== */
+/* \u4EE3\u7801\u5757 14px */
 [data-chat-flow-kind] pre,
 [data-chat-flow-kind] pre code {
   font-size: 14px !important;
 }
 
-/* \u5185\u8054\u4EE3\u7801:\u5E94\u7528\u4FA7 :not(pre)>code \u81EA\u5E26 font-size: .875em !important
-   (\u7279\u5F02\u6027 0,1,2)\u3002\u987B\u4FDD\u6301\u7B49\u7279\u5F02\u6027(\u5C5E\u6027 + :not(pre) + code)\u5E76\u4EE5\u672C\u6837\u5F0F\u540E\u6CE8\u5165
-   \u7684\u6587\u6863\u987A\u5E8F\u80DC\u51FA\u2014\u2014\u52FF\u964D\u7279\u5F02\u6027\u3002 */
+/* \u5185\u8054\u4EE3\u7801:\u4E0A\u6E38 :not(pre)>code \u4E3A (0,1,2),\u987B\u540C\u7279\u5F02\u6027\u9760\u540E\u6CE8\u5165\u80DC\u51FA */
 [data-chat-flow-kind] :not(pre) > code {
   font-size: 14px !important;
 }
 
-/* ===== Markdown \u8868\u683C\u5355\u5143\u683C \u2014 14px =====
- * \u8868\u683C th/td \u6D88\u8D39 --dsw-font-markdown-table(-head),\u5176\u5B57\u53F7\u53D6\u81EA
- * --dsh-content-font-size-secondary(= \u5185\u5BB9\u5B57\u53F7 - 1px),\u6BD4\u6B63\u6587\u5C0F\u4E00\u6863;\u8FD9\u91CC\u628A
- * \u5355\u5143\u683C\u5B57\u53F7\u63D0\u5347\u5230\u4E0E\u5361\u7247\u5176\u4F59\u6587\u672C\u4E00\u81F4\u7684 14px\u3002\u884C\u9AD8\u3001\u5B57\u91CD\u4E0E\u5B57\u4F53\u65CF\u4ECD\u7531\u5E94\u7528\u4FA7
- * font \u7B80\u5199\u7ED9\u51FA(th 500 / td 400,\u884C\u9AD8 22px),\u4E0D\u5728\u6B64\u91CD\u5199\u3002
- * \u9009\u62E9\u5668\u5E26 [data-chat-flow-kind] \u524D\u7F00:\u5E94\u7528\u4FA7 ._tableScroll_* td/th \u7279\u5F02\u6027
- * (0,1,1),\u672C\u89C4\u5219 (0,1,2) \u7A33\u5B9A\u80DC\u51FA;!important \u4E0E\u8BE5\u63D2\u4EF6\u5176\u4F59\u89C4\u5219\u4FDD\u6301\u4E00\u81F4\u3002 */
+/* \u8868\u683C\u5355\u5143\u683C 14px:\u4E0A\u6E38 th/td \u53D6\u5B57\u53F7\u8F74\u51CF 1px \u7684 secondary \u53D8\u91CF;\u672C\u89C4\u5219 (0,1,2) \u538B\u8FC7 ._tableScroll_* (0,1,1) */
 [data-chat-flow-kind] table th,
 [data-chat-flow-kind] table td {
   font-size: 14px !important;
 }
 
-/* ===== \u5361\u7247\u5C55\u5F00\u6B63\u6587 \u2014 14px ===== */
-/* DisclosureRow \u7CFB:\u5C55\u5F00\u6839 [data-open] \u5185\u3001\u8868\u5934\u884C [data-disclosure-row] \u4E4B\u5916\u7684
-   \u5144\u5F1F\u8282\u70B9\u5373\u6B63\u6587(turn-process \u5F00\u5173\u4E5F\u5E26 data-open,\u5DF2\u663E\u5F0F\u6392\u9664)\u3002 */
+/* \u5C55\u5F00\u6B63\u6587:\u5C55\u5F00\u6839 [data-open] \u5185\u3001\u8868\u5934\u5916\u7684\u5144\u5F1F\u8282\u70B9(turn-process \u4E5F\u5E26 data-open,\u5DF2\u6392\u9664) */
 [data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row]) {
   font-size: 14px !important;
 }
 
-/* \u538B\u7F29\u6807\u8BB0:\u5C55\u5F00\u540E\u7D27\u63A5\u8868\u5934 <button> \u7684 <div> \u5373\u6B63\u6587\u3002 */
+/* \u538B\u7F29\u6807\u8BB0\u6B63\u6587 = button[aria-expanded="true"] \u540E\u7684 div */
 [data-chat-flow-kind="compaction"] button[aria-expanded="true"] + div,
 [data-chat-flow-kind="manual-compaction"] button[aria-expanded="true"] + div {
   font-size: 14px !important;
 }
 
-/* ===== \u5DE5\u5177/bash \u5361\u7247\u5185\u5BB9 \u2014 14px(\u91CD\u6307\u4EE3\u7801\u5B57\u4F53 token)=====
- * I/O \u6587\u672C\u3001\u7EC8\u7AEF\u3001read/diff/search/web \u6B63\u6587\u6D88\u8D39\u8FD9\u4E24\u4E2A token(\u4E3B\u9898\u9ED8\u8BA4 11px,
- * \u8FC7\u5C0F);\u5728\u5361\u7247\u6839\u91CD\u6307 token,\u4EC5\u5185\u5BB9\u6587\u672C\u53D8\u5316,inspect \u6309\u94AE(11px)\u7B49\u4FDD\u6301\u81EA\u8EAB\u5B57\u53F7\u3002 */
+/* \u5DE5\u5177/bash \u5361\u7247:\u5728\u5361\u7247\u6839\u91CD\u6307\u4EE3\u7801\u5B57\u4F53 token(\u4E3B\u9898\u9ED8\u8BA4 11px \u8FC7\u5C0F),inspect \u6309\u94AE\u4FDD\u6301\u81EA\u8EAB\u5B57\u53F7 */
 [data-tool],
 [data-sample] {
   --dsw-font-markdown-code-block-small: 14px/16px var(--ds-font-family-code);
   --dsw-font-markdown-code-block: 14px/19px var(--ds-font-family-code);
 }
 
-/* Bash \u5361\u7247(BashRow)\u7ED3\u6784\u7279\u4F8B:data-sample \u53EA\u6253\u5728**\u8868\u5934\u884C**\u4E0A,\u5C55\u5F00\u540E\u7684\u6B63\u6587
- * (.bodyWrap,\u5185\u542B\u547D\u4EE4\u8F93\u5165\u4E0E\u6267\u884C\u7ED3\u679C\u7684 ioCard / TerminalBlock)\u662F\u8868\u5934\u7684**\u76F8\u90BB
- * \u5144\u5F1F\u8282\u70B9**,\u4E0D\u5728 [data-sample] \u5185\u3001\u4E5F\u4E0D\u662F [data-tool] \u7684\u540E\u4EE3\u2014\u2014\u4E0A\u4E00\u7EC4 token
- * \u91CD\u6307\u5230\u4E0D\u4E86\u5B83\u3002\u6545\u5728\u8868\u5934\u7684\u4E0B\u4E00\u4E2A\u5144\u5F1F(\u5373\u6B63\u6587\u5BB9\u5668)\u4E0A\u518D\u91CD\u6307\u4E00\u6B21,\u547D\u4EE4\u4E0E\u6267\u884C
- * \u7ED3\u679C\u6587\u672C\u968F token \u53D8\u4E3A 14px\u3002 */
+/* BashRow:data-sample \u53EA\u6253\u5728\u8868\u5934\u884C,\u6B63\u6587\u662F\u5176\u76F8\u90BB\u5144\u5F1F(\u4E0D\u5728 [data-sample] \u5185),\u6545\u8865\u4E00\u6B21 token \u91CD\u6307 */
 [data-sample] + * {
   --dsw-font-markdown-code-block-small: 14px/16px var(--ds-font-family-code);
   --dsw-font-markdown-code-block: 14px/19px var(--ds-font-family-code);

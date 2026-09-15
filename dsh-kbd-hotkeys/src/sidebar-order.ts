@@ -1,35 +1,5 @@
 /**
- * dsh-kbd-hotkeys — 侧栏(workspace 浏览器)可见顺序复刻。
- *
- * 会话跳转(`⌘/Ctrl+Alt+↑/↓`)必须沿**左侧侧栏里看到的顺序**走,否则
- * 「下一个活跃会话」与用户眼中的下一行不一致。侧栏顺序**不是**全局
- * `updatedAt` 排序,而是由 dsh-client-ui-workspace 的 WorkspaceBrowser 派生:
- *
- * 1. 分组:`groupBy==='workspace'` 时按 workspaces 快照的宿主顺序逐组渲染
- *    (组内会话来自该工作区的 `sessionIds`),无归属会话落在末尾的 Ungrouped 桶;
- *    `groupBy==='flat'` 时是单列表。
- * 2. 组内顺序:由浏览器本地视图 store 的 `sessionOrderByAccount[组 key]` 决定
- *    (手动拖拽结果 / `orderBy==='updated'` 的活跃提升结果),再用
- *    `reconciledSessionOrder` 与会话账号对账(新增会话追加到末尾)。
- *    该 store 通过 slots 注册项的 `store` handle 暴露(`sidebar.workspaces`,
- *    scope `root`),本模块用 `slots.resolveStore(handle, undefined)` 取活实例。
- * 3. 可见性:复刻上游 `sessionVisible`(见 session-order.ts)——剔除子代理行
- *    (origin==='subagent')、归档行、非当前空白行。
- *
- * **无降级**:顺序只有上述这一个权威来源(侧栏视图 store + workspaces 快照)。
- * 任一项读不到(服务缺失、slot 未注册、store 未创建、`groupBy` 非已知值、
- * workspaces 快照缺 `items`)一律返回空轴,调用方 no-op——宁可不动,
- * 也不按猜测的顺序跳转。
- *
- * 说明:上游还会按分组展开态(`groupExpansion`)与每组 5 行的折叠上限
- * (`COLLAPSED_SESSION_LIMIT`)隐藏行。本模块**只取顺序、不按折叠裁剪**——
- * 折叠组/超限行里的会话仍有确定的顺序位置,若一并裁掉就会变成「跳不到」,
- * 反而破坏导航可用性。这也正是最近会话浮窗(recent-sessions.ts)**复用**
- * `readWorkspaceSnapshot` / `sessionVisible` / `compareRecency` 而不是复用本函数
- * 的原因:浮窗列的是「对话」,要另行裁掉空白会话、并按最近更新重排。
- *
- * 每次调用都重新读取快照与视图 store(不缓存),即「每按一次都重新取一次
- * 活跃会话与顺序」。
+ * 侧栏可见顺序复刻:分组 + 组内本地顺序账号(slot store,root 作用域)+ 可见性;权威来源读不到即空轴(无降级)。
  */
 import { compareRecency, sessionVisible } from './session-order.ts'
 import type {
@@ -45,22 +15,16 @@ import type {
   WorkspaceViewStateLike,
 } from './types.ts'
 
-/** 单列表模式在 sessionOrderByAccount 里的账号 key(上游 FLAT_SESSION_ORDER_KEY)。 */
+/** 单列表模式的账号 key(上游 FLAT_SESSION_ORDER_KEY)。 */
 const FLAT_ORDER_KEY = '__flat_session_order__'
 
-/** 无归属会话桶在 sessionOrderByAccount 里的账号 key(上游 UNGROUPED_KEY)。 */
+/** 无归属桶的账号 key(上游 UNGROUPED_KEY)。 */
 const UNGROUPED_KEY = ''
 
-/** workspace 浏览器注册的 slot 名(其注册项挂载视图 store handle)。 */
+/** workspace 浏览器注册的 slot 名(注册项挂视图 store handle)。 */
 const WORKSPACE_SLOT = 'sidebar.workspaces'
 
-/**
- * 侧栏顺序的会话 id 轴(每次调用重新取数)。
- *
- * @param snapshot - `sessions.list` 当前快照。
- * @param services - 已解析服务集合。
- * @returns 按侧栏渲染顺序排列的可见会话 id;权威来源不可读时返回空数组(no-op)。
- */
+/** 侧栏渲染顺序下的可见会话 id(每次重新取数);权威来源不可读 → 空数组。 */
 export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, services: Services): string[] {
   const view = readSidebarViewState(services)
   if (view === undefined) return []
@@ -78,7 +42,7 @@ export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, serv
   }
   const recency = (a: string, b: string): number => compareRecency(a, b, byId)
 
-  // 单列表模式:全量可见会话按最近更新排序,再与本地顺序账号对账。
+  // flat:可见会话按最近更新排序,再与本地顺序对账
   if (view.groupBy === 'flat') {
     const base = (snapshot.ids ?? []).filter(visible)
     base.sort(recency)
@@ -88,7 +52,7 @@ export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, serv
   const items = workspaceSnapshot.items
   if (items === undefined) return []
 
-  // 按工作区分组:组按宿主顺序,组内按本地顺序账号对账后的 sessionIds 顺序。
+  // 组按宿主顺序,组内先与本地顺序对账
   const ids: string[] = []
   const accounted = new Set<string>()
   for (const workspace of items) {
@@ -98,7 +62,7 @@ export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, serv
     }
   }
 
-  // 无归属会话:有本地顺序时按该顺序(新会话按最近更新追加),否则整体按最近更新。
+  // 无归属:有本地顺序按顺序(新增按最近更新追加),否则整体按最近更新
   const stray = (snapshot.ids ?? []).filter((id) => !accounted.has(id) && visible(id))
   const ungrouped = order?.[UNGROUPED_KEY]
   if (ungrouped === undefined) {
@@ -110,15 +74,7 @@ export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, serv
   return ids
 }
 
-/**
- * 读侧栏视图 store 状态(**唯一来源**)。
- *
- * `slots.entries('sidebar.workspaces')` → 注册项上的 store handle →
- * `slots.resolveStore(handle, undefined)` 取活实例 → `getSnapshot()`,
- * 与侧栏渲染同一份内存态(实例未创建时由上游 store 自行从持久化副本水合)。
- *
- * @returns 视图状态;任一环节不可用即 undefined(调用方 no-op)。
- */
+/** 读侧栏视图 store:slots.entries → resolveStore(handle, undefined) → 快照;任一环不可用 → undefined。 */
 export function readSidebarViewState(services: Services): WorkspaceViewStateLike | undefined {
   const slots = services.slots
   if (slots === null || slots === undefined) return undefined
@@ -133,15 +89,7 @@ export function readSidebarViewState(services: Services): WorkspaceViewStateLike
   return undefined
 }
 
-/**
- * 读工作区账号快照(`workspaces.list`)。
- *
- * 与视图 store 分开读:最近会话浮窗只靠 workspaces 快照就能分组(组 = 宿主顺序,
- * 组内 = 最近更新序,正是 `orderBy==='updated'` 的默认轴),**不依赖** slots 全链路;
- * 侧栏顺序才两者都要。
- *
- * @returns 工作区快照;`workspaces` 服务缺席 / 快照非对象即 undefined(调用方 no-op)。
- */
+/** 读 workspaces 快照(与 slots 分开读,浮窗只用它);不可用 → undefined。 */
 export function readWorkspaceSnapshot(services: Services): WorkspaceSnapshotLike | undefined {
   let snapshot: unknown
   try {
@@ -153,7 +101,7 @@ export function readWorkspaceSnapshot(services: Services): WorkspaceSnapshotLike
   return snapshot as WorkspaceSnapshotLike
 }
 
-/** slots 注册项列表(服务异常/形状不符时视为不可用)。 */
+/** slot 注册项列表(调用抛错视为不可用)。 */
 function entriesOf(slots: SlotsLike): readonly SlotEntryLike[] {
   try {
     const entries = slots.entries?.(WORKSPACE_SLOT)
@@ -163,7 +111,7 @@ function entriesOf(slots: SlotsLike): readonly SlotEntryLike[] {
   }
 }
 
-/** 经 slots 解析 handle 的活实例(root 作用域无需 scopeBinding)。 */
+/** 解析 handle 的活实例(root 作用域不传 binding)。 */
 function liveInstance(slots: SlotsLike, handle: StoreHandleLike): StoreInstanceLike | undefined {
   try {
     return slots.resolveStore?.(handle, undefined)
@@ -178,10 +126,7 @@ function asViewState(raw: unknown): WorkspaceViewStateLike | undefined {
   return raw as WorkspaceViewStateLike
 }
 
-/**
- * 一个工作区组内的会话 id 顺序:本地顺序账号对账 `sessionIds`
- * (复刻上游 `reconciledSessionOrder`——账号里有的按账号序,其余按 `sessionIds` 序追加)。
- */
+/** 组内顺序:本地顺序账号对账 sessionIds(上游 reconciledSessionOrder)。 */
 function groupOrder(
   workspace: WorkspaceItemLike,
   order: Readonly<Record<string, readonly string[] | undefined>> | undefined,
@@ -190,7 +135,7 @@ function groupOrder(
   return reconcileOrder(sessionIds, order?.[workspace.workspaceId])
 }
 
-/** 对账本地顺序与当前账号(上游 reconciledSessionOrder)。 */
+/** 对账:账号内且在册的按账号序,其余按原序追加。 */
 function reconcileOrder(ids: readonly string[], stored: readonly string[] | undefined): string[] {
   if (stored === undefined) return [...ids]
   const known = new Set(ids)
@@ -208,10 +153,7 @@ function reconcileOrder(ids: readonly string[], stored: readonly string[] | unde
   return out
 }
 
-/**
- * 无归属桶的本地顺序(上游 orderedUngrouped):账号内顺序在前,
- * 账号未记录的会话按最近更新追加(与工作区分组的 `sessionIds` 追加语义不同)。
- */
+/** 无归属桶顺序:账号内在前,未记录的按最近更新追加。 */
 function orderedUngrouped(
   ids: readonly string[],
   stored: readonly string[],

@@ -1,11 +1,5 @@
 /**
- * Node half of the local `dsh-new-session` patch row.
- *
- * Registers the `/new` slash command (bare host command, no input hint) so the
- * Web '/'-menu row exists and bare invocation is admitted. The actual
- * create-and-navigate work happens in the browser half through
- * `workspaces.startSession()` — the exact New Session button path; this half
- * only settles the admitted command lifecycle with no UI text.
+ * Host half of `dsh-new-session`: register the bare `/new` command and settle its lifecycle; create-and-navigate happens in the browser half via `uiWorkspace.startSession()`.
  */
 export const name = 'dsh-new-session'
 export const inject = ['commands']

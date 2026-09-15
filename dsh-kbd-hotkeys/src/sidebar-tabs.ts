@@ -1,61 +1,5 @@
-/**
- * dsh-kbd-hotkeys — 右侧侧边栏访问层。
- * 三个动作:
- * - `cycleRightSidebarTab`(⌘/Ctrl+Alt+← / →):在当前面板的标签之间循环切换;
- * - `revealRightSidebarFiles`(⌘/Ctrl+\):打开文件浏览器页并把它置于所在
- *   标签栏首位;
- * - `revealRightSidebarTerminal`(⌘/Ctrl+L):定位终端页——已有就聚焦(必要时
- *   展开右栏)、并把 **DOM 焦点**移进终端的 xterm,没有才新建;不重排
- *   (详见该函数与 `focusTerminalScreen`)。
- *
- * 为什么需要这一层:右侧栏(`dsh-client-ui-sidebar-right`)的公开服务面
- * (`ISidebarRight`)只有 `active()`(当前标签)、`focus(tabId)`(聚焦某标签)与
- * `openTab(kind)`(打开页类型,落位是目标面板末尾),**没有** next / prev 动词、
- * 没有枚举标签的方法,也**没有**「插到第 N 位」的落位参数(`SidebarRightPlacement`
- * 只有 paneId / replaceTab / revealIfOpened)。标签顺序只存在于它自己的
- * **会话级 slot store** 里(store 快照 `{ bySession: { <sessionId>: { layout } } }`,
- * `layout` 为 docking kit 的 `LayoutState`)。因此:
- * - 「切标签」=「读权威 store 拿当前面板的标签顺序 + 调公开的
- *   `sidebarRight.focus(tabId)`」,与标签条(chip)点击同一入口;
- * - 「置顶」=「调公开的 `sidebarRight.openTab('files')` + 调 store 实例的
- *   `actions.placeTab(sessionId, tabId, paneId, 0)`」,与**标签拖拽**同一入口
- *   (seat 的 `intentsFor.placeTab`;绝不使用 `replaceTab`——那会关掉被顶掉的 tab)。
- *
- * 取数路径(全部是上游公开面,不触碰 DOM;即 AGENTS.md 的 slot store 三步范式):
- *
- * 1. `slots.entries('rightbar.session')` → 注册项;带 `store` 的那一项即
- *    `createSidebarRightStore()` 的 handle(sidebar-right 的 seat 行注册:
- *    `ctx.slots.register({ name: "rightbar.session", …, store })`);
- * 2. `uiSession.resolve(sessionId)` → 该会话**已物化的作用域绑定**
- *    (与 question-drafts.ts 同一句;`slots.bindStoreScope` 用的就是这个对象);
- * 3. `slots.resolveStore(handle, binding)` → 活实例;`getSnapshot().bySession[sessionId]`
- *    即该会话的面板(dockkit `SurfaceState`),其 `layout` 里读:
- *    - `nodes[activePaneId]` → **当前面板**;`tabs` 即标签顺序、`activeTabId` 是当前标签;
- *    - `tabs[tabId].id` → 传给 `sidebarRight.focus(tabId)` 的标签 id;
- *    - `tabs[tabId].kind` / `contentId` → 认出文件浏览器页(`kind === 'files'`,
- *      `contentId === 'sidebar://files'`);
- *    - 实例自己的 `actions.placeTab` → 置顶(defineStore 的实例动作面)。
- *
- * **无降级**(与 question-drafts.ts / sidebar-order.ts 同一约定):上述任一环节不可用
- * (服务缺失、slot 未注册、注册项无 store、作用域绑定缺 key、`resolveStore` 抛
- * `store handle is not registered`、当前会话尚无面板、`activePaneId` 找不到 pane 节点、
- * 标签 id 缺失)即返回 false / 静默跳过;不猜顺序、不写 DOM、也不在插件内镜像
- * 一份面板状态。
- *
- * 语义:
- * - 只在**当前面板**(`layout.activePaneId`;上游 `active()` 与标签条的「当前」同源)的
- *   标签之间切换,分屏的其它面板不参与;
- * - **循环**:末个标签按 → 回到第一个,首个标签按 ← 到最后一个(标签条 chip 是任意跳,
- *   热键是「轮到下一个」,循环才闭合滚动语义);
- * - 面板只有一个标签(或没有标签)时**不循环回自身**:返回 false = no-op 且不吞键,
- *   把按键交回页面,避免「按了没反应还吃掉按键」;
- * - 面板折叠着也能切:只改 store 的当前标签,展开时看到的就是它;
- * - 三态(含 `card`)均生效:问答卡片占用的是**裸** `←`/`→`,与带 `mod+alt` 的组合键
- *   不冲突,故卡片打开时同样可以切右栏标签;
- * - 置顶只作用于文件浏览器 tab **所在的那个停靠面板**(优先当前面板 = 本次
- *   `openTab` 打开/揭示的那一个);浮窗里的 tab 不碰、别的分屏面板里已有的
- *   文件树 tab 也不搬(搬过去会被上游 `arriving()` 当成重复页 **关掉**),因此
- *   跨面板可能各有一份文件浏览器 tab——这是上游「页唯一性按面板」的既定语义。
+/** dsh-kbd-hotkeys — 右栏标签 / 文件浏览器 / 终端访问层（⌘/Ctrl+Alt+←→、⌘/Ctrl+\、⌘/Ctrl+L）。
+ * 取数走 slot store 三步（entries → uiSession.resolve → resolveStore）；无降级；terminal 是 multiple 页、每次 openTab 铸 UUID，故认页由插件读 store。
  */
 import type {
   Services,
@@ -68,41 +12,29 @@ import type {
   UiSessionLike,
 } from './types.ts'
 
-/** sidebar-right 面板 seat 注册的会话级 slot 名(其 store handle 挂在这一项上)。 */
+/** sidebar-right seat 注册的会话级 slot 名（store handle 挂在该注册项上）。 */
 const RIGHTBAR_SLOT = 'rightbar.session'
 
-/** 右栏文件浏览器的**页类型** kind(dsh-client-ui-sidebar-files 的 FILES_KIND)。 */
+/** 文件浏览器页类型 kind。 */
 const FILES_KIND = 'files'
 
-/** 页类型的记录地址(上游 `pageAddress(kind)` = `sidebar://<kind>`),两个都认。 */
+/** 文件浏览器页地址（上游 pageAddress(kind)）。 */
 const FILES_PAGE_ADDRESS = 'sidebar://files'
 
-/** 右栏终端的**页类型** kind(dsh-client-ui-sidebar-terminal 的 `sidebarRightTabs.register` kind)。 */
+/** 终端页类型 kind。 */
 const TERMINAL_KIND = 'terminal'
 
-/**
- * 终端页的记录地址前缀(上游 `pageAddress('terminal')` = `sidebar://terminal`)。
- * terminal 是 `multiple: true` 的页类型,上游给每次打开铸一个带随机 UUID 的
- * contentId(`sidebar://terminal/<uuid>`),所以认页要看**前缀**而不是全等
- * (与 files 的全等地址不同)。
- */
+/** 终端页地址前缀：multiple 页的 contentId 带 UUID，故认前缀而非全等。 */
 const TERMINAL_PAGE_PREFIX = 'sidebar://terminal'
 
 /** 当前面板的标签现场。 */
 interface TabAxis {
-  /** 面板内的标签顺序(标签条的渲染顺序)。 */
   readonly ids: readonly string[]
   /** 当前激活标签在 `ids` 里的下标;找不到时为 -1。 */
   readonly active: number
 }
 
-/**
- * 在右侧栏当前面板的标签之间循环切换(⌘/Ctrl+Alt+← / →)。
- *
- * @param services - 已解析服务集合(slots / uiSession / sidebarRight / sessions)。
- * @param delta - 方向:-1 = 上一个标签,1 = 下一个标签。
- * @returns 是否确实发起了切换(false = no-op,调用方不吞键)。
- */
+/** ⌘/Ctrl+Alt+←→：在当前面板标签间循环切换（任意态）；单标签 / 任一层不可用即 no-op 不吞键。 */
 export function cycleRightSidebarTab(services: Services, delta: number): boolean {
   const sidebarRight = services.sidebarRight
   if (sidebarRight === null || sidebarRight === undefined) return false
@@ -115,56 +47,23 @@ export function cycleRightSidebarTab(services: Services, delta: number): boolean
   const target = axis.ids[index]
   if (target === undefined || target === axis.ids[axis.active]) return false
   try {
-    // 与标签 chip 点击同一入口(focus = 聚焦该标签 + 其所在面板)。
     sidebarRight.focus(target)
     return true
   } catch {
-    // 无挂载会话面时控制器 require() 抛错 → no-op(不吞键、不回退 DOM 点击)。
     return false
   }
 }
 
-/* ------------------------------------------------------------------ *
- * 文件浏览器:打开并置于首位(⌘/Ctrl+\)
- * ------------------------------------------------------------------ */
+/* 文件浏览器：打开并置于首位（⌘/Ctrl+\） */
 
-/** 一个文件浏览器 tab 的现场:它在哪个停靠面板、是哪个标签、第几位。 */
+/** 文件浏览器 tab 的现场：所在停靠面板、标签 id、下标。 */
 interface FilesTab {
   readonly paneId: string
   readonly tabId: string
   readonly index: number
 }
 
-/**
- * 在右侧栏打开文件浏览器,并把它置于所在标签栏的**首位**(⌘/Ctrl+\)。
- *
- * 两步,分别对应上游两个不同的入口:
- *
- * 1. **打开/揭示**:`sidebarRight.openTab('files')` —— 页类型按**目标面板**
- *    (`activeDockPaneId`)去重:该面板已有文件浏览器页就只聚焦它,否则在面板
- *    末尾新建;上游 store 的 `openContent` 恒先 `planSetExpanded(true)`,所以
- *    一次调用即「展开右栏 + 打开/聚焦」,不必也不该再调 `toggleExpanded()`
- *    (那会把本来开着的右栏关掉)。`require()` 在无挂载会话面(空白 / hero 会话、
- *    右栏插件缺席)时抛错,`files` 类型未注册时上游也抛错 → 一律兜住并返回 false
- *    (no-op 且**不吞键**,把按键交回页面)。
- * 2. **置顶**:读会话级 store 的活实例,找到文件浏览器 tab,`index > 0` 时调
- *    `actions.placeTab(sessionId, tabId, paneId, 0)` —— 与**标签拖拽**同一条
- *    入口(seat 的 `intentsFor.placeTab`),不是 DOM 操作、也不是 `replaceTab`
- *    (后者会关掉被顶掉的那个 tab,可能丢掉编辑器的未保存修改)。
- *
- * 置顶是 best-effort:任一层不可解析(无 slots / 无会话绑定 / 无面板 / 无
- * `actions.placeTab`)就静默跳过;**不回退**到任何 DOM 或 `replaceTab` 路径。
- * 打开本身成功即返回 true(该按键确实做了事 → 调用方吞键)。
- *
- * 边界:
- * - 已经在首位 → `planPlaceTab` 不产生任何 op(零提交、零历史),不打扰;
- * - 只认**停靠**面板(浮窗不碰),优先当前面板 = 本次 `openTab` 打开/揭示的那一个;
- * - 别的分屏面板里已有的文件树 tab 不搬过来(搬过去会被上游 `arriving()` 判为
- *   重复页而**关掉**),故跨面板可能各有一份 —— 上游「页唯一性按面板」的既定语义。
- *
- * @param services - 已解析服务集合(sidebarRight / sessions / slots / uiSession)。
- * @returns 是否确实发起过打开(false = no-op,调用方不吞键)。
- */
+/** ⌘/Ctrl+\：任意态；openTab('files') 打开 / 聚焦文件浏览器页（同一步展开右栏），再经 store 实例的 placeTab 置顶；不用 replaceTab。 */
 export function revealRightSidebarFiles(services: Services): boolean {
   const sidebarRight = services.sidebarRight
   if (sidebarRight === null || sidebarRight === undefined) return false
@@ -172,15 +71,13 @@ export function revealRightSidebarFiles(services: Services): boolean {
   try {
     sidebarRight.openTab(FILES_KIND)
   } catch {
-    // 'no session surface is mounted'(无挂载 seat)/ 'no tab type is registered
-    // as "files"'(文件浏览器插件缺席)→ no-op,不吞键。
     return false
   }
   promoteFilesTab(services)
   return true
 }
 
-/** 把当前会话里的文件浏览器 tab 移到其所在停靠面板的第一位;任一环缺失即静默跳过。 */
+/** 把当前会话的文件浏览器 tab 置为其所在停靠面板的首位；任一环缺失即静默跳过。 */
 function promoteFilesTab(services: Services): void {
   const resolved = rightbarStore(services)
   if (resolved === undefined) return
@@ -192,30 +89,17 @@ function promoteFilesTab(services: Services): void {
   const layout = resolved.snapshot.bySession?.[sessionId]?.layout
   if (layout === undefined) return
   const target = filesTabIn(layout)
-  // index 0 = 已经在首位:不提交、不记历史。
   if (target === undefined || target.index === 0) return
   try {
-    // 与标签拖拽同一入口;同面板 = 上游 reorderTab,越界由它 clamp。
     placeTab.call(actions, sessionId, target.tabId, target.paneId, 0)
   } catch {
-    // 无挂载会话面 / 会话无面板 → no-op(不回退 DOM)。
   }
 }
 
-/**
- * 找当前会话里的文件浏览器 tab:先扫**当前面板**(`layout.activePaneId`,
- * 即本次 `openTab` 的落点),再按布局顺序扫其余停靠面板;浮窗一律跳过。
- *
- * 认页的方式与上游同源:`kind === 'files'`(页类型 kind)或
- * `contentId === 'sidebar://files'`(上游 `pageAddress(kind)`)。
- *
- * @param layout - 该会话的 docking 布局。
- * @returns 面板 id / 标签 id / 下标;找不到即 undefined。
- */
+/** 找当前会话的文件浏览器 tab：当前面板优先、再扫其余停靠面板，浮窗跳过。 */
 function filesTabIn(layout: SidebarRightLayoutLike): FilesTab | undefined {
   for (const paneId of paneOrder(layout)) {
     const pane = paneOf(layout, paneId)
-    // 浮窗里的 tab 不碰(其 host 为 'float')。
     if (pane === undefined || pane.host !== 'dock') continue
     const tabs = pane.tabs ?? []
     for (let index = 0; index < tabs.length; index += 1) {
@@ -231,7 +115,7 @@ function filesTabIn(layout: SidebarRightLayoutLike): FilesTab | undefined {
   return undefined
 }
 
-/** 面板扫描顺序:当前面板优先,其余按布局节点里的键顺序(与标签条同源)。 */
+/** 面板扫描顺序：当前面板优先，其余按布局节点键顺序。 */
 function paneOrder(layout: SidebarRightLayoutLike): string[] {
   const order: string[] = []
   const active = layout.activePaneId
@@ -242,67 +126,20 @@ function paneOrder(layout: SidebarRightLayoutLike): string[] {
   return order
 }
 
-/* ------------------------------------------------------------------ *
- * 终端:定位(已有则聚焦)/ 缺则新建(⌘/Ctrl+L)
- * ------------------------------------------------------------------ */
+/* 终端：定位（已有则聚焦）/ 缺则新建（⌘/Ctrl+L） */
 
 /** 一笔布局里认出的终端现场。 */
 interface TerminalTab {
-  /** 终端 tab 所在**停靠**面板的 id(布局节点键,dockkit 原样写进 `data-dockkit-pane`)。 */
   readonly paneId: string
-  /** 要聚焦的标签 id(布局记录里的键,上游 `focus(tabId)` 按它查表)。 */
   readonly tabId: string
-  /**
-   * 该终端是否**已经**是所在面板的当前标签。为真时它已可见、上游 TerminalBody 的
-   * 自动聚焦 effect 不会重跑,需要调用方补一次元素级聚焦(见 focusTerminalScreen)。
-   */
+/** 是否已是所在面板当前标签（决定要不要补元素级聚焦）。 */
   readonly current: boolean
 }
 
 /**
- * 在右侧栏定位终端:已有终端页就聚焦它,没有就新建一个(⌘/Ctrl+L)。
- *
- * 为什么不直接 `openTab('terminal')`:terminal 是 `multiple: true` 的页类型
- * (`dsh-client-ui-sidebar-terminal`:`ctx.sidebarRightTabs.register({ kind: 'terminal',
- * multiple: true, … })`)。上游 `placeTab` 对 `multiple` 页给**每次打开**铸一个带
- * 随机 UUID 的 contentId(`sidebar://terminal/<uuid>`),`planOpenContent` 因此
- * **不会**按 (kind, contentId) 去重——直接调 `openTab('terminal')` 每按一次就多开
- * 一个终端。所以这里先自己认页(读会话级 store 的布局,判 `record.kind ===
- * 'terminal'`,与上游 `pageKind` 认 kind 的是同一条记录字段):找到就只聚焦,
- * 找不到才调公开的 `openTab('terminal')` 新建(那一步上游 `openContent` 恒先
- * `planSetExpanded(true)`,展开右栏)。
- *
- * 聚焦已有终端时右栏可能正折着——`focus(tabId)` 只改激活标签、**不动**展开态
- * (与 `openTab` 不同),所以再补一步:store 里 `layout.expanded === false` 时调公开的
- * `toggleExpanded()`(与右栏头部折叠按钮同一入口,seat 会据此同步 AppFrame 的右栏轨道)。
- * `expanded` 读不到(既不是 `true` 也不是 `false`)时**不动**展开态:宁可少做一步,
- * 也不做「猜状态再 toggle」这种可能把开着的右栏关掉的事。
- *
- * **DOM 焦点**(上游 `focus` 只聚焦「标签」,不聚焦终端内容):上游
- * `dsh-client-ui-sidebar-terminal` 的 TerminalBody 自己有一个自动聚焦 effect,
- * 依赖是 `[visible, state.writable]`——只有这两个值**变化**时才把焦点移进 xterm。
- * 于是「终端页本来就在右栏显示着」时(标签已是当前标签、右栏已展开)按 ⌘/Ctrl+L,
- * 依赖不变、effect 不重跑,焦点仍留在原处(典型:对话输入框)——这正是要修的场景。
- * 因此当这笔布局里的终端**已经是所在面板的当前标签、且右栏此刻是展开的**
- * (`held.current && layout.expanded !== false`)时,再补一次
- * `focusTerminalScreen(paneId)`(有界元素级聚焦,见该函数);标签原本不是当前标签,
- * 或右栏正折着(下面的 `toggleExpanded` 会把它翻成展开)时,`visible` 会翻转、上游
- * 自己就会聚焦,那种情形**不**代劳(避免和上游抢焦点)。
- *
- * 选哪个终端:优先**当前面板**(`layout.activePaneId`),面板内优先**当前激活**的那一个,
- * 否则取面板里的第一个;当前面板没有再看其余**停靠**面板。浮窗里的终端不参与
- * (与文件浏览器同一条「浮窗不碰」约定)。
- *
- * 与文件浏览器定位的两点差异:① 认页看 kind / 地址**前缀**(multiple 页的 contentId
- * 带 UUID);② **不置顶**——终端可能开着多个,热键不替用户决定标签顺序。
- *
- * **无降级**:`openTab` 抛错(无挂载会话面 / `terminal` 类型未注册)、`focus` 抛错、
- * 或已有终端而 `focus` 面缺失 → 一律 no-op 且**不吞键**;不回退 DOM 点击引导页。
- * 元素级聚焦同样 best-effort:找不到 xterm / 聚焦抛错只是少这一步,不影响「标签已聚焦」
- * 的返回值。
- *
- * @param services - 已解析服务集合(sidebarRight / sessions / slots / uiSession)。
- * @returns 是否确实发起过打开 / 聚焦(false = no-op,调用方不吞键)。
+ * ⌘/Ctrl+L：任意态；定位终端——已有则 focus(tabId)(折叠时补 toggleExpanded)、不置顶；没有才 openTab 新建。
+ * terminal 是 multiple 页、每次 openTab 铸 UUID contentId, 故认页由插件读 store。
+ * 无降级(任一环失败即 no-op 不吞键); 已知限制: 会抢地址栏与 shell 清屏。
  */
 export function revealRightSidebarTerminal(services: Services): boolean {
   const sidebarRight = services.sidebarRight
@@ -311,21 +148,15 @@ export function revealRightSidebarTerminal(services: Services): boolean {
   if (layout !== undefined) {
     const held = terminalTabIn(layout)
     if (held !== undefined) {
-      // 已有终端:只聚焦(focus 的 tabId 就是布局记录里的键,上游 focus 按它查表)。
       if (typeof sidebarRight.focus !== 'function') return false
-      // 「终端本来就显示着」在**调 toggleExpanded 之前**判定:那个调用会翻转
-      // 展开态,而只有「本来就是当前标签 + 右栏当时已展开」这一种情形下上游
-      // TerminalBody 的可见性依赖才不变、不会自己聚焦(见函数注释)。
+      // 「本来就可见」须在 toggleExpanded 之前判定。
       const alreadyVisible = held.current && layout.expanded !== false
       try {
         sidebarRight.focus(held.tabId)
       } catch {
-        // 无挂载会话面时 require() 抛错 → no-op(不吞键、不回退 DOM)。
         return false
       }
       expandColumn(sidebarRight, layout)
-      // 本来就是可见的终端:上游 `visible` 不变、自动聚焦 effect 不会重跑,焦点还在
-      // 原处(见函数注释),这里补一次元素级聚焦。
       if (alreadyVisible) focusTerminalScreen(held.paneId)
       return true
     }
@@ -334,40 +165,12 @@ export function revealRightSidebarTerminal(services: Services): boolean {
   try {
     sidebarRight.openTab(TERMINAL_KIND)
   } catch {
-    // 'no session surface is mounted'(无挂载 seat)/ 'no tab type is registered
-    // as "terminal"'(终端插件缺席)→ no-op,不吞键。
     return false
   }
-  // 新建这一条不必自己聚焦:xterm 随新终端 body 一起挂载,`visible` 由 false 翻成
-  // true,上游 TerminalBody 的自动聚焦 effect 会跑(起初 `writable` 还是 false 时,
-  // 等它翻成 true 会再跑一次)。
   return true
 }
 
-/**
- * 把 DOM 焦点移进终端的 xterm(⌘/Ctrl+L 的第二步)。
- *
- * 为什么需要它:上游 `sidebarRight.focus(tabId)` 只把 store 里的激活标签改成它
- * (`focus` = 「聚焦标签 + 所在面板」),**不**把 DOM 焦点移进终端内容;终端内容的
- * 聚焦由 `dsh-client-ui-sidebar-terminal` 的 TerminalBody 自己完成,而那个 effect 的
- * 依赖是 `[visible, state.writable]`——标签本来就是当前标签、右栏也展开着时依赖不变,
- * effect 不重跑,于是按 ⌘/Ctrl+L 时焦点仍留在原处(典型:对话输入框)。
- *
- * 取元素的方式是**有界**的,也是本插件唯一一处选择器查询:只用 store 里这笔布局给出的
- * `paneId` 找 `[data-dockkit-pane="<paneId>"]`(dockkit 把面板节点的 id 原样写在属性上;
- * 该属性只有 dockkit 会产出),再取该面板内容里的 xterm 隐藏输入框
- * `textarea.xterm-helper-textarea`(xterm 的 `Terminal.focus()` 就是聚焦它;`.xterm`
- * 自身没有 tabindex,聚焦不到)。面板里同一时刻只渲染**激活标签**的 body,而调用方只在
- * 终端已是所在面板当前标签时才调这里,所以命中的必然是这笔布局的那个终端;
- * 不做全文档搜索、不遍历标签、不合成事件、不点击、不读文本。
- *
- * **无降级**(失败即 no-op):无 `document`、找不到该面板元素、面板里还没有 xterm
- * (未挂载 / 正在创建)、focus 抛错 → 返回 false;调用方照旧返回 true(标签聚焦已经发生),
- * 不猜、不回退 DOM 点击。
- *
- * @param paneId - 该终端所在停靠面板的 id(布局节点键)。
- * @returns 是否确实聚焦到了终端内容。
- */
+/** 把 DOM 焦点移进终端的 xterm：唯一一处有界选择器查询（按 store 的 paneId 找面板，再取 textarea.xterm-helper-textarea）；失败即 no-op。 */
 function focusTerminalScreen(paneId: string): boolean {
   if (typeof document === 'undefined') return false
   const pane = paneElement(paneId)
@@ -384,7 +187,6 @@ function focusTerminalScreen(paneId: string): boolean {
   const focus = (screen as { focus?: unknown }).focus
   if (typeof focus !== 'function') return false
   try {
-    // preventScroll 与上游自己的 composer autofocus 同参:焦点跳转不该带着页面滚。
     ;(focus as (options?: { preventScroll?: boolean }) => void).call(screen, { preventScroll: true })
     return true
   } catch {
@@ -392,7 +194,7 @@ function focusTerminalScreen(paneId: string): boolean {
   }
 }
 
-/** 按 dockkit 写在属性上的面板 id 找面板元素(找不到 / 查询面不可用即 undefined)。 */
+/** 按 dockkit 属性上的面板 id 找面板元素。 */
 function paneElement(paneId: string): Element | undefined {
   const queryAll = document.querySelectorAll
   if (typeof queryAll !== 'function') return undefined
@@ -411,13 +213,7 @@ function paneElement(paneId: string): Element | undefined {
   return undefined
 }
 
-/**
- * 折叠着就把右栏展开(聚焦已有 tab 不会展开,只有上游 `openTab` 会)。
- *
- * `layout.expanded !== false`(已展开 / 读不到)时**不动**:不做可能把开着的右栏
- * 关掉的 toggle。`toggleExpanded` 缺席、或在无挂载会话面时 `require()` 抛错,
- * 一律静默跳过(聚焦已经发生,调用方照旧吞键)。
- */
+/** 折叠着才展开右栏（layout.expanded !== false 时不动，避免关掉开着的右栏）。 */
 function expandColumn(sidebarRight: SidebarRightLike, layout: SidebarRightLayoutLike): void {
   if (layout.expanded !== false) return
   const toggle = sidebarRight.toggleExpanded
@@ -425,33 +221,19 @@ function expandColumn(sidebarRight: SidebarRightLike, layout: SidebarRightLayout
   try {
     toggle.call(sidebarRight)
   } catch {
-    // 无挂载会话面 → 不动展开态(不回退 DOM 点右栏头部折叠按钮)。
   }
 }
 
-/**
- * 找当前会话里的终端 tab:先扫**当前面板**,再按布局顺序扫其余停靠面板;浮窗跳过。
- * 面板内优先**当前激活**的终端,否则取面板里的第一个。
- *
- * 认页:`record.kind === 'terminal'`,或记录地址是终端页地址
- * (`sidebar://terminal` / `sidebar://terminal/<uuid>`)。**不依赖**
- * `contentId === pageAddress(kind)`:上游 `pageKind` 正因 `multiple: true` 而不把
- * 这种页当「页」,所以这里自己认 `kind`。
- *
- * @param layout - 该会话的 docking 布局。
- * @returns 终端现场(面板 id / 标签 id / 是否已是该面板的当前标签);找不到即 undefined。
- */
+/** 找当前会话的终端 tab：当前面板优先、面板内优先当前激活项，浮窗跳过。 */
 function terminalTabIn(layout: SidebarRightLayoutLike): TerminalTab | undefined {
   for (const paneId of paneOrder(layout)) {
     const pane = paneOf(layout, paneId)
-    // 浮窗里的 tab 不碰(其 host 为 'float')。
     if (pane === undefined || pane.host !== 'dock') continue
     const activeTabId = pane.activeTabId
     let first: string | undefined
     for (const tabId of pane.tabs ?? []) {
       if (typeof tabId !== 'string' || tabId === '') continue
       if (!isTerminalTab(layout, tabId)) continue
-      // 面板内已在当前标签上:优先它,避免把用户从正在用的终端上挪开。
       if (tabId === activeTabId) return { paneId, tabId, current: true }
       if (first === undefined) first = tabId
     }
@@ -460,7 +242,7 @@ function terminalTabIn(layout: SidebarRightLayoutLike): TerminalTab | undefined 
   return undefined
 }
 
-/** 记录是不是终端页(以 `kind` 为准,兼容带 UUID 的页地址前缀)。 */
+/** 记录是否终端页（以 kind 为准，兼容带 UUID 的页地址前缀）。 */
 function isTerminalTab(layout: SidebarRightLayoutLike, tabId: string): boolean {
   const record = layout.tabs?.[tabId]
   if (record === undefined || record === null) return false
@@ -472,11 +254,7 @@ function isTerminalTab(layout: SidebarRightLayoutLike, tabId: string): boolean {
   )
 }
 
-/**
- * 读当前会话右栏面板的标签顺序与激活项。
- *
- * @returns 标签现场;任一层不可解析即 undefined(调用方 no-op)。
- */
+/** 当前会话右栏当前面板的标签顺序与激活项。 */
 function currentPaneTabs(services: Services): TabAxis | undefined {
   const layout = currentLayout(services)
   if (layout === undefined) return undefined
@@ -496,7 +274,7 @@ function currentPaneTabs(services: Services): TabAxis | undefined {
   }
 }
 
-/** 当前会话的右栏 docking 布局;无挂载会话面 / 该会话尚无面板时 undefined。 */
+/** 当前会话的右栏 docking 布局。 */
 function currentLayout(services: Services): SidebarRightLayoutLike | undefined {
   const resolved = rightbarStore(services)
   if (resolved === undefined) return undefined
@@ -505,25 +283,18 @@ function currentLayout(services: Services): SidebarRightLayoutLike | undefined {
   return resolved.snapshot.bySession?.[sessionId]?.layout
 }
 
-/** 当前会话 id(无当前会话时 undefined)。 */
+/** 当前会话 id（无则 undefined）。 */
 function currentSessionId(services: Services): string | undefined {
   const current = services.sessions?.list?.getSnapshot?.()?.current
   return current === undefined || current === '' ? undefined : current
 }
 
-/** 右栏会话级 store 的**活实例**与它的快照(读顺序与写置顶都需要实例上的 actions)。 */
 interface RightbarStore {
   readonly instance: SidebarRightStoreLike
   readonly snapshot: SidebarRightTabsStateLike
 }
 
-/**
- * 解析 `rightbar.session` 注册项上的 store handle 的活实例。
- *
- * 三步(全部是上游公开面):`slots.entries('rightbar.session')` → 带 store 的注册项;
- * `uiSession.resolve(sessionId)` → 会话作用域绑定;`slots.resolveStore(handle, binding)`
- * → 活实例(含 `getSnapshot` 与动作面 `actions`)。任一步不可用返回 undefined。
- */
+/** 解析 rightbar.session 注册项 store handle 的活实例（三步取数，任一步不可用即 undefined）。 */
 function rightbarStore(services: Services): RightbarStore | undefined {
   const slots = services.slots
   const uiSession = services.uiSession
@@ -539,10 +310,8 @@ function rightbarStore(services: Services): RightbarStore | undefined {
     if (handle === undefined || handle === null) continue
     let instance: unknown
     try {
-      // 会话级 store 必须带作用域绑定解析(渲染端同一句 resolveStore)。
       instance = slots.resolveStore(handle, binding)
     } catch {
-      // 'store handle is not registered' / 作用域不匹配 → 换下一个注册项。
       continue
     }
     const resolved = asRightbarStore(instance)
@@ -551,7 +320,7 @@ function rightbarStore(services: Services): RightbarStore | undefined {
   return undefined
 }
 
-/** slots 注册项列表(服务异常 / 形状不符时视为不可用)。 */
+/** slots 注册项列表（服务异常 / 形状不符即空）。 */
 function entriesOf(slots: SlotsLike): readonly { store?: unknown }[] {
   try {
     const entries = slots.entries?.(RIGHTBAR_SLOT)
@@ -561,7 +330,7 @@ function entriesOf(slots: SlotsLike): readonly { store?: unknown }[] {
   }
 }
 
-/** 取会话的作用域绑定(必须带字符串 key,否则会话级 store 无法解析)。 */
+/** 会话作用域绑定（必须带字符串 key）。 */
 function resolveBinding(uiSession: UiSessionLike, sessionId: string): unknown {
   const resolve = uiSession.resolve
   if (typeof resolve !== 'function') return undefined
@@ -576,10 +345,7 @@ function resolveBinding(uiSession: UiSessionLike, sessionId: string): unknown {
   return typeof key === 'string' && key !== '' ? binding : undefined
 }
 
-/**
- * 活实例形状校验:必须能 `getSnapshot()` 出 `{ bySession: {...} }`。
- * 动作面(`actions.placeTab`)是可选面——缺它只影响置顶,不影响读顺序。
- */
+/** 活实例形状校验：必须能 getSnapshot() 出 { bySession }；actions 为可选面。 */
 function asRightbarStore(instance: unknown): RightbarStore | undefined {
   if (typeof instance !== 'object' || instance === null) return undefined
   const getSnapshot = (instance as { getSnapshot?: unknown }).getSnapshot
@@ -599,7 +365,7 @@ function asRightbarStore(instance: unknown): RightbarStore | undefined {
   }
 }
 
-/** 按 id 取布局里的面板(dockkit `getPane` 同语义:节点缺失 / 非 pane 即不可用)。 */
+/** 按 id 取布局里的面板（节点缺失 / 非 pane 即 undefined）。 */
 function paneOf(layout: SidebarRightLayoutLike, paneId: string | undefined): SidebarRightLayoutNodeLike | undefined {
   if (typeof paneId !== 'string' || paneId === '') return undefined
   const node = layout.nodes?.[paneId]

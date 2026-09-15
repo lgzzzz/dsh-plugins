@@ -650,85 +650,36 @@ function activeSessionIds(snapshot, services) {
 
 // src/config.ts
 var ACTIONS = [
-  // 回合级高频:审批与问答/计划评审均为服务级应答(uiSession 待处理交互),
-  // `card` 态亦由该表判定,不受 React 渲染卡片时序影响;审批 Enter/Esc 与问答的
-  // 数字键/方向键/Enter 由分发器固定分发(单键不参与 bindings 覆盖,避免与输入框
-  // 光标移动 / 发送消息冲突)。
+  // 回合级:服务级应答,单键固定分发,不进 bindings
   { id: "approval.allow", label: "\u5BA1\u6279:\u5141\u8BB8\u4E00\u6B21", group: "\u5BA1\u6279", states: ["card"] },
   { id: "approval.reject", label: "\u5BA1\u6279:\u62D2\u7EDD", group: "\u5BA1\u6279", states: ["card"] },
   { id: "question.option", label: "\u95EE\u9898:\u6309 1\u20139 \u9009\u62E9\u9009\u9879(\u4E0D\u7FFB\u9898)", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
   { id: "question.prev", label: "\u95EE\u9898:\u2190 \u4E0A\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
   { id: "question.next", label: "\u95EE\u9898:\u2192 \u4E0B\u4E00\u9898", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
   { id: "question.submit", label: "\u95EE\u9898:Enter \u4E0B\u4E00\u9898 / \u672B\u9898\u63D0\u4EA4", group: "\u95EE\u7B54\u5361\u7247", states: ["card"] },
-  // 会话级
-  // 左栏为 ⌘/Ctrl+B、右栏为 ⌘/Ctrl+O(`O` = 打开 / 开合面板,Open panel;
-  // 也避免把右栏塞进 `mod+alt` 那一档而占用方向键族的语义)。
-  // 两者都额外放行 editing:带修饰键的组合不干扰文本编辑,与 `editing` 态
-  // 「只保留带修饰键的全局组合」一致。
+  // 左 B(肌肉记忆) / 右 O(Open panel);带修饰键不干扰编辑,故放行 editing
   { id: "sidebar.toggle", label: "\u5F00\u5173\u5DE6\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "sidebarRight.toggle", label: "\u5F00\u5173\u53F3\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
-  // 右栏标签切换 = ⌘/Ctrl+Alt+← / →:走 mod+alt 这一档(与右栏开关、文件浏览器的
-  // 单修饰键区分开),因为方向键在 `mod+alt` 里已成体系——←/→ 是右栏内的标签轴,
-  // ↑/↓ 是左栏里的会话轴,两者都放行三态:
-  // 焦点在输入框(editing)时带修饰键的组合不干扰文本编辑;card 态下 ← / → 虽归
-  // 问答卡片,但那是**裸**方向键(固定分发),与带 mod+alt 的组合键不冲突,故无需让路。
+  // mod+alt+←/→:方向键轴归导航;card 裸键归卡片,不冲突
   { id: "sidebarRight.tabPrev", label: "\u53F3\u4FA7\u680F:\u4E0A\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "sidebarRight.tabNext", label: "\u53F3\u4FA7\u680F:\u4E0B\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 定位右栏文件浏览器(⌘/Ctrl+\):与右栏开关(⌘/Ctrl+O)同为「右栏」这一族
-  // (单修饰键),同样三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,
-  // 也不干扰文本编辑。语义是「定位」而非「开关」:该面板已有文件浏览器页就聚焦它,
-  // 没有就在面板末尾创建(上游 openTab 按目标面板去重),再加一步置顶。
+  // 定位文件浏览器(已有则聚焦,无则创建)并置顶
   { id: "sidebarRight.files", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u6587\u4EF6\u6D4F\u89C8\u5668(\u4E0D\u5B58\u5728\u5219\u521B\u5EFA)\u5E76\u7F6E\u9876", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 定位右栏终端(⌘/Ctrl+L):与文件浏览器定位(⌘/Ctrl+\)同族,同为「定位」语义,
-  // 但**不做置顶**(终端是 multiple 页,用户可能开着多个,热键不替用户重排顺序)。
-  // 关键差异见 sidebar-tabs.ts 的 revealRightSidebarTerminal:terminal 是
-  // `multiple: true` 的页类型,上游每次 openTab 都铸一个带 UUID 的 contentId、
-  // 因此不按 (kind, contentId) 去重——直接调 openTab 会每按一次多开一个终端,
-  // 所以这里先在会话级 store 的布局里认页(record.kind === 'terminal'),
-  // 已有就只聚焦(必要时展开右栏)、并把 DOM 焦点移进 xterm
-  // (focusTerminalScreen;上游 focus 只聚焦标签,终端内容的自动聚焦 effect 在
-  // 「本来就是当前标签」时不会重跑),没有才调 openTab('terminal') 新建。
+  // 定位终端但不去重、不置顶,故先读 store 认页
   { id: "sidebarRight.terminal", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u7EC8\u7AEF\u5E76\u805A\u7126(\u4E0D\u5B58\u5728\u5219\u65B0\u5EFA)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 新建会话并跳转(⌘/Ctrl+N)= `/new` 命令的同一动作:调公开的
-  // uiWorkspace.startSession()(与侧栏「新建会话」按钮、dsh-new-session 处理
-  // command/executed('new') 后的调用逐字相同)。三态放行:创建新会话与当前
-  // 会话是否有待回应卡片、焦点是否在输入框都无关,带修饰键的组合也既不占用
-  // 卡片的裸键(数字 / ← / → / Enter)也不干扰文本编辑。
+  // 同 /new(uiWorkspace.startSession)
   { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD\u5E76\u8DF3\u8F6C(\u7B49\u540C /new)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 聚焦输入框放行 browse / editing,但 **editing 态另有一道元素级门闸**:
-  // 「焦点在可编辑元素里」并不等于「焦点在 composer 里」——右侧栏终端(xterm 的
-  // 隐藏 helper textarea)与 Monaco(inputarea textarea)都把 DOM 焦点放在一个真实的
-  // <textarea> 上,焦点在那里时用户按下 ⌘/Ctrl+J 的意图恰恰是「跳回对话输入框」
-  // (J = Jump,焦点跳转)。因此 editing 态只在焦点**不在** composer 自己的编辑区内时
-  // 才执行聚焦(见 client.ts 里基于 isComposerTarget 的门闸,复用 ⇧Tab 那道门闸的
-  // 同一取元素链路);焦点已在 composer 内时不再重复聚焦,但组合键**仍被吞掉**——
-  // 旧键位 I 在同一位放行是为了保住 contenteditable 的「斜体」默认键,J 没有等价的
-  // 默认行为,放行只会让 Win/Linux 浏览器的 Ctrl+J(下载页)跑出来。
-  // card 态仍不放行:此时归卡片自己的输入框。
+  // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
   { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 工作区切换浮窗(⌘/Ctrl+K):单修饰键这一档(`K` = Work-space),三态放行——
-  // 带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,也不干扰文本编辑。
-  // 浮窗打开后 ↑/↓ 只在列表里移动高亮、Enter 才调 uiWorkspace.openWorkspace
-  // (连接工作区),故这一个动作 id 同时覆盖「开关浮窗」与「浮窗内导航」。
+  // mod+K:浮窗内 ↑↓ 只移高亮,Enter 才 openWorkspace
   { id: "workspace.pick", label: "\u5207\u6362\u5DE5\u4F5C\u533A(\u6D6E\u7A97:\u2191\u2193 \u9009\u62E9\u3001Enter \u5207\u6362)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 模型浮窗(⌘/Ctrl+M):同属单修饰键这一档(`M` = Model),三态放行。
-  // 列表 / 切换都走**上游同一个** per-session 模型目录(ctx.modelDirectories 的
-  // directoryFor,与 `/model` 弹层、composer 模型座位同一份状态),
-  // 故浮窗里的切换与两个上游入口完全同步(见 model-picker.ts)。
+  // mod+M:与上游两个入口共用同一 per-session 目录
   { id: "model.pick", label: "\u5207\u6362\u6A21\u578B(\u6D6E\u7A97:\u2191\u2193 \u9009\u62E9\u3001Enter \u5207\u6362)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 近期对话浮窗(⌘/Ctrl+I):单修饰键这一档(`I` = Input 会话),三态放行——
-  // 带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,也不干扰文本编辑。
-  // 浮窗内 ↑/↓ 在整份列表上跨工作区分组移动高亮、Enter 才打开会话
-  // (`uiWorkspace.openSession`,与侧栏点会话行同一条公开服务调用;缺失时回退
-  // 同一份服务实例上的 `sessions.open`),见 recent-sessions.ts。
+  // mod+I:浮窗内 ↑↓ 只移高亮,Enter 才 openSession
   { id: "session.recent", label: "\u8FD1\u671F\u5BF9\u8BDD(\u6D6E\u7A97:\u6309\u5DE5\u4F5C\u533A\u5206\u7EC4\u3001\u2191\u2193 \u9009\u62E9\u3001Enter \u6253\u5F00)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 思考强度循环(⇧Tab)只放行 browse / editing:card 态下 ⇧Tab 归卡片自己
-  // (问答卡片的输入框仍需要正向/反向移动焦点)。editing 态另有一道**元素级门闸**
-  // (见 client.ts 的 isComposerTarget):只有焦点在 composer 自己的编辑区内才接管,
-  // 焦点在设置面板输入框 / Monaco 隐藏 textarea 等其它可编辑元素时一律放行——
-  // ⇧Tab 是文本编辑的核心键(反向移动焦点 / 反向缩进),不能全局抢。
+  // ⇧Tab 是编辑核心键,仅 browse / editing,且 editing 需焦点在 composer 内
   { id: "model.effortNext", label: "\u5FAA\u73AF\u5207\u6362\u601D\u8003\u5F3A\u5EA6(\u21E7Tab;\u4EC5\u8F93\u5165\u6846/\u6D4F\u89C8\u6001)", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "session.stop", label: "\u505C\u6B62\u5F53\u524D\u4F1A\u8BDD(\u65E0\u5BA1\u6279\u5361\u7247\u65F6;\u542B\u8FD0\u884C\u4E2D\u5B50\u4EE3\u7406)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "help.toggle", label: "\u5FEB\u6377\u952E\u901F\u67E5\u8868", group: "\u9762\u677F", states: ["card", "editing", "browse"] }
@@ -743,78 +694,31 @@ var FIXED_KEYS = {
   "question.submit": "Enter"
 };
 var DEFAULT_BINDINGS = {
-  // 侧栏开关按「主面板 = 主键、次面板 = 邻键」分配:
-  // - 左栏 = ⌘/Ctrl+B:与 VS Code / Slack / 各类编辑器的侧栏开关一致,也是上游
-  //   `layout.toggleSidebar()` 的本名(sidebar / sidebarCol 不带限定词就指左栏);
-  // - 右栏 = ⌘/Ctrl+O:同属单修饰键这一档,`O` 取「Open(打开/开合右栏面板)」联想
-  //   (VS Code 亦用 ⌘0 而非 ⌘N 表示次面板);与左栏的 `B` 同档不同键。
+  // 左 = B(跨应用肌肉记忆),右 = O(Open panel)
   "sidebar.toggle": "mod+b",
   "sidebarRight.toggle": "mod+o",
-  // 右栏标签切换 = ⌘/Ctrl+Alt+← / →:方向键表达「上一个 / 下一个」;与
-  // ⌘/Ctrl+Alt+↑/↓ 的活跃会话跳转同族但不同轴(会话轴在左栏、标签轴在右栏)。
-  // 边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
+  // 右栏标签轴;边缘循环,单标签不吞键
   "sidebarRight.tabPrev": "mod+alt+arrowleft",
   "sidebarRight.tabNext": "mod+alt+arrowright",
-  // 定位右栏文件浏览器并置顶 = ⌘/Ctrl+\:反斜杠在主键区右端,与右栏开关
-  // (⌘/Ctrl+O)同为「右栏」这一族。键名走 `comboOf` 的 e.code 归一化
-  // (`Backslash` → `\`),与布局产出什么字符无关;JIS 等把 `\` 放在别的物理键上的
-  // 键盘由 e.key 回退兜住。本键不再带 alt,故 Win/Linux 上「Ctrl+Alt 即 AltGr」
-  // 的老问题在这里不存在(AltGr 层单独打出的 `\` 只会命中 `alt+\\`,不是本组合)。
+  // 反斜杠走物理键位(code),与布局字符无关
   "sidebarRight.files": "mod+\\",
-  // 定位右栏终端 = ⌘/Ctrl+L:与右栏开关(⌘/Ctrl+O)、文件浏览器定位(⌘/Ctrl+\)
-  // 同属「单修饰键」这一档。`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
-  // 所以 macOS 上 ⌃L 与 ⌘L 都能触发,Win/Linux 就是 Ctrl+L。
-  // 语义与文件浏览器同形(「定位」而非「开关」):该会话已有终端页就聚焦它并把
-  // DOM 焦点移进 xterm(focusTerminalScreen),没有才新建;重复按不会堆积终端
-  // (terminal 是 multiple 页,上游的 openTab 本身不去重,认页由 sidebar-tabs.ts
-  // 自己完成)。
-  // 注意 Ctrl/Cmd+L 是浏览器「聚焦地址栏」的保留键(见 README「已知限制」)。
+  // 浏览器保留键(聚焦地址栏)
   "sidebarRight.terminal": "mod+l",
-  // 新建会话并跳转 = ⌘/Ctrl+N:跨应用肌肉记忆(浏览器 / 编辑器 / 终端的新建),
-  // 语义 = `/new` 命令(公开的 uiWorkspace.startSession())。属单修饰键这一档,
-  // 与 ⌘/Ctrl+K(工作区)、⌘/Ctrl+M(模型)并列。`mod` 在 comboOf 里同时吸收
-  // ctrlKey 与 metaKey,故 macOS 上 ⌃N 与 ⌘N 都会触发;注意浏览器把
-  // ⌘/Ctrl+N 当作「新建窗口」保留键(见 README「已知限制」)。
+  // 浏览器保留键(新建窗口)
   "session.new": "mod+n",
-  // 聚焦输入框(焦点跳转)= ⌘/Ctrl+J:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
-  // 所以 macOS 上 ⌃J 与 ⌘J 都能触发,Win/Linux 就是 Ctrl+J。该组合落在「单修饰键」
-  // 这一档,与 ⌘/Ctrl+B(左栏)、⌘/Ctrl+O(右栏)同族;语义上 J = Jump(焦点跳转),
-  // 取代旧键位 ⌘/Ctrl+I(I = Input):好处是不再与 contenteditable 的「斜体」默认键
-  // 同键,代价是终端里的 `⌃J`(= 0x0A,LF;readline 的 newline,与 Enter 同义)不再
-  // 送给 PTY,要换行请按 Enter。注意 Win/Linux 的浏览器把 Ctrl+J 绑成「下载」页
-  // (浏览器保留键),详见 README「已知限制」。
+  // J = Jump;终端里 ⌃J(LF)不再送给 PTY
   "composer.focus": "mod+j",
   "session.prev": "mod+alt+arrowup",
   "session.next": "mod+alt+arrowdown",
-  // 工作区切换浮窗 = ⌘/Ctrl+K:属「单修饰键」这一档,`K` 取「工作区(Work-space)」
-  // 联想;`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,故 macOS 上按 ⌃K 或 ⌘K
-  // 均可(Win/Linux 就是 Ctrl+K)。
-  // 打开后 ↑/↓ 移动高亮、Enter 切换、Esc 关闭(见 overlay.ts)。
-  // 注意 Ctrl+K 是浏览器保留键(地址栏搜索),详见 README「已知限制」。
+  // 浏览器保留键(地址栏搜索)
   "workspace.pick": "mod+k",
-  // 模型浮窗 = ⌘/Ctrl+M:同为「单修饰键」这一档,`M` 取「模型(Model)」联想,
-  // 与 ⌘/Ctrl+K(工作区)并列。`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
-  // 故 macOS 上按 ⌃M 或 ⌘M 均可(Win/Linux 就是 Ctrl+M)。浮窗内 ↑/↓ 选择、
-  // Enter 切换、⇧Tab 调强度、Esc 关闭。
+  // M = Model
   "model.pick": "mod+m",
-  // 近期对话浮窗 = ⌘/Ctrl+I:属「单修饰键」这一档,`I` 取「Input / 会话」联想
-  // (与 ⌘/Ctrl+K 工作区、⌘/Ctrl+M 模型并列)。`mod` 在 comboOf 里同时吸收
-  // ctrlKey 与 metaKey,故 macOS 上按 ⌃I 或 ⌘I 均可(Win/Linux 就是 Ctrl+I)。
-  // 浮窗内:↑/↓ 在整份列表上**跨工作区分组**移动高亮(不打开会话——免得连按就连开
-  // 一串)、Enter 才打开高亮会话(`uiWorkspace.openSession`,与侧栏点会话行同一条
-  // 服务调用;缺失时回退 `sessions.open`)、
-  // Esc 或同组合键关闭、⌘/ 换成速查表。注意 `Ctrl+I` 在 contenteditable 里是
-  // 浏览器默认的「斜体」键,这里会被 preventDefault 抢走(见 README「已知限制」);
-  // 焦点跳转(⌘/Ctrl+J)是另一回事,不受影响。
+  // I = Input/会话;抢了 contenteditable 的斜体默认键
   "session.recent": "mod+i",
-  // 思考强度循环 = ⇧Tab:上游 composer 座位把强度档收在「模型菜单 → Effort」二级
-  // 面板里(没有默认键位),这里给一个免鼠标的循环键。Shift 单独作修饰键不与任何
-  // 已有组合冲突(bindings 里没有其它 shift+ 项);`comboOf` 走 e.code 归一化
-  // (`Tab` → `tab`),不随布局漂移。no-op(模型无强度档 / 只有一档 / 目录不可用)时
-  // **不吞键**,页面默认的 ⇧Tab 行为照常;editing 态另需焦点落在 composer 内(见 client.ts)。
+  // 免鼠标循环强度;no-op 时不吞键
   "model.effortNext": "shift+tab",
-  // Esc:停止当前会话的整棵运行中交互树(自身 + 直系子代理后代;one-shot 跳过)。
-  // 无运行中会话时不消费该键,页面默认 Esc 行为保留(浮层打开时由浮层优先处理)。
+  // 只停运行中的会话树;无运行中会话不吞键
   "session.stop": "escape",
   "help.toggle": "mod+/"
 };
@@ -1110,11 +1014,7 @@ var STYLE_ID = "dsh-kbd-hotkeys/style";
 var STYLE = [
   ".dsh-kbd-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;font-family:var(--dsw-font-family,system-ui,-apple-system,sans-serif)}",
   ".dsh-kbd-panel{width:min(560px,calc(100vw - 48px));max-height:64vh;background:var(--dsw-specific-menu,#fff);color:var(--dsw-alias-label-primary,#111);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.25));border-radius:14px;display:flex;flex-direction:column;overflow:hidden}",
-  // 近期对话浮窗最多 10 行,面板高度按内容给足:高度是内容尺寸(不写死),这里只把
-  // 上限从 64vh 抬到「视口可用高度」(backdrop 顶部留白 12vh,底部再留 24px)——
-  // 于是 10 行 + 组标题 + 页眉/页脚在常见窗口高度下能整屏看全、列表不滚动,
-  // 只有内容真的超过视口时列表才内部滚动。必须排在 `.dsh-kbd-panel` 之后
-  // (同特异性,后声明的生效)。其余三个浮窗(速查表/工作区/模型)仍用 64vh。
+  // 近期对话浮窗最多 10 行，抬高上限让整屏可见（须排在 .dsh-kbd-panel 之后）。
   ".dsh-kbd-panel--recent{max-height:calc(88vh - 24px)}",
   ".dsh-kbd-help{padding:14px 18px;overflow-y:auto}",
   ".dsh-kbd-help h3{margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-tertiary,#999)}",
@@ -1126,9 +1026,7 @@ var STYLE = [
   ".dsh-kbd-list{display:flex;flex-direction:column;gap:2px;padding:0 8px;overflow-y:auto}",
   ".dsh-kbd-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:13px;line-height:18px}",
   ".dsh-kbd-row.isActive{background:var(--dsw-specific-sidebar-nav-item-active,var(--dsw-alias-interactive-bg-active,rgba(127,127,127,.18)))}",
-  // 分组列表(近期对话浮窗)的行:与工作区 / 模型浮窗的行同形,只多一层缩进,
-  // 让「组标题 → 组内会话」的层级一眼可辨。刻意用不同类名,便于诊断脚本区分
-  // 两个浮窗各自渲染的行。
+  // 近期对话行：多一层缩进，用独立类名便于诊断脚本区分。
   ".dsh-kbd-groupRow{display:flex;align-items:center;gap:10px;padding:6px 10px 6px 20px;border-radius:8px;font-size:13px;line-height:18px}",
   ".dsh-kbd-groupRow.isActive{background:var(--dsw-specific-sidebar-nav-item-active,var(--dsw-alias-interactive-bg-active,rgba(127,127,127,.18)))}",
   ".dsh-kbd-rowMain{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}",
@@ -2062,7 +1960,7 @@ function runAction(id, services, overlays) {
     switch (id) {
       case "question.option":
         return false;
-      // 数字键走固定分发逻辑,不作为可执行动作
+      // 数字键用固定分发,非可执行动作
       case "question.submit":
         return submitQuestion(services);
       case "sidebar.toggle":
@@ -2127,20 +2025,17 @@ function apply(ctx) {
   const actionByCombo = comboActionMap(config.bindings);
   const overlays = createOverlays({
     getConfig: () => config,
-    // 工作区浮窗:数据每次打开时现取(宿主顺序),确认走 uiWorkspace.openWorkspace
+    // 工作区浮窗:每次打开现取
     listWorkspaces: () => workspaceRows(services),
     selectWorkspace: (workspaceId) => {
       switchWorkspace(services, workspaceId);
     },
-    // 近期对话浮窗:数据每次打开时现取(sessions.list + workspaces.list,按工作区分组),
-    // 确认走公开的 uiWorkspace.openSession(sessionId)——与侧栏点会话行同一条服务调用
-    // (缺失时回退同一份服务实例上的 sessions.open)。
+    // 近期对话:现取快照;openSession 缺失回退 sessions.open
     listRecentSessions: () => recentSessionsView(services),
     selectRecentSession: (sessionId) => {
       openRecentSession(services, sessionId);
     },
-    // 模型浮窗:列表每次打开时现取当前会话的模型目录(与 `/model` 弹层、
-    // composer 模型座位同一份状态);确认走同一个 directory.select。
+    // 模型浮窗:与上游弹层共用同一 per-session 目录
     listModels: () => modelPickerView(services),
     selectModel: (selection) => {
       selectModel(services, selection);

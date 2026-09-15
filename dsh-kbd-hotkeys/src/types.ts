@@ -1,11 +1,4 @@
-/**
- * dsh-kbd-hotkeys — 运行时服务与上下文的最小结构类型切片。
- *
- * 依据 AGENTS.md「类型解析约定」:`dsh-client-ui-slots` / `dsh-client-ui-primitives`
- * 等类型包不全,这里自行声明结构切片,
- * 仅覆盖本插件实际消费的字段,以 <dsh>/node_modules/@deepseek-ai 各包 lib 的
- * 构建产物为核实依据。
- */
+/** 运行时服务 / 上下文的最小结构类型切片,只含本插件消费的字段;取数不可用即 no-op,不回退 DOM。 */
 
 /** apply(ctx) 的运行时上下文最小面。 */
 export interface ClientContext {
@@ -13,16 +6,13 @@ export interface ClientContext {
   effect?(callback: () => void | (() => void)): void
 }
 
-/** 问答请求里的一个选项(见 dsh-user-questions/lib/types/types.d.ts AskUserQuestionOption)。 */
+/** 问答请求里的一个选项。 */
 export interface PendingQuestionOptionLike {
   label: string
   description?: string
 }
 
-/**
- * 问答请求里的一道题(见 dsh-user-questions/lib/types/types.d.ts AskUserQuestionItem)。
- * 计划评审由 intent.kind==='plan-review' + intent.approve 标签标识,判定不依赖 DOM 顺序。
- */
+/** 问答请求里的一道题;计划评审由 intent.kind==='plan-review' 标识。 */
 export interface PendingQuestionItemLike {
   id: string
   question?: string
@@ -33,97 +23,83 @@ export interface PendingQuestionItemLike {
   intent?: { kind?: string; approve?: string }
 }
 
-/**
- * 待处理交互里的一项(审批/问答/计划评审共用形态)。
- * - 审批(PendingApproval):answer('allowed-once' | 'rejected');
- * - 问答/计划评审(PendingQuestion):questions 携带选项与 intent,
- *   answer({ answers: [{ id, selected, custom? }] })、cancel()(计划评审的「去聊天里说」)。
- */
+/** 待处理交互(审批 / 问答 / 计划评审共用形态)。 */
 export interface PendingInteractionLike {
   kind?: string
   key?: string
   sessionId?: string
-  /** 问答/计划评审请求的题目列表(审批载体无此字段)。 */
+  /** 题目列表(审批载体无此字段)。 */
   questions?: readonly PendingQuestionItemLike[]
   answer?(payload: unknown): Promise<void> | void
   cancel?(): Promise<void> | void
 }
 
-/** uiSession 待处理交互的公开观察面(pendingInteractions 的 getSnapshot 半边)。 */
+/** uiSession 待处理交互的公开观察面。 */
 export interface PendingInteractionsLike {
   getSnapshot?(): ReadonlyMap<string, PendingInteractionLike>
 }
 
-/**
- * UiSession 服务实例消费面:
- * - `pendingInteractions` 为公开面(sessionId → interaction);
- * - `pendingSnapshot` 为同一份数据的私有字段,仅作兼容回退;
- * - `resolve(sessionId)` 取该会话**已物化的作用域绑定**(`{ key, ctx, hooks, … }`,
- *   与 UiSession 内部 bindStoreScope 用的是同一个对象),供 slots.resolveStore
- *   解析 session 级 store。
- */
+/** uiSession:resolve(sessionId) 取已物化的作用域绑定,供 slots.resolveStore 解析会话级 store。 */
 export interface UiSessionLike {
   pendingInteractions?: PendingInteractionsLike
   pendingSnapshot?: ReadonlyMap<string, PendingInteractionLike>
   resolve?(sessionId: string): unknown
 }
 
-/** 作用域绑定最小面(store 解析入参:`key` = 会话 id,`ctx` = 该作用域的 Cordis 上下文)。 */
+/** 作用域绑定最小面(key = 会话 id,ctx = 该作用域上下文)。 */
 export interface ScopeBindingLike {
   key?: string
   ctx?: unknown
 }
 
-/** 会话摘要行消费面(见 dsh-api-session-controller …/sessions/service.d.ts)。 */
+/** 会话摘要行消费面。 */
 export interface SessionSummaryLike {
   id: string
   displayTitle?: string
   title?: string
-  /** 会话工作目录(最近对话浮窗的次行)。 */
+  /** 会话工作目录(浮窗次行)。 */
   cwd?: string
   running?: boolean
-  /** 已结束而未被查看(侧栏绿色「完成」提醒;缺席 = false)。 */
+  /** 已结束未查看(缺席 = false)。 */
   completed?: boolean
   blank?: boolean
   updatedAt?: number
-  /** 粗粒度持久来源(导航过滤用);普通会话缺省。 */
+  /** 粗粒度持久来源(过滤子代理用)。 */
   origin?: string
 }
 
-/** workspaces(workspace 控制器)快照里的工作区实体(见 dsh-api-workspace-controller workspaceView)。 */
+/** workspaces 快照里的工作区实体。 */
 export interface WorkspaceItemLike {
   workspaceId: string
   path?: string
   title?: string
-  /** 宿主记录的会话归属顺序(浏览器「按工作区」视图的组内默认顺序)。 */
+  /** 宿主记录的会话归属顺序(组内默认序)。 */
   sessionIds?: readonly string[]
   createdAt?: string
   updatedAt?: string
 }
 
-/** workspaces 列表快照消费面(与 dsh-api-workspace-controller 的 RPC baseline 同构)。 */
+/** workspaces 列表快照消费面。 */
 export interface WorkspaceSnapshotLike {
   items?: readonly WorkspaceItemLike[]
   archivedSessionIds?: readonly string[]
-  /** 列表到达生命周期:`pending`(宿主尚未给出基线) / `ready`。 */
+  /** 列表到达生命周期:pending / ready。 */
   phase?: string
 }
 
-/** workspaces(workspace 控制器)服务消费面。 */
+/** workspaces 服务消费面。 */
 export interface WorkspacesLike {
   list?: { getSnapshot?(): WorkspaceSnapshotLike }
 }
 
-/* ------------------------------------------------------------------ *
- * 近期对话浮窗(⌘/Ctrl+I):列表取数 + 打开落点
- * ------------------------------------------------------------------ */
+/* ---- 近期对话浮窗(⌘/Ctrl+I):列表取数 + 打开落点 ---- */
 
-/** 近期对话浮窗的一行(纯展示数据,由 recent-sessions.ts 从服务快照派生)。 */
+/** 近期对话浮窗的一行(纯展示数据)。 */
 export interface RecentSessionRowLike {
   sessionId: string
   /** 主标签(会话标题)。 */
   label: string
-  /** 次行(补充信息;'' = 省略)。 */
+  /** 次行('' = 省略)。 */
   detail: string
   /** 是否为当前会话。 */
   current: boolean
@@ -135,11 +111,11 @@ export interface RecentSessionRowLike {
   pending: boolean
 }
 
-/** 一个工作区分组(组标题 + 组内会话行;无归属桶的 label 为空串)。 */
+/** 一个工作区分组(无归属桶 label 为空串)。 */
 export interface RecentSessionGroupLike {
-  /** 工作区 id;无归属桶为 ''。 */
+  /** 工作区 id(无归属桶为 '')。 */
   workspaceId: string
-  /** 组标题(工作区 title → 路径末段;无归属桶为空串)。 */
+  /** 组标题(无归属桶为空串)。 */
   label: string
   /** 组内会话行(最近更新在前)。 */
   rows: readonly RecentSessionRowLike[]
@@ -147,180 +123,133 @@ export interface RecentSessionGroupLike {
 
 /** 浮窗的完整渲染数据。 */
 export interface RecentSessionsViewLike {
-  /** 分组(空组已剔除);无归属桶排在最后;全局最多 10 行时被整组裁掉的工作区不出现。 */
+  /** 分组(空组已剔除;无归属桶在最后;全局最多 10 行)。 */
   groups: readonly RecentSessionGroupLike[]
-  /** 可选中行的展平顺序(与渲染顺序一致,供 ↑/↓ 与 Enter 按下标定位);全局最多 10 行。 */
+  /** 可选中行的展平顺序(供 ↑/↓ 与 Enter 定位)。 */
   rows: readonly RecentSessionRowLike[]
-  /** 初始高亮下标:当前会话所在行(它必在列表里),缺失则 0。 */
+  /** 初始高亮下标(当前会话所在行;缺失为 0)。 */
   initialIndex: number
   /** 无行时的提示文本('' = 有行)。 */
   notice: string
 }
 
-/* ------------------------------------------------------------------ *
- * 工作区浮窗(⌘/Ctrl+K):列表取数 + 切换落点
- * ------------------------------------------------------------------ */
+/* ---- 工作区浮窗(⌘/Ctrl+K):列表取数 + 切换落点 ---- */
 
-/** 工作区浮窗的一行(纯展示数据,由 workspace-switcher.ts 从服务快照派生)。 */
+/** 工作区浮窗的一行(纯展示数据)。 */
 export interface WorkspaceRowLike {
   workspaceId: string
-  /** 主标签:工作区 title(为空时回退路径末段 / 原路径)。 */
+  /** 主标签:title → 路径末段 → 原路径。 */
   label: string
-  /** 次行:工作区规范路径(与 label 相同时留空)。 */
+  /** 次行:规范路径(与 label 相同则留空)。 */
   detail: string
-  /** 该工作区名下(未归档)的会话数。 */
+  /** 名下会话数。 */
   sessionCount: number
   /** 当前会话是否属于该工作区。 */
   current: boolean
 }
 
-/**
- * UiWorkspace 服务消费面(见 dsh-client-ui-workspace/lib/types/client/navigation.d.ts
- * 的 `UiWorkspace`;模块声明 `Context.uiWorkspace`)。
- *
- * 消费三个动词:
- * - `openWorkspace`:工作区导航的**规范路径**——「连接工作区」= 复用该工作区
- *   已挂载的空白会话,没有就 `sessions.create({ workspaceId })` 新建一个再打开;
- *   与侧栏工作区分组上的「+」新建会话、以及首屏工作区导航是同一条路径。
- *   无挂载会话面 / 未知 workspaceId 时抛错(调用方兜住 → no-op);
- * - `startSession`:「新建会话」流程(创建/复用目标工作区的空白会话并跳转),
- *   与侧栏「新建会话」按钮、`/new` 命令浏览器半部(dsh-new-session 收到
- *   `command/executed('new')` 后)是**同一条**服务调用(⌘/Ctrl+N)。
- *   无挂载会话面时抛错(调用方兜住 → no-op);
- * - `openSession`:把某会话选为当前**并回到对话视图**——上游实现逐字为
- *   `sessions.open(sessionId)` + `layout.selectPanel(null)`(后者把一个占着主区的
- *   全局主面板收掉)。侧栏工作区浏览器点会话行、搜索结果行都经它打开;
- *   「近期对话」浮窗(⌘/Ctrl+I)的 Enter 也走这一条(见 recent-sessions.ts),
- *   故「有主面板打开时按 Enter 也会切回对话」,与侧栏点击完全一致。
- */
+/** UiWorkspace 服务消费面:openWorkspace / startSession / openSession。 */
 export interface UiWorkspaceLike {
   openSession?(sessionId: string): void
   openWorkspace?(workspaceId: string, beforeOpen?: (sessionId: string) => void): Promise<void> | void
   startSession?(workspaceId?: string): void
 }
 
-/* ------------------------------------------------------------------ *
- * 侧栏(workspace 浏览器)视图状态:会话排序的权威来源
- * ------------------------------------------------------------------ */
+/* ---- 侧栏 workspace 浏览器视图状态:会话排序的权威来源 ---- */
 
-/**
- * 侧栏 workspace 浏览器的视图 store 状态(见 dsh-client-ui-workspace 的
- * createWorkspaceViewStore,持久化键名 `dsh.workspace.view.v5`)。
- * 侧栏渲染顺序由它决定:分组方式 + 每组本地会话顺序账号。
- */
+/** 侧栏 workspace 浏览器的视图 store 状态(持久化键 dsh.workspace.view.v5)。 */
 export interface WorkspaceViewStateLike {
-  /** 分组方式:`workspace`(默认,按工作区分组) / `flat`(单列表)。 */
+  /** 分组方式:workspace(默认) / flat。 */
   groupBy?: string
-  /** 排序方式:`manual`(仅手动序) / `updated`(默认,手动序 + 活跃提升)。 */
+  /** 排序方式:manual / updated(默认)。 */
   orderBy?: string
-  /** 分组展开状态:组 key(workspaceId 或 `''`)→ 是否展开。 */
+  /** 分组展开状态:组 key → 是否展开。 */
   groupExpansion?: Readonly<Record<string, boolean | undefined>>
-  /** 每组(或单列表)的本地会话顺序账号:组 key → 会话 id 顺序。 */
+  /** 每组本地会话顺序账号:组 key → 会话 id 顺序。 */
   sessionOrderByAccount?: Readonly<Record<string, readonly string[] | undefined>>
 }
 
-/** store 实例(createSnapshotStore 产物)消费面。 */
+/** store 实例消费面。 */
 export interface StoreInstanceLike {
   getSnapshot?(): unknown
 }
 
-/**
- * defineStore 返回的 store handle 消费面。
- * - `spec.persist` 即持久化键名(侧栏视图状态的 localStorage 键);
- * - `create(scopeKey?)` 新建实例,`getSnapshot()` 直接读 handle 自带实例。
- */
+/** defineStore 返回的 store handle:spec.persist 为持久化键,create() 建实例。 */
 export interface StoreHandleLike {
   spec?: { persist?: string }
   create?(scopeKey?: string): StoreInstanceLike
   getSnapshot?(): unknown
 }
 
-/** slots 注册项:workspace 浏览器把视图 store handle 挂在注册项上。 */
+/** slots 注册项(store handle 挂在这里)。 */
 export interface SlotEntryLike {
   store?: StoreHandleLike
-  /**
-   * chain slot 的路由选择器(注册项自带;注册时必须提供)。用于确认该注册项就是
-   * 承载当前待处理交互的那一个——即卡片真正使用的那份 store。
-   */
+  /** chain slot 路由选择器(注册项自带)。 */
   select?(owner: unknown): unknown
 }
 
-/**
- * 通用问答卡片草稿的**唯一真源**(dsh-client-ui-user-questions 的
- * createQuestionDraftStore,挂在 `conversation.composer` 注册项上):
- * 快照 `{ requestKey?, progress: { index, drafts } }`,动作面 replace / clear。
- */
+/** 通用问答卡片草稿(唯一真源在卡片的 slot store)。 */
 export interface QuestionDraftLike {
   selected: string[]
   custom: string
   skipped: boolean
 }
 
-/** 一次问答请求的草稿进度:当前题号 + 每题草稿(上游 QuestionFlow.progress 同形)。 */
+/** 一次问答请求的草稿进度(当前题号 + 每题草稿)。 */
 export interface QuestionProgressLike {
   index: number
   drafts: QuestionDraftLike[]
 }
 
-/** 草稿 store 快照(`requestKey` 标记这份进度属于哪一次请求)。 */
+/** 草稿 store 快照(requestKey 标记属于哪一次请求)。 */
 export interface QuestionDraftSnapshotLike {
   requestKey?: string
   progress?: QuestionProgressLike
 }
 
-/** defineStore 产出的动作面(仅本插件用到的两个)。 */
+/** 草稿 store 动作面(仅本插件用到的两个)。 */
 export interface QuestionDraftActionsLike {
   replace?(requestKey: string, progress: QuestionProgressLike): void
   clear?(requestKey: string): void
 }
 
-/** 草稿 store 活实例(resolveStore 产物)。 */
+/** 草稿 store 活实例。 */
 export interface QuestionDraftStoreLike extends StoreInstanceLike {
   actions?: QuestionDraftActionsLike
 }
 
-/**
- * slots 服务(SlotRegistry)消费面:
- * - `entries(key)` 返回某 slot 的注册项(含 `store` handle);
- * - `resolveStore(handle, scopeBinding)` 解析该 handle 的**活实例**(root 作用域
- *   无需 scopeBinding),与侧栏渲染同一份内存状态。
- */
+/** slots 服务:entries → uiSession.resolve → resolveStore 三步取活实例,与渲染同一份内存态。 */
 export interface SlotsLike {
   entries?(key: string): readonly SlotEntryLike[]
   resolveStore?(handle: unknown, scopeBinding: unknown): StoreInstanceLike | undefined
 }
 
-/** 会话快照消费面(见 dsh-api-session-controller …/contract/snapshot.d.ts)。 */
+/** 会话快照消费面。 */
 export interface SessionSnapshotLike {
   running?: boolean
-  /** 子代理会话的直系父地址;普通会话为 null。 */
+  /** 直系父地址;普通会话为 null。 */
   subagent?: { address?: { mode?: string } } | null
 }
 
-/** 单个会话的面(session.getSnapshot / session.cancel)。 */
+/** 单个会话的面(getSnapshot / cancel)。 */
 export interface SessionFaceLike {
   getSnapshot?(): SessionSnapshotLike
   cancel?(): Promise<unknown> | void
 }
 
-/**
- * sessions.binding(id) 结果(身份稳定的会话绑定)。
- * `ctx` 是该会话的作用域 Cordis 上下文(uiSession.materialize 用的同一个
- * `binding.ctx`,见 dsh-client-ui-session/lib/client.js);
- * `conversation.input.for(actx)` 需要它以解析到对应会话的 input facade。
- */
+/** sessions.binding(id) 结果;ctx 为该会话的作用域上下文。 */
 export interface SessionBindingLike {
   session?: SessionFaceLike
   ctx?: unknown
 }
 
-/** 子代理目录里的一行(kind==='child' 才是真子会话,diagnostic 行跳过)。 */
+/** 子代理目录里的一行(kind==='child' 才是真子会话)。 */
 export interface SubagentCatalogEntryLike {
   kind?: string
   id?: string
 }
 
-/** 子代理目录快照(subagentsByParent[id])。 */
+/** 子代理目录快照。 */
 export interface SubagentCatalogLike {
   entries?: readonly SubagentCatalogEntryLike[]
 }
@@ -330,82 +259,49 @@ export interface SessionListSnapshotLike {
   ids?: readonly string[]
   byId?: Readonly<Record<string, SessionSummaryLike>>
   current?: string
-  /** 直系子代理目录:父会话 id → 目录快照。 */
+  /** 直系子代理目录:父会话 id → 目录。 */
   subagentsByParent?: Readonly<Record<string, SubagentCatalogLike | undefined>>
 }
 
-/** sessions(sessions 控制器)消费面。 */
+/** sessions 服务消费面。 */
 export interface SessionsLike {
   list?: { getSnapshot?(): SessionListSnapshotLike }
   open?(sessionId: string): void
   binding?(sessionId: string): SessionBindingLike | undefined
-  /**
-   * 该会话的子代理地址(普通会话 = undefined)。
-   * 上游以「`subagentAddress(id) === undefined`」判定会话可否使用 Agent 绑定的
-   * 模型选择 RPC(见 dsh-client-ui-model-selection/lib/client.js 的 available)。
-   */
+  /** 子代理地址(普通会话 = undefined);上游据此判定可否选模型。 */
   subagentAddress?(sessionId: string): unknown
 }
 
-/**
- * layout 服务消费面(ctx.reflect.provide("layout", …) 的 LayoutController)。
- * `toggleSidebar()` 开关**左侧栏**:宽屏下在契约默认宽(280)与 0 之间切换,
- * 窄屏(<1024)下只翻转 `narrowExpanded` 覆盖——即 AppFrame 左列轨道本身。
- */
+/** layout 服务:只消费 toggleSidebar(开关左栏)。 */
 export interface LayoutLike {
   toggleSidebar?(): void
 }
 
-/**
- * 打开落点(见 ISidebarRight 的 `SidebarRightPlacement`)。
- * **没有 index**:公开面无法表达「插到第 N 位」——把 tab 放到首位只能经会话级
- * store 的 `placeTab`(见 SidebarRightSurfaceActionsLike)。
- */
+/** 打开落点;无 index,置顶只能经 store 的 placeTab。 */
 export interface SidebarRightPlacementLike {
-  /** 落到这个面板,而不是当前停靠面板。 */
+  /** 落到这个面板(非当前停靠面板)。 */
   paneId?: string
-  /** 顶掉这个标签的槽位,并在同一步里把它关掉。 */
+  /** 顶掉该标签槽位并在同一步关掉它。 */
   replaceTab?: string
-  /** 资源 tab 默认按 (kind, contentId) 揭示已开的那一个;`false` 允许重复。页类型恒按面板去重。 */
+  /** 资源 tab 是否按 (kind, contentId) 揭示已开项。 */
   revealIfOpened?: boolean
 }
 
-/**
- * sidebarRight 服务消费面(ctx.reflect.provide("sidebarRight", …) 的控制器,
- * 见 dsh-client-ui-sidebar-right/lib/client.js 的 SidebarRightController)。
- * - `toggleExpanded()`:反转**已挂载会话面**的右栏面板展开态,与右栏头部的
- *   `[data-sidebar-right-toggle]` 折叠按钮同一入口(store 动作 toggleExpanded);
- *   `require()` 在无挂载会话面(空白/hero 会话、右栏插件缺席)时抛错,调用方兜住;
- * - 面板展开态是会话级 store 状态:seat 重渲染后由自己的 useLayoutEffect 调
- *   `layout.openRightbar / closeRightbar` 同步 AppFrame 的右栏轨道,故本插件
- *   无需自己调 layout 的右栏那两个方法;
- * - `openTab(kind)`:按 kind 打开一个**页类型**(`files` = 右栏文件浏览器)——
- *   上游 store 的 openContent 恒先 `planSetExpanded(true)`,所以一次调用即完成
- *   「展开右栏 + 打开/聚焦该页」;新 tab 的落位是目标面板末尾(公开面无 index)。
- */
+/** sidebarRight 服务:开关右栏 / 聚焦标签 / 按 kind 开页(openTab 自带展开)。 */
 export interface SidebarRightLike {
   toggleExpanded?(): void
   isExpanded?(): boolean
-  /** 取当前激活标签的记录(`active()`);无挂载会话面时返回 undefined。 */
+  /** 取当前激活标签;无会话面则 undefined。 */
   active?(): SidebarRightTabRecordLike | undefined
-  /**
-   * 聚焦一个标签(并聚焦其所在面板)。与标签条 chip 点击同一入口;
-   * 标签不存在时上游静默跳过,无挂载会话面时 `require()` 抛错(调用方兜住 → no-op)。
-   */
+  /** 聚焦标签(与 chip 点击同一入口);标签不存在则静默跳过。 */
   focus?(tabId: string): void
-  /**
-   * 打开/揭示一个页类型的 tab,并在同一步里展开右栏。
-   * 页类型按**目标面板**去重(已有该页 → 只聚焦);无挂载会话面时 `require()`
-   * 抛错、kind 未注册时上游抛错,调用方一律兜住 → no-op。
-   */
+  /** 按 kind 开页并展开右栏;页类型按目标面板去重。 */
   openTab?(kind: string, options?: SidebarRightPlacementLike): void
 }
 
-/* ------------------------------------------------------------------ *
- * 右侧栏标签切换(⌘/Ctrl+Alt+← / →):docking 面板状态的会话级 slot store
- * ------------------------------------------------------------------ */
+/* ---- 右栏标签切换(⌘/Ctrl+Alt+←/→):会话级 slot store ---- */
 
-/** 一个标签的记录(见 dsh-client-ui-dockkit 的 TabRecord;只消费 id)。 */
+/** 标签记录(只消费 id)。 */
 export interface SidebarRightTabRecordLike {
   id: string
   kind?: string
@@ -413,11 +309,7 @@ export interface SidebarRightTabRecordLike {
   contentId?: string
 }
 
-/**
- * 布局里的一个节点(见 dsh-client-ui-dockkit 的 LayoutState.nodes)。
- * 只消费 pane 分支:`kind==='pane'` 时 `tabs` 是面板内的标签顺序、`activeTabId`
- * 是当前激活标签(dockkit `getPane` 同形)。
- */
+/** 布局节点(只消费 pane 分支的 tabs / activeTabId)。 */
 export interface SidebarRightLayoutNodeLike {
   kind?: string
   host?: string
@@ -426,10 +318,7 @@ export interface SidebarRightLayoutNodeLike {
   activeTabId?: string
 }
 
-/**
- * 一个会话的 docking 布局(见 dsh-client-ui-dockkit 的 LayoutState)。
- * `activePaneId` 指向当前面板;`tabs` 是布局内全部标签记录的字典。
- */
+/** 一个会话的 docking 布局。 */
 export interface SidebarRightLayoutLike {
   nodes?: Readonly<Record<string, SidebarRightLayoutNodeLike | undefined>>
   tabs?: Readonly<Record<string, SidebarRightTabRecordLike | undefined>>
@@ -438,172 +327,100 @@ export interface SidebarRightLayoutLike {
   expanded?: boolean
 }
 
-/** 一个会话的面板状态(dockkit SurfaceState;只消费 layout)。 */
+/** 一个会话的面板状态(只消费 layout)。 */
 export interface SidebarRightSurfaceLike {
   layout?: SidebarRightLayoutLike
 }
 
-/**
- * `createSidebarRightStore()` 的 store 快照(见
- * dsh-client-ui-sidebar-right 的 SidebarRightState):会话 id → 该会话的面板状态。
- * 取自 `slots.entries('rightbar.session')` 注册项上的 store handle
- * (会话级,需 `uiSession.resolve(sessionId)` 作用域绑定后 `slots.resolveStore`)。
- */
+/** 右栏会话级 store 快照(slot 'rightbar.session' handle,需作用域绑定)。 */
 export interface SidebarRightTabsStateLike {
   bySession?: Readonly<Record<string, SidebarRightSurfaceLike | undefined>>
 }
 
-/* ------------------------------------------------------------------ *
- * 右侧栏会话级 store 的**写**面(⌘/Ctrl+\ 把文件浏览器置于首位)
- * ------------------------------------------------------------------ */
+/* ---- 右栏会话级 store 的写面(⌘/Ctrl+\ 把文件浏览器置于首位) ---- */
 
-/**
- * store 实例的动作面(仅本插件用到的动词;见 stores.d.ts 的 SidebarRightActions)。
- *
- * `placeTab` 是**标签拖拽**的同一条入口(seat 的 `intentsFor.placeTab` →
- * `actions.placeTab(sessionId, tabId, toPaneId, index)`,见
- * dsh-client-ui-sidebar-right/lib/client.js 的 intentsFor),落地为 dockkit:
- * - 同面板 → `reorderTab`(上游对 index 做「先摘除再插入」的位移校正,越界 clamp);
- * - 跨面板 → `moveTab`(目标必须是停靠面板);
- * - 源为浮窗 → `unfloat`。
- * 与鼠标操作共用同一份内存态:defineStore 的实例动作面即
- * `(...args) => snapshotStore.update(draft => action(draft, ...args))`,同步提交并
- * 通知订阅者,故外部写入后 React 订阅者立即重渲染(与 question-drafts.ts 同一范式)。
- */
+/** store 动作面:placeTab 是标签拖拽同一入口(会话级 store 需作用域绑定)。 */
 export interface SidebarRightSurfaceActionsLike {
   placeTab?(sessionId: string, tabId: string, paneId: string, index: number): void
 }
 
-/**
- * `slots.resolveStore(handle, binding)` 返回的**活实例**(defineStore 的实例面:
- * `{ actions, getSnapshot, subscribe }`,见 dsh-client-store 的 defineStore)。
- * 快照之外还要 `actions`,置顶才写得到 seat 正在画的那份状态。
- */
+/** resolveStore 返回的活实例:除快照外还要 actions 才能写。 */
 export interface SidebarRightStoreLike extends StoreInstanceLike {
   actions?: SidebarRightSurfaceActionsLike
 }
 
-/* ------------------------------------------------------------------ *
- * 输入框聚焦(⌘/Ctrl+J;J = Jump,焦点跳转):conversation 服务面 → composer 的 Lexical editor
- * ------------------------------------------------------------------ */
+/* ---- 输入框聚焦(⌘/Ctrl+J):conversation → composer editor ---- */
 
-/**
- * composer 的 contenteditable 宿主元素(见 dsh-client-ui-conversation
- * `ComposerContentEditable`:`editor.setRootElement(el)` 绑定的那个 div)。
- *
- * 只声明 `focus`:聚焦的唯一可靠原语。**不做任何选择器查询 / DOM 遍历 /
- * 事件合成**——元素引用完全来自服务链路(shell.editor.getRootElement())。
- * `preventScroll` 与上游自己的 composer autofocus
- * (`editor.getRootElement()?.focus({ preventScroll: true })`)同参。
- */
+/** composer 的 contenteditable 宿主元素;只声明 focus / contains,引用来自服务链路。 */
 export interface ComposerEditableLike {
   focus?(options?: { preventScroll?: boolean }): void
-  /**
-   * 事件目标是否落在该宿主元素内(⇧Tab 的 `editing` 态门闸用)。
-   * 结构切片:上游绑定的是真实 contenteditable div,`contains` 是标准 Node 方法;
-   * 这里只做**包含判定**(与 overlay 的 `contains` 同一判据),不查询 / 不遍历。
-   */
+  /** 事件目标是否落在宿主元素内(⇧Tab 门闸用)。 */
   contains?(node: unknown): boolean
 }
 
-/**
- * shell 自有的 Lexical editor 最小面(见
- * dsh-client-ui-conversation/lib/types/client/input/facade.d.ts 的
- * `SessionInputShell.editor: readonly editor: LexicalEditor`)。
- *
- * 注意 `focus()` 不是聚焦原语:lexical 0.49 的 `LexicalEditor.focus()` 只把
- * 选区克隆置 dirty + 打 FOCUS_TAG,真正的 DOM 聚焦在选区调和器里、且要求
- * 「当前 DOM 选区已等于目标选区」才调用 rootElement.focus()——DOM 选区在
- * composer 之外时(例如刚在正文里点选过文本)它不移动键盘焦点。故这里只用
- * `getRootElement()` 取宿主元素。
- */
+/** shell 的 Lexical editor:只用 getRootElement()(focus() 不是 DOM 聚焦原语)。 */
 export interface ComposerEditorLike {
   getRootElement?(): ComposerEditableLike | null
 }
 
-/**
- * 一个会话的 input facade(InputHub 的 `shell(id)` / `for(actx)` 产物,
- * 见 dsh-client-ui-conversation/lib/types/client/input/hub.d.ts 与
- * input/facade.d.ts 的 SessionInputShell)。
- */
+/** 一个会话的 input facade(含 editor)。 */
 export interface SessionInputShellLike {
   editor?: ComposerEditorLike
 }
 
-/**
- * InputHub 消费面(`ctx.conversation.input`)。
- *
- * 公开契约 `SessionInputResolver` 只声明 `for(actx): SessionInput`(不含 editor),
- * 这里按 InputHub 的**公开类型**(hub.d.ts 的 `shell(id): SessionInputShell`)
- * 结构切片取 editor;`for` / `shell` 在会话无绑定时都抛错,调用方兜住。
- */
+/** InputHub:for(actx) / shell(id) 取会话 input facade。 */
 export interface InputHubLike {
   for?(actx: unknown): SessionInputShellLike | undefined
   shell?(id: string): SessionInputShellLike | undefined
 }
 
-/**
- * conversation 服务消费面(super(ctx, "conversation") 的 ConversationController,
- * 见 dsh-client-ui-conversation/lib/types/client/service.d.ts)。
- * 契约面无聚焦动词(`send` / `updateQueue` / `cancel` / `loadOlder` / `input` /
- * `blocks`),聚焦所需的 editor 只能经 `input` 的 InputHub 取。
- */
+/** conversation 服务:聚焦所需的 editor 经 input 取。 */
 export interface ConversationLike {
   input?: InputHubLike
 }
 
-/** 本插件解析后的服务集合(get 结果全部判空后才装进来)。 */
+/** 本插件解析后的服务集合(判空后才装入)。 */
 export interface Services {
   sessions: SessionsLike | undefined
   uiSession: UiSessionLike | undefined
-  /** layout 服务:只用于开关左侧栏(⌘/Ctrl+B)。 */
+  /** layout:开关左栏(⌘/Ctrl+B)。 */
   layout: LayoutLike | undefined
-  /** sidebarRight 服务:只用于开关右侧栏(⌘/Ctrl+O)。 */
+  /** sidebarRight:开关右栏(⌘/Ctrl+O)。 */
   sidebarRight: SidebarRightLike | undefined
   workspaces: WorkspacesLike | undefined
-  /** slots 服务:只用于读侧栏视图 store(会话跳转顺序的权威来源)。 */
+  /** slots:读侧栏视图 store(会话跳转顺序)。 */
   slots: SlotsLike | undefined
-  /** conversation 服务:只用于取 composer 的 editor 宿主元素(⌘/Ctrl+J 焦点跳转)。 */
+  /** conversation:取 composer editor(⌘/Ctrl+J)。 */
   conversation: ConversationLike | undefined
-  /**
-   * uiWorkspace 服务:工作区浮窗的切换动作(⌘/Ctrl+K 选中后 Enter
-   * 调 openWorkspace,与侧栏「+」同一条连接工作区的路径),以及
-   * ⌘/Ctrl+N 新建会话并跳转(startSession,与 `/new` 同一条服务调用)。
-   */
+  /** uiWorkspace:工作区浮窗(⌘/Ctrl+K)、新建会话(⌘/Ctrl+N)。 */
   uiWorkspace: UiWorkspaceLike | undefined
-  /**
-   * modelDirectories 服务:模型浮窗(⌘/Ctrl+M)取会话级模型目录、
-   * ⇧Tab 循环思考强度(`load()` / `select()`)——与上游 `/model` 弹层、
-   * composer 模型座位共用**同一份** per-session 目录实例。
-   */
+  /** modelDirectories:模型浮窗(⌘/Ctrl+M)、强度循环(⇧Tab)。 */
   modelDirectories: ModelDirectoryResolverLike | undefined
 }
 
-/* ------------------------------------------------------------------ *
- * 模型浮窗(⌘/Ctrl+M)与思考强度循环(⇧Tab):会话级模型目录
- * ------------------------------------------------------------------ */
+/* ---- 模型浮窗(⌘/Ctrl+M)与强度循环(⇧Tab):会话级模型目录 ---- */
 
-/** 一次完整模型选择(见 dsh-api-session-controller …/types.d.ts 的 ModelSelection)。 */
+/** 一次完整模型选择。 */
 export interface ModelSelectionLike {
   provider: string
   model: string
   reasoningEffort?: string
 }
 
-/** 一档推理强度(适配器自报;见 ModelReasoningEffort)。 */
+/** 一档推理强度。 */
 export interface ModelReasoningEffortLike {
   id: string
   name?: string
   description?: string
 }
 
-/** 某个确切模型路由的推理元数据(见 ModelReasoning)。 */
+/** 某模型的推理元数据。 */
 export interface ModelReasoningLike {
   efforts?: readonly ModelReasoningEffortLike[]
   defaultEffort?: string
 }
 
-/** 目录里的一个模型(见 ModelCatalogModel)。 */
+/** 目录里的一个模型。 */
 export interface ModelCatalogModelLike {
   id: string
   name?: string
@@ -611,25 +428,21 @@ export interface ModelCatalogModelLike {
   reasoning?: ModelReasoningLike
 }
 
-/** 一个提供方分组(见 ModelProviderGroup)。 */
+/** 一个提供方分组。 */
 export interface ModelProviderGroupLike {
   id: string
   name?: string
   models?: readonly ModelCatalogModelLike[]
 }
 
-/** 目录加载失败的提供方(见 ModelCatalogFailure;只用于底部小字提示,不可选中)。 */
+/** 加载失败的提供方(不可选中)。 */
 export interface ModelCatalogFailureLike {
   id: string
   name?: string
   message?: string
 }
 
-/**
- * 会话级模型目录快照(见 dsh-client-ui-model-selection 的 ModelDirectoryState)。
- * `current` = 「下一次请求」的有效选择(durable 投影优先,否则宿主默认);
- * `groups` / `failures` 来自当前宿主代数的共享目录(目录成员资格仅供参考)。
- */
+/** 会话级模型目录快照。 */
 export interface ModelDirectoryStateLike {
   current?: ModelSelectionLike | null
   routable?: boolean | null
@@ -639,71 +452,60 @@ export interface ModelDirectoryStateLike {
   error?: string | null
 }
 
-/** 目录的共享快照 store(createSnapshotStore 产物;上游两个入口渲染的同一份)。 */
+/** 目录的共享快照 store。 */
 export interface ModelDirectoryStoreLike {
   getSnapshot?(): ModelDirectoryStateLike
 }
 
-/**
- * 一个会话的共享模型目录(见 ModelDirectory)。
- * `load()` 拉一次宿主代数目录并回读快照;`select()` 提交完整选择
- * (失败落在 store 上并 reject)。被寻址的子代理会话两者都抛错。
- */
+/** 一个会话的共享模型目录:load() 拉取,select() 提交。 */
 export interface ModelDirectoryLike {
   store?: ModelDirectoryStoreLike
   load?(): Promise<ModelDirectoryStateLike>
   select?(selection: ModelSelectionLike): Promise<void>
 }
 
-/**
- * `ctx.modelDirectories`(ModelDirectoryResolver)消费面。
- * 上游 `/model` 弹层与 composer 模型座位都经 `directoryFor(sessionId)` 取同一个
- * per-session 实例(service.d.ts:「the ONE state both selection entries share」),
- * 本插件走同一条路,所以浮窗里的切换与两个上游入口共用同一状态与同一条
- * `session.selectModel` 提交路径——不是镜像。
- * 未知会话 / 无挂载会话面时上游 `directoryFor` **抛错**,调用方兜住。
- */
+/** ctx.modelDirectories:directoryFor(id) 取 per-session 目录(与上游两入口同一实例)。 */
 export interface ModelDirectoryResolverLike {
   directoryFor?(sessionId: string): ModelDirectoryLike | undefined
 }
 
-/** 模型浮窗的一行(可选中)。 */
+/** 模型浮窗的一行。 */
 export interface ModelPickerRowLike {
-  /** 该行对应的**完整**选择(含该模型当前的 / 默认的推理强度)。 */
+  /** 该行的完整选择(含推理强度)。 */
   selection: ModelSelectionLike
   /** 主标签:模型名。 */
   label: string
-  /** 次行:提供方名(与分组标题同源)。 */
+  /** 次行:提供方名。 */
   detail: string
-  /** 提供方分组显示名(相邻同组行共用一个分组标题)。 */
+  /** 分组显示名(同组行共用)。 */
   provider: string
-  /** 是否为当前会话的有效选择(初始高亮 + 「当前」标记)。 */
+  /** 是否当前有效选择。 */
   current: boolean
 }
 
 /** 浮窗顶部「当前」行。 */
 export interface ModelPickerCurrentLike {
-  /** 模型名(目录里找不到时回退 `provider/model`)。 */
+  /** 模型名(找不到时回退 provider/model)。 */
   label: string
-  /** 推理等级显示名('' = 该模型不提供强度档)。 */
+  /** 强度显示名('' = 无强度档)。 */
   effort: string
 }
 
-/** 模型浮窗的一次完整渲染数据(由 model-picker.ts 从目录快照派生)。 */
+/** 模型浮窗的完整渲染数据。 */
 export interface ModelPickerViewLike {
   current: ModelPickerCurrentLike | null
   rows: readonly ModelPickerRowLike[]
-  /** 无行时的提示文本('' = 有行,不显示)。 */
+  /** 无行时的提示文本('' = 有行)。 */
   notice: string
-  /** 列表下方的小字(加载失败的提供方数 / 错误详情;'' = 无)。 */
+  /** 列表下方小字('' = 无)。 */
   footnote: string
 }
 
 /** ⇧Tab 循环思考强度的结果。 */
 export interface EffortCycleResultLike {
-  /** 是否真的提交了新的强度选择(no-op 时 false,分发器据此决定是否吞键)。 */
+  /** 是否提交了新选择(false = no-op,分发器据此不吞键)。 */
   ok: boolean
-  /** 切换后的强度显示名('' = 未切换,或该模型不提供强度档)。 */
+  /** 切换后的强度显示名('' = 未切换)。 */
   effortLabel: string
 }
 
