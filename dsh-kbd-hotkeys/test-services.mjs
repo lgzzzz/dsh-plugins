@@ -30,6 +30,14 @@
  * 公开的 `sidebarRight.focus(tabId)`;首/末标签**循环**,只有一个标签时 no-op 且不吞键,
  * 焦点在输入框(editing 态)同样可用,任一环不可用一律 no-op。
  *
+ * 另含右栏终端定位断言(⌘/Ctrl+L):terminal 是 `multiple: true` 的页类型(上游每次
+ * `openTab` 都铸带 UUID 的 contentId、不按 (kind, contentId) 去重),所以「认页」必须由
+ * 插件自己读会话级 store 的布局完成(`record.kind === 'terminal'`):已有终端 → 只调
+ * 公开的 `sidebarRight.focus(tabId)`(折叠时补一步 `toggleExpanded`)、**不**再 openTab
+ * (重复按不堆积终端、不重排);没有才调 `openTab('terminal')` 新建。另覆盖面板内优先
+ * 当前激活的终端 / 跨停靠面板定位 / 浮窗不参与 / 折叠与 expanded 读不到 / 凭页地址前缀
+ * 认页,以及各层不可用或抛错时的 no-op 不吞键(已有终端时不退化成再开一个)。
+ *
  * 用法: node test-services.mjs
  */
 import { readFileSync } from 'node:fs'
@@ -756,14 +764,14 @@ console.log('\n--- ⌘/Ctrl+N → 新建会话并跳转(uiWorkspace.startSession
 }
 
 // ===========================================================================
-// 阶段 4:⌘/Ctrl+I → 聚焦对话输入框
+// 阶段 4:⌘/Ctrl+J → 聚焦对话输入框(J = Jump,焦点跳转)
 //         路径 = sessions.binding(id).ctx → conversation.input.for(actx)
 //                → shell.editor.getRootElement() → element.focus({preventScroll:true})
 //         只允许走服务链路:DOM 桩的 querySelector/querySelectorAll 恒空,任何
 //         选择器式实现都拿不到元素;断言对象是服务图里的假元素与 binding.ctx 同一性。
-//         键位是 mod+i(旧键位 mod+alt+i 已不再绑定,见下方回归断言)。
+//         键位是 mod+j(旧键位 mod+i 已不再绑定,见下方回归断言)。
 // ===========================================================================
-console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.editor) ---')
+console.log('\n--- ⌘/Ctrl+J → 聚焦输入框(conversation.input → shell.editor) ---')
 {
   const actx = { scope: 'sess-b' } // sessions.binding('sess-b').ctx(必须原样传给 input.for)
   const makeComposerSessions = (ctx = actx) => ({
@@ -777,7 +785,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
     workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
   }
 
-  // --- 主路径:browse 态 ⌘/Ctrl+I 聚焦,且 for() 收到的就是 binding.ctx 本身 ---
+  // --- 主路径:browse 态 ⌘/Ctrl+J 聚焦,且 for() 收到的就是 binding.ctx 本身 ---
   const root = makeRoot()
   const seenActx = []
   const shellCalls = []
@@ -791,44 +799,72 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
       },
     },
   })
-  let event = main({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
-  check('browse 态 Ctrl+I → 宿主元素 focus({preventScroll:true})', root.focused === true)
-  check('Ctrl+I 被吞', event.propagationStopped === true)
+  let event = main({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false })
+  check('browse 态 Ctrl+J → 宿主元素 focus({preventScroll:true})', root.focused === true)
+  check('Ctrl+J 被吞', event.propagationStopped === true)
   check('input.for 收到 binding.ctx 本身', same(seenActx, [actx]))
   check('主路径不触碰 shell(id)', shellCalls.length === 0, JSON.stringify(shellCalls))
 
-  // --- 旧键位 ⌘/Ctrl+Alt+I 已不再是本插件键位:不聚焦、不吞键 ---
+  // --- 旧键位 ⌘/Ctrl+I 已不再是本插件键位:不聚焦、不吞键 ---
   const oldRoot = makeRoot()
   const old = loadPlugin({
     ...base,
     sessions: makeComposerSessions(),
     conversation: { input: { for: () => ({ editor: { getRootElement: () => oldRoot } }) } },
   })
-  event = old({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: true })
-  check('Ctrl+Alt+I 不聚焦(旧键位已改为 ⌘/Ctrl+I)', oldRoot.focused !== true)
-  check('Ctrl+Alt+I 不吞键', event.propagationStopped !== true)
+  event = old({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
+  check('Ctrl+I 不聚焦(旧键位已改为 ⌘/Ctrl+J)', oldRoot.focused !== true)
+  check('Ctrl+I 不吞键', event.propagationStopped !== true)
 
-  // --- macOS ⌘I:metaKey 同样归一化成 mod+i ---
+  // --- macOS ⌘J:metaKey 同样归一化成 mod+j ---
   const macRoot = makeRoot()
   const mac = loadPlugin({
     ...base,
     sessions: makeComposerSessions(),
     conversation: { input: { for: () => ({ editor: { getRootElement: () => macRoot } }) } },
   })
-  event = mac({ key: 'i', code: 'KeyI', metaKey: true, altKey: false })
-  check('macOS ⌘I(metaKey)→ 同样聚焦', macRoot.focused === true)
-  check('macOS ⌘I 被吞', event.propagationStopped === true)
+  event = mac({ key: 'j', code: 'KeyJ', metaKey: true, altKey: false })
+  check('macOS ⌘J(metaKey)→ 同样聚焦', macRoot.focused === true)
+  check('macOS ⌘J 被吞', event.propagationStopped === true)
 
-  // --- 态门闸:editing(焦点已在可编辑元素)不接管,交回输入框 ---
-  const editRoot = makeRoot()
+  // --- 元素级门闸:editing 态 = 焦点在某个可编辑元素里,但不一定是 composer ---
+  // 右栏终端(xterm 的隐藏 .xterm-helper-textarea)与 Monaco(.inputarea textarea)
+  // 都是真实 <textarea>,同样被判成 editing;焦点在那里时 ⌘/Ctrl+J 的意图恰恰是
+  // 「跳回对话输入框」,故 editing 态只在焦点**不在** composer 内时执行聚焦。
+  const elsewhereRoot = makeRoot()
+  const seenEditing = [] // 门闸的 contains 与动作的 focus 各取一次元素,故同一次按键会取两次
   const editing = loadPlugin({
     ...base,
     sessions: makeComposerSessions(),
-    conversation: { input: { for: () => ({ editor: { getRootElement: () => editRoot } }) } },
+    conversation: {
+      input: { for: (arg) => { seenEditing.push(arg); return { editor: { getRootElement: () => elsewhereRoot } } } },
+    },
   })
-  event = editing({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false, target: new FakeHTMLElement('TEXTAREA') })
-  check('editing 态 Ctrl+I 不聚焦(动作在 editing 态无事可做)', editRoot.focused !== true)
-  check('editing 态 Ctrl+I 不吞键', event.propagationStopped !== true)
+  event = editing({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 + 焦点在别处可编辑元素(终端 / Monaco)→ Ctrl+J 聚焦输入框', elsewhereRoot.focused === true)
+  check('editing 态 + 焦点在别处 → Ctrl+J 被吞', event.propagationStopped === true)
+  check('editing 态 + 焦点在别处 → 走服务链路且 for 收到 binding.ctx', same(seenEditing, [actx, actx]), JSON.stringify(seenEditing))
+
+  // 焦点已在 composer 自己的编辑区内:不重复聚焦,但组合键仍被吞掉
+  // (旧键位 I 在此放行是为了保住 contenteditable 的「斜体」默认键;J 没有
+  //  等价的默认行为,放行只会让 Win/Linux 浏览器的 Ctrl+J(下载页)跑出来)
+  const inComposerTarget = new FakeHTMLElement('DIV')
+  inComposerTarget.isContentEditable = true
+  const inComposerRoot = makeRoot()
+  inComposerRoot.contains = (node) => node === inComposerTarget
+  const insideComposer = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(),
+    conversation: { input: { for: () => ({ editor: { getRootElement: () => inComposerRoot } }) } },
+  })
+  event = insideComposer({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false, target: inComposerTarget })
+  check('editing 态 + 焦点已在 composer 内 → 不聚焦(动作无事可做)', inComposerRoot.focused !== true)
+  check('editing 态 + 焦点已在 composer 内 → 仍吞键(不放行浏览器下载页)', event.propagationStopped === true)
+
+  // 取不到 composer 宿主元素时门闸判为「不在 composer 内」,仍会走一次服务链路 → no-op 不吞键
+  const noRootEditable = loadPlugin({ ...base, sessions: makeComposerSessions(), conversation: { input: {} } })
+  event = noRootEditable({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 + 取不到 composer 宿主 → Ctrl+J 不吞键(no-op)', event.propagationStopped !== true)
 
   // --- 态门闸:card(有待审批卡片)不接管 ---
   const cardPending = new Map([['sess-b', { kind: 'approval', key: 'a:1', answer() {} }]])
@@ -839,9 +875,9 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
     uiSession: { pendingInteractions: { getSnapshot: () => cardPending } },
     conversation: { input: { for: () => ({ editor: { getRootElement: () => cardRoot } }) } },
   })
-  event = card({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
-  check('card 态 Ctrl+I 不聚焦', cardRoot.focused !== true)
-  check('card 态 Ctrl+I 不吞键', event.propagationStopped !== true)
+  event = card({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false })
+  check('card 态 Ctrl+J 不聚焦', cardRoot.focused !== true)
+  check('card 态 Ctrl+J 不吞键', event.propagationStopped !== true)
 
   // --- for 缺席 → 回退公开的 shell(id)(同一 SessionInputShell) ---
   const shellRoot = makeRoot()
@@ -853,7 +889,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
       input: { shell: (id) => { shellIds.push(id); return { editor: { getRootElement: () => shellRoot } } } },
     },
   })
-  event = viaShell({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
+  event = viaShell({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false })
   check('input.for 缺席 → shell(id) 回退聚焦', shellRoot.focused === true)
   check('shell(id) 收到当前会话 id', same(shellIds, ['sess-b']), JSON.stringify(shellIds))
   check('shell 回退路径吞键', event.propagationStopped === true)
@@ -870,7 +906,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
       },
     },
   })
-  event = noCtx({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
+  event = noCtx({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false })
   check('无 binding.ctx → 走 shell(id)', noCtxRoot.focused === true)
   check('无 binding.ctx 路径吞键', event.propagationStopped === true)
 
@@ -895,8 +931,8 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
   ]
   for (const [label, extra] of cases) {
     const env = loadPlugin({ ...base, sessions: makeComposerSessions(), ...extra })
-    event = env({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
-    check(`${label} → Ctrl+I 不吞键(no-op)`, event.propagationStopped !== true)
+    event = env({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false })
+    check(`${label} → Ctrl+J 不吞键(no-op)`, event.propagationStopped !== true)
   }
 
   // 无当前会话 / current 为空串:sessions 有 conversation 也不动作
@@ -908,8 +944,8 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
         input: { for: () => { throw new Error('must not resolve without a current session') } },
       },
     })
-    event = env({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
-    check(`${label} → Ctrl+I 不吞键`, event.propagationStopped !== true)
+    event = env({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false })
+    check(`${label} → Ctrl+J 不吞键`, event.propagationStopped !== true)
   }
 
   // 键位可经 localStorage 覆盖(与左右栏同一套 bindings 机制;
@@ -921,8 +957,8 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
     sessions: makeComposerSessions(),
     conversation: { input: { for: () => ({ editor: { getRootElement: () => customRoot } }) } },
   })
-  event = custom({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
-  check('覆盖键位后 ⌘/Ctrl+I 不再聚焦', customRoot.focused !== true)
+  event = custom({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: false })
+  check('覆盖键位后 ⌘/Ctrl+J 不再聚焦', customRoot.focused !== true)
   event = custom({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: true })
   check('自定义 ⌘/Ctrl+Alt+J → 聚焦', customRoot.focused === true)
   check('自定义键位被吞', event.propagationStopped === true)
@@ -1023,7 +1059,7 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
   check('⌘/Ctrl+Alt+← 被吞', event.propagationStopped === true)
 
   // 输入态(焦点在输入框)同样可用:带修饰键的组合不干扰文本编辑
-  event = press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, altKey: false, target: new FakeHTMLElement('TEXTAREA') })
+  event = press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, altKey: true, target: new FakeHTMLElement('TEXTAREA') })
   check('editing 态 ⌘/Ctrl+Alt+← 仍切标签', same(focused, ['t3', 't1', 't3', 't2']), JSON.stringify(focused))
   check('editing 态 ⌘/Ctrl+Alt+← 被吞', event.propagationStopped === true)
 
@@ -1407,6 +1443,318 @@ console.log('\n--- ⌘/Ctrl+\\ → 右栏打开文件浏览器并置于首位 --
   check('覆盖键位后 ⌘/Ctrl+\\ 不吞键', event.propagationStopped !== true)
   event = customEnv.press({ key: '7', code: 'Digit7', ctrlKey: true })
   check('自定义 ⌘/Ctrl+7 → 打开并置顶', same(custom.calls, [['sess-b', 'files-1', 'pane-1', 0]]), JSON.stringify(custom.calls))
+  check('自定义键位被吞', event.propagationStopped === true)
+  storage.delete('dsh-kbd-hotkeys:v1')
+}
+
+// ===========================================================================
+// 阶段 7:⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新建)
+//         terminal 是 `multiple: true` 的页类型:上游 placeTab 给**每次**打开都铸一个
+//         带 UUID 的 contentId(`sidebar://terminal/<uuid>`),planOpenContent 因此不按
+//         (kind, contentId) 去重 → 直接调 openTab('terminal') 会每按一次多开一个终端。
+//         所以「认页」必须由插件自己在会话级 store 的布局里完成(kind === 'terminal'):
+//         已有就只调公开的 `sidebarRight.focus(tabId)`(折叠时补一步 toggleExpanded),
+//         没有才调公开的 `openTab('terminal')`。DOM 桩无任何标签元素,选择器式实现
+//         拿不到标签顺序与 kind。
+// ===========================================================================
+console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新建) ---')
+{
+  /** 假右栏会话级 store:快照 { bySession: { <id>: { layout } } } + 复刻上游口径的写入。 */
+  function makeTerminalStore() {
+    const handle = { spec: {} }
+    let state = { bySession: {} }
+    let minted = 0
+    /** 复刻上游 focusTab:改当前面板的 activeTabId(已在当前标签上时上游计划为空)。 */
+    const focusTab = (tabId, sessionId = 'sess-b') => {
+      const layout = state.bySession[sessionId]?.layout
+      if (layout === undefined) throw new Error('sidebarRight: no session surface is mounted')
+      const target = layout.nodes[layout.activePaneId]
+      if (target === undefined || !(target.tabs ?? []).includes(tabId)) return
+      target.activeTabId = tabId
+    }
+    /** 复刻上游 openTab 对 multiple 页的语义:**每次**都是新 contentId + 新 tab。 */
+    const open = (kind, sessionId = 'sess-b') => {
+      const layout = state.bySession[sessionId]?.layout
+      if (layout === undefined) throw new Error('sidebarRight: no session surface is mounted')
+      const target = layout.nodes[layout.activePaneId]
+      if (target === undefined || target.kind !== 'pane') throw new Error('sidebarRight: no session surface is mounted')
+      minted += 1
+      const tabId = `${kind}-${minted}`
+      layout.tabs[tabId] = { id: tabId, kind, contentId: `sidebar://${kind}/uuid-${minted}`, title: kind }
+      target.tabs.push(tabId)
+      target.activeTabId = tabId
+      layout.expanded = true
+      return tabId
+    }
+    return {
+      handle,
+      open,
+      focusTab,
+      instance: { getSnapshot: () => state },
+      seed: (layout, sessionId = 'sess-b') => { state = { bySession: { [sessionId]: { layout: clone(layout) } } } },
+      layout: (sessionId = 'sess-b') => state.bySession[sessionId]?.layout,
+    }
+  }
+
+  const guideTab = { id: 't1', kind: 'guide', contentId: 'sidebar://guide' }
+  /** 终端页记录:contentId 带 UUID(`multiple: true` 页类型的上游形态)。 */
+  const termTab = (id, uuid) => ({ id, kind: 'terminal', contentId: `sidebar://terminal/${uuid}` })
+  /** 单面板布局:标签顺序 + 记录 + 当前标签(默认末个)。 */
+  const singlePane = (ids, tabs, active = ids[ids.length - 1], over = {}) => ({
+    rootId: 'pane-1',
+    activePaneId: 'pane-1',
+    expanded: true,
+    nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: [...ids], activeTabId: active } },
+    tabs,
+    ...over,
+  })
+  const okBinding = (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined)
+  /** rightbar.session 的假 slots:无 store 的干扰项 + 承载 store handle 的注册项。 */
+  function terminalSlots(tabs) {
+    return {
+      entries: (key) => (key !== 'rightbar.session' ? [] : [{ select: () => ({}) }, { store: tabs.handle }]),
+      resolveStore: (handle, binding) => {
+        if (handle !== tabs.handle) throw new Error('resolved the wrong store handle')
+        if (binding?.key !== 'sess-b') throw new Error(`bad scope binding: ${JSON.stringify(binding)}`)
+        return tabs.instance
+      },
+    }
+  }
+  /** 装一个「右栏完整可用」的环境;openTab / focus / toggleExpanded 都落到假 store 上。 */
+  function env(tabs, over = {}) {
+    const opened = []
+    const focused = []
+    const toggled = []
+    const press = loadPlugin({
+      sessions: { ...sessions, binding: () => undefined },
+      uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, resolve: okBinding },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+      slots: terminalSlots(tabs),
+      sidebarRight: {
+        toggleExpanded: () => {
+          toggled.push(true)
+          const layout = tabs.layout()
+          if (layout !== undefined) layout.expanded = !layout.expanded
+        },
+        focus: (tabId) => { focused.push(tabId); tabs.focusTab(tabId) },
+        openTab: (kind) => { opened.push(kind); tabs.open(kind) },
+      },
+      ...over,
+    })
+    return { press, opened, focused, toggled }
+  }
+  const combo = { key: 'l', code: 'KeyL', ctrlKey: true }
+
+  // ① 没有终端页 → openTab('terminal') 新建;再按一次必须只聚焦、不新建(幂等)
+  const fresh = makeTerminalStore()
+  fresh.seed(singlePane(['t1'], { t1: guideTab }))
+  const freshEnv = env(fresh)
+  let event = freshEnv.press(combo)
+  check('无终端页 → openTab("terminal") 新建', same(freshEnv.opened, ['terminal']), JSON.stringify(freshEnv.opened))
+  check('无终端页 → 不调 focus', same(freshEnv.focused, []), JSON.stringify(freshEnv.focused))
+  check('新建后 ⌘/Ctrl+L 被吞', event.propagationStopped === true)
+  event = freshEnv.press(combo)
+  check('再按一次 → 不再 openTab(不堆积终端)', same(freshEnv.opened, ['terminal']), JSON.stringify(freshEnv.opened))
+  check('再按一次 → 只聚焦已有终端', same(freshEnv.focused, ['terminal-1']), JSON.stringify(freshEnv.focused))
+  check('再按一次仍被吞', event.propagationStopped === true)
+
+  // ② 已有终端(非当前标签)→ 只 focus,不 openTab、不重排、不动展开态
+  const held = makeTerminalStore()
+  held.seed(singlePane(['t1', 'term-2', 't3'], {
+    t1: guideTab,
+    'term-2': termTab('term-2', 'u2'),
+    t3: { id: 't3', kind: 'text', contentId: 'dsh-resource://file/session/sess-b/a.ts' },
+  }, 't1'))
+  const heldEnv = env(held)
+  event = heldEnv.press(combo)
+  check('已有终端 → 不调 openTab(幂等)', same(heldEnv.opened, []), JSON.stringify(heldEnv.opened))
+  check('已有终端 → focus("term-2")', same(heldEnv.focused, ['term-2']), JSON.stringify(heldEnv.focused))
+  check('已有终端 → 标签顺序不变(不重排)', same(held.layout().nodes['pane-1'].tabs, ['t1', 'term-2', 't3']),
+    JSON.stringify(held.layout().nodes['pane-1'].tabs))
+  check('已展开 → 不调 toggleExpanded', same(heldEnv.toggled, []), JSON.stringify(heldEnv.toggled))
+  check('已有终端被吞', event.propagationStopped === true)
+
+  // ③ 面板内有多个终端且当前标签就是其中一个 → 聚焦当前这个(不把用户挪到别的终端)
+  const multi = makeTerminalStore()
+  multi.seed(singlePane(['term-a', 'term-b', 't1'], {
+    'term-a': termTab('term-a', 'a'),
+    'term-b': termTab('term-b', 'b'),
+    t1: guideTab,
+  }, 'term-b'))
+  const multiEnv = env(multi)
+  event = multiEnv.press(combo)
+  check('多个终端 → 聚焦当前激活的那个', same(multiEnv.focused, ['term-b']), JSON.stringify(multiEnv.focused))
+  check('多个终端 → 不调 openTab', same(multiEnv.opened, []), JSON.stringify(multiEnv.opened))
+
+  // ④ 当前面板没有、别的停靠面板有 → 聚焦那个面板里的终端(不新建)
+  const otherPane = makeTerminalStore()
+  otherPane.seed({
+    rootId: 'pane-1',
+    activePaneId: 'pane-1',
+    expanded: true,
+    nodes: {
+      'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t1'], activeTabId: 't1' },
+      'pane-2': { kind: 'pane', host: 'dock', id: 'pane-2', tabs: ['term-x'], activeTabId: 'term-x' },
+    },
+    tabs: { t1: guideTab, 'term-x': termTab('term-x', 'x') },
+  })
+  const otherEnv = env(otherPane)
+  event = otherEnv.press(combo)
+  check('别的停靠面板有终端 → focus("term-x")', same(otherEnv.focused, ['term-x']), JSON.stringify(otherEnv.focused))
+  check('别的停靠面板有终端 → 不新建', same(otherEnv.opened, []), JSON.stringify(otherEnv.opened))
+  check('跨面板定位被吞', event.propagationStopped === true)
+
+  // ⑤ 只有浮窗里有终端 → 浮窗不参与认页 → 新建(浮窗里的 tab 原样保留)
+  const floated = makeTerminalStore()
+  floated.seed({
+    rootId: 'pane-1',
+    activePaneId: 'pane-1',
+    expanded: true,
+    floats: ['pane-f'],
+    nodes: {
+      'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t1'], activeTabId: 't1' },
+      'pane-f': { kind: 'pane', host: 'float', id: 'pane-f', tabs: ['term-float'], activeTabId: 'term-float' },
+    },
+    tabs: { t1: guideTab, 'term-float': termTab('term-float', 'f') },
+  })
+  const floatEnv = env(floated)
+  event = floatEnv.press(combo)
+  check('浮窗里的终端不算「已有」→ 新建', same(floatEnv.opened, ['terminal']), JSON.stringify(floatEnv.opened))
+  check('浮窗里的终端不被聚焦', same(floatEnv.focused, []), JSON.stringify(floatEnv.focused))
+  check('浮窗里的终端原样保留', same(floated.layout().nodes['pane-f'].tabs, ['term-float']),
+    JSON.stringify(floated.layout().nodes['pane-f'].tabs))
+
+  // ⑥ 右栏折叠着 + 已有终端 → 聚焦并补一步展开(focus 本身不动展开态)
+  const collapsed = makeTerminalStore()
+  collapsed.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 't1', { expanded: false }))
+  const collapsedEnv = env(collapsed)
+  event = collapsedEnv.press(combo)
+  check('折叠 + 已有终端 → 先 focus', same(collapsedEnv.focused, ['term-2']), JSON.stringify(collapsedEnv.focused))
+  check('折叠 + 已有终端 → toggleExpanded 展开', same(collapsedEnv.toggled, [true]), JSON.stringify(collapsedEnv.toggled))
+  check('折叠 + 已有终端 → 展开态已翻转', collapsed.layout().expanded === true)
+  check('折叠 + 已有终端 → 不新建', same(collapsedEnv.opened, []), JSON.stringify(collapsedEnv.opened))
+  check('折叠 + 已有终端被吞', event.propagationStopped === true)
+
+  // ⑦ expanded 读不到(既非 true 也非 false)→ 不动展开态(宁可少做,也不把开着的右栏关掉)
+  const unknown = makeTerminalStore()
+  unknown.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 't1', { expanded: undefined }))
+  const unknownEnv = env(unknown)
+  event = unknownEnv.press(combo)
+  check('expanded 读不到 → 不 toggle(不猜状态)', same(unknownEnv.toggled, []), JSON.stringify(unknownEnv.toggled))
+  check('expanded 读不到 → 仍 focus 并吞键', same(unknownEnv.focused, ['term-2']) && event.propagationStopped === true)
+
+  // ⑧ 认页兼容「只有 contentId 前缀、没有 kind」的记录(防御上游记录形态)
+  const byAddress = makeTerminalStore()
+  byAddress.seed(singlePane(['t1', 'addr'], {
+    t1: guideTab,
+    addr: { id: 'addr', contentId: 'sidebar://terminal/uuid-addr' },
+  }, 't1'))
+  const byAddressEnv = env(byAddress)
+  event = byAddressEnv.press(combo)
+  check('凭 sidebar://terminal/<uuid> 地址认页 → focus', same(byAddressEnv.focused, ['addr']), JSON.stringify(byAddressEnv.focused))
+  check('凭地址认页 → 不新建', same(byAddressEnv.opened, []), JSON.stringify(byAddressEnv.opened))
+
+  // ⑨ 无降级:服务 / slot / store 任一层不可用,或上游抛错 → no-op 且不吞键
+  //    (openTab / focus 抛错时调用已经发生且被兜住 → 只断言「不吞键」;下一条单独
+  //     断言「已有终端而 focus 面抛错」不得退化成再开一个终端。)
+  for (const [label, makeOver] of [
+    ['sidebarRight 缺席', () => ({ sidebarRight: undefined })],
+    ['sidebarRight 无 openTab(且无终端)', () => ({ sidebarRight: { toggleExpanded() {}, focus() {} } })],
+    ['无挂载会话面(openTab 抛错)', () => ({ sidebarRight: { toggleExpanded() {}, focus() {}, openTab: () => { throw new Error('sidebarRight: no session surface is mounted') } } })],
+    ['terminal 类型未注册(openTab 抛错)', () => ({ sidebarRight: { toggleExpanded() {}, focus() {}, openTab: () => { throw new Error('sidebarRight: no tab type is registered as "terminal"') } } })],
+  ]) {
+    const caseStore = makeTerminalStore()
+    caseStore.seed(singlePane(['t1'], { t1: guideTab }))
+    const caseEnv = env(caseStore, makeOver())
+    event = caseEnv.press(combo)
+    check(`${label} → 不崩、不吞键`, event.propagationStopped !== true)
+  }
+  // 已有终端但 focus 抛错(无挂载会话面)→ no-op 不吞键,且**不**退化成再开一个终端
+  const focusThrowsOpened = []
+  const focusThrows = makeTerminalStore()
+  focusThrows.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 't1'))
+  const focusThrowsEnv = env(focusThrows, {
+    sidebarRight: {
+      toggleExpanded() {},
+      openTab: (kind) => { focusThrowsOpened.push(kind) },
+      focus: () => { throw new Error('sidebarRight: no session surface is mounted') },
+    },
+  })
+  event = focusThrowsEnv.press(combo)
+  check('已有终端但 focus 抛错 → 不吞键', event.propagationStopped !== true)
+  check('已有终端但 focus 抛错 → 不新建(不重复开终端)', same(focusThrowsOpened, []), JSON.stringify(focusThrowsOpened))
+  // 已有终端但 sidebarRight 无 focus 面 → 不得退化成「再开一个终端」
+  const noFocus = makeTerminalStore()
+  noFocus.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 't1'))
+  const noFocusOpened = []
+  const noFocusEnv = env(noFocus, {
+    sidebarRight: { toggleExpanded() {}, openTab: (kind) => { noFocusOpened.push(kind) } },
+  })
+  event = noFocusEnv.press(combo)
+  check('已有终端但无 focus → 不吞键', event.propagationStopped !== true)
+  check('已有终端但无 focus → 不新建(不重复开终端)', same(noFocusOpened, []), JSON.stringify(noFocusOpened))
+  // 取数面不可用(无从判重)→ 退化为 openTab 新建:与上游 openTab 同一行为,且吞键
+  const noSlots = makeTerminalStore()
+  noSlots.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 't1'))
+  const noSlotsEnv = env(noSlots, { slots: undefined })
+  event = noSlotsEnv.press(combo)
+  check('slots 缺席 → 无从判重,按 openTab 新建', same(noSlotsEnv.opened, ['terminal']), JSON.stringify(noSlotsEnv.opened))
+  check('slots 缺席 → 吞键', event.propagationStopped === true)
+
+  // ⑩ 无当前会话 / 该会话尚无面板 → 取不到布局,openTab 在无挂载会话面时抛错 → no-op 不吞键
+  const noSession = makeTerminalStore()
+  const noSessionEnv = env(noSession, {
+    sessions: { ...sessions, list: { getSnapshot: () => ({ ...snapshot, current: undefined }) } },
+  })
+  event = noSessionEnv.press(combo)
+  check('无当前会话 + 无面板 → 不吞键', event.propagationStopped !== true)
+
+  // ⑪ card / editing 态同样生效(带修饰键的组合不与卡片的裸键、文本编辑冲突)
+  const editable = makeTerminalStore()
+  editable.seed(singlePane(['t1'], { t1: guideTab }))
+  const editableEnv = env(editable)
+  event = editableEnv.press({ ...combo, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 ⌘/Ctrl+L 仍新建终端', same(editableEnv.opened, ['terminal']), JSON.stringify(editableEnv.opened))
+  check('editing 态被吞', event.propagationStopped === true)
+
+  const cardSearch = makeTerminalStore()
+  cardSearch.seed(singlePane(['t1'], { t1: guideTab }))
+  const cardSearchEnv = env(cardSearch, {
+    uiSession: {
+      pendingInteractions: { getSnapshot: () => new Map([['sess-b', { kind: 'question', key: 'question:22', sessionId: 'sess-b', questions: [{ id: 'q1', question: 'Q?', options: [{ label: 'A' }] }] }]]) },
+      resolve: okBinding,
+    },
+  })
+  event = cardSearchEnv.press(combo)
+  check('card 态 ⌘/Ctrl+L 仍新建终端', same(cardSearchEnv.opened, ['terminal']), JSON.stringify(cardSearchEnv.opened))
+  check('card 态被吞', event.propagationStopped === true)
+
+  // ⑫ ⌘(metaKey)与 ⌃(ctrlKey)都归一化成同一个 mod 组合(macOS 上两者都能触发)
+  const mac = makeTerminalStore()
+  mac.seed(singlePane(['t1'], { t1: guideTab }))
+  const macEnv = env(mac)
+  event = macEnv.press({ key: 'l', code: 'KeyL', metaKey: true })
+  check('⌘L 同样触发', same(macEnv.opened, ['terminal']), JSON.stringify(macEnv.opened))
+  check('⌘L 被吞', event.propagationStopped === true)
+
+  // ⑬ 裸 l 不触发(mod 才触发,不能抢文本输入)
+  const bare = makeTerminalStore()
+  bare.seed(singlePane(['t1'], { t1: guideTab }))
+  const bareEnv = env(bare)
+  event = bareEnv.press({ key: 'l', code: 'KeyL' })
+  check('裸 l 不打开终端', same(bareEnv.opened, []), JSON.stringify(bareEnv.opened))
+  check('裸 l 不吞键', event.propagationStopped !== true)
+
+  // ⑭ 键位可独立覆盖(与右栏其它动作同一套 bindings 机制)
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'sidebarRight.terminal': 'mod+alt+t' } }))
+  const custom = makeTerminalStore()
+  custom.seed(singlePane(['t1'], { t1: guideTab }))
+  const customEnv = env(custom)
+  event = customEnv.press(combo)
+  check('覆盖键位后 ⌘/Ctrl+L 不再打开终端', same(customEnv.opened, []), JSON.stringify(customEnv.opened))
+  check('覆盖键位后 ⌘/Ctrl+L 不吞键', event.propagationStopped !== true)
+  event = customEnv.press({ key: 't', code: 'KeyT', ctrlKey: true, altKey: true })
+  check('自定义 ⌘/Ctrl+Alt+T → 新建终端', same(customEnv.opened, ['terminal']), JSON.stringify(customEnv.opened))
   check('自定义键位被吞', event.propagationStopped === true)
   storage.delete('dsh-kbd-hotkeys:v1')
 }

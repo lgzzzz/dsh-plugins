@@ -658,16 +658,31 @@ var ACTIONS = [
   // 也不干扰文本编辑。语义是「定位」而非「开关」:该面板已有文件浏览器页就聚焦它,
   // 没有就在面板末尾创建(上游 openTab 按目标面板去重),再加一步置顶。
   { id: "sidebarRight.files", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u6587\u4EF6\u6D4F\u89C8\u5668(\u4E0D\u5B58\u5728\u5219\u521B\u5EFA)\u5E76\u7F6E\u9876", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 定位右栏终端(⌘/Ctrl+L):与文件浏览器定位(⌘/Ctrl+\)同族,同为「定位」语义,
+  // 但**不做置顶**(终端是 multiple 页,用户可能开着多个,热键不替用户重排顺序)。
+  // 关键差异见 sidebar-tabs.ts 的 revealRightSidebarTerminal:terminal 是
+  // `multiple: true` 的页类型,上游每次 openTab 都铸一个带 UUID 的 contentId、
+  // 因此不按 (kind, contentId) 去重——直接调 openTab 会每按一次多开一个终端,
+  // 所以这里先在会话级 store 的布局里认页(record.kind === 'terminal'),
+  // 已有就只聚焦(必要时展开右栏),没有才调 openTab('terminal') 新建。
+  { id: "sidebarRight.terminal", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u7EC8\u7AEF(\u4E0D\u5B58\u5728\u5219\u65B0\u5EFA)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 新建会话并跳转(⌘/Ctrl+N)= `/new` 命令的同一动作:调公开的
   // uiWorkspace.startSession()(与侧栏「新建会话」按钮、dsh-new-session 处理
   // command/executed('new') 后的调用逐字相同)。三态放行:创建新会话与当前
   // 会话是否有待回应卡片、焦点是否在输入框都无关,带修饰键的组合也既不占用
   // 卡片的裸键(数字 / ← / → / Enter)也不干扰文本编辑。
   { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD\u5E76\u8DF3\u8F6C(\u7B49\u540C /new)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义;card 态则归卡片
-  // 自己的输入框。这一档也正好避开 contenteditable 的斜体冲突——⌘/Ctrl+I 只在焦点
-  // **不在**可编辑元素时才被本插件接管(见 DEFAULT_BINDINGS 该条注释)。
-  { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u4F1A\u8BDD", states: ["browse"] },
+  // 聚焦输入框放行 browse / editing,但 **editing 态另有一道元素级门闸**:
+  // 「焦点在可编辑元素里」并不等于「焦点在 composer 里」——右侧栏终端(xterm 的
+  // 隐藏 helper textarea)与 Monaco(inputarea textarea)都把 DOM 焦点放在一个真实的
+  // <textarea> 上,焦点在那里时用户按下 ⌘/Ctrl+J 的意图恰恰是「跳回对话输入框」
+  // (J = Jump,焦点跳转)。因此 editing 态只在焦点**不在** composer 自己的编辑区内时
+  // 才执行聚焦(见 client.ts 里基于 isComposerTarget 的门闸,复用 ⇧Tab 那道门闸的
+  // 同一取元素链路);焦点已在 composer 内时不再重复聚焦,但组合键**仍被吞掉**——
+  // 旧键位 I 在同一位放行是为了保住 contenteditable 的「斜体」默认键,J 没有等价的
+  // 默认行为,放行只会让 Win/Linux 浏览器的 Ctrl+J(下载页)跑出来。
+  // card 态仍不放行:此时归卡片自己的输入框。
+  { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 工作区切换浮窗(⌘/Ctrl+K):单修饰键这一档(`K` = Work-space),三态放行——
@@ -717,20 +732,28 @@ var DEFAULT_BINDINGS = {
   // 键盘由 e.key 回退兜住。本键不再带 alt,故 Win/Linux 上「Ctrl+Alt 即 AltGr」
   // 的老问题在这里不存在(AltGr 层单独打出的 `\` 只会命中 `alt+\\`,不是本组合)。
   "sidebarRight.files": "mod+\\",
+  // 定位右栏终端 = ⌘/Ctrl+L:与右栏开关(⌘/Ctrl+O)、文件浏览器定位(⌘/Ctrl+\)
+  // 同属「单修饰键」这一档。`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
+  // 所以 macOS 上 ⌃L 与 ⌘L 都能触发,Win/Linux 就是 Ctrl+L。
+  // 语义与文件浏览器同形(「定位」而非「开关」):该会话已有终端页就聚焦它、
+  // 没有才新建;重复按不会堆积终端(terminal 是 multiple 页,上游的 openTab
+  // 本身不去重,认页由 sidebar-tabs.ts 自己完成)。
+  // 注意 Ctrl/Cmd+L 是浏览器「聚焦地址栏」的保留键(见 README「已知限制」)。
+  "sidebarRight.terminal": "mod+l",
   // 新建会话并跳转 = ⌘/Ctrl+N:跨应用肌肉记忆(浏览器 / 编辑器 / 终端的新建),
   // 语义 = `/new` 命令(公开的 uiWorkspace.startSession())。属单修饰键这一档,
   // 与 ⌘/Ctrl+K(工作区)、⌘/Ctrl+M(模型)并列。`mod` 在 comboOf 里同时吸收
   // ctrlKey 与 metaKey,故 macOS 上 ⌃N 与 ⌘N 都会触发;注意浏览器把
   // ⌘/Ctrl+N 当作「新建窗口」保留键(见 README「已知限制」)。
   "session.new": "mod+n",
-  // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
-  // macOS 上 ⌃I 与 ⌘I 都能触发,Win/Linux 就是 Ctrl+I。该组合落在「单修饰键」这一档,
-  // 与 ⌘/Ctrl+B(左栏)、⌘/Ctrl+O(右栏)同族;语义上 I = Input。
-  // 代价是它与 contenteditable 的浏览器「斜体」默认行为同键——本动作**只放行 browse
-  // 态**(焦点在可编辑元素时根本不查表),所以斜体只会在焦点不在输入框时被 preventDefault
-  // 挡掉,编辑中的斜体不受影响。它也不与 DevTools 的带 Shift 组合
-  // (⌘⌥I / Ctrl+Shift+I)冲突。
-  "composer.focus": "mod+i",
+  // 聚焦输入框(焦点跳转)= ⌘/Ctrl+J:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
+  // 所以 macOS 上 ⌃J 与 ⌘J 都能触发,Win/Linux 就是 Ctrl+J。该组合落在「单修饰键」
+  // 这一档,与 ⌘/Ctrl+B(左栏)、⌘/Ctrl+O(右栏)同族;语义上 J = Jump(焦点跳转),
+  // 取代旧键位 ⌘/Ctrl+I(I = Input):好处是不再与 contenteditable 的「斜体」默认键
+  // 同键,代价是终端里的 `⌃J`(= 0x0A,LF;readline 的 newline,与 Enter 同义)不再
+  // 送给 PTY,要换行请按 Enter。注意 Win/Linux 的浏览器把 Ctrl+J 绑成「下载」页
+  // (浏览器保留键),详见 README「已知限制」。
+  "composer.focus": "mod+j",
   "session.prev": "mod+alt+arrowup",
   "session.next": "mod+alt+arrowdown",
   // 工作区切换浮窗 = ⌘/Ctrl+K:属「单修饰键」这一档,`K` 取「工作区(Work-space)」
@@ -1438,6 +1461,8 @@ function createOverlays(deps) {
 var RIGHTBAR_SLOT = "rightbar.session";
 var FILES_KIND = "files";
 var FILES_PAGE_ADDRESS = "sidebar://files";
+var TERMINAL_KIND = "terminal";
+var TERMINAL_PAGE_PREFIX = "sidebar://terminal";
 function cycleRightSidebarTab(services, delta) {
   const sidebarRight = services.sidebarRight;
   if (sidebarRight === null || sidebarRight === void 0) return false;
@@ -1486,21 +1511,15 @@ function promoteFilesTab(services) {
   }
 }
 function filesTabIn(layout) {
-  var _a, _b, _c;
-  const order = [];
-  const active = layout.activePaneId;
-  if (typeof active === "string" && active !== "") order.push(active);
-  for (const paneId of Object.keys((_a = layout.nodes) != null ? _a : {})) {
-    if (paneId !== active) order.push(paneId);
-  }
-  for (const paneId of order) {
+  var _a, _b;
+  for (const paneId of paneOrder(layout)) {
     const pane = paneOf(layout, paneId);
     if (pane === void 0 || pane.host !== "dock") continue;
-    const tabs = (_b = pane.tabs) != null ? _b : [];
+    const tabs = (_a = pane.tabs) != null ? _a : [];
     for (let index = 0; index < tabs.length; index += 1) {
       const tabId = tabs[index];
       if (typeof tabId !== "string" || tabId === "") continue;
-      const record = (_c = layout.tabs) == null ? void 0 : _c[tabId];
+      const record = (_b = layout.tabs) == null ? void 0 : _b[tabId];
       if (record === void 0 || record === null) continue;
       if (record.kind === FILES_KIND || record.contentId === FILES_PAGE_ADDRESS) {
         return { paneId, tabId, index };
@@ -1508,6 +1527,75 @@ function filesTabIn(layout) {
     }
   }
   return void 0;
+}
+function paneOrder(layout) {
+  var _a;
+  const order = [];
+  const active = layout.activePaneId;
+  if (typeof active === "string" && active !== "") order.push(active);
+  for (const paneId of Object.keys((_a = layout.nodes) != null ? _a : {})) {
+    if (paneId !== active) order.push(paneId);
+  }
+  return order;
+}
+function revealRightSidebarTerminal(services) {
+  const sidebarRight = services.sidebarRight;
+  if (sidebarRight === null || sidebarRight === void 0) return false;
+  const layout = currentLayout(services);
+  if (layout !== void 0) {
+    const held = terminalTabIn(layout);
+    if (held !== void 0) {
+      if (typeof sidebarRight.focus !== "function") return false;
+      try {
+        sidebarRight.focus(held);
+      } catch {
+        return false;
+      }
+      expandColumn(sidebarRight, layout);
+      return true;
+    }
+  }
+  if (typeof sidebarRight.openTab !== "function") return false;
+  try {
+    sidebarRight.openTab(TERMINAL_KIND);
+  } catch {
+    return false;
+  }
+  return true;
+}
+function expandColumn(sidebarRight, layout) {
+  if (layout.expanded !== false) return;
+  const toggle = sidebarRight.toggleExpanded;
+  if (typeof toggle !== "function") return;
+  try {
+    toggle.call(sidebarRight);
+  } catch {
+  }
+}
+function terminalTabIn(layout) {
+  var _a;
+  for (const paneId of paneOrder(layout)) {
+    const pane = paneOf(layout, paneId);
+    if (pane === void 0 || pane.host !== "dock") continue;
+    const activeTabId = pane.activeTabId;
+    let first;
+    for (const tabId of (_a = pane.tabs) != null ? _a : []) {
+      if (typeof tabId !== "string" || tabId === "") continue;
+      if (!isTerminalTab(layout, tabId)) continue;
+      if (tabId === activeTabId) return tabId;
+      if (first === void 0) first = tabId;
+    }
+    if (first !== void 0) return first;
+  }
+  return void 0;
+}
+function isTerminalTab(layout, tabId) {
+  var _a;
+  const record = (_a = layout.tabs) == null ? void 0 : _a[tabId];
+  if (record === void 0 || record === null) return false;
+  if (record.kind === TERMINAL_KIND) return true;
+  const contentId = record.contentId;
+  return typeof contentId === "string" && (contentId === TERMINAL_PAGE_PREFIX || contentId.startsWith(`${TERMINAL_PAGE_PREFIX}/`));
 }
 function currentPaneTabs(services) {
   var _a, _b, _c;
@@ -1690,6 +1778,8 @@ function runAction(id, services, overlays) {
         return cycleRightSidebarTab(services, 1);
       case "sidebarRight.files":
         return revealRightSidebarFiles(services);
+      case "sidebarRight.terminal":
+        return revealRightSidebarTerminal(services);
       case "composer.focus":
         return focusComposer(services);
       case "session.new":
@@ -1809,6 +1899,10 @@ function apply(ctx) {
     if (def === void 0) return;
     if (!def.states.includes(state)) return;
     if (actionId === "model.effortNext" && state === "editing" && !isComposerTarget(services, event.target)) return;
+    if (actionId === "composer.focus" && state === "editing" && isComposerTarget(services, event.target)) {
+      swallow(event);
+      return;
+    }
     if (runAction(actionId, services, overlays)) swallow(event);
   };
   document.addEventListener("keydown", onKeyDown, true);

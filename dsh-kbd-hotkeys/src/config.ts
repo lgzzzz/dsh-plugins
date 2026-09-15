@@ -4,13 +4,13 @@
  * 键位取向:尽量贴合跨应用肌肉记忆(`⌘/Ctrl+B` 开关左栏、`⌘/Ctrl+O` 开关右栏等),
  * 并与上游语义同源(动作名 / 服务方法名与键位一一对应)。
  * 分档:**单修饰键 `mod+键` 给全局动作**(左栏 `B`、右栏 `O`、工作区 `K`、模型 `M`、
- * 新建会话 `N`、输入框 `I`、文件浏览器 `\`、速查表 `/`),**`mod+alt` 这一档留给导航**
+ * 新建会话 `N`、焦点跳转 `J`、文件浏览器 `\`、终端 `L`、速查表 `/`),**`mod+alt` 这一档留给导航**
  * (右栏标签 `←`/`→`、会话跳转 `↑`/`↓`);两档都取 `event.code` 的物理键位。
  * 需要留意的是浏览器自带快捷键:本插件在 document 捕获阶段先 `preventDefault`,
  * 但 `⌘/Ctrl+O`(打开文件)、`⌘/Ctrl+K`(地址栏搜索)属浏览器保留键,详见 README
  * 「已知限制」。
  * - `mod` 在 macOS = ⌘(Cmd),Win/Linux = Ctrl——`comboOf` 同时吸收 ctrlKey 与
- *   metaKey,故 macOS 上 `mod+i` 的 ⌃I 与 ⌘I 都能触发;
+ *   metaKey,故 macOS 上 `mod+j` 的 ⌃J 与 ⌘J 都能触发;
  * - 三态分发:`card` 卡片态(审批/问答/计划评审卡片打开)、`editing` 输入态
  *   (输入框聚焦)、`browse` 浏览态(浏览对话);
  * - 用户可通过 localStorage 覆盖默认键位(见 README「自定义键位」)。
@@ -70,16 +70,31 @@ export const ACTIONS: readonly ActionDef[] = [
   // 也不干扰文本编辑。语义是「定位」而非「开关」:该面板已有文件浏览器页就聚焦它,
   // 没有就在面板末尾创建(上游 openTab 按目标面板去重),再加一步置顶。
   { id: 'sidebarRight.files', label: '右侧栏:定位文件浏览器(不存在则创建)并置顶', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 定位右栏终端(⌘/Ctrl+L):与文件浏览器定位(⌘/Ctrl+\)同族,同为「定位」语义,
+  // 但**不做置顶**(终端是 multiple 页,用户可能开着多个,热键不替用户重排顺序)。
+  // 关键差异见 sidebar-tabs.ts 的 revealRightSidebarTerminal:terminal 是
+  // `multiple: true` 的页类型,上游每次 openTab 都铸一个带 UUID 的 contentId、
+  // 因此不按 (kind, contentId) 去重——直接调 openTab 会每按一次多开一个终端,
+  // 所以这里先在会话级 store 的布局里认页(record.kind === 'terminal'),
+  // 已有就只聚焦(必要时展开右栏),没有才调 openTab('terminal') 新建。
+  { id: 'sidebarRight.terminal', label: '右侧栏:定位终端(不存在则新建)', group: '会话', states: ['card', 'editing', 'browse'] },
   // 新建会话并跳转(⌘/Ctrl+N)= `/new` 命令的同一动作:调公开的
   // uiWorkspace.startSession()(与侧栏「新建会话」按钮、dsh-new-session 处理
   // command/executed('new') 后的调用逐字相同)。三态放行:创建新会话与当前
   // 会话是否有待回应卡片、焦点是否在输入框都无关,带修饰键的组合也既不占用
   // 卡片的裸键(数字 / ← / → / Enter)也不干扰文本编辑。
   { id: 'session.new', label: '新建会话并跳转(等同 /new)', group: '会话', states: ['card', 'editing', 'browse'] },
-  // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义;card 态则归卡片
-  // 自己的输入框。这一档也正好避开 contenteditable 的斜体冲突——⌘/Ctrl+I 只在焦点
-  // **不在**可编辑元素时才被本插件接管(见 DEFAULT_BINDINGS 该条注释)。
-  { id: 'composer.focus', label: '聚焦输入框', group: '会话', states: ['browse'] },
+  // 聚焦输入框放行 browse / editing,但 **editing 态另有一道元素级门闸**:
+  // 「焦点在可编辑元素里」并不等于「焦点在 composer 里」——右侧栏终端(xterm 的
+  // 隐藏 helper textarea)与 Monaco(inputarea textarea)都把 DOM 焦点放在一个真实的
+  // <textarea> 上,焦点在那里时用户按下 ⌘/Ctrl+J 的意图恰恰是「跳回对话输入框」
+  // (J = Jump,焦点跳转)。因此 editing 态只在焦点**不在** composer 自己的编辑区内时
+  // 才执行聚焦(见 client.ts 里基于 isComposerTarget 的门闸,复用 ⇧Tab 那道门闸的
+  // 同一取元素链路);焦点已在 composer 内时不再重复聚焦,但组合键**仍被吞掉**——
+  // 旧键位 I 在同一位放行是为了保住 contenteditable 的「斜体」默认键,J 没有等价的
+  // 默认行为,放行只会让 Win/Linux 浏览器的 Ctrl+J(下载页)跑出来。
+  // card 态仍不放行:此时归卡片自己的输入框。
+  { id: 'composer.focus', label: '聚焦输入框', group: '会话', states: ['browse', 'editing'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'session.next', label: '下一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   // 工作区切换浮窗(⌘/Ctrl+K):单修饰键这一档(`K` = Work-space),三态放行——
@@ -139,20 +154,28 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   // 键盘由 e.key 回退兜住。本键不再带 alt,故 Win/Linux 上「Ctrl+Alt 即 AltGr」
   // 的老问题在这里不存在(AltGr 层单独打出的 `\` 只会命中 `alt+\\`,不是本组合)。
   'sidebarRight.files': 'mod+\\',
+  // 定位右栏终端 = ⌘/Ctrl+L:与右栏开关(⌘/Ctrl+O)、文件浏览器定位(⌘/Ctrl+\)
+  // 同属「单修饰键」这一档。`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
+  // 所以 macOS 上 ⌃L 与 ⌘L 都能触发,Win/Linux 就是 Ctrl+L。
+  // 语义与文件浏览器同形(「定位」而非「开关」):该会话已有终端页就聚焦它、
+  // 没有才新建;重复按不会堆积终端(terminal 是 multiple 页,上游的 openTab
+  // 本身不去重,认页由 sidebar-tabs.ts 自己完成)。
+  // 注意 Ctrl/Cmd+L 是浏览器「聚焦地址栏」的保留键(见 README「已知限制」)。
+  'sidebarRight.terminal': 'mod+l',
   // 新建会话并跳转 = ⌘/Ctrl+N:跨应用肌肉记忆(浏览器 / 编辑器 / 终端的新建),
   // 语义 = `/new` 命令(公开的 uiWorkspace.startSession())。属单修饰键这一档,
   // 与 ⌘/Ctrl+K(工作区)、⌘/Ctrl+M(模型)并列。`mod` 在 comboOf 里同时吸收
   // ctrlKey 与 metaKey,故 macOS 上 ⌃N 与 ⌘N 都会触发;注意浏览器把
   // ⌘/Ctrl+N 当作「新建窗口」保留键(见 README「已知限制」)。
   'session.new': 'mod+n',
-  // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
-  // macOS 上 ⌃I 与 ⌘I 都能触发,Win/Linux 就是 Ctrl+I。该组合落在「单修饰键」这一档,
-  // 与 ⌘/Ctrl+B(左栏)、⌘/Ctrl+O(右栏)同族;语义上 I = Input。
-  // 代价是它与 contenteditable 的浏览器「斜体」默认行为同键——本动作**只放行 browse
-  // 态**(焦点在可编辑元素时根本不查表),所以斜体只会在焦点不在输入框时被 preventDefault
-  // 挡掉,编辑中的斜体不受影响。它也不与 DevTools 的带 Shift 组合
-  // (⌘⌥I / Ctrl+Shift+I)冲突。
-  'composer.focus': 'mod+i',
+  // 聚焦输入框(焦点跳转)= ⌘/Ctrl+J:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
+  // 所以 macOS 上 ⌃J 与 ⌘J 都能触发,Win/Linux 就是 Ctrl+J。该组合落在「单修饰键」
+  // 这一档,与 ⌘/Ctrl+B(左栏)、⌘/Ctrl+O(右栏)同族;语义上 J = Jump(焦点跳转),
+  // 取代旧键位 ⌘/Ctrl+I(I = Input):好处是不再与 contenteditable 的「斜体」默认键
+  // 同键,代价是终端里的 `⌃J`(= 0x0A,LF;readline 的 newline,与 Enter 同义)不再
+  // 送给 PTY,要换行请按 Enter。注意 Win/Linux 的浏览器把 Ctrl+J 绑成「下载」页
+  // (浏览器保留键),详见 README「已知限制」。
+  'composer.focus': 'mod+j',
   'session.prev': 'mod+alt+arrowup',
   'session.next': 'mod+alt+arrowdown',
   // 工作区切换浮窗 = ⌘/Ctrl+K:属「单修饰键」这一档,`K` 取「工作区(Work-space)」

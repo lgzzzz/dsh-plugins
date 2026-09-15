@@ -18,7 +18,7 @@
  *   会话级 slot store(`rightbar.session` 注册项 → uiSession.resolve →
  *   slots.resolveStore,取 layout.activePaneId 面板的 tabs),切换调公开的
  *   sidebarRight.focus(tabId)(与标签 chip 点击同一入口);
- * - 聚焦输入框(⌘/Ctrl+I):sessions.binding(id).ctx → conversation.input
+ * - 聚焦输入框(⌘/Ctrl+J,J = Jump 焦点跳转):sessions.binding(id).ctx → conversation.input
  *   (SessionInputResolver.for / InputHub.shell)→ shell.editor.getRootElement()
  *   → `focus({ preventScroll: true })`——上游无聚焦服务面,这是唯一可靠原语;
  *   只调服务给出的元素,不做任何选择器查询 / DOM 遍历 / 事件合成(见 focusComposer);
@@ -416,7 +416,7 @@ export function startNewSession(services: Services): boolean {
 }
 
 /**
- * 聚焦对话输入框(⌘/Ctrl+I)。
+ * 聚焦对话输入框(⌘/Ctrl+J;J = Jump,焦点跳转)。
  *
  * 为什么必须走到元素上的 `focus()`:上游**没有**可触发的「聚焦 composer」服务面。
  * - conversation 契约(`send` / `updateQueue` / `cancel` / `loadOlder`)无聚焦动词;
@@ -439,6 +439,10 @@ export function startNewSession(services: Services): boolean {
  * 无降级:任一环缺失(无 conversation 服务 / 无当前会话 / 无 binding.ctx /
  * for 与 shell 都缺席 / 会话无编辑器 / editor 未绑宿主元素)即 no-op 返回 false,
  * **不回退到 DOM 查询**。
+ *
+ * 态门闸在 client.ts:`browse` 态恒可用;`editing` 态只在焦点**不在** composer 内时
+ * 执行聚焦(右栏终端 / Monaco 的隐藏 textarea 都属于后者),焦点已在 composer 内时
+ * 不再重复聚焦(但该组合键仍由 client.ts 吞掉,不放行给浏览器)。
  */
 export function focusComposer(services: Services): boolean {
   const root = composerRoot(services)
@@ -500,7 +504,8 @@ function composerRoot(services: Services): ComposerEditableLike | undefined {
 }
 
 /**
- * 事件目标是否落在 **composer 自己的编辑区内**(⇧Tab 的 `editing` 态门闸)。
+ * 事件目标是否落在 **composer 自己的编辑区内**(`editing` 态的两道元素级门闸共用:
+ * ⇧Tab 只在此为真时接管;⌘/Ctrl+J 只在此为假时执行聚焦——见 client.ts)。
  *
  * ⇧Tab 是文本编辑的**核心键**(反向移动焦点;Monaco 里是反向缩进),因此焦点在
  * 别的可编辑元素上(设置面板的 input、右侧栏 Monaco 的隐藏 textarea 等)时一律

@@ -433,7 +433,7 @@ export interface SidebarRightStoreLike extends StoreInstanceLike {
 }
 
 /* ------------------------------------------------------------------ *
- * 输入框聚焦(⌘/Ctrl+I):conversation 服务面 → composer 的 Lexical editor
+ * 输入框聚焦(⌘/Ctrl+J;J = Jump,焦点跳转):conversation 服务面 → composer 的 Lexical editor
  * ------------------------------------------------------------------ */
 
 /**
@@ -512,7 +512,7 @@ export interface Services {
   workspaces: WorkspacesLike | undefined
   /** slots 服务:只用于读侧栏视图 store(会话跳转顺序的权威来源)。 */
   slots: SlotsLike | undefined
-  /** conversation 服务:只用于取 composer 的 editor 宿主元素(⌘/Ctrl+I 聚焦输入框)。 */
+  /** conversation 服务:只用于取 composer 的 editor 宿主元素(⌘/Ctrl+J 焦点跳转)。 */
   conversation: ConversationLike | undefined
   /**
    * uiWorkspace 服务:工作区浮窗的切换动作(⌘/Ctrl+K 选中后 Enter

@@ -1,9 +1,11 @@
 /**
  * dsh-kbd-hotkeys — 右侧侧边栏访问层。
- * 两个动作:
+ * 三个动作:
  * - `cycleRightSidebarTab`(⌘/Ctrl+Alt+← / →):在当前面板的标签之间循环切换;
  * - `revealRightSidebarFiles`(⌘/Ctrl+\):打开文件浏览器页并把它置于所在
- *   标签栏首位。
+ *   标签栏首位;
+ * - `revealRightSidebarTerminal`(⌘/Ctrl+L):定位终端页——已有就聚焦(必要时
+ *   展开右栏),没有才新建;不重排(详见该函数)。
  *
  * 为什么需要这一层:右侧栏(`dsh-client-ui-sidebar-right`)的公开服务面
  * (`ISidebarRight`)只有 `active()`(当前标签)、`focus(tabId)`(聚焦某标签)与
@@ -58,6 +60,7 @@ import type {
   Services,
   SidebarRightLayoutLike,
   SidebarRightLayoutNodeLike,
+  SidebarRightLike,
   SidebarRightStoreLike,
   SidebarRightTabsStateLike,
   SlotsLike,
@@ -72,6 +75,17 @@ const FILES_KIND = 'files'
 
 /** 页类型的记录地址(上游 `pageAddress(kind)` = `sidebar://<kind>`),两个都认。 */
 const FILES_PAGE_ADDRESS = 'sidebar://files'
+
+/** 右栏终端的**页类型** kind(dsh-client-ui-sidebar-terminal 的 `sidebarRightTabs.register` kind)。 */
+const TERMINAL_KIND = 'terminal'
+
+/**
+ * 终端页的记录地址前缀(上游 `pageAddress('terminal')` = `sidebar://terminal`)。
+ * terminal 是 `multiple: true` 的页类型,上游给每次打开铸一个带随机 UUID 的
+ * contentId(`sidebar://terminal/<uuid>`),所以认页要看**前缀**而不是全等
+ * (与 files 的全等地址不同)。
+ */
+const TERMINAL_PAGE_PREFIX = 'sidebar://terminal'
 
 /** 当前面板的标签现场。 */
 interface TabAxis {
@@ -198,13 +212,7 @@ function promoteFilesTab(services: Services): void {
  * @returns 面板 id / 标签 id / 下标;找不到即 undefined。
  */
 function filesTabIn(layout: SidebarRightLayoutLike): FilesTab | undefined {
-  const order: string[] = []
-  const active = layout.activePaneId
-  if (typeof active === 'string' && active !== '') order.push(active)
-  for (const paneId of Object.keys(layout.nodes ?? {})) {
-    if (paneId !== active) order.push(paneId)
-  }
-  for (const paneId of order) {
+  for (const paneId of paneOrder(layout)) {
     const pane = paneOf(layout, paneId)
     // 浮窗里的 tab 不碰(其 host 为 'float')。
     if (pane === undefined || pane.host !== 'dock') continue
@@ -220,6 +228,144 @@ function filesTabIn(layout: SidebarRightLayoutLike): FilesTab | undefined {
     }
   }
   return undefined
+}
+
+/** 面板扫描顺序:当前面板优先,其余按布局节点里的键顺序(与标签条同源)。 */
+function paneOrder(layout: SidebarRightLayoutLike): string[] {
+  const order: string[] = []
+  const active = layout.activePaneId
+  if (typeof active === 'string' && active !== '') order.push(active)
+  for (const paneId of Object.keys(layout.nodes ?? {})) {
+    if (paneId !== active) order.push(paneId)
+  }
+  return order
+}
+
+/* ------------------------------------------------------------------ *
+ * 终端:定位(已有则聚焦)/ 缺则新建(⌘/Ctrl+L)
+ * ------------------------------------------------------------------ */
+
+/**
+ * 在右侧栏定位终端:已有终端页就聚焦它,没有就新建一个(⌘/Ctrl+L)。
+ *
+ * 为什么不直接 `openTab('terminal')`:terminal 是 `multiple: true` 的页类型
+ * (`dsh-client-ui-sidebar-terminal`:`ctx.sidebarRightTabs.register({ kind: 'terminal',
+ * multiple: true, … })`)。上游 `placeTab` 对 `multiple` 页给**每次打开**铸一个带
+ * 随机 UUID 的 contentId(`sidebar://terminal/<uuid>`),`planOpenContent` 因此
+ * **不会**按 (kind, contentId) 去重——直接调 `openTab('terminal')` 每按一次就多开
+ * 一个终端。所以这里先自己认页(读会话级 store 的布局,判 `record.kind ===
+ * 'terminal'`,与上游 `pageKind` 认 kind 的是同一条记录字段):找到就只聚焦,
+ * 找不到才调公开的 `openTab('terminal')` 新建(那一步上游 `openContent` 恒先
+ * `planSetExpanded(true)`,展开右栏)。
+ *
+ * 聚焦已有终端时右栏可能正折着——`focus(tabId)` 只改激活标签、**不动**展开态
+ * (与 `openTab` 不同),所以再补一步:store 里 `layout.expanded === false` 时调公开的
+ * `toggleExpanded()`(与右栏头部折叠按钮同一入口,seat 会据此同步 AppFrame 的右栏轨道)。
+ * `expanded` 读不到(既不是 `true` 也不是 `false`)时**不动**展开态:宁可少做一步,
+ * 也不做「猜状态再 toggle」这种可能把开着的右栏关掉的事。
+ *
+ * 选哪个终端:优先**当前面板**(`layout.activePaneId`),面板内优先**当前激活**的那一个,
+ * 否则取面板里的第一个;当前面板没有再看其余**停靠**面板。浮窗里的终端不参与
+ * (与文件浏览器同一条「浮窗不碰」约定)。
+ *
+ * 与文件浏览器定位的两点差异:① 认页看 kind / 地址**前缀**(multiple 页的 contentId
+ * 带 UUID);② **不置顶**——终端可能开着多个,热键不替用户决定标签顺序。
+ *
+ * **无降级**:`openTab` 抛错(无挂载会话面 / `terminal` 类型未注册)、`focus` 抛错、
+ * 或已有终端而 `focus` 面缺失 → 一律 no-op 且**不吞键**;不回退 DOM 点击引导页。
+ *
+ * @param services - 已解析服务集合(sidebarRight / sessions / slots / uiSession)。
+ * @returns 是否确实发起过打开 / 聚焦(false = no-op,调用方不吞键)。
+ */
+export function revealRightSidebarTerminal(services: Services): boolean {
+  const sidebarRight = services.sidebarRight
+  if (sidebarRight === null || sidebarRight === undefined) return false
+  const layout = currentLayout(services)
+  if (layout !== undefined) {
+    const held = terminalTabIn(layout)
+    if (held !== undefined) {
+      // 已有终端:只聚焦(focus 的 tabId 就是布局记录里的键,上游 focus 按它查表)。
+      if (typeof sidebarRight.focus !== 'function') return false
+      try {
+        sidebarRight.focus(held)
+      } catch {
+        // 无挂载会话面时 require() 抛错 → no-op(不吞键、不回退 DOM)。
+        return false
+      }
+      expandColumn(sidebarRight, layout)
+      return true
+    }
+  }
+  if (typeof sidebarRight.openTab !== 'function') return false
+  try {
+    sidebarRight.openTab(TERMINAL_KIND)
+  } catch {
+    // 'no session surface is mounted'(无挂载 seat)/ 'no tab type is registered
+    // as "terminal"'(终端插件缺席)→ no-op,不吞键。
+    return false
+  }
+  return true
+}
+
+/**
+ * 折叠着就把右栏展开(聚焦已有 tab 不会展开,只有上游 `openTab` 会)。
+ *
+ * `layout.expanded !== false`(已展开 / 读不到)时**不动**:不做可能把开着的右栏
+ * 关掉的 toggle。`toggleExpanded` 缺席、或在无挂载会话面时 `require()` 抛错,
+ * 一律静默跳过(聚焦已经发生,调用方照旧吞键)。
+ */
+function expandColumn(sidebarRight: SidebarRightLike, layout: SidebarRightLayoutLike): void {
+  if (layout.expanded !== false) return
+  const toggle = sidebarRight.toggleExpanded
+  if (typeof toggle !== 'function') return
+  try {
+    toggle.call(sidebarRight)
+  } catch {
+    // 无挂载会话面 → 不动展开态(不回退 DOM 点右栏头部折叠按钮)。
+  }
+}
+
+/**
+ * 找当前会话里的终端 tab:先扫**当前面板**,再按布局顺序扫其余停靠面板;浮窗跳过。
+ * 面板内优先**当前激活**的终端,否则取面板里的第一个。
+ *
+ * 认页:`record.kind === 'terminal'`,或记录地址是终端页地址
+ * (`sidebar://terminal` / `sidebar://terminal/<uuid>`)。**不依赖**
+ * `contentId === pageAddress(kind)`:上游 `pageKind` 正因 `multiple: true` 而不把
+ * 这种页当「页」,所以这里自己认 `kind`。
+ *
+ * @param layout - 该会话的 docking 布局。
+ * @returns 要聚焦的标签 id(布局记录里的键);找不到即 undefined。
+ */
+function terminalTabIn(layout: SidebarRightLayoutLike): string | undefined {
+  for (const paneId of paneOrder(layout)) {
+    const pane = paneOf(layout, paneId)
+    // 浮窗里的 tab 不碰(其 host 为 'float')。
+    if (pane === undefined || pane.host !== 'dock') continue
+    const activeTabId = pane.activeTabId
+    let first: string | undefined
+    for (const tabId of pane.tabs ?? []) {
+      if (typeof tabId !== 'string' || tabId === '') continue
+      if (!isTerminalTab(layout, tabId)) continue
+      // 面板内已在当前标签上:优先它,避免把用户从正在用的终端上挪开。
+      if (tabId === activeTabId) return tabId
+      if (first === undefined) first = tabId
+    }
+    if (first !== undefined) return first
+  }
+  return undefined
+}
+
+/** 记录是不是终端页(以 `kind` 为准,兼容带 UUID 的页地址前缀)。 */
+function isTerminalTab(layout: SidebarRightLayoutLike, tabId: string): boolean {
+  const record = layout.tabs?.[tabId]
+  if (record === undefined || record === null) return false
+  if (record.kind === TERMINAL_KIND) return true
+  const contentId = record.contentId
+  return (
+    typeof contentId === 'string' &&
+    (contentId === TERMINAL_PAGE_PREFIX || contentId.startsWith(`${TERMINAL_PAGE_PREFIX}/`))
+  )
 }
 
 /**

@@ -16,7 +16,10 @@
  *   见 sidebar-tabs.ts;单个标签时不吞键)、
  *   ⌘\ 打开右栏文件浏览器并把它置于所在标签栏首位(公开的
  *   `sidebarRight.openTab('files')` + 同一份 store 的 `actions.placeTab(…, 0)`,
- *   见 sidebar-tabs.ts 的 revealRightSidebarFiles);
+ *   见 sidebar-tabs.ts 的 revealRightSidebarFiles)、
+ *   ⌘L 定位右栏终端(已有终端页就聚焦、没有才 `openTab('terminal')` 新建;
+ *   terminal 是 `multiple` 页,上游每次打开都铸新 contentId,认页由插件自己完成,
+ *   见 sidebar-tabs.ts 的 revealRightSidebarTerminal);
  * - 全态:⌘/Ctrl+K 打开**工作区浮窗**(浮窗内 ↑/↓ 移动高亮、Enter 切换、
  *   Esc 关闭),列表取自 `workspaces.list` 快照(宿主顺序),切换调公开的
  *   `uiWorkspace.openWorkspace(workspaceId)`(连接工作区:复用该工作区的空白
@@ -33,9 +36,12 @@
  * - 全态:⌘/Ctrl+N **新建会话并跳转**(调公开的 `uiWorkspace.startSession()`——
  *   与侧栏「新建会话」按钮、以及 `dsh-new-session` 处理 `command/executed('new')`
  *   后的调用逐字相同,故语义等同于 `/new` 命令;见 actions.ts 的 startNewSession);
- * - `browse` 浏览态:⌘/Ctrl+I 聚焦对话输入框(上游无聚焦服务面,经
- *   conversation.input 取 shell.editor 的宿主元素后调 focus(),见 actions.ts
- *   的 focusComposer;不做选择器查询 / DOM 遍历 / 事件合成)。
+ * - `browse` 浏览态,以及 `editing` 输入态中焦点**不在** composer 内的情形(如焦点在
+ *   右侧栏终端 / Monaco 的隐藏 textarea 里):⌘/Ctrl+J 把焦点跳回对话输入框
+ *   (J = Jump;上游无聚焦服务面,经 conversation.input 取 shell.editor 的宿主元素后调
+ *   focus(),见 actions.ts 的 focusComposer;不做选择器查询 / DOM 遍历 / 事件合成)。
+ *   `editing` 态另有一道**元素级**门闸(isComposerTarget,与 ⇧Tab 同一取元素链路):
+ *   焦点已在 composer 内时不再重复聚焦,但组合键仍被吞掉(见 onKeyDown 内的注释)。
  *
  * 实现:document 捕获阶段单一 keydown 监听,按三态分发(`card` 卡片 → `editing`
  * 输入框 → `browse` 浏览),消费 sessions / uiSession / layout / sidebarRight /
@@ -70,7 +76,7 @@ import {
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
 import { cycleEffort, modelPickerView, selectModel } from './model-picker.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
-import { cycleRightSidebarTab, revealRightSidebarFiles } from './sidebar-tabs.ts'
+import { cycleRightSidebarTab, revealRightSidebarFiles, revealRightSidebarTerminal } from './sidebar-tabs.ts'
 import { switchWorkspace, workspaceRows } from './workspace-switcher.ts'
 import type { ClientContext, ConversationLike, LayoutLike, ModelDirectoryResolverLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, UiWorkspaceLike, WorkspacesLike } from './types.ts'
 
@@ -81,8 +87,9 @@ export const name = 'dsh-kbd-hotkeys'
  * workspaces 供会话切换复刻侧栏分组、工作区浮窗取列表,slots 供读取侧栏视图
  * store(会话顺序)与右栏标签 store(标签顺序 + 置顶用的 actions),layout 供
  * ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+O 开关右侧栏、
- * ⌘/Ctrl+Alt+←/→ 聚焦右栏标签、⌘/Ctrl+\ 打开文件浏览器,
- * conversation 供 ⌘/Ctrl+I 取 composer 的 editor 宿主元素(聚焦输入框)与
+ * ⌘/Ctrl+Alt+←/→ 聚焦右栏标签、⌘/Ctrl+\ 打开文件浏览器、
+ * ⌘/Ctrl+L 定位终端(已有则聚焦、缺则新建),
+ * conversation 供 ⌘/Ctrl+J 取 composer 的 editor 宿主元素(焦点跳转)与
  * ⇧Tab 的编辑态门闸(宿主元素 contains 事件目标),
  * uiWorkspace 供 ⌘/Ctrl+K 工作区浮窗确认时连接/切换工作区、⌘/Ctrl+N 新建会话
  * (startSession,与 `/new` 同一条服务调用),
@@ -118,6 +125,11 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         // 打开右栏文件浏览器并置于首位:openTab('files') 打开/聚焦并展开右栏,
         // 置顶走会话级 store 的 actions.placeTab(与标签拖拽同一入口)。
         return revealRightSidebarFiles(services)
+      case 'sidebarRight.terminal':
+        // 定位右栏终端:已有终端页就只聚焦(折叠时补一步 toggleExpanded),
+        // 没有才 openTab('terminal') 新建——terminal 是 multiple 页,上游不会
+        // 按 (kind, contentId) 去重,认页由 sidebar-tabs.ts 自己完成。
+        return revealRightSidebarTerminal(services)
       case 'composer.focus':
         return focusComposer(services)
       case 'session.new':
@@ -274,6 +286,18 @@ export function apply(ctx: ClientContext): void {
     // 交回该处默认行为。判据 = 服务链路取来的宿主元素上做一次 contains
     // (见 actions.ts 的 isComposerTarget),零选择器 / 零 DOM 遍历。
     if (actionId === 'model.effortNext' && state === 'editing' && !isComposerTarget(services, event.target)) return
+    // ⌘/Ctrl+J 的**元素级**门闸(方向与 ⇧Tab 相反):`editing` 态 = 焦点在某个可编辑
+    // 元素里,但那个元素**不一定**是 composer——右侧栏终端(xterm 的隐藏
+    // `.xterm-helper-textarea`)与 Monaco(`.inputarea` textarea)都是真实 <textarea>,
+    // 判据只看 tagName,于是它们同样落入 `editing`。焦点在那里时按 ⌘/Ctrl+J 的意图正是
+    // 「跳回对话输入框」(J = Jump),所以只在焦点**不在** composer 内时才执行聚焦;
+    // 焦点已经在 composer 自己的编辑区里时动作无事可做,但组合键**仍然吞掉**——
+    // 旧键位 I 在此放行是为了保住 contenteditable 的「斜体」默认键,J 在 composer 里
+    // 没有等价的、值得保留的默认行为,放行只会让 Win/Linux 浏览器的 Ctrl+J(下载页)跑出来。
+    if (actionId === 'composer.focus' && state === 'editing' && isComposerTarget(services, event.target)) {
+      swallow(event)
+      return
+    }
     if (runAction(actionId, services, overlays)) swallow(event)
   }
 

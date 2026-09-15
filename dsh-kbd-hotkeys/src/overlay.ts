@@ -99,7 +99,6 @@ function ensureStyle(): void {
 /** 创建浮层宿主(速查表 + 工作区浮窗 + 样式标签)。 */
 export function createOverlays(deps: OverlayDeps): OverlayHost {
   ensureStyle()
-
   let root: HTMLDivElement | null = null
   let kind: PanelKind | null = null
   /** 工作区浮窗的行元素与对应 workspaceId(高亮/确认都按同一下标走)。 */
