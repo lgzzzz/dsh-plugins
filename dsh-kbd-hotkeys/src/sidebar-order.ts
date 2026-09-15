@@ -13,8 +13,8 @@
  *    `reconciledSessionOrder` 与会话账号对账(新增会话追加到末尾)。
  *    该 store 通过 slots 注册项的 `store` handle 暴露(`sidebar.workspaces`,
  *    scope `root`),本模块用 `slots.resolveStore(handle, undefined)` 取活实例。
- * 3. 可见性:复刻上游 `sessionVisible`——剔除子代理行(origin==='subagent')、
- *    归档行、非当前空白行。
+ * 3. 可见性:复刻上游 `sessionVisible`(见 session-order.ts)——剔除子代理行
+ *    (origin==='subagent')、归档行、非当前空白行。
  *
  * **无降级**:顺序只有上述这一个权威来源(侧栏视图 store + workspaces 快照)。
  * 任一项读不到(服务缺失、slot 未注册、store 未创建、`groupBy` 非已知值、
@@ -24,11 +24,14 @@
  * 说明:上游还会按分组展开态(`groupExpansion`)与每组 5 行的折叠上限
  * (`COLLAPSED_SESSION_LIMIT`)隐藏行。本模块**只取顺序、不按折叠裁剪**——
  * 折叠组/超限行里的会话仍有确定的顺序位置,若一并裁掉就会变成「跳不到」,
- * 反而破坏导航可用性。
+ * 反而破坏导航可用性。这也正是最近会话浮窗(recent-sessions.ts)**复用**
+ * `readWorkspaceSnapshot` / `sessionVisible` / `compareRecency` 而不是复用本函数
+ * 的原因:浮窗列的是「对话」,要另行裁掉空白会话、并按最近更新重排。
  *
  * 每次调用都重新读取快照与视图 store(不缓存),即「每按一次都重新取一次
  * 活跃会话与顺序」。
  */
+import { compareRecency, sessionVisible } from './session-order.ts'
 import type {
   Services,
   SessionListSnapshotLike,
@@ -38,6 +41,7 @@ import type {
   StoreHandleLike,
   StoreInstanceLike,
   WorkspaceItemLike,
+  WorkspaceSnapshotLike,
   WorkspaceViewStateLike,
 } from './types.ts'
 
@@ -60,7 +64,7 @@ const WORKSPACE_SLOT = 'sidebar.workspaces'
 export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, services: Services): string[] {
   const view = readSidebarViewState(services)
   if (view === undefined) return []
-  const workspaceSnapshot = services.workspaces?.list?.getSnapshot?.()
+  const workspaceSnapshot = readWorkspaceSnapshot(services)
   if (workspaceSnapshot === undefined) return []
 
   const byId = snapshot.byId ?? {}
@@ -101,7 +105,7 @@ export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, serv
     stray.sort(recency)
     ids.push(...stray)
   } else {
-    ids.push(...orderedUngrouped(stray, ungrouped, recency))
+    ids.push(...orderedUngrouped(stray, ungrouped, byId))
   }
   return ids
 }
@@ -127,6 +131,26 @@ export function readSidebarViewState(services: Services): WorkspaceViewStateLike
     if (state !== undefined) return state
   }
   return undefined
+}
+
+/**
+ * 读工作区账号快照(`workspaces.list`)。
+ *
+ * 与视图 store 分开读:最近会话浮窗只靠 workspaces 快照就能分组(组 = 宿主顺序,
+ * 组内 = 最近更新序,正是 `orderBy==='updated'` 的默认轴),**不依赖** slots 全链路;
+ * 侧栏顺序才两者都要。
+ *
+ * @returns 工作区快照;`workspaces` 服务缺席 / 快照非对象即 undefined(调用方 no-op)。
+ */
+export function readWorkspaceSnapshot(services: Services): WorkspaceSnapshotLike | undefined {
+  let snapshot: unknown
+  try {
+    snapshot = services.workspaces?.list?.getSnapshot?.()
+  } catch {
+    return undefined
+  }
+  if (typeof snapshot !== 'object' || snapshot === null || Array.isArray(snapshot)) return undefined
+  return snapshot as WorkspaceSnapshotLike
 }
 
 /** slots 注册项列表(服务异常/形状不符时视为不可用)。 */
@@ -191,7 +215,7 @@ function reconcileOrder(ids: readonly string[], stored: readonly string[] | unde
 function orderedUngrouped(
   ids: readonly string[],
   stored: readonly string[],
-  recency: (a: string, b: string) => number,
+  byId: Readonly<Record<string, SessionSummaryLike>>,
 ): string[] {
   const known = new Set(ids)
   const out: string[] = []
@@ -202,30 +226,6 @@ function orderedUngrouped(
     included.add(id)
   }
   const rest = ids.filter((id) => !included.has(id))
-  rest.sort(recency)
+  rest.sort((a, b) => compareRecency(a, b, byId))
   return [...out, ...rest]
-}
-
-/** 最近更新在前,id 升序决胜(上游 byRecency,确定性保证连续按键轴稳定)。 */
-function compareRecency(
-  a: string,
-  b: string,
-  byId: Readonly<Record<string, SessionSummaryLike>>,
-): number {
-  const aUpdated = byId[a]?.updatedAt ?? Number.NEGATIVE_INFINITY
-  const bUpdated = byId[b]?.updatedAt ?? Number.NEGATIVE_INFINITY
-  if (bUpdated !== aUpdated) return bUpdated - aUpdated
-  return a < b ? -1 : 1
-}
-
-/**
- * 可见性判定,逐字复刻上游 workspace 浏览器 `sessionVisible`:
- * 子代理行(origin==='subagent')、归档行、非当前 blank 行均不渲染为顶层行。
- */
-function sessionVisible(
-  summary: SessionSummaryLike,
-  current: string | undefined,
-  archived: ReadonlySet<string>,
-): boolean {
-  return summary.origin !== 'subagent' && !archived.has(summary.id) && (!summary.blank || summary.id === current)
 }

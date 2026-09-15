@@ -45,7 +45,7 @@ Junction 目标均有效）。核对命令见「挂载与激活（Web Profile）
 | `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`：监听 `agent/created`，折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，与当前 pending 求交后 `inbox.remove()` | — | 分叉子会话丢弃「继承自源会话、仍 pending」的输入；有 runtime owner 的子代理显式跳过，普通 / 非 seeded 会话不动作 |
 | `dsh-fullwidth-chat` | Client only（纯 JS；宿主占位） | `lib/index.js`：空宿主（仅供组合行解析、供 client-modules 扫描） | `lib/client.js`：注入样式 | 对话列全宽展示 |
 | `dsh-git-guard` | Host only（TS） | `index.ts`：钩挂 `tools/pre-execute`；另经 `ctx.systemPrompt.section()` 注入约束区段（区段文本按会话权限动态求值） | — | `git commit` 与非 force `git push` → `ask`；force push 及 rebase / merge / cherry-pick / reset --hard 等破坏性历史改写 → `deny`；约束同时以系统提示词告知模型。**当前权限为完全权限（`danger-full-access`）时整体退出**：不拦截、不索取授权、区段文本为空串；判定取自 `ctx.sandboxPolicy.resolve({ session })`（会话为 `exec.agent.session`），服务缺席 / 无 `resolve` / 抛错一律按非完全权限处理（失败关闭） |
-| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏文件浏览器定位、右栏终端定位（聚焦标签并把 DOM 焦点移进 xterm）、新建会话（等同 `/new`）、工作区浮窗、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
+| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + session-order.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + recent-sessions.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏文件浏览器定位、右栏终端定位（聚焦标签并把 DOM 焦点移进 xterm）、新建会话（等同 `/new`）、工作区浮窗、近期对话浮窗（最近交互 10 个、按工作区分组、初始光标落在当前会话、↑↓ 选择、Enter 打开）、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令（`inject: ['commands']`） | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | `/new` 新建并跳转空白会话 |
 | `dsh-rightbar-tab-width` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/client.ts` + `src/css.ts` → esbuild → `lib/client.js` | 右栏 tab 胶囊定宽：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」，进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏）。取值 100 与兜底常量 `SPLIT_MINIMUMS.chip` 同值 ⇒ 分栏判定与上游默认逐字相同；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2），右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；详见其 README |
 
@@ -235,8 +235,8 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 
 动作**全部走服务触发**（不触碰 DOM）；DOM 只有三处：`document` 上的 `keydown`
 捕获监听（全部快捷键的入口）、`editing` 态的事件目标判定（`isEditableTarget`），
-以及插件自建自管的浮层（`overlay.ts`：⌘/ 速查表、⌘/Ctrl+K 工作区浮窗与
-⌘/Ctrl+M 模型浮窗，不消费上游服务）。浮层打开时按键进入**模态分发**
+以及插件自建自管的浮层（`overlay.ts`：⌘/ 速查表、⌘/Ctrl+K 工作区浮窗、
+⌘/Ctrl+I 近期对话浮窗与 ⌘/Ctrl+M 模型浮窗，不消费上游服务）。浮层打开时按键进入**模态分发**
 （浮层未处理的按键一律吞掉）。
 另有**元素级调用**，只对上游服务 / store 已经指明的**那一个**元素操作：`composer.focus`
 与 `model.effortNext` 用的是**服务链路给出的** composer 宿主元素（`shell.editor.getRootElement()`；
@@ -266,6 +266,7 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 | `sidebarRight.terminal` | ⌘/Ctrl+L（`mod+l`；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃L 与 ⌘L 均可） | **服务 + 一处有界选择器查询（元素级聚焦）** | 定位右栏终端页：terminal 是 `multiple: true` 的页类型（`@deepseek-ai/dsh-client-ui-sidebar-terminal` 注册 `kind: 'terminal'`），上游 `placeTab` 给**每次**打开都铸带 UUID 的 `contentId`（`sidebar://terminal/<uuid>`），`planOpenContent` **不按 (kind, contentId) 去重** ⇒ 直接 `openTab('terminal')` 会每按一次多开一个终端。故**认页由插件自己做**（与 `sidebarRight.files` 同一条取数链路：`slots.entries('rightbar.session')` → `uiSession.resolve(sessionId)` → `slots.resolveStore` → `bySession[sessionId].layout`；判 `record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先、再扫其余**停靠**面板，浮窗不参与；面板内优先当前激活的那个）。**已有 → 只调 `sidebarRight.focus(tabId)`**（与标签 chip 点击同一入口；`focus` 不动展开态，故 `layout.expanded === false` 时再补一步公开的 `toggleExpanded()`，`expanded` 读不到则不动），**不重排、不置顶**（终端可能开着多个，热键不替用户决定顺序）；随后若该终端**已经是所在面板的当前标签、且右栏此刻已展开**（判据在 `toggleExpanded` 之前取），再补一次元素级聚焦 `focusTerminalScreen(paneId)`——上游 `focus` 只聚焦标签，终端内容的 DOM 焦点由 TerminalBody 的 `[visible, state.writable]` effect 完成，而「终端本来就显示着」时它不会重跑，焦点会留在原处（典型：对话输入框）：按 store 的 `paneId` 找 `[data-dockkit-pane="<paneId>"]` → `textarea.xterm-helper-textarea` → `focus({preventScroll:true})`（不遍历标签 / 不搜索全文档 / 不合成事件；找不到即少这一步）；**没有 → `openTab('terminal')` 新建**（上游 `openContent` 恒先 `planSetExpanded(true)` ⇒ 同一步展开右栏；新终端由上游 `visible` 翻转时的自动聚焦接管，插件不代劳）。**任意态**；`openTab` 抛错（无挂载会话面 / `terminal` 类型未注册）、`focus` 抛错、已有终端而 `focus` 面缺失 → 一律 no-op **不吞键**且**不退化成再开一个**；只有 slots / 作用域绑定整条链路不可用时无从判重，才退化为按 `openTab('terminal')` 新建 |
 | `composer.focus` | ⌘/Ctrl+J（`mod+j`；J = Jump「焦点跳转」；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃J 与 ⌘J 均可） | **服务取元素 + 一次 `contains` 门闸 + 一次 `focus()`** | `sessions.list` 快照 `current` → `sessions.binding(id).ctx` → `conversation.input.for(actx)`（`for` 缺席回退 `InputHub.shell(id)`，同一 `SessionInputShell`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。**`browse` 态恒可用；`editing` 态另有元素级门闸**——`contains(event.target)` 为真（焦点已在 composer 内，动作无事可做）时不重复聚焦、但组合键**仍被吞掉**（旧键位 `I` 在此放行是为保住 contenteditable 的「斜体」默认键；`J` 无等价默认行为，放行只会触发 Win/Linux 浏览器的 `Ctrl+J` = 下载页），为假（焦点在右栏终端 xterm 的 helper textarea / Monaco 的 inputarea textarea / 设置面板输入框等**非 composer** 的可编辑元素里）时执行聚焦并跳回输入框；`card` 态不接管。上游无可触发的聚焦服务面（`commandUi.bindComposerFocus` 只 bind 不 trigger，全仓无人调用；`editor.focus()` 非 DOM 聚焦原语），任一环缺失即 no-op 不吞键、不回退 DOM 查询 |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
+| `session.recent` | ⌘/Ctrl+I | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：列表 = `sessions.list` 快照的会话行 + `workspaces.list` 快照的分组，**全局最多 10 行**、按工作区分组（组序 = 宿主顺序、组内 = `updatedAt` 降序的最近更新序、空白 / 归档 / 子代理会话不列出、无归属会话落末尾无标题组；取数见 `recent-sessions.ts` 与 `session-order.ts`，**不新增服务注入**）；每行 = `displayTitle` + 状态标记（待回应 / 运行中 / 完成）+ `当前` 标记 + `cwd` 次行；`↑`/`↓` 在整份列表上**跨组**移动高亮（clamp 不循环，**不打开会话**），`Enter` / 行内 `mousedown` 才调公开的 `uiWorkspace.openSession(sessionId)`（与侧栏点会话行 / 搜索结果行同一条上游调用：`sessions.open` **加** `layout.selectPanel(null)`；`uiWorkspace` 缺席 / 无该方法时回退 `sessions.open`，两者都以**方法**形式调用——摘下来会丢 `this` 抛错）；`Esc` 或同组合键关闭，同层内 `⌘/` 互切速查表。**任意态**；`sessions` 缺席 / 快照缺 `ids` → 空态浮窗（Enter 不消费），`open` 缺失或抛错 → 确认 no-op、浮窗照关，`workspaces` 缺席 / 缺 `items` → 全部落入无标题组（仍可用），**不回退 DOM** |
 | `session.new` | ⌘/Ctrl+N | **服务** | 公开的 `uiWorkspace.startSession()`（无参）——与侧栏「新建会话」按钮、`dsh-new-session` 浏览器半部收到 `command/executed('new')` 后的调用**逐字相同**，故等同 `/new`：继承当前 / 最近的工作区，创建或复用其空白会话并打开。不触碰 composer 草稿。**任意态**；`uiWorkspace` 缺席 / 无 `startSession` / 抛错（无挂载会话面）一律 no-op 不吞键，**不回退 DOM 点侧栏按钮**。注意浏览器把 ⌘/Ctrl+N 当「新建窗口」保留键（多数浏览器不把该键派发给页面），键位可经 localStorage 覆盖 |
 | `workspace.pick` | ⌘/Ctrl+K | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：列表 = `workspaces.list.getSnapshot().items` 的**宿主顺序**（与侧栏工作区分组同源；`title` → 路径末段 → 原路径 作主标签，`当前` = 当前会话在该工作区 `sessionIds` 名下）；`↑`/`↓` 只移动高亮（clamp 不循环，**不触发导航**），`Enter` / 行内 `mousedown` 才调公开的 `uiWorkspace.openWorkspace(workspaceId)`（`dsh-client-ui-workspace` 的 `UiWorkspace` 服务：复用该工作区已挂载的空白会话，没有就 `sessions.create({workspaceId})` 新建再打开——与侧栏分组「＋」同一条「连接工作区」路径）；`Esc` 或同组合键关闭，同层内 `⌘/` 互切速查表。**任意态**；`workspaces` 缺席/无 `items` → 空态浮窗，`uiWorkspace` 缺席或 `openWorkspace` 抛错 → 确认 no-op，**不回退 DOM 点击侧栏分组** |
 | `model.pick` | ⌘/Ctrl+M | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：目录 = `ctx.modelDirectories.directoryFor(当前会话)`——与 `/model` 弹层、composer 模型座位是**同一份** per-session 实例；列表 = `load()` 后读 `store.getSnapshot()` 的 `groups` **按宿主顺序展开**（提供方分组标题 + 组内顺序都不重排，失败提供方折成底部小字不占行），每行完整选择复刻上游弹层 `selectionOf`（`reasoningEffort` = 当前选择落在该模型时的 `current.reasoningEffort`，否则 `model.reasoning.defaultEffort`，无则省略）；`↑`/`↓` 只移动高亮（clamp 不循环），`Enter` / 行内 `mousedown` 才调 `directory.select(selection)`（与两个上游入口同一条 `session.selectModel` 提交路径），浮窗内 `⇧Tab` 就地循环强度（只更新顶部「当前」行）。列表异步取、渲染带序号守卫（过期结果丢弃）。**任意态**；`modelDirectories` 缺席 / 无当前会话 / 被寻址的子代理会话（`sessions.subagentAddress(id) !== undefined`）/ `directoryFor` 抛错 → 空态浮窗，`load()` 拒绝 → 空态 + 失败小字，`select()` 拒绝 → 浮窗照关（错误落在共享 store 上），**不回退 DOM 点 composer 模型标签** |
@@ -274,7 +275,8 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
 键位分两档：**单修饰键 `⌘/Ctrl+字母` 给全局动作**（左栏 `B`、右栏 `O`、工作区 `K`、
-模型 `M`、新建会话 `N`、焦点跳转 `J`、文件浏览器 `\`、终端 `L`、速查表 `/`），**`mod+alt` 给导航**
+近期对话 `I`、模型 `M`、新建会话 `N`、焦点跳转 `J`、文件浏览器 `\`、终端 `L`、速查表 `/`），
+**`mod+alt` 给导航**
 （`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
 侧栏开关的分配：**左栏 = ⌘/Ctrl+B**、**右栏 = ⌘/Ctrl+O**。
 理由两条：① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器），
@@ -337,6 +339,42 @@ no-op 且不吞键；两个动作 id（`sidebarRight.tabPrev` / `sidebarRight.ta
 **宿主顺序**（与侧栏分组顺序同源），初始高亮 = 当前会话所属工作区。动作 id
 `workspace.pick` 独立可覆盖。
 
+**近期对话浮窗 = ⌘/Ctrl+I**：与工作区浮窗同在单修饰键这一档（`I` = Input / 会话联想；
+`⌘/Ctrl+I` 曾是「聚焦输入框」的旧键位，现由 `⌘/Ctrl+J` 承担），语义是
+「列表 → 选中 → **打开会话**」——↑/↓ 在**整份列表上跨工作区分组**连续移动高亮
+（越界 clamp、不循环，**不打开会话**，避免连按就连开一串），Enter / 点击行才调公开的
+`uiWorkspace.openSession(sessionId)`（与侧栏点会话行、搜索结果行**同一条**上游调用：
+`openSession` = `sessions.open(sessionId)` **加** `layout.selectPanel(null)`，故有全局主面板
+占着主区时也会切回对话视图）；`uiWorkspace` 缺席 / 无 `openSession` 时回退
+`sessions.open(sessionId)`。两个动词都必须以**方法**形式调用——它们是上游类实例的
+原型方法（`sessions.open` 内部读 `this.manager`），摘下来（`const open = …; open(id)`）
+会丢 `this` 抛错并让 Enter 静默变成 no-op。Esc 或同组合键关闭，浮窗内 `⌘/` 与速查表互切。
+列表规则（`src/recent-sessions.ts`，
+每次打开现取，**不新增服务注入**——复用 `sessions` / `workspaces` / `uiSession` /
+`uiWorkspace`）：
+① **分组** = `workspaces.list` 快照的**宿主顺序**（与侧栏工作区分组同源），无归属会话
+落在末尾的**无标题组**，`workspaces` 缺席 / 快照缺 `items` 时全部会话落入该组（仍是可用
+列表，不假装没有会话）；② **组内顺序** = **最近更新在前**（`updatedAt` 降序、id 升序
+决胜，来源是 `src/session-order.ts` 的 `compareRecency`，即 `orderBy === 'updated'` 的
+默认轴；侧栏切到 `manual` 手动排序时本浮窗仍按最近更新排）；③ **可见性** =
+`session-order.ts` 的 `sessionVisible`，逐字复刻上游 `sessionVisible` 的行规则
+（排除 `origin === 'subagent'`、归档行、非当前空白行）**再加一条本插件的产品选择**
+（`keepBlank = false`）：连**当前**空白会话也一并裁掉——空白会话是「新会话」的占位行、
+不是对话（侧栏顺序不传 `keepBlank`，仍按上游语义保留当前空白行，故两个动作互不影响）；
+④ **行** = 会话 `displayTitle`（上游投影：durable 标题 → 目录末段 → 会话 id，恒非空；
+缺失时回退 `title` / 会话 id）+ 状态标记（**待回应** → **运行中** → **完成**，三选一）
++ `当前` 标记，次行 = 会话 `cwd`（与主标签相同时省略）；⑤ **条数上限 = 最近交互的
+10 个（全局口径）**：全部可见会话先按最近更新取前 10 个、**再**按工作区分组渲染，故列表
+恒不超过 10 行、某个工作区可能整组不出现（不留空标题）；当前会话另有**强制纳入**——它不在
+前 10 名时顶掉第 10 名，保证「初始光标落在当前会话」有落点；配套地，该面板带
+`dsh-kbd-panel--recent` 修饰类、`max-height` 由 `64vh` 抬到 `calc(88vh - 24px)`，让 10 行 +
+组标题 + 页眉/页脚整屏可见（面板高度仍是内容尺寸；超过视口可用高度才内部滚动）；⑥ **初始高亮** = 当前会话所在行
+（当前是空白会话 / 无 `current` / 当前会话被过滤掉时落在首行）。**无降级**：`sessions`
+缺席 / 快照缺 `ids` → 空态浮窗（Enter 不消费，由模态吞掉）；`open` 缺失或抛错（未知 id）
+→ 确认时 no-op、浮窗照关；**不回退 DOM**。动作 id `session.recent` 独立可覆盖。
+已知限制：`Ctrl+I` 是 contenteditable 里浏览器默认的「斜体」键，会被本插件
+`preventDefault` 抢走（需要斜体请用编辑器自带的格式入口，或用 localStorage 改绑）。
+
 **模型浮窗 = ⌘/Ctrl+M**：与工作区浮窗同在单修饰键这一档（`M` = Model 联想），语义与
 工作区浮窗同形（列表 → 选中 → 提交），而**取数与提交
 都与两个上游入口同源**——`ctx.modelDirectories` 的 per-session 目录实例正是 `/model`
@@ -355,7 +393,8 @@ Monaco（`.inputarea` textarea）都是真实 `<textarea>`，同样落入 `editi
 LF；readline 的 newline，与 `Enter` 同义）不再送给 PTY（裸 `Enter` 仍可）。取元素仍是
 服务链路（`conversation.input.for` → `shell.editor.getRootElement()`
 → `focus({preventScroll:true})`，`for` 缺席回退 `InputHub.shell(id)`），无降级。
-动作 id `composer.focus` 独立可覆盖；改绑回旧键位（覆盖 localStorage 为 `mod+i`）即可。
+动作 id `composer.focus` 独立可覆盖；旧键位 `⌘/Ctrl+I` 已改由近期对话浮窗占用，
+改绑回它需先把 `session.recent` 挪走。
 
 **思考强度循环 = ⇧Tab**：上游把强度档收在「模型菜单 → Effort」二级面板里、**没有默认
 键位**，而「在模型上按 Tab 循环档位」是既有习惯；候选档与当前档都逐字复刻上游 composer
@@ -386,8 +425,18 @@ store 的 paneId 聚焦其中的 `textarea.xterm-helper-textarea`、分屏只碰
 当前标签时不代劳、面板里没有 xterm 或 focus 抛错只是少这一步）；⌘/Ctrl+N 新建会话（必须调 `uiWorkspace.startSession`、三态放行、
 服务缺席 / 无 `startSession` / 抛错 no-op 不吞键）；⌘/Ctrl+J 聚焦输入框（J = Jump）的取数链路
 （`browse` 恒可用；`editing` 只在焦点**不在** composer 内时执行聚焦——右栏终端 / Monaco 的
-隐藏 textarea 属于这一类——焦点已在 composer 内时不重复聚焦但组合键仍被吞掉）；工作区浮窗与模型浮窗的列表
-顺序、高亮 clamp、确认路径与空态；`⇧Tab` 的候选档与编辑态门闸）与
+隐藏 textarea 属于这一类——焦点已在 composer 内时不重复聚焦但组合键仍被吞掉）；
+工作区浮窗与模型浮窗的列表
+顺序、高亮 clamp、确认路径与空态；⌘/Ctrl+I 近期对话浮窗（按 workspaces 宿主顺序分组、
+组内最近更新在前、blank / 归档 / 子代理不列出、无归属落末尾无标题组、**全局最多 10 行**
+（13 个可见会话只渲染 10 行、blank 不占名额、当前会话不在前 10 名时强制纳入并顶掉第 10 名）、
+面板高度（近期对话面板带 `dsh-kbd-panel--recent` 修饰类、`max-height` 由 64vh 抬到
+`calc(88vh - 24px)`，工作区浮窗不带该修饰类）、
+↑↓ 跨组移动高亮
+且不打开会话、Enter/点击才打开会话（桩里的 `open` / `openSession` 都写成读 `this` 的
+类方法形态：有 `uiWorkspace.openSession` 时优先走它、无该方法或抛错则回退 `sessions.open`；
+把方法摘下来调用会丢 `this` 并让这些断言 FAIL）、空态与 `sessions` 缺席 / 缺 ids / `open`
+缺失或抛错 / `workspaces` 缺席的各自边界）；`⇧Tab` 的候选档与编辑态门闸）与
 `node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，覆盖分组 / flat / 权威来源不可用时
 no-op——**无降级**）。
 
@@ -411,6 +460,16 @@ no-op——**无降级**）。
    加载由用户执行，代理仅交付代码与加载说明。
 9. 新增插件若浏览器半部为手写 JavaScript、未提供 `build` 脚本，即违反强制规范第 2 条；
    浏览器不支持 Type Stripping，TypeScript 源码必须经构建产出 `lib/client.js` 才能加载。
+10. **上游服务方法必须以「方法」形式调用，不得把方法摘下来单独调用**：`ctx.get(...)`
+   返回的都是类实例（`ClientSessions.open` 内部读 `this.manager`、
+   `UiWorkspaceService.openSession` 读 `this.sessions` / `this.ctx.layout` 等），类方法
+   体是严格模式——`const open = services.sessions.open; open(id)` 里 `this === undefined`，
+   会抛 `TypeError` 并被调用方的 `catch` 静默吞掉，表现为「快捷键毫无反应」。
+   需要保存引用时用 `fn.call(owner, …)`（本仓库既有写法：
+   `sidebar-tabs.ts` 的 `placeTab.call(actions, …)` / `toggle.call(sidebarRight)`、
+   `model-picker.ts` 的 `fn.call(sessions, …)`、`question-drafts.ts` 的
+   `replace.call(store.actions, …)`）。纯 DOM / 纯闭包对象（`getSnapshot` 等）不受影响。
+   诊断脚本里的桩也要写成读 `this` 的类方法形态，否则回归测不出来。
 
 ## 文档索引
 

@@ -27,6 +27,12 @@
  *   `uiWorkspace.openWorkspace(workspaceId)`(连接工作区:复用该工作区的空白
  *   会话、没有就新建一个再打开,与侧栏工作区分组的「+」同一条路径),
  *   见 workspace-switcher.ts 与 overlay.ts;
+ * - 全态:⌘/Ctrl+I 打开**近期对话浮窗**(浮窗内 ↑/↓ 跨工作区分组选择、Enter 打开、
+ *   Esc 关闭):列表取自 `sessions.list` + `workspaces.list` 快照,按工作区分组
+ *   (组序 = 宿主顺序、组内 = 最近更新在前、空白会话不列出),打开调公开的
+ *   `uiWorkspace.openSession(sessionId)`(与侧栏点会话行同一条服务调用;
+ *   缺失时回退 `sessions.open`),
+ *   见 recent-sessions.ts 与 overlay.ts;
  * - 全态:⌘/Ctrl+M 打开**模型浮窗**(浮窗内 ↑/↓ 选择、Enter 切换、
  *   ⇧Tab 调强度、Esc 关闭),列表 / 当前选择 / 切换都走上游**同一个** per-session
  *   模型目录(`ctx.modelDirectories.directoryFor(sessionId)`——与 `/model` 弹层、
@@ -78,6 +84,7 @@ import {
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
 import { cycleEffort, modelPickerView, selectModel } from './model-picker.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
+import { openRecentSession, recentSessionsView } from './recent-sessions.ts'
 import { cycleRightSidebarTab, revealRightSidebarFiles, revealRightSidebarTerminal } from './sidebar-tabs.ts'
 import { switchWorkspace, workspaceRows } from './workspace-switcher.ts'
 import type { ClientContext, ConversationLike, LayoutLike, ModelDirectoryResolverLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, UiWorkspaceLike, WorkspacesLike } from './types.ts'
@@ -94,7 +101,8 @@ export const name = 'dsh-kbd-hotkeys'
  * conversation 供 ⌘/Ctrl+J 取 composer 的 editor 宿主元素(焦点跳转)与
  * ⇧Tab 的编辑态门闸(宿主元素 contains 事件目标),
  * uiWorkspace 供 ⌘/Ctrl+K 工作区浮窗确认时连接/切换工作区、⌘/Ctrl+N 新建会话
- * (startSession,与 `/new` 同一条服务调用),
+ * (startSession,与 `/new` 同一条服务调用)、以及 ⌘/Ctrl+I 近期对话浮窗的确认
+ * (openSession,与侧栏点会话行同一条服务调用;缺失时回退 sessions.open),
  * modelDirectories 供 ⌘/Ctrl+M 模型浮窗与 ⇧Tab 循环思考强度
  * (上游 `/model` 弹层、composer 模型座位的**同一份** per-session 目录实例)。
  */
@@ -142,6 +150,11 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
       case 'workspace.pick':
         // 工作区浮窗:打开时按当前快照现取列表(↑/↓ 与 Enter 在 overlay 内处理)
         overlays.toggleWorkspacePicker()
+        return true
+      case 'session.recent':
+        // 近期对话浮窗(⌘/Ctrl+I):打开时现取会话 + 工作区快照(按工作区分组),
+        // ↑/↓ 与 Enter 在 overlay 内处理;确认时打开会话(见 recent-sessions.ts)。
+        overlays.toggleRecentPicker()
         return true
       case 'model.pick':
         // 模型浮窗:打开时现取当前会话的模型目录(↑/↓ 与 Enter 在 overlay 内处理)
@@ -202,6 +215,13 @@ export function apply(ctx: ClientContext): void {
     listWorkspaces: () => workspaceRows(services),
     selectWorkspace: (workspaceId) => {
       switchWorkspace(services, workspaceId)
+    },
+    // 近期对话浮窗:数据每次打开时现取(sessions.list + workspaces.list,按工作区分组),
+    // 确认走公开的 uiWorkspace.openSession(sessionId)——与侧栏点会话行同一条服务调用
+    // (缺失时回退同一份服务实例上的 sessions.open)。
+    listRecentSessions: () => recentSessionsView(services),
+    selectRecentSession: (sessionId) => {
+      openRecentSession(services, sessionId)
     },
     // 模型浮窗:列表每次打开时现取当前会话的模型目录(与 `/model` 弹层、
     // composer 模型座位同一份状态);确认走同一个 directory.select。

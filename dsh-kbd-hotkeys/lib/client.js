@@ -141,19 +141,39 @@ function clearProgress(store, requestKey) {
   }
 }
 
+// src/session-order.ts
+function sessionRowVisible(summary, current, archived) {
+  return summary.origin !== "subagent" && !archived.has(summary.id) && (!summary.blank || summary.id === current);
+}
+function sessionVisible(summary, current, archived, keepBlank = true) {
+  if (!sessionRowVisible(summary, current, archived)) return false;
+  if (summary.blank === true && !keepBlank) return false;
+  return true;
+}
+function compareRecency(a, b, byId) {
+  var _a, _b, _c, _d;
+  const aUpdated = (_b = (_a = byId[a]) == null ? void 0 : _a.updatedAt) != null ? _b : Number.NEGATIVE_INFINITY;
+  const bUpdated = (_d = (_c = byId[b]) == null ? void 0 : _c.updatedAt) != null ? _d : Number.NEGATIVE_INFINITY;
+  if (bUpdated !== aUpdated) return bUpdated - aUpdated;
+  return a < b ? -1 : 1;
+}
+function recencyOrder(ids, byId) {
+  return ids.map((id, index) => ({ id, index })).sort((a, b) => compareRecency(a.id, b.id, byId) || a.index - b.index).map((entry) => entry.id);
+}
+
 // src/sidebar-order.ts
 var FLAT_ORDER_KEY = "__flat_session_order__";
 var UNGROUPED_KEY = "";
 var WORKSPACE_SLOT = "sidebar.workspaces";
 function sidebarOrderedSessionIds(snapshot, services) {
-  var _a, _b, _c, _d, _e, _f, _g;
+  var _a, _b, _c, _d;
   const view = readSidebarViewState(services);
   if (view === void 0) return [];
-  const workspaceSnapshot = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
+  const workspaceSnapshot = readWorkspaceSnapshot(services);
   if (workspaceSnapshot === void 0) return [];
-  const byId = (_d = snapshot.byId) != null ? _d : {};
+  const byId = (_a = snapshot.byId) != null ? _a : {};
   const current = snapshot.current;
-  const archived = new Set((_e = workspaceSnapshot.archivedSessionIds) != null ? _e : []);
+  const archived = new Set((_b = workspaceSnapshot.archivedSessionIds) != null ? _b : []);
   const order = view.sessionOrderByAccount;
   const visible = (id) => {
     const summary = byId[id];
@@ -161,7 +181,7 @@ function sidebarOrderedSessionIds(snapshot, services) {
   };
   const recency = (a, b) => compareRecency(a, b, byId);
   if (view.groupBy === "flat") {
-    const base = ((_f = snapshot.ids) != null ? _f : []).filter(visible);
+    const base = ((_c = snapshot.ids) != null ? _c : []).filter(visible);
     base.sort(recency);
     return reconcileOrder(base, order == null ? void 0 : order[FLAT_ORDER_KEY]);
   }
@@ -176,13 +196,13 @@ function sidebarOrderedSessionIds(snapshot, services) {
       if (visible(id)) ids.push(id);
     }
   }
-  const stray = ((_g = snapshot.ids) != null ? _g : []).filter((id) => !accounted.has(id) && visible(id));
+  const stray = ((_d = snapshot.ids) != null ? _d : []).filter((id) => !accounted.has(id) && visible(id));
   const ungrouped = order == null ? void 0 : order[UNGROUPED_KEY];
   if (ungrouped === void 0) {
     stray.sort(recency);
     ids.push(...stray);
   } else {
-    ids.push(...orderedUngrouped(stray, ungrouped, recency));
+    ids.push(...orderedUngrouped(stray, ungrouped, byId));
   }
   return ids;
 }
@@ -199,6 +219,17 @@ function readSidebarViewState(services) {
     if (state !== void 0) return state;
   }
   return void 0;
+}
+function readWorkspaceSnapshot(services) {
+  var _a, _b, _c;
+  let snapshot;
+  try {
+    snapshot = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
+  } catch {
+    return void 0;
+  }
+  if (typeof snapshot !== "object" || snapshot === null || Array.isArray(snapshot)) return void 0;
+  return snapshot;
 }
 function entriesOf2(slots) {
   var _a;
@@ -242,7 +273,7 @@ function reconcileOrder(ids, stored) {
   }
   return out;
 }
-function orderedUngrouped(ids, stored, recency) {
+function orderedUngrouped(ids, stored, byId) {
   const known = new Set(ids);
   const out = [];
   const included = /* @__PURE__ */ new Set();
@@ -252,18 +283,8 @@ function orderedUngrouped(ids, stored, recency) {
     included.add(id);
   }
   const rest = ids.filter((id) => !included.has(id));
-  rest.sort(recency);
+  rest.sort((a, b) => compareRecency(a, b, byId));
   return [...out, ...rest];
-}
-function compareRecency(a, b, byId) {
-  var _a, _b, _c, _d;
-  const aUpdated = (_b = (_a = byId[a]) == null ? void 0 : _a.updatedAt) != null ? _b : Number.NEGATIVE_INFINITY;
-  const bUpdated = (_d = (_c = byId[b]) == null ? void 0 : _c.updatedAt) != null ? _d : Number.NEGATIVE_INFINITY;
-  if (bUpdated !== aUpdated) return bUpdated - aUpdated;
-  return a < b ? -1 : 1;
-}
-function sessionVisible(summary, current, archived) {
-  return summary.origin !== "subagent" && !archived.has(summary.id) && (!summary.blank || summary.id === current);
 }
 
 // src/actions.ts
@@ -697,6 +718,12 @@ var ACTIONS = [
   // directoryFor,与 `/model` 弹层、composer 模型座位同一份状态),
   // 故浮窗里的切换与两个上游入口完全同步(见 model-picker.ts)。
   { id: "model.pick", label: "\u5207\u6362\u6A21\u578B(\u6D6E\u7A97:\u2191\u2193 \u9009\u62E9\u3001Enter \u5207\u6362)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 近期对话浮窗(⌘/Ctrl+I):单修饰键这一档(`I` = Input 会话),三态放行——
+  // 带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,也不干扰文本编辑。
+  // 浮窗内 ↑/↓ 在整份列表上跨工作区分组移动高亮、Enter 才打开会话
+  // (`uiWorkspace.openSession`,与侧栏点会话行同一条公开服务调用;缺失时回退
+  // 同一份服务实例上的 `sessions.open`),见 recent-sessions.ts。
+  { id: "session.recent", label: "\u8FD1\u671F\u5BF9\u8BDD(\u6D6E\u7A97:\u6309\u5DE5\u4F5C\u533A\u5206\u7EC4\u3001\u2191\u2193 \u9009\u62E9\u3001Enter \u6253\u5F00)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 思考强度循环(⇧Tab)只放行 browse / editing:card 态下 ⇧Tab 归卡片自己
   // (问答卡片的输入框仍需要正向/反向移动焦点)。editing 态另有一道**元素级门闸**
   // (见 client.ts 的 isComposerTarget):只有焦点在 composer 自己的编辑区内才接管,
@@ -770,6 +797,16 @@ var DEFAULT_BINDINGS = {
   // 故 macOS 上按 ⌃M 或 ⌘M 均可(Win/Linux 就是 Ctrl+M)。浮窗内 ↑/↓ 选择、
   // Enter 切换、⇧Tab 调强度、Esc 关闭。
   "model.pick": "mod+m",
+  // 近期对话浮窗 = ⌘/Ctrl+I:属「单修饰键」这一档,`I` 取「Input / 会话」联想
+  // (与 ⌘/Ctrl+K 工作区、⌘/Ctrl+M 模型并列)。`mod` 在 comboOf 里同时吸收
+  // ctrlKey 与 metaKey,故 macOS 上按 ⌃I 或 ⌘I 均可(Win/Linux 就是 Ctrl+I)。
+  // 浮窗内:↑/↓ 在整份列表上**跨工作区分组**移动高亮(不打开会话——免得连按就连开
+  // 一串)、Enter 才打开高亮会话(`uiWorkspace.openSession`,与侧栏点会话行同一条
+  // 服务调用;缺失时回退 `sessions.open`)、
+  // Esc 或同组合键关闭、⌘/ 换成速查表。注意 `Ctrl+I` 在 contenteditable 里是
+  // 浏览器默认的「斜体」键,这里会被 preventDefault 抢走(见 README「已知限制」);
+  // 焦点跳转(⌘/Ctrl+J)是另一回事,不受影响。
+  "session.recent": "mod+i",
   // 思考强度循环 = ⇧Tab:上游 composer 座位把强度档收在「模型菜单 → Effort」二级
   // 面板里(没有默认键位),这里给一个免鼠标的循环键。Shift 单独作修饰键不与任何
   // 已有组合冲突(bindings 里没有其它 shift+ 项);`comboOf` 走 e.code 归一化
@@ -1073,6 +1110,12 @@ var STYLE_ID = "dsh-kbd-hotkeys/style";
 var STYLE = [
   ".dsh-kbd-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;font-family:var(--dsw-font-family,system-ui,-apple-system,sans-serif)}",
   ".dsh-kbd-panel{width:min(560px,calc(100vw - 48px));max-height:64vh;background:var(--dsw-specific-menu,#fff);color:var(--dsw-alias-label-primary,#111);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.25));border-radius:14px;display:flex;flex-direction:column;overflow:hidden}",
+  // 近期对话浮窗最多 10 行,面板高度按内容给足:高度是内容尺寸(不写死),这里只把
+  // 上限从 64vh 抬到「视口可用高度」(backdrop 顶部留白 12vh,底部再留 24px)——
+  // 于是 10 行 + 组标题 + 页眉/页脚在常见窗口高度下能整屏看全、列表不滚动,
+  // 只有内容真的超过视口时列表才内部滚动。必须排在 `.dsh-kbd-panel` 之后
+  // (同特异性,后声明的生效)。其余三个浮窗(速查表/工作区/模型)仍用 64vh。
+  ".dsh-kbd-panel--recent{max-height:calc(88vh - 24px)}",
   ".dsh-kbd-help{padding:14px 18px;overflow-y:auto}",
   ".dsh-kbd-help h3{margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-tertiary,#999)}",
   ".dsh-kbd-help h3:first-child{margin-top:0}",
@@ -1083,6 +1126,11 @@ var STYLE = [
   ".dsh-kbd-list{display:flex;flex-direction:column;gap:2px;padding:0 8px;overflow-y:auto}",
   ".dsh-kbd-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:13px;line-height:18px}",
   ".dsh-kbd-row.isActive{background:var(--dsw-specific-sidebar-nav-item-active,var(--dsw-alias-interactive-bg-active,rgba(127,127,127,.18)))}",
+  // 分组列表(近期对话浮窗)的行:与工作区 / 模型浮窗的行同形,只多一层缩进,
+  // 让「组标题 → 组内会话」的层级一眼可辨。刻意用不同类名,便于诊断脚本区分
+  // 两个浮窗各自渲染的行。
+  ".dsh-kbd-groupRow{display:flex;align-items:center;gap:10px;padding:6px 10px 6px 20px;border-radius:8px;font-size:13px;line-height:18px}",
+  ".dsh-kbd-groupRow.isActive{background:var(--dsw-specific-sidebar-nav-item-active,var(--dsw-alias-interactive-bg-active,rgba(127,127,127,.18)))}",
   ".dsh-kbd-rowMain{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}",
   ".dsh-kbd-rowLabel,.dsh-kbd-rowDetail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
   ".dsh-kbd-rowDetail{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}",
@@ -1105,8 +1153,7 @@ function createOverlays(deps) {
   let root = null;
   let kind = null;
   let rowEls = [];
-  let rowIds = [];
-  let rowSelections = [];
+  let rowTargets = [];
   let cursor = 0;
   let modelList = null;
   let modelCurrentEl = null;
@@ -1124,8 +1171,7 @@ function createOverlays(deps) {
     root = null;
     kind = null;
     rowEls = [];
-    rowIds = [];
-    rowSelections = [];
+    rowTargets = [];
     cursor = 0;
     modelList = null;
     modelCurrentEl = null;
@@ -1139,9 +1185,10 @@ function createOverlays(deps) {
     const backdrop = document.createElement("div");
     backdrop.className = "dsh-kbd-backdrop";
     const panel = document.createElement("div");
-    panel.className = "dsh-kbd-panel";
+    panel.className = next === "recent" ? "dsh-kbd-panel dsh-kbd-panel--recent" : "dsh-kbd-panel";
     if (next === "help") panel.appendChild(renderHelp());
     else if (next === "workspace") renderWorkspacePicker(panel);
+    else if (next === "recent") renderRecentPicker(panel);
     else renderModelPicker(panel);
     backdrop.appendChild(panel);
     backdrop.addEventListener("mousedown", (event) => {
@@ -1189,13 +1236,13 @@ function createOverlays(deps) {
       empty.className = "dsh-kbd-empty";
       empty.textContent = "\u5F53\u524D\u6CA1\u6709\u5DF2\u767B\u8BB0\u7684\u5DE5\u4F5C\u533A";
       panel.appendChild(empty);
-      panel.appendChild(renderHint());
+      panel.appendChild(renderHint("\u2191 \u2193 \u9009\u62E9 \xB7 Enter \u5207\u6362 \xB7 Esc \u5173\u95ED"));
       return;
     }
     const list = document.createElement("div");
     list.className = "dsh-kbd-list";
     const els = [];
-    const ids = [];
+    const targets = [];
     rows.forEach((row, index) => {
       const el = document.createElement("div");
       el.className = "dsh-kbd-row";
@@ -1210,23 +1257,59 @@ function createOverlays(deps) {
       count.className = "dsh-kbd-rowCount";
       count.textContent = `${String(row.sessionCount)} \u4E2A\u4F1A\u8BDD`;
       el.appendChild(count);
-      el.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        choose(index);
-      });
-      el.addEventListener("mouseenter", () => {
-        setCursor(index);
-      });
+      bindRow(el, index);
       list.appendChild(el);
       els.push(el);
-      ids.push(row.workspaceId);
+      targets.push({ workspaceId: row.workspaceId });
     });
     panel.appendChild(list);
-    panel.appendChild(renderHint());
+    panel.appendChild(renderHint("\u2191 \u2193 \u9009\u62E9 \xB7 Enter \u5207\u6362 \xB7 Esc \u5173\u95ED"));
     rowEls = els;
-    rowIds = ids;
+    rowTargets = targets;
     setCursor(Math.max(0, rows.findIndex((row) => row.current)));
+  }
+  function renderRecentPicker(panel) {
+    const heading = document.createElement("div");
+    heading.className = "dsh-kbd-panelHeading";
+    heading.textContent = "\u8FD1\u671F\u5BF9\u8BDD";
+    panel.appendChild(heading);
+    const view = deps.listRecentSessions();
+    if (view.rows.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "dsh-kbd-empty";
+      empty.textContent = view.notice !== "" ? view.notice : "\u5F53\u524D\u6CA1\u6709\u53EF\u6253\u5F00\u7684\u5BF9\u8BDD";
+      panel.appendChild(empty);
+      panel.appendChild(renderHint("\u2191 \u2193 \u9009\u62E9 \xB7 Enter \u6253\u5F00 \xB7 Esc \u5173\u95ED"));
+      return;
+    }
+    const list = document.createElement("div");
+    list.className = "dsh-kbd-list";
+    const els = [];
+    const targets = [];
+    for (const group of view.groups) {
+      if (group.label !== "") {
+        const groupHeading = document.createElement("div");
+        groupHeading.className = "dsh-kbd-group";
+        groupHeading.textContent = group.label;
+        list.appendChild(groupHeading);
+      }
+      for (const row of group.rows) {
+        const el = document.createElement("div");
+        el.className = "dsh-kbd-groupRow";
+        el.appendChild(renderRowMain(row));
+        el.appendChild(renderStatusBadges(row));
+        if (row.current) el.appendChild(renderBadge("\u5F53\u524D"));
+        bindRow(el, els.length);
+        list.appendChild(el);
+        els.push(el);
+        targets.push({ sessionId: row.sessionId });
+      }
+    }
+    panel.appendChild(list);
+    panel.appendChild(renderHint("\u2191 \u2193 \u9009\u62E9 \xB7 Enter \u6253\u5F00 \xB7 Esc \u5173\u95ED"));
+    rowEls = els;
+    rowTargets = targets;
+    setCursor(view.initialIndex);
   }
   function renderRowMain(row) {
     const main = document.createElement("div");
@@ -1243,10 +1326,32 @@ function createOverlays(deps) {
     }
     return main;
   }
-  function renderHint() {
+  function renderBadge(text) {
+    const badge = document.createElement("span");
+    badge.className = "dsh-kbd-rowBadge";
+    badge.textContent = text;
+    return badge;
+  }
+  function renderStatusBadges(row) {
+    const badge = document.createElement("span");
+    badge.className = "dsh-kbd-rowBadge";
+    badge.textContent = row.pending ? "\u5F85\u56DE\u5E94" : row.running ? "\u8FD0\u884C\u4E2D" : row.completed ? "\u5B8C\u6210" : "";
+    return badge;
+  }
+  function bindRow(el, index) {
+    el.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      choose(index);
+    });
+    el.addEventListener("mouseenter", () => {
+      setCursor(index);
+    });
+  }
+  function renderHint(text) {
     const hint = document.createElement("div");
     hint.className = "dsh-kbd-hint";
-    hint.textContent = "\u2191 \u2193 \u9009\u62E9 \xB7 Enter \u5207\u6362 \xB7 Esc \u5173\u95ED";
+    hint.textContent = text;
     return hint;
   }
   function renderModelPicker(panel) {
@@ -1297,11 +1402,11 @@ function createOverlays(deps) {
       list.appendChild(empty);
       if (view.footnote !== "") list.appendChild(renderFootnote(view.footnote));
       rowEls = [];
-      rowSelections = [];
+      rowTargets = [];
       return;
     }
     const els = [];
-    const selections = [];
+    const targets = [];
     let lastProvider = "";
     rows.forEach((row, index) => {
       if (row.provider !== lastProvider) {
@@ -1311,27 +1416,15 @@ function createOverlays(deps) {
       const el = document.createElement("div");
       el.className = "dsh-kbd-row";
       el.appendChild(renderRowMain(row));
-      if (row.current) {
-        const badge = document.createElement("span");
-        badge.className = "dsh-kbd-rowBadge";
-        badge.textContent = "\u5F53\u524D";
-        el.appendChild(badge);
-      }
-      el.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        choose(index);
-      });
-      el.addEventListener("mouseenter", () => {
-        setCursor(index);
-      });
+      if (row.current) el.appendChild(renderBadge("\u5F53\u524D"));
+      bindRow(el, index);
       list.appendChild(el);
       els.push(el);
-      selections.push({ ...row.selection });
+      targets.push({ selection: { ...row.selection } });
     });
     if (view.footnote !== "") list.appendChild(renderFootnote(view.footnote));
     rowEls = els;
-    rowSelections = selections;
+    rowTargets = targets;
     setCursor(Math.max(0, rows.findIndex((row) => row.current)));
   }
   function renderFootnote(text) {
@@ -1359,7 +1452,9 @@ function createOverlays(deps) {
     const next = Math.max(0, Math.min(index, rowEls.length - 1));
     cursor = next;
     rowEls.forEach((el, i) => {
-      el.className = i === next ? "dsh-kbd-row isActive" : "dsh-kbd-row";
+      var _a;
+      const base = (_a = el.className.split(" ").filter((name2) => name2 !== "isActive")[0]) != null ? _a : "dsh-kbd-row";
+      el.className = i === next ? `${base} isActive` : base;
     });
     const active = rowEls[next];
     if (active !== void 0 && typeof active.scrollIntoView === "function") {
@@ -1367,15 +1462,24 @@ function createOverlays(deps) {
     }
   }
   function choose(index) {
+    const target = rowTargets[index];
+    if (target === void 0) return;
     if (kind === "model") {
-      const selection = rowSelections[index];
+      const selection = target.selection;
       if (selection === void 0) return;
-      const target = { ...selection };
+      const next = { ...selection };
       close();
-      deps.selectModel(target);
+      deps.selectModel(next);
       return;
     }
-    const workspaceId = rowIds[index];
+    if (kind === "recent") {
+      const sessionId = target.sessionId;
+      if (sessionId === void 0) return;
+      close();
+      deps.selectRecentSession(sessionId);
+      return;
+    }
+    const workspaceId = target.workspaceId;
     if (workspaceId === void 0) return;
     close();
     deps.selectWorkspace(workspaceId);
@@ -1391,6 +1495,10 @@ function createOverlays(deps) {
     if (kind === "workspace") close();
     else mount("workspace");
   }
+  function toggleRecentPicker() {
+    if (kind === "recent") close();
+    else mount("recent");
+  }
   function toggleModelPicker() {
     if (kind === "model") close();
     else mount("model");
@@ -1402,7 +1510,7 @@ function createOverlays(deps) {
       return true;
     }
     const combo = comboOf(event);
-    if (kind === "workspace") {
+    if (kind === "workspace" || kind === "recent") {
       if (combo === "arrowup") {
         setCursor(cursor - 1);
         return true;
@@ -1411,7 +1519,7 @@ function createOverlays(deps) {
         setCursor(cursor + 1);
         return true;
       }
-      if (combo === "enter" && rowIds.length > 0) {
+      if (combo === "enter" && rowTargets.length > 0) {
         choose(cursor);
         return true;
       }
@@ -1425,7 +1533,7 @@ function createOverlays(deps) {
         setCursor(cursor + 1);
         return true;
       }
-      if (combo === "enter" && rowSelections.length > 0) {
+      if (combo === "enter" && rowTargets.length > 0) {
         choose(cursor);
         return true;
       }
@@ -1437,6 +1545,10 @@ function createOverlays(deps) {
         }
         return true;
       }
+    }
+    if (combo === bindingOf("session.recent")) {
+      toggleRecentPicker();
+      return true;
     }
     if (combo === bindingOf("model.pick")) {
       toggleModelPicker();
@@ -1457,7 +1569,198 @@ function createOverlays(deps) {
     close();
     (_a = document.getElementById(STYLE_ID)) == null ? void 0 : _a.remove();
   }
-  return { isOpen, contains, handleKey, toggleHelp, toggleWorkspacePicker, toggleModelPicker, destroy };
+  return { isOpen, contains, handleKey, toggleHelp, toggleWorkspacePicker, toggleModelPicker, toggleRecentPicker, destroy };
+}
+
+// src/workspace-switcher.ts
+function workspaceRows(services) {
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+  const snapshot = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
+  const items = snapshot == null ? void 0 : snapshot.items;
+  if (!Array.isArray(items)) return [];
+  const current = (_g = (_f = (_e = (_d = services.sessions) == null ? void 0 : _d.list) == null ? void 0 : _e.getSnapshot) == null ? void 0 : _f.call(_e)) == null ? void 0 : _g.current;
+  const rows = [];
+  for (const item of items) {
+    if (item === null || item === void 0) continue;
+    const id = item.workspaceId;
+    if (typeof id !== "string" || id === "") continue;
+    rows.push({
+      workspaceId: id,
+      label: workspaceLabel(item),
+      detail: typeof item.path === "string" ? item.path : "",
+      sessionCount: (_i = (_h = item.sessionIds) == null ? void 0 : _h.length) != null ? _i : 0,
+      current: current !== void 0 && current !== "" && ((_k = (_j = item.sessionIds) == null ? void 0 : _j.includes(current)) != null ? _k : false)
+    });
+  }
+  for (const row of rows) {
+    if (row.detail === row.label) row.detail = "";
+  }
+  return rows;
+}
+function switchWorkspace(services, workspaceId) {
+  const uiWorkspace = services.uiWorkspace;
+  if (uiWorkspace === null || uiWorkspace === void 0) return false;
+  if (typeof uiWorkspace.openWorkspace !== "function") return false;
+  if (typeof workspaceId !== "string" || workspaceId === "") return false;
+  try {
+    void Promise.resolve(uiWorkspace.openWorkspace(workspaceId)).catch(() => {
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function workspaceLabel(item) {
+  const title = typeof item.title === "string" ? item.title.trim() : "";
+  if (title !== "") return title;
+  const path = typeof item.path === "string" ? item.path : "";
+  const base = pathBasename(path);
+  return base !== "" ? base : path;
+}
+function pathBasename(path) {
+  const trimmed = path.replace(/[/\\]+$/, "");
+  const separator = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  return trimmed.slice(separator + 1);
+}
+
+// src/recent-sessions.ts
+var UNGROUPED_KEY2 = "";
+var EMPTY_NOTICE = "\u5F53\u524D\u6CA1\u6709\u53EF\u6253\u5F00\u7684\u5BF9\u8BDD";
+var RECENT_LIMIT = 10;
+function recentSessionsView(services) {
+  var _a, _b, _c, _d, _e, _f;
+  const snapshot = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
+  const byId = snapshot == null ? void 0 : snapshot.byId;
+  const ids = snapshot == null ? void 0 : snapshot.ids;
+  if (byId === void 0 || byId === null || !Array.isArray(ids) || ids.length === 0) {
+    return emptyView();
+  }
+  const current = snapshot == null ? void 0 : snapshot.current;
+  const pending = pendingSessionIds(services);
+  const workspaceSnapshot = readWorkspaceSnapshot(services);
+  const archived = new Set((_d = workspaceSnapshot == null ? void 0 : workspaceSnapshot.archivedSessionIds) != null ? _d : []);
+  const visible = (id) => {
+    const summary = byId[id];
+    return summary !== void 0 && sessionVisible(summary, current, archived, false);
+  };
+  const rows = [];
+  const groups = [];
+  const accounted = /* @__PURE__ */ new Set();
+  const buckets = [];
+  const all = [];
+  for (const item of (_e = workspaceSnapshot == null ? void 0 : workspaceSnapshot.items) != null ? _e : []) {
+    if (item === null || item === void 0) continue;
+    const workspaceId = item.workspaceId;
+    if (typeof workspaceId !== "string" || workspaceId === "") continue;
+    const members = ((_f = item.sessionIds) != null ? _f : []).filter(visible);
+    for (const id of members) accounted.add(id);
+    if (members.length === 0) continue;
+    buckets.push({ workspaceId, label: workspaceLabel2(item), members });
+    all.push(...members);
+  }
+  const stray = ids.filter((id) => !accounted.has(id) && visible(id));
+  if (stray.length > 0) {
+    buckets.push({ workspaceId: UNGROUPED_KEY2, label: "", members: stray });
+    all.push(...stray);
+  }
+  const order = recencyOrder(all, byId);
+  const kept = new Set(order.slice(0, RECENT_LIMIT));
+  if (current !== void 0 && current !== "" && kept.size === RECENT_LIMIT && !kept.has(current) && visible(current)) {
+    kept.delete(order[RECENT_LIMIT - 1]);
+    kept.add(current);
+  }
+  for (const bucket of buckets) {
+    const members = bucket.members.filter((id) => kept.has(id));
+    if (members.length === 0) continue;
+    const groupRows = recencyOrder(members, byId).map((id) => sessionRow(id, byId[id], current, pending));
+    groups.push({ workspaceId: bucket.workspaceId, label: bucket.label, rows: groupRows });
+    rows.push(...groupRows);
+  }
+  if (rows.length === 0) return emptyView();
+  return {
+    groups,
+    rows,
+    initialIndex: initialIndex(rows, current),
+    notice: ""
+  };
+}
+function openRecentSession(services, sessionId) {
+  if (typeof sessionId !== "string" || sessionId === "") return false;
+  const uiWorkspace = services.uiWorkspace;
+  const openSession = uiWorkspace == null ? void 0 : uiWorkspace.openSession;
+  if (uiWorkspace !== null && uiWorkspace !== void 0 && typeof openSession === "function") {
+    try {
+      openSession.call(uiWorkspace, sessionId);
+      return true;
+    } catch {
+    }
+  }
+  const sessions = services.sessions;
+  const open = sessions == null ? void 0 : sessions.open;
+  if (sessions === null || sessions === void 0 || typeof open !== "function") return false;
+  try {
+    open.call(sessions, sessionId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function emptyView() {
+  return { groups: [], rows: [], initialIndex: 0, notice: EMPTY_NOTICE };
+}
+function initialIndex(rows, current) {
+  if (current === void 0 || current === "") return 0;
+  const index = rows.findIndex((row) => row.sessionId === current);
+  return index < 0 ? 0 : index;
+}
+function sessionRow(id, summary, current, pending) {
+  const label = titleOf(summary, id);
+  const cwd = typeof (summary == null ? void 0 : summary.cwd) === "string" ? summary.cwd.trim() : "";
+  return {
+    sessionId: id,
+    label,
+    detail: cwd === label ? "" : cwd,
+    current: id === current,
+    running: (summary == null ? void 0 : summary.running) === true,
+    completed: (summary == null ? void 0 : summary.completed) === true,
+    pending: pending.has(id)
+  };
+}
+function titleOf(summary, id) {
+  const display = typeof (summary == null ? void 0 : summary.displayTitle) === "string" ? summary.displayTitle.trim() : "";
+  if (display !== "") return display;
+  const title = typeof (summary == null ? void 0 : summary.title) === "string" ? summary.title.trim() : "";
+  return title !== "" ? title : id;
+}
+function workspaceLabel2(item) {
+  const title = typeof item.title === "string" ? item.title.trim() : "";
+  if (title !== "") return title;
+  const path = typeof item.path === "string" ? item.path : "";
+  return pathBasename(path);
+}
+function pendingSessionIds(services) {
+  var _a, _b;
+  const uiSession = services.uiSession;
+  let map;
+  try {
+    map = (_b = (_a = uiSession == null ? void 0 : uiSession.pendingInteractions) == null ? void 0 : _a.getSnapshot) == null ? void 0 : _b.call(_a);
+  } catch {
+    map = void 0;
+  }
+  if (map === void 0 || map === null) {
+    try {
+      map = uiSession == null ? void 0 : uiSession.pendingSnapshot;
+    } catch {
+      map = void 0;
+    }
+  }
+  if (map === void 0 || map === null) return /* @__PURE__ */ new Set();
+  const ids = /* @__PURE__ */ new Set();
+  for (const [id, interaction] of map) {
+    if (interaction === null || interaction === void 0) continue;
+    if (typeof id === "string" && id !== "") ids.add(id);
+  }
+  return ids;
 }
 
 // src/sidebar-tabs.ts
@@ -1746,57 +2049,6 @@ function paneOf(layout, paneId) {
   return node;
 }
 
-// src/workspace-switcher.ts
-function workspaceRows(services) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
-  const snapshot = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
-  const items = snapshot == null ? void 0 : snapshot.items;
-  if (!Array.isArray(items)) return [];
-  const current = (_g = (_f = (_e = (_d = services.sessions) == null ? void 0 : _d.list) == null ? void 0 : _e.getSnapshot) == null ? void 0 : _f.call(_e)) == null ? void 0 : _g.current;
-  const rows = [];
-  for (const item of items) {
-    if (item === null || item === void 0) continue;
-    const id = item.workspaceId;
-    if (typeof id !== "string" || id === "") continue;
-    rows.push({
-      workspaceId: id,
-      label: workspaceLabel(item),
-      detail: typeof item.path === "string" ? item.path : "",
-      sessionCount: (_i = (_h = item.sessionIds) == null ? void 0 : _h.length) != null ? _i : 0,
-      current: current !== void 0 && current !== "" && ((_k = (_j = item.sessionIds) == null ? void 0 : _j.includes(current)) != null ? _k : false)
-    });
-  }
-  for (const row of rows) {
-    if (row.detail === row.label) row.detail = "";
-  }
-  return rows;
-}
-function switchWorkspace(services, workspaceId) {
-  const uiWorkspace = services.uiWorkspace;
-  if (uiWorkspace === null || uiWorkspace === void 0) return false;
-  if (typeof uiWorkspace.openWorkspace !== "function") return false;
-  if (typeof workspaceId !== "string" || workspaceId === "") return false;
-  try {
-    void Promise.resolve(uiWorkspace.openWorkspace(workspaceId)).catch(() => {
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-function workspaceLabel(item) {
-  const title = typeof item.title === "string" ? item.title.trim() : "";
-  if (title !== "") return title;
-  const path = typeof item.path === "string" ? item.path : "";
-  const base = pathBasename(path);
-  return base !== "" ? base : path;
-}
-function pathBasename(path) {
-  const trimmed = path.replace(/[/\\]+$/, "");
-  const separator = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-  return trimmed.slice(separator + 1);
-}
-
 // src/client.ts
 var name = "dsh-kbd-hotkeys";
 var inject = ["sessions", "uiSession", "layout", "sidebarRight", "workspaces", "slots", "conversation", "uiWorkspace", "modelDirectories"];
@@ -1831,6 +2083,9 @@ function runAction(id, services, overlays) {
         return startNewSession(services);
       case "workspace.pick":
         overlays.toggleWorkspacePicker();
+        return true;
+      case "session.recent":
+        overlays.toggleRecentPicker();
         return true;
       case "model.pick":
         overlays.toggleModelPicker();
@@ -1876,6 +2131,13 @@ function apply(ctx) {
     listWorkspaces: () => workspaceRows(services),
     selectWorkspace: (workspaceId) => {
       switchWorkspace(services, workspaceId);
+    },
+    // 近期对话浮窗:数据每次打开时现取(sessions.list + workspaces.list,按工作区分组),
+    // 确认走公开的 uiWorkspace.openSession(sessionId)——与侧栏点会话行同一条服务调用
+    // (缺失时回退同一份服务实例上的 sessions.open)。
+    listRecentSessions: () => recentSessionsView(services),
+    selectRecentSession: (sessionId) => {
+      openRecentSession(services, sessionId);
     },
     // 模型浮窗:列表每次打开时现取当前会话的模型目录(与 `/model` 弹层、
     // composer 模型座位同一份状态);确认走同一个 directory.select。

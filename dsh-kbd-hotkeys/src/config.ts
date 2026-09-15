@@ -109,6 +109,12 @@ export const ACTIONS: readonly ActionDef[] = [
   // directoryFor,与 `/model` 弹层、composer 模型座位同一份状态),
   // 故浮窗里的切换与两个上游入口完全同步(见 model-picker.ts)。
   { id: 'model.pick', label: '切换模型(浮窗:↑↓ 选择、Enter 切换)', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 近期对话浮窗(⌘/Ctrl+I):单修饰键这一档(`I` = Input 会话),三态放行——
+  // 带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,也不干扰文本编辑。
+  // 浮窗内 ↑/↓ 在整份列表上跨工作区分组移动高亮、Enter 才打开会话
+  // (`uiWorkspace.openSession`,与侧栏点会话行同一条公开服务调用;缺失时回退
+  // 同一份服务实例上的 `sessions.open`),见 recent-sessions.ts。
+  { id: 'session.recent', label: '近期对话(浮窗:按工作区分组、↑↓ 选择、Enter 打开)', group: '会话', states: ['card', 'editing', 'browse'] },
   // 思考强度循环(⇧Tab)只放行 browse / editing:card 态下 ⇧Tab 归卡片自己
   // (问答卡片的输入框仍需要正向/反向移动焦点)。editing 态另有一道**元素级门闸**
   // (见 client.ts 的 isComposerTarget):只有焦点在 composer 自己的编辑区内才接管,
@@ -192,6 +198,16 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   // 故 macOS 上按 ⌃M 或 ⌘M 均可(Win/Linux 就是 Ctrl+M)。浮窗内 ↑/↓ 选择、
   // Enter 切换、⇧Tab 调强度、Esc 关闭。
   'model.pick': 'mod+m',
+  // 近期对话浮窗 = ⌘/Ctrl+I:属「单修饰键」这一档,`I` 取「Input / 会话」联想
+  // (与 ⌘/Ctrl+K 工作区、⌘/Ctrl+M 模型并列)。`mod` 在 comboOf 里同时吸收
+  // ctrlKey 与 metaKey,故 macOS 上按 ⌃I 或 ⌘I 均可(Win/Linux 就是 Ctrl+I)。
+  // 浮窗内:↑/↓ 在整份列表上**跨工作区分组**移动高亮(不打开会话——免得连按就连开
+  // 一串)、Enter 才打开高亮会话(`uiWorkspace.openSession`,与侧栏点会话行同一条
+  // 服务调用;缺失时回退 `sessions.open`)、
+  // Esc 或同组合键关闭、⌘/ 换成速查表。注意 `Ctrl+I` 在 contenteditable 里是
+  // 浏览器默认的「斜体」键,这里会被 preventDefault 抢走(见 README「已知限制」);
+  // 焦点跳转(⌘/Ctrl+J)是另一回事,不受影响。
+  'session.recent': 'mod+i',
   // 思考强度循环 = ⇧Tab:上游 composer 座位把强度档收在「模型菜单 → Effort」二级
   // 面板里(没有默认键位),这里给一个免鼠标的循环键。Shift 单独作修饰键不与任何
   // 已有组合冲突(bindings 里没有其它 shift+ 项);`comboOf` 走 e.code 归一化

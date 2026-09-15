@@ -79,6 +79,8 @@ export interface SessionSummaryLike {
   id: string
   displayTitle?: string
   title?: string
+  /** 会话工作目录(最近对话浮窗的次行)。 */
+  cwd?: string
   running?: boolean
   /** 已结束而未被查看(侧栏绿色「完成」提醒;缺席 = false)。 */
   completed?: boolean
@@ -113,6 +115,49 @@ export interface WorkspacesLike {
 }
 
 /* ------------------------------------------------------------------ *
+ * 近期对话浮窗(⌘/Ctrl+I):列表取数 + 打开落点
+ * ------------------------------------------------------------------ */
+
+/** 近期对话浮窗的一行(纯展示数据,由 recent-sessions.ts 从服务快照派生)。 */
+export interface RecentSessionRowLike {
+  sessionId: string
+  /** 主标签(会话标题)。 */
+  label: string
+  /** 次行(补充信息;'' = 省略)。 */
+  detail: string
+  /** 是否为当前会话。 */
+  current: boolean
+  /** 是否运行中。 */
+  running: boolean
+  /** 是否有未查看的完成提醒。 */
+  completed: boolean
+  /** 是否有待处理交互卡片。 */
+  pending: boolean
+}
+
+/** 一个工作区分组(组标题 + 组内会话行;无归属桶的 label 为空串)。 */
+export interface RecentSessionGroupLike {
+  /** 工作区 id;无归属桶为 ''。 */
+  workspaceId: string
+  /** 组标题(工作区 title → 路径末段;无归属桶为空串)。 */
+  label: string
+  /** 组内会话行(最近更新在前)。 */
+  rows: readonly RecentSessionRowLike[]
+}
+
+/** 浮窗的完整渲染数据。 */
+export interface RecentSessionsViewLike {
+  /** 分组(空组已剔除);无归属桶排在最后;全局最多 10 行时被整组裁掉的工作区不出现。 */
+  groups: readonly RecentSessionGroupLike[]
+  /** 可选中行的展平顺序(与渲染顺序一致,供 ↑/↓ 与 Enter 按下标定位);全局最多 10 行。 */
+  rows: readonly RecentSessionRowLike[]
+  /** 初始高亮下标:当前会话所在行(它必在列表里),缺失则 0。 */
+  initialIndex: number
+  /** 无行时的提示文本('' = 有行)。 */
+  notice: string
+}
+
+/* ------------------------------------------------------------------ *
  * 工作区浮窗(⌘/Ctrl+K):列表取数 + 切换落点
  * ------------------------------------------------------------------ */
 
@@ -133,7 +178,7 @@ export interface WorkspaceRowLike {
  * UiWorkspace 服务消费面(见 dsh-client-ui-workspace/lib/types/client/navigation.d.ts
  * 的 `UiWorkspace`;模块声明 `Context.uiWorkspace`)。
  *
- * 消费两个动词:
+ * 消费三个动词:
  * - `openWorkspace`:工作区导航的**规范路径**——「连接工作区」= 复用该工作区
  *   已挂载的空白会话,没有就 `sessions.create({ workspaceId })` 新建一个再打开;
  *   与侧栏工作区分组上的「+」新建会话、以及首屏工作区导航是同一条路径。
@@ -141,9 +186,15 @@ export interface WorkspaceRowLike {
  * - `startSession`:「新建会话」流程(创建/复用目标工作区的空白会话并跳转),
  *   与侧栏「新建会话」按钮、`/new` 命令浏览器半部(dsh-new-session 收到
  *   `command/executed('new')` 后)是**同一条**服务调用(⌘/Ctrl+N)。
- *   无挂载会话面时抛错(调用方兜住 → no-op)。
+ *   无挂载会话面时抛错(调用方兜住 → no-op);
+ * - `openSession`:把某会话选为当前**并回到对话视图**——上游实现逐字为
+ *   `sessions.open(sessionId)` + `layout.selectPanel(null)`(后者把一个占着主区的
+ *   全局主面板收掉)。侧栏工作区浏览器点会话行、搜索结果行都经它打开;
+ *   「近期对话」浮窗(⌘/Ctrl+I)的 Enter 也走这一条(见 recent-sessions.ts),
+ *   故「有主面板打开时按 Enter 也会切回对话」,与侧栏点击完全一致。
  */
 export interface UiWorkspaceLike {
+  openSession?(sessionId: string): void
   openWorkspace?(workspaceId: string, beforeOpen?: (sessionId: string) => void): Promise<void> | void
   startSession?(workspaceId?: string): void
 }
@@ -655,3 +706,4 @@ export interface EffortCycleResultLike {
   /** 切换后的强度显示名('' = 未切换,或该模型不提供强度档)。 */
   effortLabel: string
 }
+

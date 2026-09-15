@@ -89,8 +89,9 @@ function workspaceLabel(item: WorkspaceItemLike): string {
 /**
  * 路径末段,逐字复刻上游 `workspaceTitleOf`:先去掉尾部所有分隔符,
  * 再取最后一个 `/` 或 `\` 之后的部分(纯分隔符路径得到空串)。
+ * 工作区浮窗与最近会话浮窗的工作区分组标题同用这一个实现。
  */
-function pathBasename(path: string): string {
+export function pathBasename(path: string): string {
   const trimmed = path.replace(/[/\\]+$/, '')
   const separator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
   return trimmed.slice(separator + 1)
