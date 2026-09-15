@@ -18,8 +18,10 @@
  *   `sidebarRight.openTab('files')` + 同一份 store 的 `actions.placeTab(…, 0)`,
  *   见 sidebar-tabs.ts 的 revealRightSidebarFiles)、
  *   ⌘L 定位右栏终端(已有终端页就聚焦、没有才 `openTab('terminal')` 新建;
- *   terminal 是 `multiple` 页,上游每次打开都铸新 contentId,认页由插件自己完成,
- *   见 sidebar-tabs.ts 的 revealRightSidebarTerminal);
+ *   terminal 是 `multiple` 页,上游每次打开都铸新 contentId,认页由插件自己完成;
+ *   终端本来就是当前标签、右栏已展开时,上游 TerminalBody 的自动聚焦 effect
+ *   不会重跑,故再补一次有界的元素级聚焦把 DOM 焦点移进 xterm,
+ *   见 sidebar-tabs.ts 的 revealRightSidebarTerminal / focusTerminalScreen);
  * - 全态:⌘/Ctrl+K 打开**工作区浮窗**(浮窗内 ↑/↓ 移动高亮、Enter 切换、
  *   Esc 关闭),列表取自 `workspaces.list` 快照(宿主顺序),切换调公开的
  *   `uiWorkspace.openWorkspace(workspaceId)`(连接工作区:复用该工作区的空白
@@ -126,9 +128,10 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         // 置顶走会话级 store 的 actions.placeTab(与标签拖拽同一入口)。
         return revealRightSidebarFiles(services)
       case 'sidebarRight.terminal':
-        // 定位右栏终端:已有终端页就只聚焦(折叠时补一步 toggleExpanded),
-        // 没有才 openTab('terminal') 新建——terminal 是 multiple 页,上游不会
-        // 按 (kind, contentId) 去重,认页由 sidebar-tabs.ts 自己完成。
+        // 定位右栏终端:已有终端页就只聚焦(折叠时补一步 toggleExpanded)、
+        // 并把焦点移进 xterm,没有才 openTab('terminal') 新建——terminal 是
+        // multiple 页,上游不会按 (kind, contentId) 去重,认页由 sidebar-tabs.ts
+        // 自己完成。
         return revealRightSidebarTerminal(services)
       case 'composer.focus':
         return focusComposer(services)

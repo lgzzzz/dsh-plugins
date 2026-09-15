@@ -76,8 +76,10 @@ export const ACTIONS: readonly ActionDef[] = [
   // `multiple: true` 的页类型,上游每次 openTab 都铸一个带 UUID 的 contentId、
   // 因此不按 (kind, contentId) 去重——直接调 openTab 会每按一次多开一个终端,
   // 所以这里先在会话级 store 的布局里认页(record.kind === 'terminal'),
-  // 已有就只聚焦(必要时展开右栏),没有才调 openTab('terminal') 新建。
-  { id: 'sidebarRight.terminal', label: '右侧栏:定位终端(不存在则新建)', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 已有就只聚焦(必要时展开右栏)、并把 DOM 焦点移进 xterm
+  // (focusTerminalScreen;上游 focus 只聚焦标签,终端内容的自动聚焦 effect 在
+  // 「本来就是当前标签」时不会重跑),没有才调 openTab('terminal') 新建。
+  { id: 'sidebarRight.terminal', label: '右侧栏:定位终端并聚焦(不存在则新建)', group: '会话', states: ['card', 'editing', 'browse'] },
   // 新建会话并跳转(⌘/Ctrl+N)= `/new` 命令的同一动作:调公开的
   // uiWorkspace.startSession()(与侧栏「新建会话」按钮、dsh-new-session 处理
   // command/executed('new') 后的调用逐字相同)。三态放行:创建新会话与当前
@@ -157,9 +159,10 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   // 定位右栏终端 = ⌘/Ctrl+L:与右栏开关(⌘/Ctrl+O)、文件浏览器定位(⌘/Ctrl+\)
   // 同属「单修饰键」这一档。`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
   // 所以 macOS 上 ⌃L 与 ⌘L 都能触发,Win/Linux 就是 Ctrl+L。
-  // 语义与文件浏览器同形(「定位」而非「开关」):该会话已有终端页就聚焦它、
-  // 没有才新建;重复按不会堆积终端(terminal 是 multiple 页,上游的 openTab
-  // 本身不去重,认页由 sidebar-tabs.ts 自己完成)。
+  // 语义与文件浏览器同形(「定位」而非「开关」):该会话已有终端页就聚焦它并把
+  // DOM 焦点移进 xterm(focusTerminalScreen),没有才新建;重复按不会堆积终端
+  // (terminal 是 multiple 页,上游的 openTab 本身不去重,认页由 sidebar-tabs.ts
+  // 自己完成)。
   // 注意 Ctrl/Cmd+L 是浏览器「聚焦地址栏」的保留键(见 README「已知限制」)。
   'sidebarRight.terminal': 'mod+l',
   // 新建会话并跳转 = ⌘/Ctrl+N:跨应用肌肉记忆(浏览器 / 编辑器 / 终端的新建),

@@ -5,7 +5,8 @@
  * - `revealRightSidebarFiles`(⌘/Ctrl+\):打开文件浏览器页并把它置于所在
  *   标签栏首位;
  * - `revealRightSidebarTerminal`(⌘/Ctrl+L):定位终端页——已有就聚焦(必要时
- *   展开右栏),没有才新建;不重排(详见该函数)。
+ *   展开右栏)、并把 **DOM 焦点**移进终端的 xterm,没有才新建;不重排
+ *   (详见该函数与 `focusTerminalScreen`)。
  *
  * 为什么需要这一层:右侧栏(`dsh-client-ui-sidebar-right`)的公开服务面
  * (`ISidebarRight`)只有 `active()`(当前标签)、`focus(tabId)`(聚焦某标签)与
@@ -245,6 +246,19 @@ function paneOrder(layout: SidebarRightLayoutLike): string[] {
  * 终端:定位(已有则聚焦)/ 缺则新建(⌘/Ctrl+L)
  * ------------------------------------------------------------------ */
 
+/** 一笔布局里认出的终端现场。 */
+interface TerminalTab {
+  /** 终端 tab 所在**停靠**面板的 id(布局节点键,dockkit 原样写进 `data-dockkit-pane`)。 */
+  readonly paneId: string
+  /** 要聚焦的标签 id(布局记录里的键,上游 `focus(tabId)` 按它查表)。 */
+  readonly tabId: string
+  /**
+   * 该终端是否**已经**是所在面板的当前标签。为真时它已可见、上游 TerminalBody 的
+   * 自动聚焦 effect 不会重跑,需要调用方补一次元素级聚焦(见 focusTerminalScreen)。
+   */
+  readonly current: boolean
+}
+
 /**
  * 在右侧栏定位终端:已有终端页就聚焦它,没有就新建一个(⌘/Ctrl+L)。
  *
@@ -264,6 +278,17 @@ function paneOrder(layout: SidebarRightLayoutLike): string[] {
  * `expanded` 读不到(既不是 `true` 也不是 `false`)时**不动**展开态:宁可少做一步,
  * 也不做「猜状态再 toggle」这种可能把开着的右栏关掉的事。
  *
+ * **DOM 焦点**(上游 `focus` 只聚焦「标签」,不聚焦终端内容):上游
+ * `dsh-client-ui-sidebar-terminal` 的 TerminalBody 自己有一个自动聚焦 effect,
+ * 依赖是 `[visible, state.writable]`——只有这两个值**变化**时才把焦点移进 xterm。
+ * 于是「终端页本来就在右栏显示着」时(标签已是当前标签、右栏已展开)按 ⌘/Ctrl+L,
+ * 依赖不变、effect 不重跑,焦点仍留在原处(典型:对话输入框)——这正是要修的场景。
+ * 因此当这笔布局里的终端**已经是所在面板的当前标签、且右栏此刻是展开的**
+ * (`held.current && layout.expanded !== false`)时,再补一次
+ * `focusTerminalScreen(paneId)`(有界元素级聚焦,见该函数);标签原本不是当前标签,
+ * 或右栏正折着(下面的 `toggleExpanded` 会把它翻成展开)时,`visible` 会翻转、上游
+ * 自己就会聚焦,那种情形**不**代劳(避免和上游抢焦点)。
+ *
  * 选哪个终端:优先**当前面板**(`layout.activePaneId`),面板内优先**当前激活**的那一个,
  * 否则取面板里的第一个;当前面板没有再看其余**停靠**面板。浮窗里的终端不参与
  * (与文件浏览器同一条「浮窗不碰」约定)。
@@ -273,6 +298,8 @@ function paneOrder(layout: SidebarRightLayoutLike): string[] {
  *
  * **无降级**:`openTab` 抛错(无挂载会话面 / `terminal` 类型未注册)、`focus` 抛错、
  * 或已有终端而 `focus` 面缺失 → 一律 no-op 且**不吞键**;不回退 DOM 点击引导页。
+ * 元素级聚焦同样 best-effort:找不到 xterm / 聚焦抛错只是少这一步,不影响「标签已聚焦」
+ * 的返回值。
  *
  * @param services - 已解析服务集合(sidebarRight / sessions / slots / uiSession)。
  * @returns 是否确实发起过打开 / 聚焦(false = no-op,调用方不吞键)。
@@ -286,13 +313,20 @@ export function revealRightSidebarTerminal(services: Services): boolean {
     if (held !== undefined) {
       // 已有终端:只聚焦(focus 的 tabId 就是布局记录里的键,上游 focus 按它查表)。
       if (typeof sidebarRight.focus !== 'function') return false
+      // 「终端本来就显示着」在**调 toggleExpanded 之前**判定:那个调用会翻转
+      // 展开态,而只有「本来就是当前标签 + 右栏当时已展开」这一种情形下上游
+      // TerminalBody 的可见性依赖才不变、不会自己聚焦(见函数注释)。
+      const alreadyVisible = held.current && layout.expanded !== false
       try {
-        sidebarRight.focus(held)
+        sidebarRight.focus(held.tabId)
       } catch {
         // 无挂载会话面时 require() 抛错 → no-op(不吞键、不回退 DOM)。
         return false
       }
       expandColumn(sidebarRight, layout)
+      // 本来就是可见的终端:上游 `visible` 不变、自动聚焦 effect 不会重跑,焦点还在
+      // 原处(见函数注释),这里补一次元素级聚焦。
+      if (alreadyVisible) focusTerminalScreen(held.paneId)
       return true
     }
   }
@@ -304,7 +338,77 @@ export function revealRightSidebarTerminal(services: Services): boolean {
     // as "terminal"'(终端插件缺席)→ no-op,不吞键。
     return false
   }
+  // 新建这一条不必自己聚焦:xterm 随新终端 body 一起挂载,`visible` 由 false 翻成
+  // true,上游 TerminalBody 的自动聚焦 effect 会跑(起初 `writable` 还是 false 时,
+  // 等它翻成 true 会再跑一次)。
   return true
+}
+
+/**
+ * 把 DOM 焦点移进终端的 xterm(⌘/Ctrl+L 的第二步)。
+ *
+ * 为什么需要它:上游 `sidebarRight.focus(tabId)` 只把 store 里的激活标签改成它
+ * (`focus` = 「聚焦标签 + 所在面板」),**不**把 DOM 焦点移进终端内容;终端内容的
+ * 聚焦由 `dsh-client-ui-sidebar-terminal` 的 TerminalBody 自己完成,而那个 effect 的
+ * 依赖是 `[visible, state.writable]`——标签本来就是当前标签、右栏也展开着时依赖不变,
+ * effect 不重跑,于是按 ⌘/Ctrl+L 时焦点仍留在原处(典型:对话输入框)。
+ *
+ * 取元素的方式是**有界**的,也是本插件唯一一处选择器查询:只用 store 里这笔布局给出的
+ * `paneId` 找 `[data-dockkit-pane="<paneId>"]`(dockkit 把面板节点的 id 原样写在属性上;
+ * 该属性只有 dockkit 会产出),再取该面板内容里的 xterm 隐藏输入框
+ * `textarea.xterm-helper-textarea`(xterm 的 `Terminal.focus()` 就是聚焦它;`.xterm`
+ * 自身没有 tabindex,聚焦不到)。面板里同一时刻只渲染**激活标签**的 body,而调用方只在
+ * 终端已是所在面板当前标签时才调这里,所以命中的必然是这笔布局的那个终端;
+ * 不做全文档搜索、不遍历标签、不合成事件、不点击、不读文本。
+ *
+ * **无降级**(失败即 no-op):无 `document`、找不到该面板元素、面板里还没有 xterm
+ * (未挂载 / 正在创建)、focus 抛错 → 返回 false;调用方照旧返回 true(标签聚焦已经发生),
+ * 不猜、不回退 DOM 点击。
+ *
+ * @param paneId - 该终端所在停靠面板的 id(布局节点键)。
+ * @returns 是否确实聚焦到了终端内容。
+ */
+function focusTerminalScreen(paneId: string): boolean {
+  if (typeof document === 'undefined') return false
+  const pane = paneElement(paneId)
+  if (pane === undefined) return false
+  const query = pane.querySelector
+  if (typeof query !== 'function') return false
+  let screen: unknown
+  try {
+    screen = query.call(pane, 'textarea.xterm-helper-textarea')
+  } catch {
+    return false
+  }
+  if (typeof screen !== 'object' || screen === null) return false
+  const focus = (screen as { focus?: unknown }).focus
+  if (typeof focus !== 'function') return false
+  try {
+    // preventScroll 与上游自己的 composer autofocus 同参:焦点跳转不该带着页面滚。
+    ;(focus as (options?: { preventScroll?: boolean }) => void).call(screen, { preventScroll: true })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 按 dockkit 写在属性上的面板 id 找面板元素(找不到 / 查询面不可用即 undefined)。 */
+function paneElement(paneId: string): Element | undefined {
+  const queryAll = document.querySelectorAll
+  if (typeof queryAll !== 'function') return undefined
+  let panes: ArrayLike<Element>
+  try {
+    panes = queryAll.call(document, '[data-dockkit-pane]')
+  } catch {
+    return undefined
+  }
+  for (let index = 0; index < panes.length; index += 1) {
+    const pane = panes[index]
+    if (pane === undefined || pane === null) continue
+    const attribute = pane.getAttribute
+    if (typeof attribute === 'function' && attribute.call(pane, 'data-dockkit-pane') === paneId) return pane
+  }
+  return undefined
 }
 
 /**
@@ -335,9 +439,9 @@ function expandColumn(sidebarRight: SidebarRightLike, layout: SidebarRightLayout
  * 这种页当「页」,所以这里自己认 `kind`。
  *
  * @param layout - 该会话的 docking 布局。
- * @returns 要聚焦的标签 id(布局记录里的键);找不到即 undefined。
+ * @returns 终端现场(面板 id / 标签 id / 是否已是该面板的当前标签);找不到即 undefined。
  */
-function terminalTabIn(layout: SidebarRightLayoutLike): string | undefined {
+function terminalTabIn(layout: SidebarRightLayoutLike): TerminalTab | undefined {
   for (const paneId of paneOrder(layout)) {
     const pane = paneOf(layout, paneId)
     // 浮窗里的 tab 不碰(其 host 为 'float')。
@@ -348,10 +452,10 @@ function terminalTabIn(layout: SidebarRightLayoutLike): string | undefined {
       if (typeof tabId !== 'string' || tabId === '') continue
       if (!isTerminalTab(layout, tabId)) continue
       // 面板内已在当前标签上:优先它,避免把用户从正在用的终端上挪开。
-      if (tabId === activeTabId) return tabId
+      if (tabId === activeTabId) return { paneId, tabId, current: true }
       if (first === undefined) first = tabId
     }
-    if (first !== undefined) return first
+    if (first !== undefined) return { paneId, tabId: first, current: false }
   }
   return undefined
 }

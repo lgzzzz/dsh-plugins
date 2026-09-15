@@ -23,7 +23,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 | `⌘/Ctrl+O` | 开关**右**侧栏（`sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+←` / `→` | **右侧栏**当前面板的标签：上一个 / 下一个（循环；只有一个标签时不吞键） | 任意 |
 | `⌘/Ctrl+\` | **右侧栏**定位文件浏览器：打开（不存在时创建）/ 聚焦该页并置顶（`openTab('files')`，同时展开右栏） | 任意 |
-| `⌘/Ctrl+L` | **右侧栏**定位终端：已有终端页就聚焦（折叠时顺带展开右栏），没有才新建（`openTab('terminal')`）；**不重排** | 任意 |
+| `⌘/Ctrl+L` | **右侧栏**定位终端：已有终端页就聚焦它并**把 DOM 焦点移进 xterm**（折叠时顺带展开右栏），没有才新建（`openTab('terminal')`）；**不重排** | 任意 |
 | `⌘/Ctrl+J` | 聚焦对话**输入框**（「焦点跳转」，J = Jump：走 `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`） | `browse` / `editing`（`editing` 时需焦点**不在** composer 内） |
 | `⌘/Ctrl+N` | **新建会话并跳转**（等同 `/new`：调公开的 `uiWorkspace.startSession()`，与侧栏「新建会话」按钮同一条服务调用） | 任意 |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
@@ -103,10 +103,10 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > **定位右栏终端为什么是 `⌘/Ctrl+L`**：与右栏开关（`O`）、文件浏览器定位（`\`）同属
 > 单修饰键这一档，`L` 取「（Termina）**L**」联想，且 `mod` 在 `comboOf` 里同时吸收
 > `ctrlKey` 与 `metaKey`，所以 macOS 上 **⌃L 与 ⌘L 都能触发**、Win/Linux 就是 `Ctrl+L`。
-> 语义与文件浏览器**同形但少一步**：**已有终端页就只聚焦它（必要时展开右栏），没有才新建**，
-> 重复按不会堆积终端；唯一差异是**不做置顶**——终端页是 `multiple: true` 的页类型
-> （`dsh-client-ui-sidebar-terminal` 注册 `kind: 'terminal'` + `multiple: true`），
-> 用户可能同时开着好几个，热键不替用户决定标签顺序。
+> 语义与文件浏览器**同形但少一步**：**已有终端页就只聚焦它（必要时展开右栏）、并把
+> DOM 焦点移进终端，没有才新建**，重复按不会堆积终端；唯一差异是**不做置顶**——终端页是
+> `multiple: true` 的页类型（`dsh-client-ui-sidebar-terminal` 注册 `kind: 'terminal'` +
+> `multiple: true`），用户可能同时开着好几个，热键不替用户决定标签顺序。
 > 这里**不能**像文件浏览器那样直接 `openTab(kind)` 了事：上游对 `multiple` 页给**每次**
 > 打开都铸一个带随机 UUID 的 `contentId`（`sidebar://terminal/<uuid>`），`planOpenContent`
 > 因此**不按 (kind, contentId) 去重**——直接调 `openTab('terminal')` 会**每按一次多开一个
@@ -116,6 +116,21 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > `expanded` 读不到时**不动**展开态，不做「猜状态再 toggle」这种可能把开着的右栏关掉的事），
 > 没有才调公开的 `openTab('terminal')` 新建（那一步上游 `openContent` 恒先
 > `planSetExpanded(true)`）。删除/关闭终端仍是上游自己的事，本插件只负责「定位」。
+>
+> **为什么还要自己聚焦终端内容**：上游 `focus(tabId)` 只聚焦「标签」（把 store 里的激活
+> 标签改成它），**不**把 DOM 焦点移进终端；终端内容的聚焦由 `dsh-client-ui-sidebar-terminal`
+> 的 TerminalBody 自己完成，而那个 effect 的依赖是 `[visible, state.writable]`——**终端页
+> 本来就在右栏显示着**（标签已是当前标签、右栏已展开）时依赖不变、effect 不重跑，于是按
+> `⌘/Ctrl+L` 时焦点还留在原处（典型：对话输入框），这正是本插件补这一步的原因：终端
+> **已经是所在面板的当前标签**时，再按 store 这笔布局给出的 `paneId` 找
+> `[data-dockkit-pane="<paneId>"]`，聚焦其内容里的 xterm 隐藏输入框
+> `textarea.xterm-helper-textarea`（xterm 的 `Terminal.focus()` 就是聚焦它；`.xterm` 自身
+> 没有 tabindex）。取元素是**有界**的：只用布局给的 `paneId`——不遍历标签、不搜索全文档、
+> 不合成事件、不点击；面板里同一时刻只渲染**激活标签**的 body，所以命中的必然是这笔布局
+> 的那个终端。标签原本不是当前标签（或右栏由折叠被展开）时 `visible` 会翻转、上游自己就会
+> 聚焦，本插件**不代劳**（避免与上游抢焦点）。任何一环缺失（找不到面板元素 / 面板里还没有
+> xterm）都只是少这一步——标签聚焦已经发生，按键照旧被吞掉。
+>
 > 三态均生效：`mod+` 与卡片的裸键、与文本编辑都不冲突。
 > 已知限制：`⌘/Ctrl+L` 是浏览器「聚焦地址栏」的保留键（Win/Linux 的 `Ctrl+L` 尤甚），
 > 且终端里 `Ctrl+L` 原本是 shell 的清屏（readline `clear-screen`），都会被本插件抢走，
@@ -169,6 +184,15 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 速查表浮层打开时由浮层优先关闭。
 
 ## 实现要点（源码核实结论）
+
+**DOM 约定**：除 `document` 捕获阶段的 `keydown` 监听（全部快捷键的入口）、`editing`
+态的事件目标判定（`isEditableTarget` / `isComposerTarget` 的 `contains`）、以及插件自建
+自管的浮层（速查表 / 工作区 / 模型）之外，动作一律走上游**服务面**。两处**元素级**操作
+是例外，且都只对「上游服务或 store 已经指明的那一个元素」动手：`⌘/Ctrl+J` 的 composer
+聚焦（元素来自服务链路 `conversation.input.for(...).shell.editor.getRootElement()`，
+**零选择器查询**），以及 `⌘/Ctrl+L` 的终端聚焦（**唯一一处选择器查询**——按 store 给出的
+`paneId` 在 dockkit 面板里找 xterm 的隐藏输入框，见下文终端定位那一节；不遍历标签、
+不搜索全文档、不合成事件、不点击）。
 
 **服务级（不触碰 DOM）**
 
@@ -275,16 +299,33 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   扫描顺序与文件浏览器一致：**当前面板**（`layout.activePaneId`）优先、再按布局键顺序扫
   其余**停靠**面板，浮窗（`host === 'float'`）不参与；面板内**优先当前激活**的那个终端，
   否则取面板里的第一个。
-  ② **已有 → 只聚焦**：调公开的 `sidebarRight.focus(held)`（与标签 chip 点击同一入口；
-  `held` 就是布局记录里的键，上游 `focus` 按它查表）。`focus` **不动展开态**，所以
-  store 里 `layout.expanded === false` 时再调一次公开的 `toggleExpanded()`
-  （与右栏头部折叠按钮同一入口，seat 会据此同步 AppFrame 的右栏轨道）；
+  ② **已有 → 只聚焦 + 元素级聚焦**：调公开的 `sidebarRight.focus(held.tabId)`（与标签
+  chip 点击同一入口；`tabId` 就是布局记录里的键，上游 `focus` 按它查表）。`focus`
+  **不动展开态**，所以 store 里 `layout.expanded === false` 时再调一次公开的
+  `toggleExpanded()`（与右栏头部折叠按钮同一入口，seat 会据此同步 AppFrame 的右栏轨道）；
   `expanded` 既不是 `true` 也不是 `false`（读不到）时**不动**——宁可少做一步，也不做
   「猜状态再 toggle」这种可能把开着的右栏关掉的事。**不置顶、不重排**：终端是
   `multiple` 页，可能开着多个，热键不替用户决定顺序（这与文件浏览器那一步刻意不同）。
+  随后，如果这笔布局里的终端**已经是所在面板的当前标签、且右栏此刻已展开**
+  （`held.current && layout.expanded !== false`；该判据在 `toggleExpanded` 之前取，
+  因为那一步会翻转展开态），再补一次
+  **元素级聚焦** `focusTerminalScreen(held.paneId)`：上游 `focus(tabId)` 只聚焦「标签」，
+  终端内容的 DOM 焦点由 TerminalBody 自己的 effect（依赖 `[visible, state.writable]`）
+  完成，而「终端本来就显示着」时该依赖不变、effect 不重跑，焦点仍会留在原处（典型：
+  对话输入框）——这正是本动作要修的场景。取元素是**有界**的：按 store 给出的 `paneId`
+  找 `[data-dockkit-pane="<paneId>"]`（dockkit 把面板节点 id 原样写在属性上），再取面板
+  内容里的 `textarea.xterm-helper-textarea` 并 `focus({ preventScroll: true })`；面板里
+  同一时刻只渲染**激活标签**的 body，所以命中的必然是这笔布局的那个终端；不遍历标签、
+  不搜索全文档、不合成事件、不点击、不读文本。标签原本不是当前标签（或右栏由上面的
+  `toggleExpanded` 从折叠翻成展开）时 `visible` 会翻转、上游自己就会聚焦，插件**不代劳**。
+  聚焦失败（找不到面板元素 / 面板里还没有 xterm / `focus` 抛错）只是少这一步，不影响
+  返回值（标签聚焦已经发生、按键照旧被吞掉）。这是本插件唯一一处选择器查询（见
+  「实现要点」开头的 DOM 约定）。
   ③ **没有 → 新建**：调公开的 `openTab('terminal')`，落到当前停靠面板末尾；上游
   `openContent` 恒先 `planSetExpanded(true)`，故一次调用即「展开右栏 + 新建」，
-  插件不必也不该再调 `toggleExpanded()`（那会把本来开着的右栏关掉）。
+  插件不必也不该再调 `toggleExpanded()`（那会把本来开着的右栏关掉）。新建这一条不自己
+  聚焦：xterm 随新终端 body 一起挂载、`visible` 由 `false` 翻成 `true`，上游的自动聚焦
+  effect 会跑（起初 `writable` 还是 `false` 时，等它翻成 `true` 会再跑一次）。
   **无降级**：`openTab` 抛错（无挂载会话面 / `terminal` 类型未注册）→ no-op 且
   **不吞键**；`focus` 抛错（无挂载会话面）→ no-op 不吞键，且**不**退化成再开一个终端；
   已有终端而 `focus` 面缺失 → 同样 no-op 不吞键（宁可不动，也不重复开终端）。
@@ -499,6 +540,14 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   会话由 `dsh-api-terminal-controller` 提供）。该行缺席时 `openTab('terminal')` 会抛
   `no tab type is registered as "terminal"`，本动作兜住并 no-op（**不吞键**），不会退化
   成任何 DOM 操作。
+- **终端「聚焦内容」这一步依赖两个上游事实**（都是插件唯一的选择器查询所依赖的）：
+  ① 终端内容的 DOM 焦点由上游 TerminalBody 的 effect（依赖 `[visible, state.writable]`）
+  完成，所以「终端本来就显示着」时它不会重跑——插件据此补 `focusTerminalScreen`；
+  ② dockkit 把面板节点 id 原样写成 `[data-dockkit-pane]` 属性、xterm 的隐藏输入框是
+  `textarea.xterm-helper-textarea`。若上游改了其中之一（属性名 / 元素结构），效果是
+  **少一次内容聚焦**（标签仍被聚焦、按键仍被吞掉），不会报错、也不会退化到点击或事件
+  合成——用「自定义键位」换绑或提 issue 即可。另注意：终端**不是**当前标签时插件刻意
+  不代劳（`visible` 翻转后上游自己会聚焦），所以那种情况下是由上游把焦点移进终端的。
 - **`⌘/Ctrl+L` 与浏览器地址栏、终端清屏同键**：Chrome / Edge / Firefox 把 `Ctrl+L`
   （macOS `⌘L`）绑成「聚焦地址栏」。本插件在 `document` 捕获阶段先 `preventDefault()`，
   命中的按键在**页面内**不会触发地址栏；但该键属浏览器保留键，**焦点不在本页面时**
@@ -562,7 +611,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 + 终端定位用的布局认页），
 `layout` 用于 `⌘/Ctrl+B` 开关左栏，
 `sidebarRight` 用于 `⌘/Ctrl+O` 开关右栏、`⌘/Ctrl+Alt+←/→` 聚焦右栏标签、
-`⌘/Ctrl+\` 定位（打开/创建/置顶）文件浏览器与 `⌘/Ctrl+L` 定位（聚焦/新建）终端，
+`⌘/Ctrl+\` 定位（打开/创建/置顶）文件浏览器与 `⌘/Ctrl+L` 定位（聚焦标签 + 聚焦
+终端内容 / 缺则新建）终端，
 `conversation` 用于 `⌘/Ctrl+J` 取 composer 的 editor 宿主元素与 `⇧Tab` 的编辑态门闸，
 `uiWorkspace` 用于 `⌘/Ctrl+K` 工作区浮窗确认时连接/切换工作区、`⌘/Ctrl+N`
 新建会话（`startSession`，与 `/new` 同一条服务调用），
@@ -666,7 +716,14 @@ node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/ca
                          # （expanded 读不到则不动展开态）；没有才 openTab('terminal') 新建；
                          # 另含面板内优先当前激活的终端 / 跨停靠面板定位 / 浮窗不参与认页 /
                          # 各层不可用或抛错一律 no-op 不吞键（已有终端时不退化成再开一个）、
-                         # card·editing 态生效、⌃L 与 ⌘L 归一化成同一组合、键位可覆盖
+                         # card·editing 态生效、⌃L 与 ⌘L 归一化成同一组合、键位可覆盖；
+                         # 以及 ⌘/Ctrl+L 的**元素级聚焦**：终端本来就是所在面板的当前标签、
+                         # 且右栏已展开时（上游 TerminalBody 依赖 [visible, state.writable]
+                         # 的自动聚焦 effect 不会重跑），插件按 store 给出的 paneId 找
+                         # [data-dockkit-pane] 里 xterm 的 textarea.xterm-helper-textarea 并
+                         # focus（注入假面板观察；分屏时只碰终端所在那个面板）；
+                         # 终端不是当前标签 / 右栏折叠着时不代劳（交回上游 visible 翻转）、
+                         # 面板里还没有 xterm / focus 抛错只是少这一步（不崩、仍吞键）
 node test-dispatch.mjs   # 分发链路：⌘/Ctrl+Alt+↑/↓ 按侧栏顺序跳转（分组 / flat / 来源不可用 no-op）
                          # 与两个侧栏开关的键位 / browse·editing 态闸门
 ```

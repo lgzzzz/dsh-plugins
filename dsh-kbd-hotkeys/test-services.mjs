@@ -37,6 +37,10 @@
  * (重复按不堆积终端、不重排);没有才调 `openTab('terminal')` 新建。另覆盖面板内优先
  * 当前激活的终端 / 跨停靠面板定位 / 浮窗不参与 / 折叠与 expanded 读不到 / 凭页地址前缀
  * 认页,以及各层不可用或抛错时的 no-op 不吞键(已有终端时不退化成再开一个)。
+ * 另有**元素级聚焦**断言:终端本来就是所在面板的当前标签时,上游 TerminalBody 的自动
+ * 聚焦 effect(依赖 [visible, state.writable])不会重跑,插件按 store 给出的 paneId 找
+ * `[data-dockkit-pane]` 里 xterm 的 `textarea.xterm-helper-textarea` 并 focus
+ * (注入假面板;其余用例的 DOM 桩仍然一律返回空——认页 / 取数不得依赖 DOM)。
  *
  * 用法: node test-services.mjs
  */
@@ -87,12 +91,18 @@ class FakeDocument {
   }
   removeEventListener() {}
   querySelector() { return null }
-  querySelectorAll() { return [] }
+  querySelectorAll(selector) { return selector === '[data-dockkit-pane]' ? dockPanes : [] }
   createElement(tag) { return new FakeHTMLElement(tag.toUpperCase()) }
   getElementById() { return null }
   get body() { return this._body }
   get head() { return this._head }
 }
+/**
+ * 可注入的「右栏停靠面板」DOM:默认空——业务代码的**认页 / 取数**必须全部走服务面,
+ * 空 DOM 下所有既有断言照旧成立。只有 ⌘/Ctrl+L 的**元素级聚焦**需要 DOM,故相关用例
+ * 临时注入假面板(见阶段 7 的 ⑮),测完清空。
+ */
+let dockPanes = []
 class FakeKeyboardEvent {
   constructor(init) {
     Object.assign(this, {
@@ -1453,9 +1463,10 @@ console.log('\n--- ⌘/Ctrl+\\ → 右栏打开文件浏览器并置于首位 --
 //         带 UUID 的 contentId(`sidebar://terminal/<uuid>`),planOpenContent 因此不按
 //         (kind, contentId) 去重 → 直接调 openTab('terminal') 会每按一次多开一个终端。
 //         所以「认页」必须由插件自己在会话级 store 的布局里完成(kind === 'terminal'):
-//         已有就只调公开的 `sidebarRight.focus(tabId)`(折叠时补一步 toggleExpanded),
-//         没有才调公开的 `openTab('terminal')`。DOM 桩无任何标签元素,选择器式实现
-//         拿不到标签顺序与 kind。
+//         已有就只调公开的 `sidebarRight.focus(tabId)`(折叠时补一步 toggleExpanded)并
+//         把 DOM 焦点移进 xterm(focusTerminalScreen,见 ⑮),没有才调公开的
+//         `openTab('terminal')`。DOM 桩的 querySelector/querySelectorAll 默认返回空,
+//         选择器式实现拿不到标签顺序与 kind;只有 ⑮ 临时注入假面板观察元素级聚焦。
 // ===========================================================================
 console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新建) ---')
 {
@@ -1757,6 +1768,111 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
   check('自定义 ⌘/Ctrl+Alt+T → 新建终端', same(customEnv.opened, ['terminal']), JSON.stringify(customEnv.opened))
   check('自定义键位被吞', event.propagationStopped === true)
   storage.delete('dsh-kbd-hotkeys:v1')
+
+  // ⑮ ⌘/Ctrl+L 的**元素级聚焦**:上游 `sidebarRight.focus(tabId)` 只聚焦「标签」,终端
+  //     内容的 DOM 焦点由 TerminalBody 自己的 effect(依赖 [visible, state.writable])
+  //     完成;终端**本来就是所在面板的当前标签**时该依赖不变、effect 不重跑,焦点
+  //     仍留在原处(典型:对话输入框)——所以插件补一次有界聚焦:按 store 给出的
+  //     paneId 找 `[data-dockkit-pane="<paneId>"]`,再聚焦其内容里的
+  //     `textarea.xterm-helper-textarea`。取元素只用布局给的 paneId(不遍历标签 /
+  //     不合成事件 / 不点击),找不到即 no-op;终端**不是**当前标签时不代劳
+  //     (那时 visible 会翻转,上游自己聚焦)。
+  {
+    /** 带属性与子树查询的假元素:模拟 dockkit 面板 + xterm 隐藏输入框。 */
+    class FakeAttributedElement extends FakeHTMLElement {
+      constructor(tag, attributes = {}, content = {}) {
+        super(tag)
+        this.attributes = attributes
+        this.content = content
+      }
+      getAttribute(name) { return this.attributes[name] ?? null }
+      querySelector(selector) { return this.content[selector] ?? null }
+    }
+    const makeTerminalDom = (paneId) => {
+      const textarea = new FakeAttributedElement('TEXTAREA')
+      const pane = new FakeAttributedElement('SECTION', { 'data-dockkit-pane': paneId }, {
+        'textarea.xterm-helper-textarea': textarea,
+      })
+      return { pane, textarea }
+    }
+
+    // a) 终端就是当前标签(用户正看着终端、焦点却在别处)→ 聚焦 xterm,且不新建
+    const shown = makeTerminalStore()
+    shown.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 'term-2'))
+    const shownEnv = env(shown)
+    const shownDom = makeTerminalDom('pane-1')
+    dockPanes = [shownDom.pane]
+    event = shownEnv.press(combo)
+    check('终端就是当前标签 → 聚焦 xterm', shownDom.textarea.focused === true)
+    check('终端就是当前标签 → 只 focus 标签、不新建',
+      same(shownEnv.focused, ['term-2']) && same(shownEnv.opened, []), JSON.stringify([shownEnv.focused, shownEnv.opened]))
+    check('终端就是当前标签 → 吞键', event.propagationStopped === true)
+
+    // b) 分屏:只碰 store 给出的**那个面板**(两个面板各有 xterm)
+    const split = makeTerminalStore()
+    split.seed({
+      rootId: 'pane-1',
+      activePaneId: 'pane-1',
+      expanded: true,
+      nodes: {
+        'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t1'], activeTabId: 't1' },
+        'pane-2': { kind: 'pane', host: 'dock', id: 'pane-2', tabs: ['term-x'], activeTabId: 'term-x' },
+      },
+      tabs: { t1: guideTab, 'term-x': termTab('term-x', 'x') },
+    })
+    const splitEnv = env(split)
+    const domOne = makeTerminalDom('pane-1')
+    const domTwo = makeTerminalDom('pane-2')
+    dockPanes = [domOne.pane, domTwo.pane]
+    event = splitEnv.press(combo)
+    check('分屏 → 只聚焦终端所在面板的 xterm',
+      domTwo.textarea.focused === true && domOne.textarea.focused !== true)
+    check('分屏 → 吞键', event.propagationStopped === true)
+
+    // c) 终端**不是**当前标签:visible 会翻转,上游自己会聚焦 → 插件不代劳
+    const notCurrent = makeTerminalStore()
+    notCurrent.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 't1'))
+    const notCurrentEnv = env(notCurrent)
+    const notCurrentDom = makeTerminalDom('pane-1')
+    dockPanes = [notCurrentDom.pane]
+    event = notCurrentEnv.press(combo)
+    check('终端不是当前标签 → 插件不抢上游的自动聚焦', notCurrentDom.textarea.focused !== true)
+    check('终端不是当前标签 → 仍 focus 标签并吞键',
+      same(notCurrentEnv.focused, ['term-2']) && event.propagationStopped === true)
+
+    // d) 面板里还没有 xterm(未挂载 / 正在创建)→ 少这一步,不影响标签聚焦的返回值
+    const noScreen = makeTerminalStore()
+    noScreen.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 'term-2'))
+    const noScreenEnv = env(noScreen)
+    dockPanes = [new FakeAttributedElement('SECTION', { 'data-dockkit-pane': 'pane-1' })]
+    event = noScreenEnv.press(combo)
+    check('面板里没有 xterm → 不崩、仍吞键', event.propagationStopped === true)
+
+    // e) xterm 的 focus() 抛错 → 兜住,不崩、不吞键之路不受影响
+    const throwing = makeTerminalStore()
+    throwing.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 'term-2'))
+    const throwingEnv = env(throwing)
+    const throwingDom = makeTerminalDom('pane-1')
+    throwingDom.textarea.focus = () => { throw new Error('focus failed') }
+    dockPanes = [throwingDom.pane]
+    event = throwingEnv.press(combo)
+    check('xterm 聚焦抛错 → no-op 不崩、仍吞键', event.propagationStopped === true)
+
+    // f) 右栏折叠着(但终端已是当前标签):展开会让 visible 翻转、上游随后自己聚焦 →
+    //    插件不在展开**之前**抢这一次聚焦(否则会对着还没显示的面板做无用功)
+    const collapsedCurrent = makeTerminalStore()
+    collapsedCurrent.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 'term-2', { expanded: false }))
+    const collapsedCurrentEnv = env(collapsedCurrent)
+    const collapsedDom = makeTerminalDom('pane-1')
+    dockPanes = [collapsedDom.pane]
+    event = collapsedCurrentEnv.press(combo)
+    check('折叠 + 终端是当前标签 → 不抢上游的自动聚焦', collapsedDom.textarea.focused !== true)
+    check('折叠 + 终端是当前标签 → 仍展开并吞键',
+      same(collapsedCurrentEnv.toggled, [true]) && event.propagationStopped === true)
+
+    // 注入的假面板只服务本组用例;清空后其余断言仍建立在「空 DOM」之上
+    dockPanes = []
+  }
 }
 
 // ===========================================================================

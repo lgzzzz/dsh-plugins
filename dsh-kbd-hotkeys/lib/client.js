@@ -664,8 +664,10 @@ var ACTIONS = [
   // `multiple: true` 的页类型,上游每次 openTab 都铸一个带 UUID 的 contentId、
   // 因此不按 (kind, contentId) 去重——直接调 openTab 会每按一次多开一个终端,
   // 所以这里先在会话级 store 的布局里认页(record.kind === 'terminal'),
-  // 已有就只聚焦(必要时展开右栏),没有才调 openTab('terminal') 新建。
-  { id: "sidebarRight.terminal", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u7EC8\u7AEF(\u4E0D\u5B58\u5728\u5219\u65B0\u5EFA)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 已有就只聚焦(必要时展开右栏)、并把 DOM 焦点移进 xterm
+  // (focusTerminalScreen;上游 focus 只聚焦标签,终端内容的自动聚焦 effect 在
+  // 「本来就是当前标签」时不会重跑),没有才调 openTab('terminal') 新建。
+  { id: "sidebarRight.terminal", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u7EC8\u7AEF\u5E76\u805A\u7126(\u4E0D\u5B58\u5728\u5219\u65B0\u5EFA)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 新建会话并跳转(⌘/Ctrl+N)= `/new` 命令的同一动作:调公开的
   // uiWorkspace.startSession()(与侧栏「新建会话」按钮、dsh-new-session 处理
   // command/executed('new') 后的调用逐字相同)。三态放行:创建新会话与当前
@@ -735,9 +737,10 @@ var DEFAULT_BINDINGS = {
   // 定位右栏终端 = ⌘/Ctrl+L:与右栏开关(⌘/Ctrl+O)、文件浏览器定位(⌘/Ctrl+\)
   // 同属「单修饰键」这一档。`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,
   // 所以 macOS 上 ⌃L 与 ⌘L 都能触发,Win/Linux 就是 Ctrl+L。
-  // 语义与文件浏览器同形(「定位」而非「开关」):该会话已有终端页就聚焦它、
-  // 没有才新建;重复按不会堆积终端(terminal 是 multiple 页,上游的 openTab
-  // 本身不去重,认页由 sidebar-tabs.ts 自己完成)。
+  // 语义与文件浏览器同形(「定位」而非「开关」):该会话已有终端页就聚焦它并把
+  // DOM 焦点移进 xterm(focusTerminalScreen),没有才新建;重复按不会堆积终端
+  // (terminal 是 multiple 页,上游的 openTab 本身不去重,认页由 sidebar-tabs.ts
+  // 自己完成)。
   // 注意 Ctrl/Cmd+L 是浏览器「聚焦地址栏」的保留键(见 README「已知限制」)。
   "sidebarRight.terminal": "mod+l",
   // 新建会话并跳转 = ⌘/Ctrl+N:跨应用肌肉记忆(浏览器 / 编辑器 / 终端的新建),
@@ -1546,12 +1549,14 @@ function revealRightSidebarTerminal(services) {
     const held = terminalTabIn(layout);
     if (held !== void 0) {
       if (typeof sidebarRight.focus !== "function") return false;
+      const alreadyVisible = held.current && layout.expanded !== false;
       try {
-        sidebarRight.focus(held);
+        sidebarRight.focus(held.tabId);
       } catch {
         return false;
       }
       expandColumn(sidebarRight, layout);
+      if (alreadyVisible) focusTerminalScreen(held.paneId);
       return true;
     }
   }
@@ -1562,6 +1567,46 @@ function revealRightSidebarTerminal(services) {
     return false;
   }
   return true;
+}
+function focusTerminalScreen(paneId) {
+  if (typeof document === "undefined") return false;
+  const pane = paneElement(paneId);
+  if (pane === void 0) return false;
+  const query = pane.querySelector;
+  if (typeof query !== "function") return false;
+  let screen;
+  try {
+    screen = query.call(pane, "textarea.xterm-helper-textarea");
+  } catch {
+    return false;
+  }
+  if (typeof screen !== "object" || screen === null) return false;
+  const focus = screen.focus;
+  if (typeof focus !== "function") return false;
+  try {
+    ;
+    focus.call(screen, { preventScroll: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function paneElement(paneId) {
+  const queryAll = document.querySelectorAll;
+  if (typeof queryAll !== "function") return void 0;
+  let panes;
+  try {
+    panes = queryAll.call(document, "[data-dockkit-pane]");
+  } catch {
+    return void 0;
+  }
+  for (let index = 0; index < panes.length; index += 1) {
+    const pane = panes[index];
+    if (pane === void 0 || pane === null) continue;
+    const attribute = pane.getAttribute;
+    if (typeof attribute === "function" && attribute.call(pane, "data-dockkit-pane") === paneId) return pane;
+  }
+  return void 0;
 }
 function expandColumn(sidebarRight, layout) {
   if (layout.expanded !== false) return;
@@ -1582,10 +1627,10 @@ function terminalTabIn(layout) {
     for (const tabId of (_a = pane.tabs) != null ? _a : []) {
       if (typeof tabId !== "string" || tabId === "") continue;
       if (!isTerminalTab(layout, tabId)) continue;
-      if (tabId === activeTabId) return tabId;
+      if (tabId === activeTabId) return { paneId, tabId, current: true };
       if (first === void 0) first = tabId;
     }
-    if (first !== void 0) return first;
+    if (first !== void 0) return { paneId, tabId: first, current: false };
   }
   return void 0;
 }

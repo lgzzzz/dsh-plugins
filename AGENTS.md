@@ -45,7 +45,7 @@ Junction 目标均有效）。核对命令见「挂载与激活（Web Profile）
 | `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`：监听 `agent/created`，折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，与当前 pending 求交后 `inbox.remove()` | — | 分叉子会话丢弃「继承自源会话、仍 pending」的输入；有 runtime owner 的子代理显式跳过，普通 / 非 seeded 会话不动作 |
 | `dsh-fullwidth-chat` | Client only（纯 JS；宿主占位） | `lib/index.js`：空宿主（仅供组合行解析、供 client-modules 扫描） | `lib/client.js`：注入样式 | 对话列全宽展示 |
 | `dsh-git-guard` | Host only（TS） | `index.ts`：钩挂 `tools/pre-execute`；另经 `ctx.systemPrompt.section()` 注入约束区段（区段文本按会话权限动态求值） | — | `git commit` 与非 force `git push` → `ask`；force push 及 rebase / merge / cherry-pick / reset --hard 等破坏性历史改写 → `deny`；约束同时以系统提示词告知模型。**当前权限为完全权限（`danger-full-access`）时整体退出**：不拦截、不索取授权、区段文本为空串；判定取自 `ctx.sandboxPolicy.resolve({ session })`（会话为 `exec.agent.session`），服务缺席 / 无 `resolve` / 抛错一律按非完全权限处理（失败关闭） |
-| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏文件浏览器定位、右栏终端定位、新建会话（等同 `/new`）、工作区浮窗、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
+| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏文件浏览器定位、右栏终端定位（聚焦标签并把 DOM 焦点移进 xterm）、新建会话（等同 `/new`）、工作区浮窗、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令（`inject: ['commands']`） | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | `/new` 新建并跳转空白会话 |
 | `dsh-rightbar-tab-width` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/client.ts` + `src/css.ts` → esbuild → `lib/client.js` | 右栏 tab 胶囊定宽：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」，进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏）。取值 100 与兜底常量 `SPLIT_MINIMUMS.chip` 同值 ⇒ 分栏判定与上游默认逐字相同；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2），右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；详见其 README |
 
@@ -238,14 +238,20 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 以及插件自建自管的浮层（`overlay.ts`：⌘/ 速查表、⌘/Ctrl+K 工作区浮窗与
 ⌘/Ctrl+M 模型浮窗，不消费上游服务）。浮层打开时按键进入**模态分发**
 （浮层未处理的按键一律吞掉）。
-另有**元素级调用**，都只对**服务链路给出的** composer 宿主元素操作
-（无选择器查询 / DOM 遍历 / 事件合成）：`composer.focus` 在 `editing` 态用它的
+另有**元素级调用**，只对上游服务 / store 已经指明的**那一个**元素操作：`composer.focus`
+与 `model.effortNext` 用的是**服务链路给出的** composer 宿主元素（`shell.editor.getRootElement()`；
+无选择器查询 / DOM 遍历 / 事件合成）——`composer.focus` 在 `editing` 态用它的
 `contains` 判「焦点是否**不在** composer 内」（不在才执行聚焦并调
 `focus({preventScroll:true})`；焦点已在 composer 内时不重复聚焦，但该组合键仍被吞掉、
 不放行给浏览器）；`model.effortNext` 在 `editing` 态用同一个
 `contains` 判「焦点是否**在** composer 内」（在才接管）——两者判定方向相反，
 共用 `isComposerTarget`（见下表两行）。
-逐项源码依据见该插件 `README.md`「实现要点」与 `src/actions.ts` 头部注释。
+`sidebarRight.terminal`（⌘/Ctrl+L）另有一处**有界选择器查询**（全插件唯一一处）：终端
+锁定为所在面板的当前标签后，按 store 给出的 `paneId` 找 `[data-dockkit-pane="<paneId>"]`
+并把焦点移进其中的 `textarea.xterm-helper-textarea`（失败即少这一步，标签聚焦与吞键不受
+影响）——用于修「终端本来就显示着、上游 TerminalBody 的 `[visible, state.writable]`
+自动聚焦 effect 不会重跑」的场景（详见下表该行与其 README）。
+逐项源码依据见该插件 `README.md`「实现要点」与 `src/sidebar-tabs.ts` 头部注释。
 
 | 动作 | 键位（默认） | 触发路径 | 服务接口 / DOM 选择器 |
 | --- | --- | --- | --- |
@@ -257,7 +263,7 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 | `sidebar.toggle` / `sidebarRight.toggle` | ⌘/Ctrl+B / ⌘/Ctrl+O | **服务** | 左栏 `layout.toggleSidebar()`；右栏 `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；帧轨道由右侧 seat 自行同步 `layout.openRightbar`/`closeRightbar`）。两者均 `browse` + `editing`：左栏沿用跨应用肌肉记忆 `B`，右栏取 `O`（Open panel），同属**单修饰键**这一档 |
 | `sidebarRight.tabPrev` / `sidebarRight.tabNext` | ⌘/Ctrl+Alt+←/→ | **服务** | 标签顺序读右栏自己的会话级 slot store：`slots.entries('rightbar.session')` 注册项上的 store handle → `uiSession.resolve(sessionId)` 作用域绑定 → `slots.resolveStore` → `getSnapshot().bySession[sessionId].layout`，取 `layout.nodes[layout.activePaneId]`（**当前面板**）的 `tabs` / `activeTabId`；切换调公开的 `sidebarRight.focus(tabId)`（与标签 chip 点击同一入口）。**只在当前面板内循环**，单标签 / 该会话尚无面板 / 任一环不可用一律 no-op 不吞键（**无降级**）；**任意态**（含 `card`——问答卡片只占**裸** `←`/`→`，与 `mod+alt` 组合键不冲突） |
 | `sidebarRight.files` | ⌘/Ctrl+`\` | **服务** | 定位右栏文件浏览器页：公开的 `sidebarRight.openTab('files')`（`kind` 来自常驻挂载的 `@deepseek-ai/dsh-client-ui-sidebar-files`）——页类型按**目标面板**（`activeDockPaneId`）去重，该面板已有文件浏览器页就只聚焦、**没有就创建**（上游 `openContent` 恒先 `planSetExpanded(true)` ⇒ 同一步展开右栏）；随后经同一份会话级 slot store 的**活实例** `actions.placeTab(sessionId, tabId, paneId, 0)`（与**标签拖拽**同一入口，**不用** `replaceTab`——那会关掉被顶掉的 tab）把它置于标签栏首位，**已在首位则零提交**。只认停靠面板（浮窗 / 别的分屏面板里的同页不搬）。**任意态**（`card` / `editing` / `browse`）；`openTab` 抛错（无挂载会话面 / `files` 类型未注册）或置顶任一取数环不可用一律 **no-op 不吞键**，且**只跳过置顶**、绝不回退 DOM |
-| `sidebarRight.terminal` | ⌘/Ctrl+L（`mod+l`；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃L 与 ⌘L 均可） | **服务** | 定位右栏终端页：terminal 是 `multiple: true` 的页类型（`@deepseek-ai/dsh-client-ui-sidebar-terminal` 注册 `kind: 'terminal'`），上游 `placeTab` 给**每次**打开都铸带 UUID 的 `contentId`（`sidebar://terminal/<uuid>`），`planOpenContent` **不按 (kind, contentId) 去重** ⇒ 直接 `openTab('terminal')` 会每按一次多开一个终端。故**认页由插件自己做**（与 `sidebarRight.files` 同一条取数链路：`slots.entries('rightbar.session')` → `uiSession.resolve(sessionId)` → `slots.resolveStore` → `bySession[sessionId].layout`；判 `record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先、再扫其余**停靠**面板，浮窗不参与；面板内优先当前激活的那个）。**已有 → 只调 `sidebarRight.focus(tabId)`**（与标签 chip 点击同一入口；`focus` 不动展开态，故 `layout.expanded === false` 时再补一步公开的 `toggleExpanded()`，`expanded` 读不到则不动），**不重排、不置顶**（终端可能开着多个，热键不替用户决定顺序）；**没有 → `openTab('terminal')` 新建**（上游 `openContent` 恒先 `planSetExpanded(true)` ⇒ 同一步展开右栏）。**任意态**；`openTab` 抛错（无挂载会话面 / `terminal` 类型未注册）、`focus` 抛错、已有终端而 `focus` 面缺失 → 一律 no-op **不吞键**且**不退化成再开一个**；只有 slots / 作用域绑定整条链路不可用时无从判重，才退化为按 `openTab('terminal')` 新建 |
+| `sidebarRight.terminal` | ⌘/Ctrl+L（`mod+l`；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃L 与 ⌘L 均可） | **服务 + 一处有界选择器查询（元素级聚焦）** | 定位右栏终端页：terminal 是 `multiple: true` 的页类型（`@deepseek-ai/dsh-client-ui-sidebar-terminal` 注册 `kind: 'terminal'`），上游 `placeTab` 给**每次**打开都铸带 UUID 的 `contentId`（`sidebar://terminal/<uuid>`），`planOpenContent` **不按 (kind, contentId) 去重** ⇒ 直接 `openTab('terminal')` 会每按一次多开一个终端。故**认页由插件自己做**（与 `sidebarRight.files` 同一条取数链路：`slots.entries('rightbar.session')` → `uiSession.resolve(sessionId)` → `slots.resolveStore` → `bySession[sessionId].layout`；判 `record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先、再扫其余**停靠**面板，浮窗不参与；面板内优先当前激活的那个）。**已有 → 只调 `sidebarRight.focus(tabId)`**（与标签 chip 点击同一入口；`focus` 不动展开态，故 `layout.expanded === false` 时再补一步公开的 `toggleExpanded()`，`expanded` 读不到则不动），**不重排、不置顶**（终端可能开着多个，热键不替用户决定顺序）；随后若该终端**已经是所在面板的当前标签、且右栏此刻已展开**（判据在 `toggleExpanded` 之前取），再补一次元素级聚焦 `focusTerminalScreen(paneId)`——上游 `focus` 只聚焦标签，终端内容的 DOM 焦点由 TerminalBody 的 `[visible, state.writable]` effect 完成，而「终端本来就显示着」时它不会重跑，焦点会留在原处（典型：对话输入框）：按 store 的 `paneId` 找 `[data-dockkit-pane="<paneId>"]` → `textarea.xterm-helper-textarea` → `focus({preventScroll:true})`（不遍历标签 / 不搜索全文档 / 不合成事件；找不到即少这一步）；**没有 → `openTab('terminal')` 新建**（上游 `openContent` 恒先 `planSetExpanded(true)` ⇒ 同一步展开右栏；新终端由上游 `visible` 翻转时的自动聚焦接管，插件不代劳）。**任意态**；`openTab` 抛错（无挂载会话面 / `terminal` 类型未注册）、`focus` 抛错、已有终端而 `focus` 面缺失 → 一律 no-op **不吞键**且**不退化成再开一个**；只有 slots / 作用域绑定整条链路不可用时无从判重，才退化为按 `openTab('terminal')` 新建 |
 | `composer.focus` | ⌘/Ctrl+J（`mod+j`；J = Jump「焦点跳转」；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃J 与 ⌘J 均可） | **服务取元素 + 一次 `contains` 门闸 + 一次 `focus()`** | `sessions.list` 快照 `current` → `sessions.binding(id).ctx` → `conversation.input.for(actx)`（`for` 缺席回退 `InputHub.shell(id)`，同一 `SessionInputShell`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。**`browse` 态恒可用；`editing` 态另有元素级门闸**——`contains(event.target)` 为真（焦点已在 composer 内，动作无事可做）时不重复聚焦、但组合键**仍被吞掉**（旧键位 `I` 在此放行是为保住 contenteditable 的「斜体」默认键；`J` 无等价默认行为，放行只会触发 Win/Linux 浏览器的 `Ctrl+J` = 下载页），为假（焦点在右栏终端 xterm 的 helper textarea / Monaco 的 inputarea textarea / 设置面板输入框等**非 composer** 的可编辑元素里）时执行聚焦并跳回输入框；`card` 态不接管。上游无可触发的聚焦服务面（`commandUi.bindComposerFocus` 只 bind 不 trigger，全仓无人调用；`editor.focus()` 非 DOM 聚焦原语），任一环缺失即 no-op 不吞键、不回退 DOM 查询 |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
 | `session.new` | ⌘/Ctrl+N | **服务** | 公开的 `uiWorkspace.startSession()`（无参）——与侧栏「新建会话」按钮、`dsh-new-session` 浏览器半部收到 `command/executed('new')` 后的调用**逐字相同**，故等同 `/new`：继承当前 / 最近的工作区，创建或复用其空白会话并打开。不触碰 composer 草稿。**任意态**；`uiWorkspace` 缺席 / 无 `startSession` / 抛错（无挂载会话面）一律 no-op 不吞键，**不回退 DOM 点侧栏按钮**。注意浏览器把 ⌘/Ctrl+N 当「新建窗口」保留键（多数浏览器不把该键派发给页面），键位可经 localStorage 覆盖 |
@@ -305,9 +311,19 @@ no-op 且不吞键；两个动作 id（`sidebarRight.tabPrev` / `sidebarRight.ta
 **停靠**面板，浮窗不参与；面板内优先当前激活的那个）：**已有 → 只调公开的
 `sidebarRight.focus(tabId)`**（`focus` 只改激活标签、**不动**展开态，故
 `layout.expanded === false` 时补一步公开的 `toggleExpanded()`；`expanded` 读不到则不动），
-**不重排、不置顶**（终端可能同时开着多个，热键不替用户决定顺序）；**没有 → 调公开的
+**不重排、不置顶**（终端可能同时开着多个，热键不替用户决定顺序）；该终端若**本来就是
+所在面板的当前标签、且右栏此刻已展开**（判据在补 `toggleExpanded()` 之前取），再补一次**元素级聚焦** `focusTerminalScreen(paneId)`——上游
+`focus` 只聚焦「标签」，终端内容的 DOM 焦点由 TerminalBody 的
+`[visible, state.writable]` effect 完成，而「终端本来就显示着」时该依赖不变、effect
+不重跑，焦点仍留在原处（典型：对话输入框）。取元素是**有界**的：按 store 给出的
+`paneId` 找 `[data-dockkit-pane="<paneId>"]`，再取其中的
+`textarea.xterm-helper-textarea` 调 `focus({ preventScroll: true })`（dockkit 把面板
+节点 id 原样写进属性；面板里同一时刻只渲染激活标签的 body；不遍历标签、不搜索全文档、
+不合成事件、不点击）；找不到 / 抛错只是少这一步，标签聚焦与吞键不受影响。这是本插件
+**唯一一处选择器查询**（见上文「动作触发路径」的元素级说明）。**没有 → 调公开的
 `openTab('terminal')` 新建**（上游 `openContent` 恒先 `planSetExpanded(true)`，故这一条
-自身就展开右栏）。动作 id `sidebarRight.terminal` 独立可覆盖。已知限制：`⌘/Ctrl+L` 是
+自身就展开右栏；新终端由上游 `visible` 翻转时的自动聚焦接管，插件不代劳）。动作 id
+`sidebarRight.terminal` 独立可覆盖。已知限制：`⌘/Ctrl+L` 是
 浏览器「聚焦地址栏」的保留键，终端里 `Ctrl+L` 原本也是 shell 的清屏，都会被本插件抢走；
 另：若 slots / 会话作用域绑定整条链路不可用则无从判重，会退化为每次按键新建一个终端
 （与直接调上游 `openTab` 的行为一致），而「已有终端但 `focus` 面缺失 / 抛错」只 no-op、
@@ -365,7 +381,9 @@ LF；readline 的 newline，与 `Enter` 同义）不再送给 PTY（裸 `Enter` 
 定位 / 置顶的取数入口与边界；⌘/Ctrl+L 终端定位（terminal 是 `multiple` 页、上游每次 `openTab`
 都铸带 UUID 的 contentId ⇒ 认页靠插件读 store 的布局：已有则只调 `focus`、不重复 `openTab`、
 不重排，折叠时补 `toggleExpanded`；没有才 `openTab('terminal')`；各层不可用 / 抛错一律 no-op
-不吞键且不退化成再开一个）；⌘/Ctrl+N 新建会话（必须调 `uiWorkspace.startSession`、三态放行、
+不吞键且不退化成再开一个；元素级聚焦注入假面板观察——终端本来就是所在面板当前标签时按
+store 的 paneId 聚焦其中的 `textarea.xterm-helper-textarea`、分屏只碰终端所在面板、终端不是
+当前标签时不代劳、面板里没有 xterm 或 focus 抛错只是少这一步）；⌘/Ctrl+N 新建会话（必须调 `uiWorkspace.startSession`、三态放行、
 服务缺席 / 无 `startSession` / 抛错 no-op 不吞键）；⌘/Ctrl+J 聚焦输入框（J = Jump）的取数链路
 （`browse` 恒可用；`editing` 只在焦点**不在** composer 内时执行聚焦——右栏终端 / Monaco 的
 隐藏 textarea 属于这一类——焦点已在 composer 内时不重复聚焦但组合键仍被吞掉）；工作区浮窗与模型浮窗的列表
