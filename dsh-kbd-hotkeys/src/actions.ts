@@ -22,6 +22,8 @@
  *   (SessionInputResolver.for / InputHub.shell)→ shell.editor.getRootElement()
  *   → `focus({ preventScroll: true })`——上游无聚焦服务面,这是唯一可靠原语;
  *   只调服务给出的元素,不做任何选择器查询 / DOM 遍历 / 事件合成(见 focusComposer);
+ * - 新建会话(⌘/Ctrl+N):uiWorkspace.startSession()——与 `/new` 命令浏览器半部
+ *   同一条服务调用(见 startNewSession);
  * - 会话跳转:sessions 快照 + slots 里的侧栏视图 store(顺序)+ sessions.open(id);
  * - Esc 停止:sessions.binding(id).session.cancel();
  * - `card` 态判定:当前会话在 uiSession 待处理交互表中命中(不依赖卡片是否已渲染)。
@@ -365,7 +367,7 @@ export function toggleSidebar(services: Services): boolean {
 }
 
 /**
- * 开关右侧栏(`sidebarRight.toggleExpanded()`,⌘/Ctrl+N,
+ * 开关右侧栏(`sidebarRight.toggleExpanded()`,⌘/Ctrl+O,
  * 与右栏头部的折叠按钮同一入口)。
  *
  * 一次调用即完成「面板 + AppFrame 右栏轨道」的开合:展开态是会话级 slot store
@@ -380,6 +382,33 @@ export function toggleRightSidebar(services: Services): boolean {
   if (typeof sidebarRight.toggleExpanded !== 'function') return false
   try {
     sidebarRight.toggleExpanded()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 新建会话并跳转(⌘/Ctrl+N,等同 `/new` 命令)。
+ *
+ * 走公开的 `uiWorkspace.startSession()`——与侧栏「新建会话」按钮、以及
+ * `dsh-new-session` 浏览器半部收到 `command/executed('new')` 后的调用**完全相同**
+ * (同一服务、同一无参形态:继承当前 / 最近的工作区,创建或复用其空白会话并打开)。
+ * 因此本动作与 `/new` 的落点和语义逐字一致,不另造一套新建会话逻辑。
+ *
+ * 无降级:`uiWorkspace` 服务缺席 / 无 `startSession` / 抛错(无挂载会话面)一律
+ * no-op 返回 false,**不回退**到 DOM 点击侧栏的「新建会话」按钮。
+ *
+ * 已知限制:浏览器把 ⌘/Ctrl+N 当作「新建窗口」保留键(见 README「已知限制」);
+ * 本插件在 document 捕获阶段先 preventDefault,页面内可接管,焦点不在本页面时
+ * 浏览器仍按自己的默认处理。
+ */
+export function startNewSession(services: Services): boolean {
+  const uiWorkspace = services.uiWorkspace
+  if (uiWorkspace === null || uiWorkspace === undefined) return false
+  if (typeof uiWorkspace.startSession !== 'function') return false
+  try {
+    uiWorkspace.startSession()
     return true
   } catch {
     return false

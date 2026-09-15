@@ -1,13 +1,13 @@
 /**
  * dsh-kbd-hotkeys — 键位表、组合键归一化与用户配置(localStorage)。
  *
- * 键位取向:尽量贴合跨应用肌肉记忆(`⌘/Ctrl+B` 开关左栏、`⌘/Ctrl+N` 开关右栏等),
+ * 键位取向:尽量贴合跨应用肌肉记忆(`⌘/Ctrl+B` 开关左栏、`⌘/Ctrl+O` 开关右栏等),
  * 并与上游语义同源(动作名 / 服务方法名与键位一一对应)。
- * 分档:**单修饰键 `mod+键` 给全局动作**(左栏 `B`、工作区 `K`、模型 `M`、
- * 文件浏览器 `\`、输入框 `I`、速查表 `/`),**`mod+alt` 这一档留给右栏的导航类**
- * (右栏开关 `N`、标签 `←`/`→`、会话跳转 `↑`/`↓`);两档都取 `event.code` 的物理键位。
+ * 分档:**单修饰键 `mod+键` 给全局动作**(左栏 `B`、右栏 `O`、工作区 `K`、模型 `M`、
+ * 新建会话 `N`、输入框 `I`、文件浏览器 `\`、速查表 `/`),**`mod+alt` 这一档留给导航**
+ * (右栏标签 `←`/`→`、会话跳转 `↑`/`↓`);两档都取 `event.code` 的物理键位。
  * 需要留意的是浏览器自带快捷键:本插件在 document 捕获阶段先 `preventDefault`,
- * 但 `⌘/Ctrl+N`(新窗口)、`⌘/Ctrl+K`(地址栏搜索)属浏览器保留键,详见 README
+ * 但 `⌘/Ctrl+O`(打开文件)、`⌘/Ctrl+K`(地址栏搜索)属浏览器保留键,详见 README
  * 「已知限制」。
  * - `mod` 在 macOS = ⌘(Cmd),Win/Linux = Ctrl——`comboOf` 同时吸收 ctrlKey 与
  *   metaKey,故 macOS 上 `mod+i` 的 ⌃I 与 ⌘I 都能触发;
@@ -52,7 +52,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'question.next', label: '问题:→ 下一题', group: '问答卡片', states: ['card'] },
   { id: 'question.submit', label: '问题:Enter 下一题 / 末题提交', group: '问答卡片', states: ['card'] },
   // 会话级
-  // 左栏为 ⌘/Ctrl+B、右栏为 ⌘/Ctrl+N(`N` = 右栏导航面板,navigation panel;
+  // 左栏为 ⌘/Ctrl+B、右栏为 ⌘/Ctrl+O(`O` = 打开 / 开合面板,Open panel;
   // 也避免把右栏塞进 `mod+alt` 那一档而占用方向键族的语义)。
   // 两者都额外放行 editing:带修饰键的组合不干扰文本编辑,与 `editing` 态
   // 「只保留带修饰键的全局组合」一致。
@@ -65,14 +65,20 @@ export const ACTIONS: readonly ActionDef[] = [
   // 问答卡片,但那是**裸**方向键(固定分发),与带 mod+alt 的组合键不冲突,故无需让路。
   { id: 'sidebarRight.tabPrev', label: '右侧栏:上一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'sidebarRight.tabNext', label: '右侧栏:下一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
-  // 定位右栏文件浏览器(⌘/Ctrl+\):与右栏开关(⌘/Ctrl+N)同为「右栏」这一族
+  // 定位右栏文件浏览器(⌘/Ctrl+\):与右栏开关(⌘/Ctrl+O)同为「右栏」这一族
   // (单修饰键),同样三态放行——带修饰键的组合既不与卡片的裸 ← / → / 数字键冲突,
   // 也不干扰文本编辑。语义是「定位」而非「开关」:该面板已有文件浏览器页就聚焦它,
   // 没有就在面板末尾创建(上游 openTab 按目标面板去重),再加一步置顶。
   { id: 'sidebarRight.files', label: '右侧栏:定位文件浏览器(不存在则创建)并置顶', group: '会话', states: ['card', 'editing', 'browse'] },
-  // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义,且 contenteditable
-  // 里 ⌘/Ctrl+I 是浏览器「斜体」默认行为(execCommand,绕过 Lexical),card 态则归卡片
-  // 自己的输入框。
+  // 新建会话并跳转(⌘/Ctrl+N)= `/new` 命令的同一动作:调公开的
+  // uiWorkspace.startSession()(与侧栏「新建会话」按钮、dsh-new-session 处理
+  // command/executed('new') 后的调用逐字相同)。三态放行:创建新会话与当前
+  // 会话是否有待回应卡片、焦点是否在输入框都无关,带修饰键的组合也既不占用
+  // 卡片的裸键(数字 / ← / → / Enter)也不干扰文本编辑。
+  { id: 'session.new', label: '新建会话并跳转(等同 /new)', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 聚焦输入框只放行 browse:输入框已聚焦(editing)时该动作无意义;card 态则归卡片
+  // 自己的输入框。这一档也正好避开 contenteditable 的斜体冲突——⌘/Ctrl+I 只在焦点
+  // **不在**可编辑元素时才被本插件接管(见 DEFAULT_BINDINGS 该条注释)。
   { id: 'composer.focus', label: '聚焦输入框', group: '会话', states: ['browse'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'session.next', label: '下一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
@@ -118,24 +124,34 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   // 侧栏开关按「主面板 = 主键、次面板 = 邻键」分配:
   // - 左栏 = ⌘/Ctrl+B:与 VS Code / Slack / 各类编辑器的侧栏开关一致,也是上游
   //   `layout.toggleSidebar()` 的本名(sidebar / sidebarCol 不带限定词就指左栏);
-  // - 右栏 = ⌘/Ctrl+N:同属单修饰键这一档,`N` 取「右栏导航面板」联想(上游把右栏
-  //   叫 rightbar,rightbarShown / rightbarTrack);与左栏的 `B` 同档不同键。
+  // - 右栏 = ⌘/Ctrl+O:同属单修饰键这一档,`O` 取「Open(打开/开合右栏面板)」联想
+  //   (VS Code 亦用 ⌘0 而非 ⌘N 表示次面板);与左栏的 `B` 同档不同键。
   'sidebar.toggle': 'mod+b',
-  'sidebarRight.toggle': 'mod+n',
+  'sidebarRight.toggle': 'mod+o',
   // 右栏标签切换 = ⌘/Ctrl+Alt+← / →:方向键表达「上一个 / 下一个」;与
   // ⌘/Ctrl+Alt+↑/↓ 的活跃会话跳转同族但不同轴(会话轴在左栏、标签轴在右栏)。
   // 边缘处**循环**,只有单个标签时不吞键(见 sidebar-tabs.ts)。
   'sidebarRight.tabPrev': 'mod+alt+arrowleft',
   'sidebarRight.tabNext': 'mod+alt+arrowright',
   // 定位右栏文件浏览器并置顶 = ⌘/Ctrl+\:反斜杠在主键区右端,与右栏开关
-  // (⌘/Ctrl+N)同为「右栏」这一族。键名走 `comboOf` 的 e.code 归一化
+  // (⌘/Ctrl+O)同为「右栏」这一族。键名走 `comboOf` 的 e.code 归一化
   // (`Backslash` → `\`),与布局产出什么字符无关;JIS 等把 `\` 放在别的物理键上的
   // 键盘由 e.key 回退兜住。本键不再带 alt,故 Win/Linux 上「Ctrl+Alt 即 AltGr」
   // 的老问题在这里不存在(AltGr 层单独打出的 `\` 只会命中 `alt+\\`,不是本组合)。
   'sidebarRight.files': 'mod+\\',
+  // 新建会话并跳转 = ⌘/Ctrl+N:跨应用肌肉记忆(浏览器 / 编辑器 / 终端的新建),
+  // 语义 = `/new` 命令(公开的 uiWorkspace.startSession())。属单修饰键这一档,
+  // 与 ⌘/Ctrl+K(工作区)、⌘/Ctrl+M(模型)并列。`mod` 在 comboOf 里同时吸收
+  // ctrlKey 与 metaKey,故 macOS 上 ⌃N 与 ⌘N 都会触发;注意浏览器把
+  // ⌘/Ctrl+N 当作「新建窗口」保留键(见 README「已知限制」)。
+  'session.new': 'mod+n',
   // 聚焦输入框 = ⌘/Ctrl+I:`mod` 在 comboOf 里同时吸收 ctrlKey 与 metaKey,所以
-  // macOS 上 ⌃I 与 ⌘I 都能触发(用户要的 Ctrl+I 在 mac 上按 ⌃I 即可),Win/Linux
-  // 就是 Ctrl+I;两平台的浏览器 DevTools 都带 Shift(⌘⌥I / Ctrl+Shift+I),不冲突。
+  // macOS 上 ⌃I 与 ⌘I 都能触发,Win/Linux 就是 Ctrl+I。该组合落在「单修饰键」这一档,
+  // 与 ⌘/Ctrl+B(左栏)、⌘/Ctrl+O(右栏)同族;语义上 I = Input。
+  // 代价是它与 contenteditable 的浏览器「斜体」默认行为同键——本动作**只放行 browse
+  // 态**(焦点在可编辑元素时根本不查表),所以斜体只会在焦点不在输入框时被 preventDefault
+  // 挡掉,编辑中的斜体不受影响。它也不与 DevTools 的带 Shift 组合
+  // (⌘⌥I / Ctrl+Shift+I)冲突。
   'composer.focus': 'mod+i',
   'session.prev': 'mod+alt+arrowup',
   'session.next': 'mod+alt+arrowdown',

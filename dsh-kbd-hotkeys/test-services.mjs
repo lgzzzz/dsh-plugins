@@ -15,9 +15,14 @@
  * Enter 必须从这份 store 取草稿(非末题推进、末题结算)——插件内不另存镜像状态。
  *
  * 另含侧栏开关断言:⌘/Ctrl+B → `layout.toggleSidebar()`(左栏)、
- * ⌘/Ctrl+N → `sidebarRight.toggleExpanded()`(右栏),两者在 browse / editing
+ * ⌘/Ctrl+O → `sidebarRight.toggleExpanded()`(右栏),两者在 browse / editing
  * 两态都生效且互不串场;服务缺席或抛错(无挂载会话面)时 no-op 且不吞键;左栏键位
  * 可经 localStorage 自定义且不影响右栏默认键位。
+ *
+ * 另含新建会话断言(⌘/Ctrl+N,等同 `/new`):必须调公开的
+ * `uiWorkspace.startSession()`(与侧栏「新建会话」按钮、dsh-new-session 处理
+ * `command/executed('new')` 后是同一条服务调用);三态放行,服务缺席 / 无
+ * startSession / 抛错一律 no-op 且不吞键,键位可自定义。
  *
  * 另含右栏标签切换断言(⌘/Ctrl+Alt+← / →):标签顺序必须取自右栏自己的会话级 slot
  * store(`rightbar.session` 注册项上的 store handle → `uiSession.resolve(sessionId)`
@@ -608,10 +613,10 @@ console.log('\n--- 兼容回退:仅 pendingSnapshot ---')
 }
 
 // ===========================================================================
-// 阶段 3:⌘/Ctrl+B → 左栏(layout.toggleSidebar)、⌘/Ctrl+N → 右栏
+// 阶段 3:⌘/Ctrl+B → 左栏(layout.toggleSidebar)、⌘/Ctrl+O → 右栏
 //          (sidebarRight.toggleExpanded);两键互不串场,服务缺席一律不吞键
 // ===========================================================================
-console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+N → 左右栏开关 ---')
+console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+O → 左右栏开关 ---')
 {
   const base = {
     sessions,
@@ -632,18 +637,18 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+N → 左右栏开关 ---')
   check('browse 态 ⌘/Ctrl+B → layout.toggleSidebar(左栏)', same([left, right], [1, 0]), `${left},${right}`)
   check('browse 态 ⌘/Ctrl+B 被吞', event.propagationStopped === true)
 
-  // ⌘/Ctrl+N:只打右栏
-  event = both({ key: 'n', code: 'KeyN', ctrlKey: true })
-  check('browse 态 ⌘/Ctrl+N → sidebarRight.toggleExpanded(右栏)', same([left, right], [1, 1]), `${left},${right}`)
-  check('browse 态 ⌘/Ctrl+N 被吞', event.propagationStopped === true)
+  // ⌘/Ctrl+O:只打右栏
+  event = both({ key: 'o', code: 'KeyO', ctrlKey: true })
+  check('browse 态 ⌘/Ctrl+O → sidebarRight.toggleExpanded(右栏)', same([left, right], [1, 1]), `${left},${right}`)
+  check('browse 态 ⌘/Ctrl+O 被吞', event.propagationStopped === true)
 
   // editing 态(焦点在输入框)两个键位同样生效
   event = both({ key: 'b', code: 'KeyB', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
   check('editing 态 ⌘/Ctrl+B → 左栏', same([left, right], [2, 1]), `${left},${right}`)
   check('editing 态 ⌘/Ctrl+B 被吞', event.propagationStopped === true)
-  event = both({ key: 'n', code: 'KeyN', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
-  check('editing 态 ⌘/Ctrl+N → 右栏', same([left, right], [2, 2]), `${left},${right}`)
-  check('editing 态 ⌘/Ctrl+N 被吞', event.propagationStopped === true)
+  event = both({ key: 'o', code: 'KeyO', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 ⌘/Ctrl+O → 右栏', same([left, right], [2, 2]), `${left},${right}`)
+  check('editing 态 ⌘/Ctrl+O 被吞', event.propagationStopped === true)
 
   // bindings 覆盖:sidebar.toggle 是左栏的合法动作 id(键位可自定义)
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'sidebar.toggle': 'mod+alt+s' } }))
@@ -658,7 +663,7 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+N → 左右栏开关 ---')
   check('左栏自定义键位后 ⌘/Ctrl+B 不再触发左栏', same([customLeft, customRight], [0, 0]), `${customLeft},${customRight}`)
   event = custom({ key: 's', code: 'KeyS', ctrlKey: true, altKey: true })
   check('自定义 ⌘/Ctrl+Alt+S → 左栏', same([customLeft, customRight], [1, 0]), `${customLeft},${customRight}`)
-  event = custom({ key: 'n', code: 'KeyN', ctrlKey: true })
+  event = custom({ key: 'o', code: 'KeyO', ctrlKey: true })
   check('右栏默认键位不受左栏自定义影响', same([customLeft, customRight], [1, 1]), `${customLeft},${customRight}`)
   storage.delete('dsh-kbd-hotkeys:v1')
 
@@ -666,8 +671,8 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+N → 左右栏开关 ---')
   const missing = loadPlugin(base)
   event = missing({ key: 'b', code: 'KeyB', ctrlKey: true })
   check('layout 缺席 → ⌘/Ctrl+B 不吞键', event.propagationStopped !== true)
-  event = missing({ key: 'n', code: 'KeyN', ctrlKey: true })
-  check('sidebarRight 缺席 → ⌘/Ctrl+N 不吞键', event.propagationStopped !== true)
+  event = missing({ key: 'o', code: 'KeyO', ctrlKey: true })
+  check('sidebarRight 缺席 → ⌘/Ctrl+O 不吞键', event.propagationStopped !== true)
 
   const dead = loadPlugin({
     ...base,
@@ -676,8 +681,78 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+N → 左右栏开关 ---')
   })
   event = dead({ key: 'b', code: 'KeyB', ctrlKey: true })
   check('layout 抛错 → ⌘/Ctrl+B 不吞键', event.propagationStopped !== true)
+  event = dead({ key: 'o', code: 'KeyO', ctrlKey: true })
+  check('无挂载会话面(抛错)→ ⌘/Ctrl+O 不吞键', event.propagationStopped !== true)
+}
+
+// ===========================================================================
+// 阶段 3b:⌘/Ctrl+N → 新建会话并跳转(等同 `/new`)
+//          路径 = 公开的 uiWorkspace.startSession()(与侧栏「新建会话」按钮、
+//          dsh-new-session 处理 command/executed('new') 后是同一调用,无参形态);
+//          三态放行;服务缺席 / 无 startSession / 抛错一律 no-op 且不吞键。
+// ===========================================================================
+console.log('\n--- ⌘/Ctrl+N → 新建会话并跳转(uiWorkspace.startSession) ---')
+{
+  const base = {
+    sessions,
+    uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
+    workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+  }
+
+  const calls = []
+  const workspace = loadPlugin({ ...base, uiWorkspace: { startSession: (id) => { calls.push(id) } } })
+
+  let event = workspace({ key: 'n', code: 'KeyN', ctrlKey: true })
+  check('browse 态 ⌘/Ctrl+N → startSession()', same(calls, [undefined]), JSON.stringify(calls))
+  check('browse 态 ⌘/Ctrl+N 被吞', event.propagationStopped === true)
+
+  // macOS:metaKey 同样命中(mod 同时吸收 ctrl/meta)
+  event = workspace({ key: 'n', code: 'KeyN', metaKey: true })
+  check('macOS ⌘N(metaKey)→ startSession()', calls.length === 2, JSON.stringify(calls))
+  check('macOS ⌘N 被吞', event.propagationStopped === true)
+
+  // editing 态(焦点在输入框)与 card 态(有待回应卡片)同样生效
+  event = workspace({ key: 'n', code: 'KeyN', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 ⌘/Ctrl+N → startSession()', calls.length === 3, JSON.stringify(calls))
+  check('editing 态 ⌘/Ctrl+N 被吞', event.propagationStopped === true)
+
+  const cardPending = new Map([['sess-b', { kind: 'approval', key: 'approval:1', answer() {} }]])
+  const cardCalls = []
+  const cardEnv = loadPlugin({
+    ...base,
+    uiSession: { pendingInteractions: { getSnapshot: () => cardPending } },
+    uiWorkspace: { startSession: () => { cardCalls.push(1) } },
+  })
+  event = cardEnv({ key: 'n', code: 'KeyN', ctrlKey: true })
+  check('card 态 ⌘/Ctrl+N → startSession()(新建会话与卡片无关)', cardCalls.length === 1, String(cardCalls.length))
+  check('card 态 ⌘/Ctrl+N 被吞', event.propagationStopped === true)
+
+  // bindings 覆盖:session.new 是合法动作 id,键位可自定义
+  storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'session.new': 'mod+alt+n' } }))
+  const customCalls = []
+  const custom = loadPlugin({ ...base, uiWorkspace: { startSession: () => { customCalls.push(1) } } })
+  event = custom({ key: 'n', code: 'KeyN', ctrlKey: true })
+  check('覆盖键位后 ⌘/Ctrl+N 不再新建', customCalls.length === 0 && event.propagationStopped !== true)
+  event = custom({ key: 'n', code: 'KeyN', ctrlKey: true, altKey: true })
+  check('自定义 ⌘/Ctrl+Alt+N → startSession()', customCalls.length === 1, String(customCalls.length))
+  check('自定义键位被吞', event.propagationStopped === true)
+  storage.delete('dsh-kbd-hotkeys:v1')
+
+  // 无降级:服务缺席 / 无 startSession / 抛错(无挂载会话面)→ no-op 且不吞键
+  const missing = loadPlugin(base)
+  event = missing({ key: 'n', code: 'KeyN', ctrlKey: true })
+  check('uiWorkspace 缺席 → ⌘/Ctrl+N 不吞键', event.propagationStopped !== true)
+
+  const noMethod = loadPlugin({ ...base, uiWorkspace: {} })
+  event = noMethod({ key: 'n', code: 'KeyN', ctrlKey: true })
+  check('无 startSession → ⌘/Ctrl+N 不吞键', event.propagationStopped !== true)
+
+  const dead = loadPlugin({
+    ...base,
+    uiWorkspace: { startSession: () => { throw new Error('uiWorkspace: no mounted session surface') } },
+  })
   event = dead({ key: 'n', code: 'KeyN', ctrlKey: true })
-  check('无挂载会话面(抛错)→ ⌘/Ctrl+N 不吞键', event.propagationStopped !== true)
+  check('startSession 抛错 → ⌘/Ctrl+N 不吞键', event.propagationStopped !== true)
 }
 
 // ===========================================================================
@@ -686,6 +761,7 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+N → 左右栏开关 ---')
 //                → shell.editor.getRootElement() → element.focus({preventScroll:true})
 //         只允许走服务链路:DOM 桩的 querySelector/querySelectorAll 恒空,任何
 //         选择器式实现都拿不到元素;断言对象是服务图里的假元素与 binding.ctx 同一性。
+//         键位是 mod+i(旧键位 mod+alt+i 已不再绑定,见下方回归断言)。
 // ===========================================================================
 console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.editor) ---')
 {
@@ -715,11 +791,22 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
       },
     },
   })
-  let event = main({ key: 'i', code: 'KeyI', ctrlKey: true })
+  let event = main({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
   check('browse 态 Ctrl+I → 宿主元素 focus({preventScroll:true})', root.focused === true)
   check('Ctrl+I 被吞', event.propagationStopped === true)
   check('input.for 收到 binding.ctx 本身', same(seenActx, [actx]))
   check('主路径不触碰 shell(id)', shellCalls.length === 0, JSON.stringify(shellCalls))
+
+  // --- 旧键位 ⌘/Ctrl+Alt+I 已不再是本插件键位:不聚焦、不吞键 ---
+  const oldRoot = makeRoot()
+  const old = loadPlugin({
+    ...base,
+    sessions: makeComposerSessions(),
+    conversation: { input: { for: () => ({ editor: { getRootElement: () => oldRoot } }) } },
+  })
+  event = old({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: true })
+  check('Ctrl+Alt+I 不聚焦(旧键位已改为 ⌘/Ctrl+I)', oldRoot.focused !== true)
+  check('Ctrl+Alt+I 不吞键', event.propagationStopped !== true)
 
   // --- macOS ⌘I:metaKey 同样归一化成 mod+i ---
   const macRoot = makeRoot()
@@ -728,7 +815,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
     sessions: makeComposerSessions(),
     conversation: { input: { for: () => ({ editor: { getRootElement: () => macRoot } }) } },
   })
-  event = mac({ key: 'i', code: 'KeyI', metaKey: true })
+  event = mac({ key: 'i', code: 'KeyI', metaKey: true, altKey: false })
   check('macOS ⌘I(metaKey)→ 同样聚焦', macRoot.focused === true)
   check('macOS ⌘I 被吞', event.propagationStopped === true)
 
@@ -739,8 +826,8 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
     sessions: makeComposerSessions(),
     conversation: { input: { for: () => ({ editor: { getRootElement: () => editRoot } }) } },
   })
-  event = editing({ key: 'i', code: 'KeyI', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
-  check('editing 态 Ctrl+I 不聚焦(不干扰文本编辑)', editRoot.focused !== true)
+  event = editing({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 Ctrl+I 不聚焦(动作在 editing 态无事可做)', editRoot.focused !== true)
   check('editing 态 Ctrl+I 不吞键', event.propagationStopped !== true)
 
   // --- 态门闸:card(有待审批卡片)不接管 ---
@@ -752,7 +839,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
     uiSession: { pendingInteractions: { getSnapshot: () => cardPending } },
     conversation: { input: { for: () => ({ editor: { getRootElement: () => cardRoot } }) } },
   })
-  event = card({ key: 'i', code: 'KeyI', ctrlKey: true })
+  event = card({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
   check('card 态 Ctrl+I 不聚焦', cardRoot.focused !== true)
   check('card 态 Ctrl+I 不吞键', event.propagationStopped !== true)
 
@@ -766,7 +853,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
       input: { shell: (id) => { shellIds.push(id); return { editor: { getRootElement: () => shellRoot } } } },
     },
   })
-  event = viaShell({ key: 'i', code: 'KeyI', ctrlKey: true })
+  event = viaShell({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
   check('input.for 缺席 → shell(id) 回退聚焦', shellRoot.focused === true)
   check('shell(id) 收到当前会话 id', same(shellIds, ['sess-b']), JSON.stringify(shellIds))
   check('shell 回退路径吞键', event.propagationStopped === true)
@@ -783,7 +870,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
       },
     },
   })
-  event = noCtx({ key: 'i', code: 'KeyI', ctrlKey: true })
+  event = noCtx({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
   check('无 binding.ctx → 走 shell(id)', noCtxRoot.focused === true)
   check('无 binding.ctx 路径吞键', event.propagationStopped === true)
 
@@ -808,7 +895,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
   ]
   for (const [label, extra] of cases) {
     const env = loadPlugin({ ...base, sessions: makeComposerSessions(), ...extra })
-    event = env({ key: 'i', code: 'KeyI', ctrlKey: true })
+    event = env({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
     check(`${label} → Ctrl+I 不吞键(no-op)`, event.propagationStopped !== true)
   }
 
@@ -821,7 +908,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
         input: { for: () => { throw new Error('must not resolve without a current session') } },
       },
     })
-    event = env({ key: 'i', code: 'KeyI', ctrlKey: true })
+    event = env({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
     check(`${label} → Ctrl+I 不吞键`, event.propagationStopped !== true)
   }
 
@@ -834,7 +921,7 @@ console.log('\n--- ⌘/Ctrl+I → 聚焦输入框(conversation.input → shell.e
     sessions: makeComposerSessions(),
     conversation: { input: { for: () => ({ editor: { getRootElement: () => customRoot } }) } },
   })
-  event = custom({ key: 'i', code: 'KeyI', ctrlKey: true })
+  event = custom({ key: 'i', code: 'KeyI', ctrlKey: true, altKey: false })
   check('覆盖键位后 ⌘/Ctrl+I 不再聚焦', customRoot.focused !== true)
   event = custom({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: true })
   check('自定义 ⌘/Ctrl+Alt+J → 聚焦', customRoot.focused === true)
@@ -936,7 +1023,7 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
   check('⌘/Ctrl+Alt+← 被吞', event.propagationStopped === true)
 
   // 输入态(焦点在输入框)同样可用:带修饰键的组合不干扰文本编辑
-  event = press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, altKey: true, target: new FakeHTMLElement('TEXTAREA') })
+  event = press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, altKey: false, target: new FakeHTMLElement('TEXTAREA') })
   check('editing 态 ⌘/Ctrl+Alt+← 仍切标签', same(focused, ['t3', 't1', 't3', 't2']), JSON.stringify(focused))
   check('editing 态 ⌘/Ctrl+Alt+← 被吞', event.propagationStopped === true)
 

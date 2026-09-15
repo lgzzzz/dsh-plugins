@@ -133,13 +133,19 @@ export interface WorkspaceRowLike {
  * UiWorkspace 服务消费面(见 dsh-client-ui-workspace/lib/types/client/navigation.d.ts
  * 的 `UiWorkspace`;模块声明 `Context.uiWorkspace`)。
  *
- * 只消费 `openWorkspace`:工作区导航的**规范路径**——「连接工作区」= 复用该工作区
- * 已挂载的空白会话,没有就 `sessions.create({ workspaceId })` 新建一个再打开;
- * 与侧栏工作区分组上的「+」新建会话、以及首屏工作区导航是同一条路径。
- * 无挂载会话面 / 未知 workspaceId 时抛错(调用方兜住 → no-op)。
+ * 消费两个动词:
+ * - `openWorkspace`:工作区导航的**规范路径**——「连接工作区」= 复用该工作区
+ *   已挂载的空白会话,没有就 `sessions.create({ workspaceId })` 新建一个再打开;
+ *   与侧栏工作区分组上的「+」新建会话、以及首屏工作区导航是同一条路径。
+ *   无挂载会话面 / 未知 workspaceId 时抛错(调用方兜住 → no-op);
+ * - `startSession`:「新建会话」流程(创建/复用目标工作区的空白会话并跳转),
+ *   与侧栏「新建会话」按钮、`/new` 命令浏览器半部(dsh-new-session 收到
+ *   `command/executed('new')` 后)是**同一条**服务调用(⌘/Ctrl+N)。
+ *   无挂载会话面时抛错(调用方兜住 → no-op)。
  */
 export interface UiWorkspaceLike {
   openWorkspace?(workspaceId: string, beforeOpen?: (sessionId: string) => void): Promise<void> | void
+  startSession?(workspaceId?: string): void
 }
 
 /* ------------------------------------------------------------------ *
@@ -501,7 +507,7 @@ export interface Services {
   uiSession: UiSessionLike | undefined
   /** layout 服务:只用于开关左侧栏(⌘/Ctrl+B)。 */
   layout: LayoutLike | undefined
-  /** sidebarRight 服务:只用于开关右侧栏(⌘/Ctrl+N)。 */
+  /** sidebarRight 服务:只用于开关右侧栏(⌘/Ctrl+O)。 */
   sidebarRight: SidebarRightLike | undefined
   workspaces: WorkspacesLike | undefined
   /** slots 服务:只用于读侧栏视图 store(会话跳转顺序的权威来源)。 */
@@ -509,8 +515,9 @@ export interface Services {
   /** conversation 服务:只用于取 composer 的 editor 宿主元素(⌘/Ctrl+I 聚焦输入框)。 */
   conversation: ConversationLike | undefined
   /**
-   * uiWorkspace 服务:只用于工作区浮窗的切换动作(⌘/Ctrl+K 选中后 Enter
-   * 调 openWorkspace,与侧栏「+」同一条连接工作区的路径)。
+   * uiWorkspace 服务:工作区浮窗的切换动作(⌘/Ctrl+K 选中后 Enter
+   * 调 openWorkspace,与侧栏「+」同一条连接工作区的路径),以及
+   * ⌘/Ctrl+N 新建会话并跳转(startSession,与 `/new` 同一条服务调用)。
    */
   uiWorkspace: UiWorkspaceLike | undefined
   /**

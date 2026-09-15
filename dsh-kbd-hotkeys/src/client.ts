@@ -11,7 +11,7 @@
  *   刚完成未查看,按**侧栏可见顺序**定位)、
  *   Esc 停止当前会话的整棵运行中交互树(自身 + 直系子代理,one-shot 跳过);
  * - `browse` 浏览态(输入框失焦)与 `editing` 输入态:⌘B 开关左侧栏、
- *   ⌘N 开关右侧栏、⌘⌥←/→ 在右侧栏当前面板的标签之间循环切换
+ *   ⌘O 开关右侧栏、⌘⌥←/→ 在右侧栏当前面板的标签之间循环切换
  *   (标签顺序读右栏自己的会话级 slot store,切换调公开的 `sidebarRight.focus`,
  *   见 sidebar-tabs.ts;单个标签时不吞键)、
  *   ⌘\ 打开右栏文件浏览器并把它置于所在标签栏首位(公开的
@@ -30,6 +30,9 @@
  *   composer 座位的 `effortChoices`;模型无推理元数据 / 只有一档 / 目录不可用时
  *   no-op 且不吞键)。`editing` 态另有一道元素级门闸:只有焦点在 composer 自己的
  *   编辑区内才接管(⇧Tab 在别处仍是反向移动焦点 / 反向缩进),见 isComposerTarget;
+ * - 全态:⌘/Ctrl+N **新建会话并跳转**(调公开的 `uiWorkspace.startSession()`——
+ *   与侧栏「新建会话」按钮、以及 `dsh-new-session` 处理 `command/executed('new')`
+ *   后的调用逐字相同,故语义等同于 `/new` 命令;见 actions.ts 的 startNewSession);
  * - `browse` 浏览态:⌘/Ctrl+I 聚焦对话输入框(上游无聚焦服务面,经
  *   conversation.input 取 shell.editor 的宿主元素后调 focus(),见 actions.ts
  *   的 focusComposer;不做选择器查询 / DOM 遍历 / 事件合成)。
@@ -58,6 +61,7 @@ import {
   moveQuestion,
   openNeighborSession,
   pickQuestionOption,
+  startNewSession,
   submitQuestion,
   stopCurrentSessionTree,
   toggleRightSidebar,
@@ -76,11 +80,12 @@ export const name = 'dsh-kbd-hotkeys'
  * 浏览器半部注入的服务(模块加载器读取)。
  * workspaces 供会话切换复刻侧栏分组、工作区浮窗取列表,slots 供读取侧栏视图
  * store(会话顺序)与右栏标签 store(标签顺序 + 置顶用的 actions),layout 供
- * ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+N 开关右侧栏、
+ * ⌘/Ctrl+B 开关左侧栏,sidebarRight 供 ⌘/Ctrl+O 开关右侧栏、
  * ⌘/Ctrl+Alt+←/→ 聚焦右栏标签、⌘/Ctrl+\ 打开文件浏览器,
  * conversation 供 ⌘/Ctrl+I 取 composer 的 editor 宿主元素(聚焦输入框)与
  * ⇧Tab 的编辑态门闸(宿主元素 contains 事件目标),
- * uiWorkspace 供 ⌘/Ctrl+K 工作区浮窗确认时连接/切换工作区,
+ * uiWorkspace 供 ⌘/Ctrl+K 工作区浮窗确认时连接/切换工作区、⌘/Ctrl+N 新建会话
+ * (startSession,与 `/new` 同一条服务调用),
  * modelDirectories 供 ⌘/Ctrl+M 模型浮窗与 ⇧Tab 循环思考强度
  * (上游 `/model` 弹层、composer 模型座位的**同一份** per-session 目录实例)。
  */
@@ -115,6 +120,10 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return revealRightSidebarFiles(services)
       case 'composer.focus':
         return focusComposer(services)
+      case 'session.new':
+        // ⌘/Ctrl+N:新建会话并跳转 = `/new` 命令的同一动作
+        // (公开的 uiWorkspace.startSession,与侧栏「新建会话」按钮同一条路径)。
+        return startNewSession(services)
       case 'workspace.pick':
         // 工作区浮窗:打开时按当前快照现取列表(↑/↓ 与 Enter 在 overlay 内处理)
         overlays.toggleWorkspacePicker()

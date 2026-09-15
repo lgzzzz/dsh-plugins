@@ -20,10 +20,11 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 | `←` / `→` | 问答卡片：上一题 / 下一题（只切题号，草稿保留；首题按 `←`、末题按 `→` 不循环且不吞键） | `card` |
 | `⌘/Ctrl+/` | 快捷键速查表 | 任意 |
 | `⌘/Ctrl+B` | 开关**左**侧栏（走 `layout.toggleSidebar`） | `browse` / `editing` |
-| `⌘/Ctrl+N` | 开关**右**侧栏（`sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
+| `⌘/Ctrl+O` | 开关**右**侧栏（`sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+←` / `→` | **右侧栏**当前面板的标签：上一个 / 下一个（循环；只有一个标签时不吞键） | 任意 |
 | `⌘/Ctrl+\` | **右侧栏**定位文件浏览器：打开（不存在时创建）/ 聚焦该页并置顶（`openTab('files')`，同时展开右栏） | 任意 |
 | `⌘/Ctrl+I` | 聚焦对话**输入框**（走 `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`） | `browse` |
+| `⌘/Ctrl+N` | **新建会话并跳转**（等同 `/new`：调公开的 `uiWorkspace.startSession()`，与侧栏「新建会话」按钮同一条服务调用） | 任意 |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
 | `⌘/Ctrl+K` | 打开**工作区浮窗**（浮窗内 `↑`/`↓` 选择、`Enter` 切换、`Esc` 关闭） | 任意 |
 | `⌘/Ctrl+M` | 打开**模型浮窗**：选择本会话使用的模型（浮窗内 `↑`/`↓` 选择、`Enter` 切换、`⇧Tab` 调思考强度、`Esc` 关闭） | 任意 |
@@ -32,28 +33,40 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > 「任意」= 三态均允许（动作 `states` 为 `['card','editing','browse']`）。
 > 两个侧栏开关为 `['browse','editing']`：输入框聚焦时同样生效（带修饰键的组合不干扰
 > 文本编辑，符合 `editing` 态「只保留带修饰键的全局组合」的规则）；右栏标签切换、
-> 文件浏览器定位、工作区浮窗与模型浮窗都是**任意态**（含 `card`）——卡片占用的是**裸**
-> `←` / `→` / 数字键，与带修饰键的组合键不冲突。
+> 文件浏览器定位、新建会话、工作区浮窗与模型浮窗都是**任意态**（含 `card`）——卡片
+> 占用的是**裸** `←` / `→` / 数字键，与带修饰键的组合键不冲突。
 > **聚焦输入框只放行 `browse`**：焦点已经在输入框里时该动作没有意义（`editing`），
-> 且 contenteditable 里的 `⌘/Ctrl+I` 是浏览器「斜体」默认行为（`execCommand`，
-> 绕过 Lexical 直接改 DOM），放行会与编辑器状态打架；卡片态同理（卡片自己的输入框
-> 归卡片管）。`mod` 在 `comboOf` 里同时吸收 `ctrlKey` 与 `metaKey`，所以 macOS 上
-> **⌃I 与 ⌘I 都能触发**（用户按 Ctrl+I 的习惯在 mac 上按 ⌃I 即可），Win/Linux 就是
-> Ctrl+I；两平台浏览器 DevTools 都带 `Shift`（⌘⌥I / Ctrl+Shift+I），不冲突。
+> 卡片态同理（卡片自己的输入框归卡片管）。键位是 `⌘/Ctrl+I`，属单修饰键这一档。
+> 裸 `⌘/Ctrl+I` 在 contenteditable 里是浏览器「斜体」默认行为（`execCommand`，
+> 绕过 Lexical 直接改 DOM），但本动作**只在 `browse` 态生效**——焦点在任意可编辑
+> 元素里时按键走 `editing` 分支、根本不查键位表，所以编辑中的斜体不受影响；只有焦点
+> 不在输入框时（此时斜体本来也没有作用对象）才被本插件接管。它也不与 DevTools 的带
+> `Shift` 组合（`⌘⌥I` / `Ctrl+Shift+I`）重叠。`mod` 在 `comboOf` 里同时吸收
+> `ctrlKey` 与 `metaKey`，所以 macOS 上 **⌃I 与 ⌘I 都能触发**，Win/Linux 就是
+> `Ctrl+I`。
 >
-> **键位分两档**：**单修饰键 `mod+键` 给全局动作**（`B` 左栏、`N` 右栏、`K` 工作区、
-> `M` 模型、`\` 文件浏览器、`I` 输入框、`/` 速查表），**`mod+alt` 这一档只留给右栏的
-> 两个「轴」**（`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
+> **键位分两档**：**单修饰键 `mod+键` 给全局动作**（`B` 左栏、`O` 右栏、`K` 工作区、
+> `M` 模型、`N` 新建会话、`I` 输入框、`\` 文件浏览器、`/` 速查表），**`mod+alt`
+> 这一档留给导航**（`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
 >
-> **为什么左栏是 `⌘/Ctrl+B`、右栏是 `⌘/Ctrl+N`**：
+> **新建会话为什么是 `⌘/Ctrl+N`**：`N`（New）是跨应用肌肉记忆（浏览器、编辑器、
+> 终端的新建都是它），语义就是已有的 `/new` 命令——调公开的
+> `uiWorkspace.startSession()`，与侧栏「新建会话」按钮、以及 `dsh-new-session`
+> 浏览器半部收到 `command/executed('new')` 之后的调用**逐字相同**（同一服务、
+> 同一无参形态：继承当前 / 最近的工作区，创建或复用其空白会话并打开）。三态放行：
+> 新建会话与当前会话是否有待回应卡片、焦点是否在输入框都无关，带修饰键的组合也
+> 既不占用卡片的**裸**数字 / `←` / `→` / `Enter`，也不干扰文本编辑。
+> 浏览器把 `⌘/Ctrl+N` 当作「新建窗口」保留键，见下文「已知限制」。
+>
+> **为什么左栏是 `⌘/Ctrl+B`、右栏是 `⌘/Ctrl+O`**：
 > ① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器一致），把
 > 「已经被训练过的反射」留给最基础的左栏（导航主面板，也对应上游不带限定词的
 > `sidebar` / `sidebarCol` → `layout.toggleSidebar()`）；
-> ② 右栏取 `N`（**导航面板**，navigation panel；上游叫 `rightbar`——
+> ② 右栏取 `O`（**Open panel**——打开/开合右栏面板；上游叫 `rightbar`——
 > `rightbarShown` / `rightbarTrack`），与左栏的 `B` **同档不同键**：两者都是
 > 「`mod+字母`」的等长组合，不再有「谁要多按一个修饰键」的层级差；
 > ③ 右栏的方向键（`mod+alt+←/→`）留给**右栏内部**的标签轴、`mod+alt+↑/↓` 留给
-> **左栏**的会话轴，`N` 只做开关、不占任何轴。
+> **左栏**的会话轴，`O` 只做开关、不占任何轴。
 > 两个动作 id 各自独立，互换只改 `src/config.ts` 的两行 `DEFAULT_BINDINGS`，或用
 > `localStorage` 覆盖单个动作的键位（见「自定义键位」）。
 >
@@ -74,7 +87,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > store 实例上的 `actions.placeTab(sessionId, tabId, paneId, 0)`；**绝不使用 `replaceTab`**
 > （那会 `closeTab` 掉被顶掉的那个 tab，可能丢掉编辑器的未保存修改）。三态均生效：
 > `mod+` 与卡片的裸键、与文本编辑都不冲突。
-> 已知限制：浏览器把 `⌘/Ctrl+N`（新建窗口）与 `⌘/Ctrl+K`（地址栏搜索）当作保留键，
+> 已知限制：浏览器把 `⌘/Ctrl+O`（打开本地文件）与 `⌘/Ctrl+K`（地址栏搜索）当作保留键，
 > 详见下文「已知限制」中的快捷键冲突；极窄窗口下上游会把「挤不下」的右栏
 > 再折叠回去（与右栏头部展开按钮同一条路）。
 >
@@ -163,7 +176,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 - 左栏开关（`⌘/Ctrl+B` → `layout.toggleSidebar()`）：宽屏下在侧栏契约默认宽（280px）与
   0 之间切换，窄屏（`viewportWidth < 1024`）下只翻转 `narrowExpanded` 覆盖——即
   AppFrame 左列轨道本身。服务缺席时 no-op（不吞键）。
-- 右栏开关（`⌘/Ctrl+N` → `sidebarRight.toggleExpanded()`）：与右栏头部的折叠按钮
+- 右栏开关（`⌘/Ctrl+O` → `sidebarRight.toggleExpanded()`）：与右栏头部的折叠按钮
   （`[data-sidebar-right-toggle]`）**同一入口**——反转**当前会话**右栏面板的展开态。
   展开态是 `dsh-client-ui-sidebar-right` 的会话级 store 状态：右侧 seat 重渲染后由
   自己的 `useLayoutEffect` 调 `layout.openRightbar(track, fullscreen)` /
@@ -294,6 +307,14 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   > 真正的 `rootElement.focus()` 在选区调和器里，且只在「当前 DOM 选区已等于目标
   > 选区」的分支中执行——DOM 选区落在 composer 之外时（刚在正文里点选过文本）
   > 它不会把键盘焦点移回输入框。所以取宿主元素后直接 `focus()` 才是可靠原语。
+- 新建会话（`⌘/Ctrl+N` → `src/actions.ts` 的 `startNewSession`）：一次服务调用，
+  `uiWorkspace.startSession()`（无参）。这就是 `/new` 的落点——`dsh-new-session`
+  的浏览器半部监听 `command/executed`，收到 `name === 'new'` 后调的是**同一个**
+  `uiWorkspace.startSession()`；侧栏「新建会话」按钮走 `startSession(workspaceId)`。
+  所以本动作与 `/new` 语义逐字一致，没有另造一套「新建空白会话」逻辑，也不触碰
+  composer 草稿（不像「把 `/new` 写进输入框再提交」那样会冲掉用户已输入的内容）。
+  **无降级**：`uiWorkspace` 服务缺席 / 无 `startSession` / 抛错（无挂载会话面）
+  一律 no-op 且**不吞键**，**不回退**到 DOM 点击侧栏按钮。
 - 会话跳转（`⌘/Ctrl+Alt+↑/↓`）：在**活跃会话**之间跳转。活跃 =
   正在运行（`running`）∪ 有待处理交互（待处理交互表命中）∪
   刚完成未查看（`completed`）。
@@ -347,9 +368,11 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 - 计划评审键位语义以请求数据为准（`1`/`2`/`3` = 确认 / 拒绝 / 去聊天里说）；
   请求未提供「拒绝」选项时 `2` 为空操作。
 - **聚焦输入框只在 `browse` 态生效**：焦点已经在任意可编辑元素里（`editing`）时
-  `⌘/Ctrl+I` 不接管也不吞键——否则会在 contenteditable 里触发浏览器「斜体」
-  （`execCommand('italic')` 直接改 DOM，绕过 Lexical）。若你在别的输入框里想跳到
-  对话输入框，请先 `Esc` / 点击对话区域退出编辑态再按。
+  `⌘/Ctrl+I` 不接管也不吞键（该动作在 `editing` 态本身无事可做）。这同时化解了与
+  contenteditable「斜体」默认键（`execCommand('italic')` 直接改 DOM，绕过 Lexical）
+  的同键问题——编辑态根本不查键位表，斜体照常；只有焦点不在输入框时才由本插件接管
+  （此时斜体本来也无对象）。若你在别的输入框里想跳到对话输入框，请先 `Esc` / 点击
+  对话区域退出编辑态再按。
 - **聚焦输入框依赖 composer 已渲染**：目标会话的输入框从未挂载（例如该会话从未在
   当前布局里显示过）时 `editor.getRootElement()` 为 `null`，动作 no-op（不吞键）；
   空白/hero 会话、composer 被 block 停用时同理。
@@ -376,7 +399,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   （`slots.entries` 找不到）、右栏自己那份会话级 store（`slots.resolveStore` 抛
   `store handle is not registered`）、或该会话尚无 `bySession[sessionId]`
   （从未展开过右栏、空白/hero 会话）时动作 no-op 且**不吞键**（无降级：不猜顺序、
-  不碰 DOM）。此时 `⌘/Ctrl+N` 先展开右栏即可。
+  不碰 DOM）。此时 `⌘/Ctrl+O` 先展开右栏即可。
 - **单个标签时不吞键**：面板只有一个标签（或没有标签）时 `←` / `→` 不循环回自身，
   no-op 并把按键交回页面——避免「按了没反应还吃掉按键」。
 - **`card` 态下右栏标签照常可切**：卡片占用的方向键是**裸** `←` / `→`（问答翻题），
@@ -391,14 +414,25 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   另一个已知的上游行为沿用：极窄窗口下右栏会被上游按「挤不下」的规则再折叠回去
   （与右栏头部展开按钮同一条路，见 `dsh-client-ui-layout` 的
   `canShow: normal.rightbar > 0`）。
-- **浏览器保留键**：`⌘/Ctrl+N`（新建窗口）与 `⌘/Ctrl+K`（地址栏搜索）是浏览器自己的
+- **浏览器保留键**：`⌘/Ctrl+O`（打开本地文件）与 `⌘/Ctrl+K`（地址栏搜索）是浏览器自己的
   快捷键，`⌘/Ctrl+M`（旧式静音/最小化）在部分系统上也留给窗口管理器。本插件在
   `document` 的**捕获阶段**监听，命中的动作会先 `preventDefault()` +
   `stopPropagation()` 再执行，因此在页面内这两组键由插件接管；但**焦点不在本页面时**
   （地址栏已聚焦、页面失焦）浏览器仍按自己的默认处理——此时先点一下页面再按即可。
-  若与你的浏览器/扩展冲突，用 `localStorage` 把 `sidebar.toggle`（左栏）/
-  `sidebarRight.toggle`（右栏）/ `workspace.pick` / `model.pick` / `sidebarRight.files`
-  任一动作改成别的组合即可（见「自定义键位」）。
+  **`⌘/Ctrl+N`（新建会话）是最硬的一例**：Chrome / Edge / Safari 把它绑成「新建窗口」，
+  且该保留键在多数浏览器里**不派发给页面**（页面收不到 keydown，`preventDefault` 无从下手），
+  因此 Win/Linux 的 `Ctrl+N` 在浏览器标签页里可能始终打开新窗口；macOS 上
+  `⌘N` 同样被浏览器截获，而 `⌃N`（`comboOf` 也吸收 ctrlKey）通常能到达页面。
+  若在你的浏览器上不生效，用 `localStorage` 把 `sidebar.toggle`（左栏）/
+  `sidebarRight.toggle`（右栏）/ `workspace.pick` / `model.pick` /
+  `sidebarRight.files` / `session.new` / `composer.focus` 任一动作改成别的组合即可
+  （见「自定义键位」）。
+- **聚焦输入框（`⌘/Ctrl+I`）与 contenteditable 斜体同键**：裸 `⌘/Ctrl+I` 在可编辑
+  区域里是浏览器「斜体」默认行为，本插件只在 `browse` 态（焦点不在可编辑元素）接管，
+  因此编辑中的斜体不受影响；代价是**焦点在对话输入框里时不能再按 `⌘/Ctrl+I` 回焦**
+  （此时本来也不需要）。macOS 上 `⌃I` 与 `⌘I` 都归一化成同一个 `mod+i`；Win/Linux
+  上 `AltGr` 在页面事件里就是 `ctrlKey + altKey`，不再与任何默认键位重合（本动作
+  已不带 `alt`）。不合口味的话经 `localStorage` 改绑 `composer.focus` 即可。
 - **模型浮窗只对「普通会话」可用**：上游 `directoryFor` 要求该会话有已挂载的 scope
   与 binding，且模型选择 RPC 只对**非子代理**会话开放（`subagentAddress(id) ===
   undefined`）。被寻址的子代理会话（继续对话的子会话）打开浮窗显示空态、
@@ -427,10 +461,11 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 （全部判空后才消费；`slots` 用于读侧栏视图 store（会话跳转顺序）、问答草稿 store
 与右栏标签 store（`rightbar.session` 的标签顺序 + 置顶用的 `actions.placeTab`），
 `layout` 用于 `⌘/Ctrl+B` 开关左栏，
-`sidebarRight` 用于 `⌘/Ctrl+N` 开关右栏、`⌘/Ctrl+Alt+←/→` 聚焦右栏标签与
+`sidebarRight` 用于 `⌘/Ctrl+O` 开关右栏、`⌘/Ctrl+Alt+←/→` 聚焦右栏标签与
 `⌘/Ctrl+\` 定位（打开/创建/置顶）文件浏览器，
 `conversation` 用于 `⌘/Ctrl+I` 取 composer 的 editor 宿主元素与 `⇧Tab` 的编辑态门闸，
-`uiWorkspace` 用于 `⌘/Ctrl+K` 工作区浮窗确认时连接/切换工作区，
+`uiWorkspace` 用于 `⌘/Ctrl+K` 工作区浮窗确认时连接/切换工作区、`⌘/Ctrl+N`
+新建会话（`startSession`，与 `/new` 同一条服务调用），
 `modelDirectories` 用于 `⌘/Ctrl+M` 模型浮窗取目录与 `⇧Tab` 循环思考强度——
 与 `/model` 弹层、composer 模型座位共用**同一份** per-session 目录实例）。
 无宿主逻辑（`index.ts` 为占位空宿主），无 react 依赖（速查表、工作区浮窗与模型浮窗
@@ -453,8 +488,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   `src/config.ts` 的 `DEFAULT_BINDINGS`），改完刷新页面生效；两个侧栏动作
   （`sidebar.toggle` 左栏 / `sidebarRight.toggle` 右栏）、右栏标签切换
   （`sidebarRight.tabPrev` / `sidebarRight.tabNext`）、定位文件浏览器并置顶
-  （`sidebarRight.files`）、工作区浮窗（`workspace.pick`）、模型浮窗
-  （`model.pick`）、思考强度循环（`model.effortNext`）与聚焦输入框
+  （`sidebarRight.files`）、新建会话（`session.new`）、工作区浮窗（`workspace.pick`）、
+  模型浮窗（`model.pick`）、思考强度循环（`model.effortNext`）与聚焦输入框
   （`composer.focus`）各自独立可覆盖。
   > 未注册的动作 id 写在 `bindings` 里不会触发：分发前先查动作注册表
   > （`ACTION_BY_ID`），未注册即忽略。
@@ -486,8 +521,11 @@ npm run check       # node --check 产物与宿主
 ```sh
 node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/card 态判定（DOM 桩不提供任何卡片；
                          # 问答断言直接落在卡片草稿 store 上——数字键必须写入 store、Enter 必须取自 store；
-                         # 另含 ⌘/Ctrl+B → layout.toggleSidebar（左栏）/ ⌘/Ctrl+N →
+                         # 另含 ⌘/Ctrl+B → layout.toggleSidebar（左栏）/ ⌘/Ctrl+O →
                          # sidebarRight.toggleExpanded（右栏）的两态调用、互不串场、自定义键位与无降级；
+                         # 以及 ⌘/Ctrl+N 新建会话并跳转：必须调公开的 uiWorkspace.startSession
+                         # （与 /new、侧栏「新建会话」同一条服务调用）、三态放行（含 card）、
+                         # 服务缺席 / 无 startSession / 抛错一律 no-op 不吞键、键位可覆盖；
                          # 以及 ⌘/Ctrl+Alt+←/→ 右栏标签切换：标签顺序必须取自
                          # rightbar.session 注册项的会话级 store（bySession[sessionId].layout
                          # 的 activePaneId 面板）、切换必须调 sidebarRight.focus，首末标签循环、
@@ -499,6 +537,7 @@ node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/ca
                          # 已在首位不调 placeTab、只作用于停靠面板且优先当前面板（浮窗与别的
                          # 分屏面板不搬动）、openTab 抛错时 no-op 不吞键、取数失败只跳过置顶；
                          # 以及 ⌘/Ctrl+I 聚焦输入框：binding.ctx 原样传给 input.for、只认 browse 态、
+                         # ⌘/Ctrl+Alt+I 不再是键位（不聚焦也不吞键）、⌃I 与 ⌘I 都归一化成同一组合、
                          # for 缺席回退 shell(id)、任一环缺失/抛错一律 no-op 不吞键；
                          # 以及 ⌘/Ctrl+K 工作区浮窗：列表按宿主顺序渲染（title / 路径末段 /
                          # 当前标记 / 会话数）、初始高亮 = 当前会话所属工作区、↑↓ 只移动高亮

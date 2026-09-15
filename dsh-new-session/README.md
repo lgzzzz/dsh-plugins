@@ -9,7 +9,10 @@
 | 命令行抑制 | 隐藏 `/new` 的 "new 已完成" 生命周期行（命令仍持久记录，只是不渲染 UI 文本） |
 
 > `Esc` 停止当前会话交互树由 `dsh-kbd-hotkeys` 提供（动作 `session.stop`，默认绑定
-> `escape`）；本插件不监听键盘事件。
+> `escape`）；**`⌘/Ctrl+N` 新建会话并跳转**同样由 `dsh-kbd-hotkeys` 提供（动作
+> `session.new`）：它直接调公开的 `uiWorkspace.startSession()`——与本插件浏览器半部
+> 收到 `command/executed('new')` 后的调用逐字相同，故等同 `/new`，且不写入命令
+> 生命周期行。本插件不监听键盘事件。
 
 ## 结构
 

@@ -25,7 +25,7 @@
 | `dsh-fork-inbox-guard` | 分叉子会话丢弃继承自源会话、仍 pending 的输入（子代理显式跳过） |
 | `dsh-fullwidth-chat` | 对话列全宽展示 |
 | `dsh-git-guard` | `git commit` 与非 force `git push` 需用户审批；force push 与 rebase / merge / cherry-pick / reset --hard 等破坏性历史改写直接禁止，并把约束注入系统提示词 |
-| `dsh-kbd-hotkeys` | 全局快捷键：审批 / 问答键盘化、左右栏开关、右栏标签切换、右栏文件浏览器定位并置顶、活跃会话跳转、工作区浮窗、模型浮窗、思考强度循环、聚焦对话输入框、⌘/ 速查表 |
+| `dsh-kbd-hotkeys` | 全局快捷键：审批 / 问答键盘化、左右栏开关、右栏标签切换、右栏文件浏览器定位并置顶、新建会话（⌘/Ctrl+N，等同 `/new`）、活跃会话跳转、工作区浮窗、模型浮窗、思考强度循环、聚焦对话输入框、⌘/ 速查表 |
 | `dsh-new-session` | `/new` 新建并跳转空白会话 |
 | `dsh-rightbar-tab-width` | 右栏 tab 胶囊定宽 100px（取值等于上游地板与分栏判定兜底常量，分栏判定与上游默认一致） |
 

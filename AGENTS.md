@@ -45,7 +45,7 @@ Junction 目标均有效）。核对命令见「挂载与激活（Web Profile）
 | `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`：监听 `agent/created`，折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，与当前 pending 求交后 `inbox.remove()` | — | 分叉子会话丢弃「继承自源会话、仍 pending」的输入；有 runtime owner 的子代理显式跳过，普通 / 非 seeded 会话不动作 |
 | `dsh-fullwidth-chat` | Client only（纯 JS；宿主占位） | `lib/index.js`：空宿主（仅供组合行解析、供 client-modules 扫描） | `lib/client.js`：注入样式 | 对话列全宽展示 |
 | `dsh-git-guard` | Host only（TS） | `index.ts`：钩挂 `tools/pre-execute`；另经 `ctx.systemPrompt.section()` 注入约束区段（区段文本按会话权限动态求值） | — | `git commit` 与非 force `git push` → `ask`；force push 及 rebase / merge / cherry-pick / reset --hard 等破坏性历史改写 → `deny`；约束同时以系统提示词告知模型。**当前权限为完全权限（`danger-full-access`）时整体退出**：不拦截、不索取授权、区段文本为空串；判定取自 `ctx.sandboxPolicy.resolve({ session })`（会话为 `exec.agent.session`），服务缺席 / 无 `resolve` / 抛错一律按非完全权限处理（失败关闭） |
-| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏文件浏览器定位、工作区浮窗、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
+| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏文件浏览器定位、新建会话（等同 `/new`）、工作区浮窗、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
 | `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令（`inject: ['commands']`） | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | `/new` 新建并跳转空白会话 |
 | `dsh-rightbar-tab-width` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/client.ts` + `src/css.ts` → esbuild → `lib/client.js` | 右栏 tab 胶囊定宽：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」，进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏）。取值 100 与兜底常量 `SPLIT_MINIMUMS.chip` 同值 ⇒ 分栏判定与上游默认逐字相同；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2），右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；详见其 README |
 
@@ -251,25 +251,26 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 | `question.option` / `question.submit`（通用问答） | `1`–`9` / `Enter` | **服务** | 同上 → 卡片自身的 slot 草稿 store（`slots.entries('conversation.composer')` 注册项 + `uiSession.resolve(sessionId)` + `slots.resolveStore`）写入 `{index, drafts}`：数字键只改选中态（**不翻题**）；Enter 保留上游 `continueFlow` 推进（当前题已作答且非末题 → 翻到下一题），末题仅在**全部题目完成后**结算 `answer({answers:[{id,selected,custom?}]})`（未完成即 no-op，不跳回未完成题）；卡片实时高亮，与鼠标点选共用同一状态 |
 | `question.prev` / `question.next`（通用问答） | `←` / `→` | **服务** | 同一草稿 store 写入 `{index ± 1, drafts}`（草稿原样保留）；对齐上游 pager `nav.prev`/`nav.next` 的 disabled 语义，首题/末题越界 no-op 且不吞键 |
 | `card` 态判定（数字键 / `←` `→` / `Enter` 门闸） | — | **服务** | 当前会话是否命中 `uiSession.pendingInteractions` 快照 |
-| `sidebar.toggle` / `sidebarRight.toggle` | ⌘/Ctrl+B / ⌘/Ctrl+N | **服务** | 左栏 `layout.toggleSidebar()`；右栏 `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；帧轨道由右侧 seat 自行同步 `layout.openRightbar`/`closeRightbar`）。两者均 `browse` + `editing`：左栏沿用跨应用肌肉记忆 `B`，右栏取 `N`（导航面板 navigation panel），同属**单修饰键**这一档 |
+| `sidebar.toggle` / `sidebarRight.toggle` | ⌘/Ctrl+B / ⌘/Ctrl+O | **服务** | 左栏 `layout.toggleSidebar()`；右栏 `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；帧轨道由右侧 seat 自行同步 `layout.openRightbar`/`closeRightbar`）。两者均 `browse` + `editing`：左栏沿用跨应用肌肉记忆 `B`，右栏取 `O`（Open panel），同属**单修饰键**这一档 |
 | `sidebarRight.tabPrev` / `sidebarRight.tabNext` | ⌘/Ctrl+Alt+←/→ | **服务** | 标签顺序读右栏自己的会话级 slot store：`slots.entries('rightbar.session')` 注册项上的 store handle → `uiSession.resolve(sessionId)` 作用域绑定 → `slots.resolveStore` → `getSnapshot().bySession[sessionId].layout`，取 `layout.nodes[layout.activePaneId]`（**当前面板**）的 `tabs` / `activeTabId`；切换调公开的 `sidebarRight.focus(tabId)`（与标签 chip 点击同一入口）。**只在当前面板内循环**，单标签 / 该会话尚无面板 / 任一环不可用一律 no-op 不吞键（**无降级**）；**任意态**（含 `card`——问答卡片只占**裸** `←`/`→`，与 `mod+alt` 组合键不冲突） |
 | `sidebarRight.files` | ⌘/Ctrl+`\` | **服务** | 定位右栏文件浏览器页：公开的 `sidebarRight.openTab('files')`（`kind` 来自常驻挂载的 `@deepseek-ai/dsh-client-ui-sidebar-files`）——页类型按**目标面板**（`activeDockPaneId`）去重，该面板已有文件浏览器页就只聚焦、**没有就创建**（上游 `openContent` 恒先 `planSetExpanded(true)` ⇒ 同一步展开右栏）；随后经同一份会话级 slot store 的**活实例** `actions.placeTab(sessionId, tabId, paneId, 0)`（与**标签拖拽**同一入口，**不用** `replaceTab`——那会关掉被顶掉的 tab）把它置于标签栏首位，**已在首位则零提交**。只认停靠面板（浮窗 / 别的分屏面板里的同页不搬）。**任意态**（`card` / `editing` / `browse`）；`openTab` 抛错（无挂载会话面 / `files` 类型未注册）或置顶任一取数环不可用一律 **no-op 不吞键**，且**只跳过置顶**、绝不回退 DOM |
 | `composer.focus` | ⌘/Ctrl+I（`mod+i`；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃I 与 ⌘I 均可） | **服务取元素 + 一次 `focus()`** | `sessions.list` 快照 `current` → `sessions.binding(id).ctx` → `conversation.input.for(actx)`（`for` 缺席回退 `InputHub.shell(id)`，同一 `SessionInputShell`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。仅 `browse` 态；上游无可触发的聚焦服务面（`commandUi.bindComposerFocus` 只 bind 不 trigger，全仓无人调用；`editor.focus()` 非 DOM 聚焦原语），任一环缺失即 no-op 不吞键、不回退 DOM 查询 |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
+| `session.new` | ⌘/Ctrl+N | **服务** | 公开的 `uiWorkspace.startSession()`（无参）——与侧栏「新建会话」按钮、`dsh-new-session` 浏览器半部收到 `command/executed('new')` 后的调用**逐字相同**，故等同 `/new`：继承当前 / 最近的工作区，创建或复用其空白会话并打开。不触碰 composer 草稿。**任意态**；`uiWorkspace` 缺席 / 无 `startSession` / 抛错（无挂载会话面）一律 no-op 不吞键，**不回退 DOM 点侧栏按钮**。注意浏览器把 ⌘/Ctrl+N 当「新建窗口」保留键（多数浏览器不把该键派发给页面），键位可经 localStorage 覆盖 |
 | `workspace.pick` | ⌘/Ctrl+K | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：列表 = `workspaces.list.getSnapshot().items` 的**宿主顺序**（与侧栏工作区分组同源；`title` → 路径末段 → 原路径 作主标签，`当前` = 当前会话在该工作区 `sessionIds` 名下）；`↑`/`↓` 只移动高亮（clamp 不循环，**不触发导航**），`Enter` / 行内 `mousedown` 才调公开的 `uiWorkspace.openWorkspace(workspaceId)`（`dsh-client-ui-workspace` 的 `UiWorkspace` 服务：复用该工作区已挂载的空白会话，没有就 `sessions.create({workspaceId})` 新建再打开——与侧栏分组「＋」同一条「连接工作区」路径）；`Esc` 或同组合键关闭，同层内 `⌘/` 互切速查表。**任意态**；`workspaces` 缺席/无 `items` → 空态浮窗，`uiWorkspace` 缺席或 `openWorkspace` 抛错 → 确认 no-op，**不回退 DOM 点击侧栏分组** |
 | `model.pick` | ⌘/Ctrl+M | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：目录 = `ctx.modelDirectories.directoryFor(当前会话)`——与 `/model` 弹层、composer 模型座位是**同一份** per-session 实例；列表 = `load()` 后读 `store.getSnapshot()` 的 `groups` **按宿主顺序展开**（提供方分组标题 + 组内顺序都不重排，失败提供方折成底部小字不占行），每行完整选择复刻上游弹层 `selectionOf`（`reasoningEffort` = 当前选择落在该模型时的 `current.reasoningEffort`，否则 `model.reasoning.defaultEffort`，无则省略）；`↑`/`↓` 只移动高亮（clamp 不循环），`Enter` / 行内 `mousedown` 才调 `directory.select(selection)`（与两个上游入口同一条 `session.selectModel` 提交路径），浮窗内 `⇧Tab` 就地循环强度（只更新顶部「当前」行）。列表异步取、渲染带序号守卫（过期结果丢弃）。**任意态**；`modelDirectories` 缺席 / 无当前会话 / 被寻址的子代理会话（`sessions.subagentAddress(id) !== undefined`）/ `directoryFor` 抛错 → 空态浮窗，`load()` 拒绝 → 空态 + 失败小字，`select()` 拒绝 → 浮窗照关（错误落在共享 store 上），**不回退 DOM 点 composer 模型标签** |
 | `model.effortNext` | `⇧Tab` | **服务（+ 一次 `contains` 门闸）** | 同一目录实例上循环 `reasoningEffort`：候选档复刻上游座位 `effortChoices`（`[Default（仅当模型无 defaultEffort 时）] + reasoning.efforts`），当前档 = `current.reasoningEffort ?? reasoning.defaultEffort`（不在候选里时从首项开始），`select` 只改强度、provider/model 沿用。**`browse` / `editing`**；`editing` 态另有元素级门闸——对服务链路取来的 composer 宿主元素调 `contains(event.target)`（`isComposerTarget`，与 `composer.focus` 同一条取元素链路），焦点在设置面板输入框 / Monaco 隐藏 textarea 等别处可编辑元素时不接管（`⇧Tab` 在别处仍是反向移动焦点 / 反向缩进）。模型无推理元数据 / 只有一档 / 目录不可用 / 取元素环缺失 → **no-op 不吞键**；`card` 态不接管（归卡片） |
 | `session.stop` | `Esc`（仅当前会话无待审批卡片时） | **服务** | `sessions.binding(id).session.cancel()`（含直系子代理） |
 | `help.toggle` | ⌘/Ctrl+/ | 插件自身浮层 | 纯 DOM 浮层（不消费上游服务） |
 
-键位分两档：**单修饰键 `⌘/Ctrl+字母` 给全局动作**（左栏 `B`、右栏 `N`、工作区 `K`、
-模型 `M`、文件浏览器 `\`、输入框 `I`、速查表 `/`），**`mod+alt` 只留给两个「轴」**
+键位分两档：**单修饰键 `⌘/Ctrl+字母` 给全局动作**（左栏 `B`、右栏 `O`、工作区 `K`、
+模型 `M`、新建会话 `N`、输入框 `I`、文件浏览器 `\`、速查表 `/`），**`mod+alt` 给导航**
 （`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
-侧栏开关的分配：**左栏 = ⌘/Ctrl+B**、**右栏 = ⌘/Ctrl+N**。
+侧栏开关的分配：**左栏 = ⌘/Ctrl+B**、**右栏 = ⌘/Ctrl+O**。
 理由两条：① `⌘/Ctrl+B` 开关侧栏是跨应用肌肉记忆（VS Code / Slack / 各类编辑器），
 把已被训练过的反射留给最基础的左栏（导航主面板，对应上游不带限定词的
-`sidebar` / `sidebarCol` → `layout.toggleSidebar()`）；② 右栏取 `N`（**导航面板**，
-navigation panel；上游叫 `rightbar`——`rightbarShown` / `rightbarTrack`），与左栏的 `B`
+`sidebar` / `sidebarCol` → `layout.toggleSidebar()`）；② 右栏取 `O`（**Open panel**，
+开合右栏面板；上游叫 `rightbar`——`rightbarShown` / `rightbarTrack`），与左栏的 `B`
 **同档不同键**（都是「`mod+字母`」的等长组合，没有谁要多按一个修饰键的层级差）。
 两个动作 id 各自独立可经 localStorage 覆盖，互换只改 `src/config.ts` 两行
 `DEFAULT_BINDINGS`。
@@ -302,6 +303,14 @@ no-op 且不吞键；两个动作 id（`sidebarRight.tabPrev` / `sidebarRight.ta
 弹层与 composer 模型座位共用的那一份，所以浮窗里切换后 composer 的模型标签同步变化，
 反之亦然。
 
+**聚焦输入框 = ⌘/Ctrl+I**：属单修饰键这一档（`I` = Input），因此 `mod+alt` 档只剩
+方向键轴（右栏标签 `←`/`→`、活跃会话 `↑`/`↓`）。裸 `⌘/Ctrl+I` 与 contenteditable 的
+浏览器「斜体」默认键同键，但该动作**只放行 `browse`**：焦点在任意可编辑元素里时走
+`editing` 分支、不查键位表，斜体不受影响；只有焦点不在输入框（此时斜体本就无对象）
+时才被接管。取元素仍是服务链路（`conversation.input.for` → `shell.editor.getRootElement()`
+→ `focus({preventScroll:true})`，`for` 缺席回退 `InputHub.shell(id)`），无降级。
+动作 id `composer.focus` 独立可覆盖；改绑回旧键位只需覆盖 localStorage。
+
 **思考强度循环 = ⇧Tab**：上游把强度档收在「模型菜单 → Effort」二级面板里、**没有默认
 键位**，而「在模型上按 Tab 循环档位」是既有习惯；候选档与当前档都逐字复刻上游 composer
 座位的 `effortChoices` / `effectiveEffort`。它只放行 `browse` / `editing`，且 `editing`
@@ -321,9 +330,10 @@ no-op 且不吞键；两个动作 id（`sidebarRight.tabPrev` / `sidebarRight.ta
 
 验证：`node test-services.mjs`（最小 DOM 桩不提供任何卡片，断言服务路径与草稿 store
 写入，含数字键不翻题、`←`/`→` 只改题号、首末题不循环、Enter 非末题推进 / 末题未完成不
-结算；左右栏开关（`⌘/Ctrl+B` / `⌘/Ctrl+N`）分别打各自服务、互不串场、自定义键位与无降级；
+结算；左右栏开关（`⌘/Ctrl+B` / `⌘/Ctrl+O`）分别打各自服务、互不串场、自定义键位与无降级；
 右栏标签切换与文件浏览器
-定位 / 置顶的取数入口与边界；⌘/Ctrl+I 聚焦输入框的取数链路；工作区浮窗与模型浮窗的列表
+定位 / 置顶的取数入口与边界；⌘/Ctrl+N 新建会话（必须调 `uiWorkspace.startSession`、三态放行、
+服务缺席 / 无 `startSession` / 抛错 no-op 不吞键）；⌘/Ctrl+I 聚焦输入框的取数链路；工作区浮窗与模型浮窗的列表
 顺序、高亮 clamp、确认路径与空态；`⇧Tab` 的候选档与编辑态门闸）与
 `node test-dispatch.mjs`（会话跳转分发：按侧栏顺序，覆盖分组 / flat / 权威来源不可用时
 no-op——**无降级**）。

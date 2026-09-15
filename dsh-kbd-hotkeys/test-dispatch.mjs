@@ -259,7 +259,7 @@ function check(label, actual, expected) {
 }
 
 /* ------------------------------------------------------------------ *
- * 场景 4:⌘/Ctrl+B(左栏)与 ⌘/Ctrl+N(右栏)在 browse / editing 态都生效
+ * 场景 4:⌘/Ctrl+B(左栏)与 ⌘/Ctrl+O(右栏)在 browse / editing 态都生效
  * ------------------------------------------------------------------ */
 {
   console.log('\n--- 场景 4:侧栏开关的键位与态闸门 ---')
@@ -282,11 +282,11 @@ function check(label, actual, expected) {
   event = env.press('b', { altKey: false, target: editable })
   check('editing 态 ⌘/Ctrl+B → 左栏 + 吞键', [left, right, event.propagationStopped], [2, 0, true])
 
-  // 右栏 = ⌘/Ctrl+N(单修饰键这一档;altKey 显式关掉,免得落到 mod+alt 的会话跳转上)
-  event = env.press('n', { altKey: false })
-  check('browse 态 ⌘/Ctrl+N → 右栏 + 吞键', [left, right, event.propagationStopped], [2, 1, true])
-  event = env.press('n', { altKey: false, target: editable })
-  check('editing 态 ⌘/Ctrl+N → 右栏 + 吞键', [left, right, event.propagationStopped], [2, 2, true])
+  // 右栏 = ⌘/Ctrl+O(单修饰键这一档;altKey 显式关掉,免得落到 mod+alt 的会话跳转上)
+  event = env.press('o', { altKey: false })
+  check('browse 态 ⌘/Ctrl+O → 右栏 + 吞键', [left, right, event.propagationStopped], [2, 1, true])
+  event = env.press('o', { altKey: false, target: editable })
+  check('editing 态 ⌘/Ctrl+O → 右栏 + 吞键', [left, right, event.propagationStopped], [2, 2, true])
 }
 
 console.log(failures === 0 ? '\nall dispatch probes passed' : `\n${failures} probe(s) FAILED`)
