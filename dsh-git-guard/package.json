@@ -1,7 +1,7 @@
 {
   "name": "dsh-git-guard",
-  "version": "2.3.0",
-  "description": "Intercept git push and git commit issued via the bash tool (ask for user approval) on the tools/pre-execute waterfall; injects a Chinese system-prompt section telling the model that commits and pushes require user permission and must not be retried if declined. Fully stands down (no interception, no authorization request, no prompt section) while the session's effective sandbox mode is danger-full-access (the GUI \"full access\" preset)",
+  "version": "2.4.0",
+  "description": "Intercept sensitive git operations issued via any shell tool on the tools/pre-execute waterfall and ask the user for approval (git commit, git push including force push, rebase, merge, cherry-pick, reset --hard, revert, am, filter-branch/filter-repo); never denies on its own. Injects a Chinese system-prompt section telling the model that these operations all require user permission and must not be retried if declined. Fully stands down (no interception, no authorization request, no prompt section) while the session's effective sandbox mode is danger-full-access (the GUI \"full access\" preset)",
   "type": "module",
   "main": "index.ts",
   "dsh": {

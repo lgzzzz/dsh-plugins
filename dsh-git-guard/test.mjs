@@ -1,6 +1,9 @@
 /**
  * dsh-git-guard 行为冒烟测试。
  *
+ * 全部敏感 git 操作（commit / push，含 force push 与 rebase、merge、cherry-pick、
+ * reset --hard 等破坏性历史改写）一律断言为 `ask`：本插件不再直接 deny。
+ *
  * 直接用支持 Type Stripping 的运行时加载 index.ts（Node 22.18+ / 23.6+ / 24+，
  * 或 App 内置运行时）：
  *
@@ -97,7 +100,7 @@ for (const [label, text] of [
   assert.match(text, /git push/, `${label}：区段提及 git push`)
   assert.match(text, /git commit/, `${label}：区段提及 git commit`)
   assert.match(text, /用户许可/, `${label}：区段声明需要用户许可`)
-  assert.match(text, /git push --force|rebase/, `${label}：区段提及破坏性操作被禁止`)
+  assert.match(text, /git push --force|rebase/, `${label}：区段提及破坏性操作同样须获许可`)
 }
 assert.equal(sectionText(fullAccessSession), '', '完全权限会话：区段文本为空，不向模型提出授权要求')
 
@@ -147,23 +150,67 @@ for (const command of [
   assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知推送需用户许可')
 }
 
-// --- deny：破坏性 / 历史改写操作 ---
+// --- ask：破坏性 / 历史改写操作（原先直接 deny，现一律改为请求用户授权）---
 for (const command of [
   'git push --force',
   'git push -f',
   'git push --force-with-lease',
+  'git push --force-if-includes',
   'git rebase',
   'git rebase -i HEAD~3',
   'git merge feature',
   'git cherry-pick abc123',
   'git reset --hard HEAD~1',
   'git reset --keep',
+  'git reset --merge',
+  'git revert abc123',
+  'git am < patch.diff',
+  'git filter-branch -- --all',
+  'git filter-repo --force',
+  'git add . && git push --force',
+  'bash -c "git rebase -i HEAD~3"',
+  'sudo git reset --hard HEAD~1',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(破坏性): ${command}`)
+  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知需用户许可')
+  assert.match(decision?.reason ?? '', /批准或拒绝/, 'ask reason 交给用户裁决')
+}
+
+// 回归：任何命令都不再由本插件直接拒绝（deny 语义已全部改为 ask）。
+for (const command of [
+  'git commit -m x',
+  'git push',
+  'git push --force',
+  'git rebase -i HEAD~3',
+  'git merge feature',
+  'git cherry-pick abc123',
+  'git reset --hard HEAD~1',
   'git revert abc123',
   'git filter-branch -- --all',
 ]) {
   const decision = await decide(command)
-  assert.equal(decision?.kind, 'deny', `deny: ${command}`)
-  assert.equal(typeof decision?.reason, 'string', 'deny 附禁止原因')
+  assert.notEqual(decision?.kind, 'deny', `不再产生 deny: ${command}`)
+}
+
+// 同一条命令行内多处命中：破坏性措辞优先于普通措辞，且只产生一个决定。
+{
+  const decision = await decide('git commit -m x && git push --force')
+  assert.equal(decision?.kind, 'ask', '混合命令仍是 ask')
+  assert.match(decision?.reason ?? '', /--force/, '混合命令优先提示破坏性操作')
+  assert.deepEqual(Object.keys(decision).sort(), ['kind', 'reason'], '交出的决定只含 kind / reason（内部标记已剥掉）')
+}
+
+// 逐段 / 逐层审查：破坏性操作在后续语句段里也能被优先挑出。
+{
+  const decision = await decide('git add .; git commit -m x; git reset --hard HEAD~1')
+  assert.equal(decision?.kind, 'ask')
+  assert.match(decision?.reason ?? '', /reset --hard/, '后续语句段里的破坏性操作仍优先提示')
+}
+{
+  const decision = await decide('bash -c "git push --force"')
+  assert.equal(decision?.kind, 'ask')
+  assert.match(decision?.reason ?? '', /--force/, 'shell 负载内的破坏性操作同样优先提示')
 }
 
 // --- 放行：安全 git 子命令与非 git 命令（本插件不介入 → 交给链尾）---
@@ -219,7 +266,7 @@ defaultMode = 'workspace-write'
 
 // 权限是 per-session 的：别的会话不因某会话是完全权限而失去护栏。
 assert.equal((await decide('git commit -m x', { session: workspaceSession }))?.kind, 'ask')
-assert.equal((await decide('git push --force', { session: workspaceSession }))?.kind, 'deny')
+assert.equal((await decide('git push --force', { session: workspaceSession }))?.kind, 'ask')
 
 // 只有 danger-full-access 是「完全权限」：read-only 照旧拦截且照旧告知模型。
 const readOnlySession = { id: 'session-read-only' }
@@ -236,10 +283,10 @@ assert.deepEqual(
   '权限判定只取用 sandboxPolicy 服务',
 )
 
-// --- 失败关闭：权限未知按「非完全权限」处理，照常拦截 ---
+// --- 失败关闭：权限未知按「非完全权限」处理，照常索取授权 ---
 policyMounted = false
 assert.equal((await decide('git commit -m x', { session: fullAccessSession }))?.kind, 'ask', '服务缺席仍 ask')
-assert.equal((await decide('git push --force', { session: fullAccessSession }))?.kind, 'deny', '服务缺席仍 deny')
+assert.equal((await decide('git push --force', { session: fullAccessSession }))?.kind, 'ask', '服务缺席仍 ask(force push)')
 policyMounted = true
 
 policyHasResolve = false
@@ -248,7 +295,7 @@ policyHasResolve = true
 
 policyFails = true
 assert.equal((await decide('git commit -m x', { session: fullAccessSession }))?.kind, 'ask', 'resolve 抛错仍 ask')
-assert.equal((await decide('git rebase', { session: fullAccessSession }))?.kind, 'deny', 'resolve 抛错仍 deny')
+assert.equal((await decide('git rebase', { session: fullAccessSession }))?.kind, 'ask', 'resolve 抛错仍 ask(破坏性操作)')
 assert.notEqual(sectionText(fullAccessSession), '', 'resolve 抛错时区段仍保留（不误判为完全权限）')
 policyFails = false
 

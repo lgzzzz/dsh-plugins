@@ -1,12 +1,15 @@
 /**
  * dsh-git-guard — shell 工具中的 git 敏感操作门禁。
- * `git commit` / 非 force `git push` → ask; force push、rebase、merge、cherry-pick、reset --hard → deny; 其余放行。
- * 挂 `tools/pre-execute`, 返回 allow/deny/ask; 约束另经 `ctx.systemPrompt.section()` 注入。
+ * 全部敏感操作一律 ask(需用户授权): `git commit`、`git push`(含 force)、rebase、merge、
+ * cherry-pick、reset --hard、revert、am、filter-branch / filter-repo 等; 其余放行。
+ * 本插件不产生 deny —— 「默认禁止」的语义已改为「默认须经用户授权」, 授权与否由用户裁决。
+ * 挂 `tools/pre-execute`, 返回 allow/ask; 约束另经 `ctx.systemPrompt.section()` 注入。
  * 完全权限(danger-full-access)时整体退出(失败关闭): 判定取 `ctx.sandboxPolicy.resolve({ session })`。
  */
 import type { Context } from '@deepseek-ai/cordis'
 
-/** `tools/pre-execute` 瀑布钩子的决定类型(同 dsh-tools 的 PreToolDecision). */
+/** `tools/pre-execute` 瀑布钩子的决定类型(同 dsh-tools 的 PreToolDecision).
+ *  `deny` 仅为与宿主签名同形而保留; 本插件的策略层不再产生它(敏感操作一律 ask). */
 type PreToolDecision =
   | { kind: 'allow' }
   | { kind: 'deny'; reason: string }
@@ -36,7 +39,7 @@ interface ShellArguments {
 /** 文件沙箱模式(dsh-sandbox-policy 的闭集联合). */
 type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 
-/** `dsh-sandbox-policy` 服务切片: 只用 `resolve()`; 服务缺席时保持拦截(失败关闭). */
+/** `dsh-sandbox-policy` 服务切片: 只用 `resolve()`; 服务缺席时照常索取授权(失败关闭). */
 interface SandboxPolicyService {
   resolve(request?: { readonly session?: SessionRef }): { readonly mode: SandboxMode }
 }
@@ -63,7 +66,8 @@ interface AssembleContext {
 const PUSH_POLICY_TEXT =
   '`git commit` 与 `git push` 均须获得用户许可后才能执行; ' +
   '破坏性历史改写与远程改写操作(如 `git rebase`、`git merge`、`git cherry-pick`、' +
-  '`git reset --hard`、`git push --force`)被禁止, 未获明确指示不得执行. ' +
+  '`git revert`、`git reset --hard`、`git push --force`)同样须先获得用户许可, ' +
+  '未获明确许可不得执行; 这些操作会以授权请求的形式征求你的用户同意, 不得自行绕过. ' +
   '若用户拒绝了某次代码提交或代码推送, 请停止, 不得再次尝试提交或推送; ' +
   '也不要以命令替换、别名、脚本包装等任何间接形式绕过. ' +
   '如需继续, 请等待用户的明确指示.'
@@ -80,7 +84,7 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** dsh-system-prompt 服务(运行时由宿主提供). */
     systemPrompt: SystemPromptService
-    /** dsh-sandbox-policy 服务; 仅为 `ctx.get` 提供类型, 属机会式取用, 缺席时照常拦截. */
+    /** dsh-sandbox-policy 服务; 仅为 `ctx.get` 提供类型, 属机会式取用, 缺席时照常索取授权. */
     sandboxPolicy: SandboxPolicyService
   }
 }
@@ -362,50 +366,72 @@ function extractSubstitutions(command: string): string[] {
   return out
 }
 
-// --- 策略 ---
+// --- 策略: 一律向用户请求授权, 不产生 deny ---
 
-/** `push` 的强制标志集: 出现即 deny(改写远程历史). */
+/** `push` 的强制标志集: 出现即按「远程改写」措辞请求授权. */
 const FORCE_FLAGS = new Set(['--force', '-f', '--force-with-lease', '--force-if-includes'])
 
-/** `reset` 的破坏性模式标志集: 出现即 deny(可能丢失工作区改动). */
+/** `reset` 的破坏性模式标志集: 出现即按「破坏性重置」措辞请求授权. */
 const RESET_DESTRUCTIVE = new Set(['--hard', '--merge', '--keep'])
 
-/** 直接 deny 的子命令(历史改写 / 危险操作)及理由. */
-const DENY_SUBCOMMANDS: Record<string, string> = {
-  rebase: 'git rebase 会改写提交历史, 已被 Git Guard 禁止. 请与用户确认后再执行.',
-  merge: 'git merge 会改写提交历史, 已被 Git Guard 禁止. 请与用户确认后再执行.',
-  'cherry-pick': 'git cherry-pick 会改写提交历史, 已被 Git Guard 禁止. 请与用户确认后再执行.',
-  revert: 'git revert 操作已被 Git Guard 禁止. 请与用户确认后再执行.',
-  am: 'git am 操作已被 Git Guard 禁止. 请与用户确认后再执行.',
-  'filter-branch': 'git filter-branch 会改写历史, 已被 Git Guard 禁止. 请与用户确认后再执行.',
-  'filter-repo': 'git filter-repo 会改写历史, 已被 Git Guard 禁止. 请与用户确认后再执行.',
+/** 授权请求的统一尾句: 把决定权交回用户(批准或拒绝). */
+const ASK_SUFFIX = '需要你的许可。请审核后批准或拒绝.'
+
+/** 各敏感子命令的授权请求理由(历史改写 / 危险操作, 均改为 ask). */
+const ASK_SUBCOMMANDS: Record<string, string> = {
+  rebase: `git rebase 会改写提交历史, ${ASK_SUFFIX}`,
+  merge: `git merge 会改写提交历史, ${ASK_SUFFIX}`,
+  'cherry-pick': `git cherry-pick 会改写提交历史, ${ASK_SUFFIX}`,
+  revert: `git revert 操作, ${ASK_SUFFIX}`,
+  am: `git am 操作, ${ASK_SUFFIX}`,
+  'filter-branch': `git filter-branch 会改写历史, ${ASK_SUFFIX}`,
+  'filter-repo': `git filter-repo 会改写历史, ${ASK_SUFFIX}`,
 }
 
-/** 对 git 子命令求策略: deny 优先于 ask, 未命中返回 undefined. */
-function decideGit(subcommand: string, args: string[]): PreToolDecision | undefined {
+/** 内部决定: 宿主 ask 决定之外多带一个「破坏性」标记, 用于同一条命令内择优措辞.
+ *  宿主只看 kind / reason, 该标记在钩子出口剥掉, 不进 `PreToolDecision`. */
+interface AskDecision {
+  readonly kind: 'ask'
+  readonly reason: string
+  /** 破坏性历史改写 / 危险操作(优先向用户提示其风险措辞). */
+  readonly destructive: boolean
+}
+
+/** 同一条命令里的多个敏感操作: 破坏性措辞优先, 同级取先命中者. */
+function preferAsk(current: AskDecision | undefined, candidate: AskDecision | undefined): AskDecision | undefined {
+  if (candidate === undefined) return current
+  if (current === undefined) return candidate
+  if (candidate.destructive && !current.destructive) return candidate
+  return current
+}
+
+/** 对 git 子命令求策略: 命中敏感操作即请求用户授权, 未命中返回 undefined. */
+function decideGit(subcommand: string, args: string[]): AskDecision | undefined {
   if (subcommand === 'push') {
     if (args.some(flag => FORCE_FLAGS.has(flag))) {
       return {
-        kind: 'deny',
-        reason: 'git push --force 等强制推送会改写远程历史, 已被 Git Guard 禁止. 请与用户确认后再执行.',
+        kind: 'ask',
+        reason: `git push --force 等强制推送会改写远程历史, ${ASK_SUFFIX}`,
+        destructive: true,
       }
     }
-    return { kind: 'ask', reason: 'git push 需要你的许可。请审核后批准或拒绝.' }
+    return { kind: 'ask', reason: `git push ${ASK_SUFFIX}`, destructive: false }
   }
   if (subcommand === 'commit') {
-    return { kind: 'ask', reason: 'git commit 需要你的许可。请审核后批准或拒绝.' }
+    return { kind: 'ask', reason: `git commit ${ASK_SUFFIX}`, destructive: false }
   }
   if (subcommand === 'reset') {
     if (args.some(flag => RESET_DESTRUCTIVE.has(flag))) {
       return {
-        kind: 'deny',
-        reason: 'git reset --hard 等破坏性重置会丢失工作区改动, 已被 Git Guard 禁止. 请与用户确认后再执行.',
+        kind: 'ask',
+        reason: `git reset --hard 等破坏性重置可能丢失工作区改动, ${ASK_SUFFIX}`,
+        destructive: true,
       }
     }
     return undefined
   }
-  const denyReason = DENY_SUBCOMMANDS[subcommand]
-  if (denyReason !== undefined) return { kind: 'deny', reason: denyReason }
+  const askReason = ASK_SUBCOMMANDS[subcommand]
+  if (askReason !== undefined) return { kind: 'ask', reason: askReason, destructive: true }
   return undefined
 }
 
@@ -413,7 +439,7 @@ function decideGit(subcommand: string, args: string[]): PreToolDecision | undefi
 const MAX_DEPTH = 5
 
 /** 对单个语句段求策略. */
-function decideSegment(segment: string, depth: number): PreToolDecision | undefined {
+function decideSegment(segment: string, depth: number): AskDecision | undefined {
   const stripped = stripBalancedWrap(segment.trim())
   if (stripped.length === 0) return undefined
   const tokens = tokenize(stripped)
@@ -437,21 +463,18 @@ function decideSegment(segment: string, depth: number): PreToolDecision | undefi
   return decideGit(found.subcommand, found.args)
 }
 
-/** 对整个命令求策略: deny 优先于 ask; 先扫命令替换, 再逐段审查. */
-function decide(command: string, depth = 0): PreToolDecision | undefined {
+/** 对整个命令求策略: 全部敏感操作都请求授权(无 deny); 先扫命令替换, 再逐段审查,
+ *  同一条命令行内多处命中时按「破坏性措辞优先」取一条. */
+function decide(command: string, depth = 0): AskDecision | undefined {
   if (depth > MAX_DEPTH) return undefined
-  let askDecision: PreToolDecision | undefined
+  let best: AskDecision | undefined
   for (const inner of extractSubstitutions(command)) {
-    const decision = decide(inner, depth + 1)
-    if (decision?.kind === 'deny') return decision
-    askDecision ??= decision
+    best = preferAsk(best, decide(inner, depth + 1))
   }
   for (const segment of splitSegments(command)) {
-    const decision = decideSegment(segment, depth)
-    if (decision?.kind === 'deny') return decision
-    askDecision ??= decision
+    best = preferAsk(best, decideSegment(segment, depth))
   }
-  return askDecision
+  return best
 }
 
 export const name = 'dsh-git-guard'
@@ -476,9 +499,10 @@ export function apply(ctx: Context): void {
     // 先算决定再查权限: 不产生决定的命令无需解析权限.
     const decision = decide(command)
     if (decision === undefined) return next()
-    // 完全权限: 本插件整体退出, deny 与 ask 都不产生.
+    // 完全权限: 本插件整体退出, 授权请求不产生.
     if (isFullAccess(ctx, exec.agent?.session)) return next()
-    return decision
+    // 剥掉内部标记, 只交出宿主的 ask 面.
+    return { kind: 'ask', reason: decision.reason }
   })
 }
 
