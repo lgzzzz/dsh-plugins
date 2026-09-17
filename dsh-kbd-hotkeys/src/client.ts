@@ -64,7 +64,7 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
       case 'composer.focus':
         return focusComposer(services)
       case 'session.new':
-        // 新建会话 = /new(uiWorkspace.startSession)
+        // 新建会话 = 侧栏「新建会话」按钮(uiWorkspace.startSession)
         return startNewSession(services)
       case 'workspace.pick':
         // 工作区浮窗:打开时现取列表

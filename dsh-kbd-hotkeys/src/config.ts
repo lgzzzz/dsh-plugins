@@ -37,8 +37,8 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'sidebarRight.terminal', label: '右侧栏:定位终端并聚焦(不存在则新建)', group: '会话', states: ['card', 'editing', 'browse'] },
   // 关当前标签;上游拒关「独占停靠的 guide」,被拒即 no-op 不吞键
   { id: 'sidebarRight.closeTab', label: '右侧栏:关闭当前标签', group: '会话', states: ['card', 'editing', 'browse'] },
-  // 同 /new(uiWorkspace.startSession)
-  { id: 'session.new', label: '新建会话并跳转(等同 /new)', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 等同侧栏「新建会话」按钮(uiWorkspace.startSession)
+  { id: 'session.new', label: '新建会话并跳转', group: '会话', states: ['card', 'editing', 'browse'] },
   // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
   { id: 'composer.focus', label: '聚焦输入框', group: '会话', states: ['browse', 'editing'] },
   { id: 'session.prev', label: '上一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },

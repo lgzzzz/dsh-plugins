@@ -669,8 +669,8 @@ var ACTIONS = [
   { id: "sidebarRight.terminal", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u7EC8\u7AEF\u5E76\u805A\u7126(\u4E0D\u5B58\u5728\u5219\u65B0\u5EFA)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 关当前标签;上游拒关「独占停靠的 guide」,被拒即 no-op 不吞键
   { id: "sidebarRight.closeTab", label: "\u53F3\u4FA7\u680F:\u5173\u95ED\u5F53\u524D\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 同 /new(uiWorkspace.startSession)
-  { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD\u5E76\u8DF3\u8F6C(\u7B49\u540C /new)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 等同侧栏「新建会话」按钮(uiWorkspace.startSession)
+  { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD\u5E76\u8DF3\u8F6C", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
   { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },

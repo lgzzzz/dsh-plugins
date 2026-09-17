@@ -26,7 +26,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 | `⌘/Ctrl+\` | **右侧栏**定位文件浏览器：打开（不存在时创建）/ 聚焦该页并置顶（`openTab('files')`，同时展开右栏） | 任意 |
 | `⌘/Ctrl+L` | **右侧栏**定位终端：已有终端页就聚焦它并**把 DOM 焦点移进 xterm**（折叠时顺带展开右栏），没有才新建（`openTab('terminal')`）；**不重排** | 任意 |
 | `⌘/Ctrl+J` | 聚焦对话**输入框**（「焦点跳转」，J = Jump：走 `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`） | `browse` / `editing`（`editing` 时需焦点**不在** composer 内） |
-| `⌘/Ctrl+N` | **新建会话并跳转**（等同 `/new`：调公开的 `uiWorkspace.startSession()`，与侧栏「新建会话」按钮同一条服务调用） | 任意 |
+| `⌘/Ctrl+N` | **新建会话并跳转**（调公开的 `uiWorkspace.startSession()`，与侧栏「新建会话」按钮同一条服务调用） | 任意 |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话** | 任意 |
 | `⌘/Ctrl+K` | 打开**工作区浮窗**（浮窗内 `↑`/`↓` 选择、`Enter` 切换、`Esc` 关闭） | 任意 |
 | `⌘/Ctrl+I` | 打开**近期对话浮窗**：最近交互的 **10 个**会话、按工作区分组，初始光标落在当前会话（浮窗内 `↑`/`↓` 跨组选择、`Enter` 打开会话、`Esc` 关闭） | 任意 |
@@ -62,10 +62,9 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > 这一档留给导航**（`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
 >
 > **新建会话为什么是 `⌘/Ctrl+N`**：`N`（New）是跨应用肌肉记忆（浏览器、编辑器、
-> 终端的新建都是它），语义就是已有的 `/new` 命令——调公开的
-> `uiWorkspace.startSession()`，与侧栏「新建会话」按钮、以及 `dsh-new-session`
-> 浏览器半部收到 `command/executed('new')` 之后的调用**逐字相同**（同一服务、
-> 同一无参形态：继承当前 / 最近的工作区，创建或复用其空白会话并打开）。三态放行：
+> 终端的新建都是它），语义就是侧栏的「新建会话」按钮——调公开的
+> `uiWorkspace.startSession()`（同一服务、同一无参形态：继承当前 / 最近的工作区，
+> 创建或复用其空白会话并打开）。三态放行：
 > 新建会话与当前会话是否有待回应卡片、焦点是否在输入框都无关，带修饰键的组合也
 > 既不占用卡片的**裸**数字 / `←` / `→` / `Enter`，也不干扰文本编辑。
 > 浏览器把 `⌘/Ctrl+N` 当作「新建窗口」保留键，见下文「已知限制」。
@@ -523,11 +522,9 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   > 选区」的分支中执行——DOM 选区落在 composer 之外时（刚在正文里点选过文本）
   > 它不会把键盘焦点移回输入框。所以取宿主元素后直接 `focus()` 才是可靠原语。
 - 新建会话（`⌘/Ctrl+N` → `src/actions.ts` 的 `startNewSession`）：一次服务调用，
-  `uiWorkspace.startSession()`（无参）。这就是 `/new` 的落点——`dsh-new-session`
-  的浏览器半部监听 `command/executed`，收到 `name === 'new'` 后调的是**同一个**
-  `uiWorkspace.startSession()`；侧栏「新建会话」按钮走 `startSession(workspaceId)`。
-  所以本动作与 `/new` 语义逐字一致，没有另造一套「新建空白会话」逻辑，也不触碰
-  composer 草稿（不像「把 `/new` 写进输入框再提交」那样会冲掉用户已输入的内容）。
+  `uiWorkspace.startSession()`（无参）；侧栏「新建会话」按钮走的是**同一个**方法的
+  `startSession(workspaceId)` 形态。所以本动作没有另造一套「新建空白会话」逻辑，也不触碰
+  composer 草稿（不像「把命令写进输入框再提交」那样会冲掉用户已输入的内容）。
   **无降级**：`uiWorkspace` 服务缺席 / 无 `startSession` / 抛错（无挂载会话面）
   一律 no-op 且**不吞键**，**不回退**到 DOM 点击侧栏按钮。
 - 会话跳转（`⌘/Ctrl+Alt+↑/↓`）：在**活跃会话**之间跳转。活跃 =
@@ -612,7 +609,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 - **近期对话浮窗只列「对话」，不列空白会话**：空白会话（`blank`，即侧栏那个「新会话」
   占位行）一律不列出——包括**当前**选中的那个空白会话。这是本插件在产品规则上对上游
   `sessionVisible` 的唯一偏离（上游保留当前空白行）；需要空白新会话请用侧栏分组上的
-  「＋」或 `⌘/Ctrl+N`（等同 `/new`）。
+  「＋」或 `⌘/Ctrl+N`。
 - **近期对话浮窗的组内顺序恒为「最近更新」**：即使侧栏切到**手动排序**
   （`orderBy === 'manual'`，视图 store 里的 `sessionOrderByAccount` 记录拖拽结果），
   本浮窗仍按 `updatedAt` 降序排——它回答的是「近期对话」，不是「侧栏第几行」。
@@ -774,7 +771,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 终端内容 / 缺则新建）终端，
 `conversation` 用于 `⌘/Ctrl+J` 取 composer 的 editor 宿主元素与 `⇧Tab` 的编辑态门闸，
 `uiWorkspace` 用于 `⌘/Ctrl+K` 工作区浮窗确认时连接/切换工作区、`⌘/Ctrl+N`
-新建会话（`startSession`，与 `/new` 同一条服务调用），
+新建会话（`startSession`，与侧栏「新建会话」按钮同一条服务调用），
 `modelDirectories` 用于 `⌘/Ctrl+M` 模型浮窗取目录与 `⇧Tab` 循环思考强度——
 与 `/model` 弹层、composer 模型座位共用**同一份** per-session 目录实例）。
 `⌘/Ctrl+I` 近期对话浮窗不新增注入：它复用 `sessions`（列表快照 + `open`）、
@@ -836,7 +833,7 @@ node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/ca
                          # 另含 ⌘/Ctrl+B → layout.toggleSidebar（左栏）/ ⌘/Ctrl+O →
                          # sidebarRight.toggleExpanded（右栏）的两态调用、互不串场、自定义键位与无降级；
                          # 以及 ⌘/Ctrl+N 新建会话并跳转：必须调公开的 uiWorkspace.startSession
-                         # （与 /new、侧栏「新建会话」同一条服务调用）、三态放行（含 card）、
+                         # （与侧栏「新建会话」同一条服务调用）、三态放行（含 card）、
                          # 服务缺席 / 无 startSession / 抛错一律 no-op 不吞键、键位可覆盖；
                          # 以及 ⌘/Ctrl+Alt+←/→ 右栏标签切换：标签顺序必须取自
                          # rightbar.session 注册项的会话级 store（bySession[sessionId].layout

@@ -17,8 +17,8 @@
    TypeScript 写在 `src/`（入口 `src/client.ts`），`package.json` 必须提供 `build`
    脚本（产出 `lib/client.js`）与 `typecheck` 脚本；宿主半部以 TypeScript 写在
    `index.ts`（Node 22 Type Stripping 直接加载，无需编译），同样必须能通过 `typecheck`。
-   `lib/*.js` 是构建产物，不得手改。现有两个纯 JavaScript 插件
-   （`dsh-fullwidth-chat`、`dsh-new-session`）保持现状，不要求迁移。
+   `lib/*.js` 是构建产物，不得手改。现有纯 JavaScript 插件
+   （`dsh-fullwidth-chat`）保持现状，不要求迁移。
 
 ## 仓库布局与版本控制
 
@@ -29,24 +29,22 @@
   `.idea/`）、包管理器缓存（`.pnpm-store/`、`.npm-cache/`、`node_modules/`）与
   TypeScript 增量缓存（`*.tsbuildinfo`）。新增插件目录默认即受版本控制，无需额外配置。
 - 构建产物默认**入仓**以保证离线可加载：当前所有插件的 `lib/*.js` 都已入仓；目前没有任何插件存在不入仓的构建产物。
-- 各插件目录内可另有 `.gitignore`（如 `dsh-git-guard`、`dsh-fork-inbox-guard` 忽略
+- 各插件目录内可另有 `.gitignore`（如 `dsh-git-guard` 忽略
   `node_modules/`、`.npm-cache/`、`*.log`）。
 
 ## 插件清单
 
-仓库内含 **9 个插件目录**，本机 web Profile 已全部挂载（`dependencies` 9 条 `link:`、
-`dsh.profile.bundles` 11 项，与仓库目录一一对应、无多余项；`node_modules` 下 9 条
-Junction 目标均有效）。核对命令见「挂载与激活（Web Profile）」。
+仓库内含 **7 个插件目录**，与本机 web Profile 的 `dependencies` 逐项对应（7 条 `link:`；
+`dsh.profile.bundles` 9 项 = 2 个上游 bundle + 7 个本地插件）。核对命令见
+「挂载与激活（Web Profile）」。
 
 | 目录 | 形态 | 宿主半部 | 浏览器半部 | 说明 |
 | --- | --- | --- | --- | --- |
 | `dsh-code-card-fonts` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/client.ts` + `src/css.ts` → esbuild → `lib/client.js` | 卡片标题 / 摘要行 / 展开内容 / 代码块 / 内联代码 / Markdown 表格单元格字号补丁（统一 14px）与卡片间距 `calc(14px * 0.5)` = 7px；**不覆盖**内容字号轴 `--dsh-content-font-size`，设置里的「字号大小」仍可调 |
 | `dsh-directory-picker-browse` | Patch only（无代码） | — | — | `cordis.patch.yml` 覆盖层：`disabled` 停用上游 `directory-picker`（auto 目录选择器）与 `ui-deliverables`（产物行），`insert` 挂载 browse 变体的宿主 / 浏览器两个 in-box 包 |
-| `dsh-fork-inbox-guard` | Host only（TS） | `index.ts`：监听 `agent/created`，折叠继承前缀 `events[0, inheritedEventCount)` 的 `agent/inbox/spliced`，与当前 pending 求交后 `inbox.remove()` | — | 分叉子会话丢弃「继承自源会话、仍 pending」的输入；有 runtime owner 的子代理显式跳过，普通 / 非 seeded 会话不动作 |
 | `dsh-fullwidth-chat` | Client only（纯 JS；宿主占位） | `lib/index.js`：空宿主（仅供组合行解析、供 client-modules 扫描） | `lib/client.js`：注入样式 | 对话列全宽展示 |
 | `dsh-git-guard` | Host only（TS） | `index.ts`：钩挂 `tools/pre-execute`；另经 `ctx.systemPrompt.section()` 注入约束区段（区段文本按会话权限动态求值） | — | **所有敏感 git 操作一律 `ask`（需用户授权），本插件不产生 `deny`**：`git commit`、非 force `git push`，以及 force push 与 rebase / merge / cherry-pick / reset --hard / revert / am / filter-branch / filter-repo 等破坏性历史改写，统统改为向用户索取授权；约束同时以系统提示词告知模型。**当前权限为完全权限（`danger-full-access`）时整体退出**：不拦截、不索取授权、区段文本为空串；判定取自 `ctx.sandboxPolicy.resolve({ session })`（会话为 `exec.agent.session`），服务缺席 / 无 `resolve` / 抛错一律按非完全权限处理（失败关闭）。注意 `ask` 的落地效果还取决于 approval 策略：`approval=never` 而沙箱**非**完全权限时（典型：子代理会话）宿主确定性拒绝该授权请求，效果等同不放行——那是宿主裁决，不是插件的 deny |
-| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + session-order.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + recent-sessions.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏当前标签关闭（`sidebarRight.close`）、右栏文件浏览器定位、右栏终端定位（聚焦标签并把 DOM 焦点移进 xterm）、新建会话（等同 `/new`）、工作区浮窗、近期对话浮窗（最近交互 10 个、按工作区分组、初始光标落在当前会话、↑↓ 选择、Enter 打开）、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
-| `dsh-new-session` | Host + Client（纯 JS） | `lib/index.js`：注册 `/new` 命令（`inject: ['commands']`） | `lib/client.js`：`uiWorkspace.startSession` + 抑制命令生命周期行 | `/new` 新建并跳转空白会话 |
+| `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/`（client.ts + config.ts + actions.ts + question-drafts.ts + session-order.ts + sidebar-order.ts + sidebar-tabs.ts + workspace-switcher.ts + recent-sessions.ts + model-picker.ts + overlay.ts + types.ts）→ esbuild → `lib/client.js` | 全局快捷键，三态分发（`card` 卡片态 / `editing` 输入态 / `browse` 浏览态）：审批与问答键盘化、活跃会话跳转、左右栏开关、右栏标签切换、右栏当前标签关闭（`sidebarRight.close`）、右栏文件浏览器定位、右栏终端定位（聚焦标签并把 DOM 焦点移进 xterm）、新建会话（`uiWorkspace.startSession`）、工作区浮窗、近期对话浮窗（最近交互 10 个、按工作区分组、初始光标落在当前会话、↑↓ 选择、Enter 打开）、模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表。逐动作触发路径见下文专节 |
 | `dsh-rightbar-tab-width` | Client only（TS；宿主占位） | `index.ts`：空宿主 | `src/client.ts` + `src/css.ts` → esbuild → `lib/client.js` | 右栏 tab 胶囊定宽：`[data-dockkit-tab][role="tab"]`（两个属性选择器 = (0,2,0)，压过 dockkit 的 `._tab_*` 单类名）上写 `box-sizing:border-box; min-width:100px; max-width:100px`，把上游随文字在 100px–190px 浮动的外宽钉成恒定 100px（= 上游胶囊自身地板：80px 内容盒 + 左右各 10px 内边距）。**耦合**：dockkit 的 `ey()` 把 pane 内第一个 `[data-dockkit-tab]` 的计算后 `min-width` 当作「一枚胶囊的宽度预算」，进入尺度可行性判定 `row: pane.width/2 - extra >= 固定chrome + chip`（决定「分栏」按钮是否渲染、以及把 tab 拖到格子左右边缘是否允许分栏）。取值 100 与兜底常量 `SPLIT_MINIMUMS.chip` 同值 ⇒ 分栏判定与上游默认逐字相同；若改常量，所需右栏最小宽度会整体移动 2×Δpx（阈值在 `pane.width` 上、系数 2），右栏用 `hideSplitWhenBlocked: true`，判定不过时按钮不渲染。只命中停靠 chip，浮窗标题（`[data-dockkit-float-title]`）不受影响；详见其 README |
 
 ## 包结构与约定
@@ -70,8 +68,7 @@ Junction 目标均有效）。核对命令见「挂载与激活（Web Profile）
 - `dsh.client.platform: "web"` + `dsh.client.immediately: true`：浏览器半部据此注册至
   浏览器 roster；
 - `dsh.bundle.patch: "./cordis.patch.yml"`：挂载行随 bundle 层应用；
-- 宿主入口也可以是 `main`（如 `dsh-git-guard`、`dsh-fork-inbox-guard` 的
-  `"main": "index.ts"`）。
+- 宿主入口也可以是 `main`（如 `dsh-git-guard` 的 `"main": "index.ts"`）。
 
 `cordis.patch.yml`：
 
@@ -82,9 +79,9 @@ Junction 目标均有效）。核对命令见「挂载与激活（Web Profile）
   `index.ts` 也必须是合法加载项（当前为空宿主 `apply() {}`），`dsh-client-modules`
   靠扫描这些 Loader 条目发现声明了 `dsh.client.platform: "web"` 的包。
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务由挂载行 `inject`
-  声明；浏览器半部按需 `export const inject = [...]`（由模块加载器读取）。遗留纯 JS
-  宿主（`dsh-new-session` 的 `lib/index.js`）仍在代码中
-  `export inject = ['commands']`。不消费服务的客户端（`dsh-code-card-fonts`、
+  声明；浏览器半部按需 `export const inject = [...]`（由模块加载器读取）。仓库内已无
+  代码内静态 `export inject` 的宿主（`dsh-fullwidth-chat` 的 `lib/index.js` 是空宿主，
+  不声明注入）。不消费服务的客户端（`dsh-code-card-fonts`、
   `dsh-rightbar-tab-width`）不声明任何注入。
 
 宿主半部：以 TypeScript 编写 `index.ts`（可拆分多文件），由 Node 22 Type Stripping 直接加载，无需编译；相对导入须携带 `.ts` 扩展名；
@@ -111,11 +108,10 @@ Junction 目标均有效）。核对命令见「挂载与激活（Web Profile）
 
 `~/.dsh/profiles/web/package.json` 当前配置：
 
-- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件，共 **9 条**，与仓库内插件
-  目录一一对应；`~/.dsh/profiles/web/node_modules` 下 9 条 Junction 目标均有效
-  （另有 `monaco-editor` 一条，指向 Profile 的模块回退目录）；
-- `dsh.profile.bundles` 共 **11 项**：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
-  及上述 9 个本地插件（与 `dependencies` 逐项对应，无多余项）；
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件，共 **7 条**，与仓库内
+  7 个插件目录一一对应；
+- `dsh.profile.bundles` 共 **9 项**：`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`
+  及上述 7 个本地插件（与 `dependencies` 逐项对应，无多余项）；
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`
   （当前为 `[]`）；bundle 层为常驻挂载，不支持热重载。
 
@@ -146,9 +142,14 @@ dsh plugin --profile web remove <name>
 ```
 
 > 上述步骤属于用户操作：依据强制规范第 1 条，代理交付插件后不得自行执行加载步骤
-> （`dsh plugin add`、`pnpm install`、重启 App）；应将步骤写入插件 README 并告知用户。
+> （`dsh plugin add`、`pnpm install`、重启 App）；移除插件同样会改动 Profile 清单
+> （`dsh plugin remove`），也由用户执行。代理只把步骤写入插件 README 并告知用户。
 > `link:` 依赖已存在时重复执行是幂等 no-op；由于 `link:` 实时指向仓库目录，之后修改
 > 插件代码无需重装。
+>
+> **从仓库删除插件目录时，Profile 侧的 `link:` 依赖与 bundle 项不会自动消失**：
+> 残留的 `link:` 指向已不存在的目录，下次启动会解析失败。须先由用户执行
+> `dsh plugin --profile web remove <name>` 再重启 App。
 
 ## 变更生效机制
 
@@ -176,11 +177,9 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | --- | --- | --- |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild（JS API）→ `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 | `dsh-directory-picker-browse` | 无 | 纯补丁插件，无源码与产物 |
-| `dsh-fork-inbox-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 用真实 `@deepseek-ai/dsh-session` 构造 seeded 子会话，验证前缀折叠、移除幂等、子代理 balanced 前缀零改动、异常不外逸 |
 | `dsh-fullwidth-chat` | 无 | 纯 JS 插件，`lib/*.js` 即源码 |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 ask / 放行各分支（**全部敏感操作断言为 `ask`，并回归断言不再产生 `deny`**；含工具名解耦、引号与包装词、破坏性操作回归），以及完全权限放行、权限逐会话生效、只取用 `sandboxPolicy`、服务缺席 / 无 `resolve` / 抛错的失败关闭、提示词区段的动态求值 |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check`；`node test-services.mjs`；`node test-dispatch.mjs` | esbuild（平台二进制）→ `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check`。两个诊断脚本是纯 Node + 最小 DOM 桩，无需浏览器（覆盖范围见其 README「构建」） |
-| `dsh-new-session` | 无 | 纯 JS 插件，`lib/*.js` 即源码 |
 | `dsh-rightbar-tab-width` | `npm run typecheck && npm run build && npm run check` | esbuild（平台二进制）→ `lib/client.js`（入仓）；`check` 对产物与宿主执行 `node --check` |
 
 `node_modules` 可能被清理；安装 typescript 等依赖时若默认 npm 缓存不可用，应指定可写
@@ -191,7 +190,10 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 - `@deepseek-ai/*` 为预发布包，不经 registry 安装；插件的 `node_modules/@deepseek-ai`
   是指向全局 dsh 包内置 bundled scope 的 junction / 符号链接
   （`<npm root>/@deepseek-ai/dsh/node_modules/@deepseek-ai`，含 `lib/types` 声明）。
-  重装或迁移全局 dsh 包后须重建该 junction（示例命令见 `dsh-fork-inbox-guard/README.md`）。
+  重装或迁移全局 dsh 包后须重建该 junction（令 `node_modules/@deepseek-ai` 重新指向
+  上述路径）。`node_modules` 被清理后 `npm install` 会因 npm 的 reify 试图写穿该
+  junction 而失败（`EPERM`，详见 `dsh-git-guard/README.md`），此时类型检查直接用全局
+  `tsc --noEmit -p tsconfig.json`，行为测试只需 Node 运行时、不依赖 `node_modules`。
 - 部分类型包（`dsh-client-ui-slots`、`dsh-client-ui-primitives`）不在内置 bundle 中，
   故启用 `skipLibCheck`，并在源码中自行声明结构切片类型（模板：
   `dsh-kbd-hotkeys/src/types.ts`，仅覆盖实际消费的
@@ -268,7 +270,7 @@ store 上。这类状态仍然可以零 DOM 读写，范式固定为三步（本
 | `composer.focus` | ⌘/Ctrl+J（`mod+j`；J = Jump「焦点跳转」；`comboOf` 同时吸收 ctrlKey/metaKey，mac 上 ⌃J 与 ⌘J 均可） | **服务取元素 + 一次 `contains` 门闸 + 一次 `focus()`** | `sessions.list` 快照 `current` → `sessions.binding(id).ctx` → `conversation.input.for(actx)`（`for` 缺席回退 `InputHub.shell(id)`，同一 `SessionInputShell`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。**`browse` 态恒可用；`editing` 态另有元素级门闸**——`contains(event.target)` 为真（焦点已在 composer 内，动作无事可做）时不重复聚焦、但组合键**仍被吞掉**（旧键位 `I` 在此放行是为保住 contenteditable 的「斜体」默认键；`J` 无等价默认行为，放行只会触发 Win/Linux 浏览器的 `Ctrl+J` = 下载页），为假（焦点在右栏终端 xterm 的 helper textarea / Monaco 的 inputarea textarea / 设置面板输入框等**非 composer** 的可编辑元素里）时执行聚焦并跳回输入框；`card` 态不接管。上游无可触发的聚焦服务面（`commandUi.bindComposerFocus` 只 bind 不 trigger，全仓无人调用；`editor.focus()` 非 DOM 聚焦原语），任一环缺失即 no-op 不吞键、不回退 DOM 查询 |
 | `session.prev` / `session.next` | ⌘/Ctrl+Alt+↑/↓ | **服务** | `sessions.list` 快照 + `slots.entries('sidebar.workspaces')` 注册项上的侧栏视图 store（顺序）+ `sessions.open(id)` |
 | `session.recent` | ⌘/Ctrl+I | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：列表 = `sessions.list` 快照的会话行 + `workspaces.list` 快照的分组，**全局最多 10 行**、按工作区分组（组序 = 宿主顺序、组内 = `updatedAt` 降序的最近更新序、空白 / 归档 / 子代理会话不列出、无归属会话落末尾无标题组；取数见 `recent-sessions.ts` 与 `session-order.ts`，**不新增服务注入**）；每行 = `displayTitle` + 状态标记（待回应 / 运行中 / 完成）+ `当前` 标记 + `cwd` 次行；`↑`/`↓` 在整份列表上**跨组**移动高亮（clamp 不循环，**不打开会话**），`Enter` / 行内 `mousedown` 才调公开的 `uiWorkspace.openSession(sessionId)`（与侧栏点会话行 / 搜索结果行同一条上游调用：`sessions.open` **加** `layout.selectPanel(null)`；`uiWorkspace` 缺席 / 无该方法时回退 `sessions.open`，两者都以**方法**形式调用——摘下来会丢 `this` 抛错）；`Esc` 或同组合键关闭，同层内 `⌘/` 互切速查表。**任意态**；`sessions` 缺席 / 快照缺 `ids` → 空态浮窗（Enter 不消费），`open` 缺失或抛错 → 确认 no-op、浮窗照关，`workspaces` 缺席 / 缺 `items` → 全部落入无标题组（仍可用），**不回退 DOM** |
-| `session.new` | ⌘/Ctrl+N | **服务** | 公开的 `uiWorkspace.startSession()`（无参）——与侧栏「新建会话」按钮、`dsh-new-session` 浏览器半部收到 `command/executed('new')` 后的调用**逐字相同**，故等同 `/new`：继承当前 / 最近的工作区，创建或复用其空白会话并打开。不触碰 composer 草稿。**任意态**；`uiWorkspace` 缺席 / 无 `startSession` / 抛错（无挂载会话面）一律 no-op 不吞键，**不回退 DOM 点侧栏按钮**。注意浏览器把 ⌘/Ctrl+N 当「新建窗口」保留键（多数浏览器不把该键派发给页面），键位可经 localStorage 覆盖 |
+| `session.new` | ⌘/Ctrl+N | **服务** | 公开的 `uiWorkspace.startSession()`（无参）——与侧栏「新建会话」按钮同一条服务调用（上游按钮走 `startSession(workspaceId)`、无参时继承当前 / 最近的工作区）：创建或复用其空白会话并打开。不触碰 composer 草稿。**任意态**；`uiWorkspace` 缺席 / 无 `startSession` / 抛错（无挂载会话面）一律 no-op 不吞键，**不回退 DOM 点侧栏按钮**。注意浏览器把 ⌘/Ctrl+N 当「新建窗口」保留键（多数浏览器不把该键派发给页面），键位可经 localStorage 覆盖 |
 | `workspace.pick` | ⌘/Ctrl+K | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：列表 = `workspaces.list.getSnapshot().items` 的**宿主顺序**（与侧栏工作区分组同源；`title` → 路径末段 → 原路径 作主标签，`当前` = 当前会话在该工作区 `sessionIds` 名下）；`↑`/`↓` 只移动高亮（clamp 不循环，**不触发导航**），`Enter` / 行内 `mousedown` 才调公开的 `uiWorkspace.openWorkspace(workspaceId)`（`dsh-client-ui-workspace` 的 `UiWorkspace` 服务：复用该工作区已挂载的空白会话，没有就 `sessions.create({workspaceId})` 新建再打开——与侧栏分组「＋」同一条「连接工作区」路径）；`Esc` 或同组合键关闭，同层内 `⌘/` 互切速查表。**任意态**；`workspaces` 缺席/无 `items` → 空态浮窗，`uiWorkspace` 缺席或 `openWorkspace` 抛错 → 确认 no-op，**不回退 DOM 点击侧栏分组** |
 | `model.pick` | ⌘/Ctrl+M | **服务 + 插件自身浮层** | 浮窗（`overlay.ts`，纯 DOM）内：目录 = `ctx.modelDirectories.directoryFor(当前会话)`——与 `/model` 弹层、composer 模型座位是**同一份** per-session 实例；列表 = `load()` 后读 `store.getSnapshot()` 的 `groups` **按宿主顺序展开**（提供方分组标题 + 组内顺序都不重排，失败提供方折成底部小字不占行），每行完整选择复刻上游弹层 `selectionOf`（`reasoningEffort` = 当前选择落在该模型时的 `current.reasoningEffort`，否则 `model.reasoning.defaultEffort`，无则省略）；`↑`/`↓` 只移动高亮（clamp 不循环），`Enter` / 行内 `mousedown` 才调 `directory.select(selection)`（与两个上游入口同一条 `session.selectModel` 提交路径），浮窗内 `⇧Tab` 就地循环强度（只更新顶部「当前」行）。列表异步取、渲染带序号守卫（过期结果丢弃）。**任意态**；`modelDirectories` 缺席 / 无当前会话 / 被寻址的子代理会话（`sessions.subagentAddress(id) !== undefined`）/ `directoryFor` 抛错 → 空态浮窗，`load()` 拒绝 → 空态 + 失败小字，`select()` 拒绝 → 浮窗照关（错误落在共享 store 上），**不回退 DOM 点 composer 模型标签** |
 | `model.effortNext` | `⇧Tab` | **服务（+ 一次 `contains` 门闸）** | 同一目录实例上循环 `reasoningEffort`：候选档复刻上游座位 `effortChoices`（`[Default（仅当模型无 defaultEffort 时）] + reasoning.efforts`），当前档 = `current.reasoningEffort ?? reasoning.defaultEffort`（不在候选里时从首项开始），`select` 只改强度、provider/model 沿用。**`browse` / `editing`**；`editing` 态另有元素级门闸——对服务链路取来的 composer 宿主元素调 `contains(event.target)`（`isComposerTarget`，与 `composer.focus` 同一条取元素链路），焦点在设置面板输入框 / Monaco 隐藏 textarea 等别处可编辑元素时不接管（`⇧Tab` 在别处仍是反向移动焦点 / 反向缩进）。模型无推理元数据 / 只有一档 / 目录不可用 / 取元素环缺失 → **no-op 不吞键**；`card` 态不接管（归卡片） |

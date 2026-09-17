@@ -265,7 +265,7 @@ export function toggleRightSidebar(services: Services): boolean {
   }
 }
 
-/** 新建会话（⌘/Ctrl+N，等同 /new）：uiWorkspace.startSession()；不可用即 no-op，不回退 DOM；⌘/Ctrl+N 是浏览器保留键。 */
+/** 新建会话（⌘/Ctrl+N，等同侧栏「新建会话」按钮）：uiWorkspace.startSession()；不可用即 no-op，不回退 DOM；⌘/Ctrl+N 是浏览器保留键。 */
 export function startNewSession(services: Services): boolean {
   const uiWorkspace = services.uiWorkspace
   if (uiWorkspace === null || uiWorkspace === undefined) return false

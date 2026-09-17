@@ -1,6 +1,6 @@
 # dsh-plugins — DSH Web 本地插件仓库
 
-本仓库包含 **9 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**。每个插件是
+本仓库包含 **7 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**。每个插件是
 一个自包含的本地 npm 包，位于自己的目录中：动态 Cordis 定义只存在于进程内存、重启即
 失效，需要长期保留的行为因此固化为仓库内的本地包，经 web Profile 的 `link:` 依赖挂载
 进正在运行的应用。
@@ -16,20 +16,23 @@
 
 ## 插件清单
 
-本机 web Profile 当前挂载**全部 9 个插件**，与仓库目录一一对应、无多余项。
+本机 web Profile 挂载**全部 7 个插件**（`dependencies` 7 条 `link:`、
+`dsh.profile.bundles` 9 项 = 2 个上游 bundle + 7 个本地插件）。
+
+> `dsh-new-session` 已从仓库移除，但 Profile 侧仍留着它的 `link:` 依赖与 bundle 项，
+> 须由用户执行一次 `dsh plugin --profile web remove dsh-new-session` 清掉（见下文
+> 「卸载」）——否则该依赖在下次启动时解析失败。
 
 | 目录 | 说明 |
 | --- | --- |
 | `dsh-code-card-fonts` | 卡片标题 / 摘要行 / 展开内容 / 代码块 / 内联代码 / Markdown 表格单元格统一 14px，卡片间距 7px；不覆盖内容字号轴，设置里的「字号大小」仍可调 |
 | `dsh-directory-picker-browse` | 纯补丁插件：停用上游 auto 目录选择器与产物行，挂载 browse 变体 |
-| `dsh-fork-inbox-guard` | 分叉子会话丢弃继承自源会话、仍 pending 的输入（子代理显式跳过） |
 | `dsh-fullwidth-chat` | 对话列全宽展示 |
 | `dsh-git-guard` | 所有敏感 git 操作（`git commit`、`git push`，以及 force push 与 rebase / merge / cherry-pick / reset --hard / revert / am / filter-branch / filter-repo 等破坏性历史改写）一律需用户授权，本插件不直接拒绝；约束同时注入系统提示词 |
-| `dsh-kbd-hotkeys` | 全局快捷键：审批 / 问答键盘化、左右栏开关、右栏标签切换 / 关闭当前标签 / 文件浏览器定位并置顶 / 终端定位、新建会话（⌘/Ctrl+N，等同 `/new`）、活跃会话跳转、工作区浮窗、近期对话浮窗、模型浮窗、思考强度循环、聚焦对话输入框、⌘/ 速查表 |
-| `dsh-new-session` | `/new` 新建并跳转空白会话 |
+| `dsh-kbd-hotkeys` | 全局快捷键：审批 / 问答键盘化、左右栏开关、右栏标签切换 / 关闭当前标签 / 文件浏览器定位并置顶 / 终端定位、新建会话（⌘/Ctrl+N）、活跃会话跳转、工作区浮窗、近期对话浮窗、模型浮窗、思考强度循环、聚焦对话输入框、⌘/ 速查表 |
 | `dsh-rightbar-tab-width` | 右栏 tab 胶囊定宽 100px（取值等于上游地板与分栏判定兜底常量，分栏判定与上游默认一致） |
 
-挂载状态可自行核对（9 条 `link:` 依赖 + 11 项 bundle + 9 条有效 Junction）：
+挂载状态可自行核对（7 条 `link:` 依赖 + 9 项 bundle = 2 个上游 bundle + 7 个本地插件）：
 
 ```powershell
 Get-Content "$env:USERPROFILE\.dsh\profiles\web\package.json"     # dependencies / dsh.profile.bundles
@@ -86,7 +89,7 @@ dsh plugin --profile <name> add link:<仓库根>/<name>
 dsh plugin --profile web remove <name>
 
 # 全部本地插件（按需删减；写成一行即可）
-dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fork-inbox-guard dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-new-session dsh-rightbar-tab-width
+dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-rightbar-tab-width
 # 重启 App 生效
 ```
 

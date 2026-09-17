@@ -19,9 +19,8 @@
  * 两态都生效且互不串场;服务缺席或抛错(无挂载会话面)时 no-op 且不吞键;左栏键位
  * 可经 localStorage 自定义且不影响右栏默认键位。
  *
- * 另含新建会话断言(⌘/Ctrl+N,等同 `/new`):必须调公开的
- * `uiWorkspace.startSession()`(与侧栏「新建会话」按钮、dsh-new-session 处理
- * `command/executed('new')` 后是同一条服务调用);三态放行,服务缺席 / 无
+ * 另含新建会话断言(⌘/Ctrl+N,等同侧栏「新建会话」按钮):必须调公开的
+ * `uiWorkspace.startSession()`(与该按钮是同一条服务调用);三态放行,服务缺席 / 无
  * startSession / 抛错一律 no-op 且不吞键,键位可自定义。
  *
  * 另含右栏标签切换断言(⌘/Ctrl+Alt+← / →):标签顺序必须取自右栏自己的会话级 slot
@@ -704,10 +703,9 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+O → 左右栏开关 ---')
 }
 
 // ===========================================================================
-// 阶段 3b:⌘/Ctrl+N → 新建会话并跳转(等同 `/new`)
-//          路径 = 公开的 uiWorkspace.startSession()(与侧栏「新建会话」按钮、
-//          dsh-new-session 处理 command/executed('new') 后是同一调用,无参形态);
-//          三态放行;服务缺席 / 无 startSession / 抛错一律 no-op 且不吞键。
+// 阶段 3b:⌘/Ctrl+N → 新建会话并跳转(等同侧栏「新建会话」按钮)
+//          路径 = 公开的 uiWorkspace.startSession()(与侧栏「新建会话」按钮是同一调用,
+//          无参形态);三态放行;服务缺席 / 无 startSession / 抛错一律 no-op 且不吞键。
 // ===========================================================================
 console.log('\n--- ⌘/Ctrl+N → 新建会话并跳转(uiWorkspace.startSession) ---')
 {
