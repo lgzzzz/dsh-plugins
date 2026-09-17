@@ -20,7 +20,7 @@ import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } 
 import { cycleEffort, modelPickerView, selectModel } from './model-picker.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
 import { openRecentSession, recentSessionsView } from './recent-sessions.ts'
-import { cycleRightSidebarTab, revealRightSidebarFiles, revealRightSidebarTerminal } from './sidebar-tabs.ts'
+import { closeRightSidebarTab, cycleRightSidebarTab, revealRightSidebarFiles, revealRightSidebarTerminal } from './sidebar-tabs.ts'
 import { switchWorkspace, workspaceRows } from './workspace-switcher.ts'
 import type { ClientContext, ConversationLike, LayoutLike, ModelDirectoryResolverLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, UiWorkspaceLike, WorkspacesLike } from './types.ts'
 
@@ -58,6 +58,9 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
       case 'sidebarRight.terminal':
         // 终端:上游不去重,认页由 sidebar-tabs 完成
         return revealRightSidebarTerminal(services)
+      case 'sidebarRight.closeTab':
+        // 关当前标签:上游自带拒绝(独占 guide)时读回布局判定,no-op 不吞键
+        return closeRightSidebarTab(services)
       case 'composer.focus':
         return focusComposer(services)
       case 'session.new':

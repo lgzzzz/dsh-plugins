@@ -295,6 +295,8 @@ export interface SidebarRightLike {
   active?(): SidebarRightTabRecordLike | undefined
   /** 聚焦标签(与 chip 点击同一入口);标签不存在则静默跳过。 */
   focus?(tabId: string): void
+  /** 关闭一个标签(与 chip 的关闭按钮同一入口);上游自带关闭钩子与「独占停靠的 guide 不关」判定。 */
+  close?(tabId: string): void
   /** 按 kind 开页并展开右栏;页类型按目标面板去重。 */
   openTab?(kind: string, options?: SidebarRightPlacementLike): void
 }

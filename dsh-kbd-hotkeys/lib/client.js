@@ -667,6 +667,8 @@ var ACTIONS = [
   { id: "sidebarRight.files", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u6587\u4EF6\u6D4F\u89C8\u5668(\u4E0D\u5B58\u5728\u5219\u521B\u5EFA)\u5E76\u7F6E\u9876", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 定位终端但不去重、不置顶,故先读 store 认页
   { id: "sidebarRight.terminal", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u7EC8\u7AEF\u5E76\u805A\u7126(\u4E0D\u5B58\u5728\u5219\u65B0\u5EFA)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 关当前标签;上游拒关「独占停靠的 guide」,被拒即 no-op 不吞键
+  { id: "sidebarRight.closeTab", label: "\u53F3\u4FA7\u680F:\u5173\u95ED\u5F53\u524D\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 同 /new(uiWorkspace.startSession)
   { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD\u5E76\u8DF3\u8F6C(\u7B49\u540C /new)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
@@ -704,6 +706,8 @@ var DEFAULT_BINDINGS = {
   "sidebarRight.files": "mod+\\",
   // 浏览器保留键(聚焦地址栏)
   "sidebarRight.terminal": "mod+l",
+  // 关标签的点号:与右栏开关 / 定位同属单修饰键这一档,`code` 判定(Period)不受布局影响
+  "sidebarRight.closeTab": "mod+.",
   // 浏览器保留键(新建窗口)
   "session.new": "mod+n",
   // J = Jump;终端里 ⌃J(LF)不再送给 PTY
@@ -1684,6 +1688,48 @@ function cycleRightSidebarTab(services, delta) {
     return false;
   }
 }
+function closeRightSidebarTab(services) {
+  var _a, _b;
+  const sidebarRight = services.sidebarRight;
+  if (sidebarRight === null || sidebarRight === void 0) return false;
+  if (typeof sidebarRight.close !== "function") return false;
+  const resolved = rightbarStore(services);
+  if (resolved === void 0) return false;
+  const sessionId = currentSessionId2(services);
+  if (sessionId === void 0) return false;
+  const layout = (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
+  if (layout === void 0) return false;
+  const tabId = activeTabId(layout);
+  if (tabId === void 0) return false;
+  try {
+    sidebarRight.close(tabId);
+  } catch {
+    return false;
+  }
+  return !tabStillOpen(resolved.instance, sessionId, tabId);
+}
+function activeTabId(layout) {
+  var _a;
+  const pane = paneOf(layout, layout.activePaneId);
+  if (pane === void 0) return void 0;
+  const active = pane.activeTabId;
+  if (typeof active !== "string" || active === "") return void 0;
+  return ((_a = pane.tabs) != null ? _a : []).includes(active) ? active : void 0;
+}
+function tabStillOpen(instance, sessionId, tabId) {
+  var _a, _b, _c;
+  const getSnapshot = instance.getSnapshot;
+  if (typeof getSnapshot !== "function") return true;
+  let snapshot;
+  try {
+    snapshot = getSnapshot.call(instance);
+  } catch {
+    return true;
+  }
+  const layout = (_b = (_a = snapshot == null ? void 0 : snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
+  if (layout === void 0) return false;
+  return ((_c = layout.tabs) == null ? void 0 : _c[tabId]) !== void 0;
+}
 function revealRightSidebarFiles(services) {
   const sidebarRight = services.sidebarRight;
   if (sidebarRight === null || sidebarRight === void 0) return false;
@@ -1823,12 +1869,12 @@ function terminalTabIn(layout) {
   for (const paneId of paneOrder(layout)) {
     const pane = paneOf(layout, paneId);
     if (pane === void 0 || pane.host !== "dock") continue;
-    const activeTabId = pane.activeTabId;
+    const activeTabId2 = pane.activeTabId;
     let first;
     for (const tabId of (_a = pane.tabs) != null ? _a : []) {
       if (typeof tabId !== "string" || tabId === "") continue;
       if (!isTerminalTab(layout, tabId)) continue;
-      if (tabId === activeTabId) return { paneId, tabId, current: true };
+      if (tabId === activeTabId2) return { paneId, tabId, current: true };
       if (first === void 0) first = tabId;
     }
     if (first !== void 0) return { paneId, tabId: first, current: false };
@@ -1856,10 +1902,10 @@ function currentPaneTabs(services) {
     ids.push(typeof id === "string" && id !== "" ? id : tabId);
   }
   if (ids.length === 0) return void 0;
-  const activeTabId = pane.activeTabId;
+  const activeTabId2 = pane.activeTabId;
   return {
     ids,
-    active: typeof activeTabId === "string" ? ids.indexOf(activeTabId) : -1
+    active: typeof activeTabId2 === "string" ? ids.indexOf(activeTabId2) : -1
   };
 }
 function currentLayout(services) {
@@ -1975,6 +2021,8 @@ function runAction(id, services, overlays) {
         return revealRightSidebarFiles(services);
       case "sidebarRight.terminal":
         return revealRightSidebarTerminal(services);
+      case "sidebarRight.closeTab":
+        return closeRightSidebarTab(services);
       case "composer.focus":
         return focusComposer(services);
       case "session.new":

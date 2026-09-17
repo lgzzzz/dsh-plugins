@@ -22,6 +22,7 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 | `⌘/Ctrl+B` | 开关**左**侧栏（走 `layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+O` | 开关**右**侧栏（`sidebarRight.toggleExpanded`，与右栏头部折叠按钮同一入口） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+←` / `→` | **右侧栏**当前面板的标签：上一个 / 下一个（循环；只有一个标签时不吞键） | 任意 |
+| `⌘/Ctrl+.` | **右侧栏**关闭当前面板的**当前标签**（`sidebarRight.close(tabId)`；上游拒关「独占停靠的引导页」时不吞键） | 任意 |
 | `⌘/Ctrl+\` | **右侧栏**定位文件浏览器：打开（不存在时创建）/ 聚焦该页并置顶（`openTab('files')`，同时展开右栏） | 任意 |
 | `⌘/Ctrl+L` | **右侧栏**定位终端：已有终端页就聚焦它并**把 DOM 焦点移进 xterm**（折叠时顺带展开右栏），没有才新建（`openTab('terminal')`）；**不重排** | 任意 |
 | `⌘/Ctrl+J` | 聚焦对话**输入框**（「焦点跳转」，J = Jump：走 `conversation.input` 取 composer 的 editor 宿主元素后 `focus()`） | `browse` / `editing`（`editing` 时需焦点**不在** composer 内） |
@@ -89,6 +90,16 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
 > 面板只有一个标签时**不循环回自身**——no-op 且不吞键，把按键交回页面，
 > 避免「按了没反应还吃掉按键」。三态均生效（含 `card`）：卡片打开时同样能切右栏标签，
 > 因为卡片占用的是**裸** `←` / `→`，带 `mod+alt` 的组合键与它不冲突，本动作无需让路。
+>
+> **关闭右栏当前标签为什么是 `⌘/Ctrl+.`**：句点键 `.` 在多数应用里就是「取消 / 关闭」
+> 的联想键（macOS 的 `⌘.` 即「取消」），且它落在**单修饰键**这一档、不与右栏标签轴
+> （`mod+alt+←/→`）抢位。语义 =「关掉**当前面板的当前标签**」：读取与标签切换**同源**的
+> 会话级 slot store 布局（`bySession[sessionId].layout` 的 `activePaneId` → `activeTabId`），
+> 再调公开的 `sidebarRight.close(tabId)`——与标签 chip 上的关闭按钮、标签菜单里的
+> 「关闭」**同一入口**（上游会跑该页类型注册的关闭钩子，并拒关「**独占停靠**的引导页」）。
+> 关完立即**回读同一份活实例**确认该标签真的从布局里消失：没消失（上游拒关 / 调用落到
+> 了别的会话面）就当作 no-op、**不吞键**，所以插件不必自己复制上游那套「能不能关」的
+> 判定。三态均生效：`mod+.` 与卡片的裸键、与文本编辑都不冲突。
 >
 > **定位右栏文件浏览器为什么是 `⌘/Ctrl+\`**：与右栏开关同属单修饰键这一档，
 > 反斜杠在主键区右端、不与 `mod+alt` 那一档的方向键抢位。语义是「打开 + 归位」而不是
@@ -284,8 +295,9 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   控制器在无挂载会话面（空白/hero 会话、右栏插件缺席）时 `require()` 抛错，插件兜住
   → **no-op 且不吞键**（无降级：不碰 DOM 里那个折叠按钮）。
 - 右栏标签切换（`⌘/Ctrl+Alt+←` / `→` → `sidebarRight.focus(tabId)`，见
-  `src/sidebar-tabs.ts`）：上游右栏的公开面只有 `active()`（当前标签）与
-  `focus(tabId)`（聚焦某标签），**没有** next/prev 动词、也无法枚举标签；标签顺序只
+  `src/sidebar-tabs.ts`）：上游右栏的公开面只有 `active()`（当前标签）、
+  `focus(tabId)`（聚焦某标签）与 `close(tabId)`（关某标签），**没有** next/prev 动词、
+  也无法枚举标签；标签顺序只
   存在于右栏自己的**会话级 slot store**里（`createSidebarRightStore`，快照
   `{ bySession: { <sessionId>: { layout } } }`，`layout` 为 docking kit 的 `LayoutState`）。
   于是切标签 = 「读权威 store 拿顺序 + 调公开的 `focus`」，与标签条（chip）点击**同一
@@ -304,6 +316,21 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   态闸门为**任意态**：问答卡片只用**裸** `←` / `→`（固定分发，见上面的
   `question.prev` / `question.next`），带 `mod+alt` 的组合键与它不在同一个 combo 上，
   所以卡片打开时本动作照常生效。
+- 关闭右栏当前标签（`⌘/Ctrl+.` → `src/sidebar-tabs.ts` 的 `closeRightSidebarTab`）：
+  取数与切标签**同源**（同一份会话级 slot store 的 `bySession[sessionId].layout`），
+  当前标签 = `layout.nodes[layout.activePaneId].activeTabId`（**当前面板**的**当前标签**，
+  且必须真在该面板的 `tabs` 里；失配即无当前标签）。关闭走公开的
+  `sidebarRight.close(tabId)`——与标签 chip 的关闭按钮、标签菜单「关闭」
+  （seat 的 `closeTab`）**同一入口**，上游会先跑该页类型注册的关闭钩子
+  （`registerCloseHandler`，失败即保留标签），并自动拒关「**独占停靠**的引导页」
+  （`canCloseTab` + `soleDockedTab`：关掉它右栏会整体收起，上游不让）。
+  插件**不复制**这套可行性判定，而是**关完回读同一份活实例**、确认该标签已从
+  `layout.tabs` 消失：消失才算处理（吞键），没消失（上游拒关、或服务面在别的会话上）
+  就返回 no-op 且**不吞键**；回读失败（`getSnapshot` 缺失 / 抛错）按「仍在」处理，
+  宁可放行也不吃掉按键。上游 store 的动作是同步提交（`defineStore` → `setState`），
+  所以这里的回读看到的就是这次调用的结果。**无降级**：`sidebarRight` 缺席、无 `close`
+  动词、取数三步任一环不可用、当前标签缺失、`close` 抛错（无挂载会话面）一律 no-op
+  且不吞键，不碰 DOM（DOM 里根本没有可点的关闭按钮——插件只用 store 与公开服务面）。
 - 定位右栏文件浏览器（`⌘/Ctrl+\` → `src/sidebar-tabs.ts` 的
   `revealRightSidebarFiles`）：两步，各走一个上游入口。
   ① **打开/创建/聚焦** = 公开的 `sidebarRight.openTab('files')`——`files` 是
@@ -630,6 +657,18 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   no-op 并把按键交回页面——避免「按了没反应还吃掉按键」。
 - **`card` 态下右栏标签照常可切**：卡片占用的方向键是**裸** `←` / `→`（问答翻题），
   `⌘/Ctrl+Alt+←/→` 是另一个 combo，两者互不影响；同理输入框聚焦（`editing`）时也生效。
+- **关闭当前标签只覆盖「当前面板」的当前标签**：与切标签同源，其它分屏面板、浮窗里的
+  标签都不受影响（要关它们先切过去）。当前面板没有激活标签（面板空 / `activeTabId`
+  失配）时 no-op 且不吞键。
+- **关闭当前标签依赖右栏插件已挂载且该会话开过面板**：与切标签同一批前置条件
+  （`rightbar.session` 注册项、会话级 store、`bySession[sessionId]`）。任一环不可用时
+  no-op 且**不吞键**——此时 `⌘/Ctrl+O` 先展开右栏即可。另注意上游 `sidebarRight.close`
+  作用在**已挂载会话面**上，所以插件在调用后回读布局确认；若服务面落在别的会话上
+  （当前标签未被删除）则同样按 no-op 放行，不会误吞按键。
+- **「独占停靠的引导页」关不掉，且此时不吞键**：右栏只剩引导页（guide）这一个停靠标签时
+  上游拒绝关闭（关掉它右栏会整体收起，`canCloseTab` / `soleDockedTab`）。插件调完
+  `close` 后回读发现标签仍在，就返回 no-op、把按键交回页面——与切标签「单个标签不吞键」
+  一致的取舍。引导页与其它标签共存时照常可关。
 - **文件浏览器页本身由上游提供**：`files` 这个页类型来自 `dsh-web-app` bundle 常驻挂载的
   `@deepseek-ai/dsh-client-ui-sidebar-files`（引导页里的「工作区文件」）。该行缺席时
   `openTab('files')` 会抛 `no tab type is registered as "files"`，本动作兜住并
@@ -687,7 +726,8 @@ DSH Web 降低鼠标依赖的全局快捷键插件（client-only）。
   `⌘N` 同样被浏览器截获，而 `⌃N`（`comboOf` 也吸收 ctrlKey）通常能到达页面。
   若在你的浏览器上不生效，用 `localStorage` 把 `sidebar.toggle`（左栏）/
   `sidebarRight.toggle`（右栏）/ `workspace.pick` / `model.pick` /
-  `sidebarRight.files` / `sidebarRight.terminal` / `session.new` / `composer.focus` 任一动作改成别的组合即可
+  `sidebarRight.files` / `sidebarRight.terminal` / `sidebarRight.closeTab` / `session.new` /
+  `composer.focus` 任一动作改成别的组合即可
   （见「自定义键位」）。
 - **焦点跳转（`⌘/Ctrl+J`）在 Win/Linux 与浏览器的「下载」键同键**：Chrome / Edge /
   Firefox 把 `Ctrl+J` 绑成「打开下载页」。本插件在页面捕获阶段先 `preventDefault()`，
@@ -802,6 +842,13 @@ node test-services.mjs   # 服务级动作路径：审批/问答/计划评审/ca
                          # rightbar.session 注册项的会话级 store（bySession[sessionId].layout
                          # 的 activePaneId 面板）、切换必须调 sidebarRight.focus，首末标签循环、
                          # 单标签与任一环不可用一律 no-op 不吞键、card 态仍生效（裸方向键归卡片）；
+                         # 以及 ⌘/Ctrl+. 关闭右栏当前标签：现场取自同一份会话级 store 布局的
+                         # **当前面板当前标签**（多面板时只关当前面板那个、activeTabId 失配
+                         # 不关）、关闭必须调公开的 sidebarRight.close(tabId)、关完回读布局
+                         # 确认标签真的消失（桩里复刻上游 closeTab：独占停靠的 guide 拒关
+                         # ⇒ 插件 no-op 不吞键；guide 与其它标签共存则可关）、
+                         # 无标签 / 非 pane / 该会话无布局 / 服务·注册项·store·close 任一环
+                         # 不可用一律 no-op 不吞键、card·editing 态生效、键位可覆盖；
                          # 以及 ⌘/Ctrl+\ 定位右栏文件浏览器并置顶：必须调公开的
                          # sidebarRight.openTab('files')（不存在时创建 / 已存在时聚焦，即
                          # 「定位 + 缺则创建」），置顶必须调同一份会话级 store 实例的

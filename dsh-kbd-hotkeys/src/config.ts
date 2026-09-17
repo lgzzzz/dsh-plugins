@@ -35,6 +35,8 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'sidebarRight.files', label: '右侧栏:定位文件浏览器(不存在则创建)并置顶', group: '会话', states: ['card', 'editing', 'browse'] },
   // 定位终端但不去重、不置顶,故先读 store 认页
   { id: 'sidebarRight.terminal', label: '右侧栏:定位终端并聚焦(不存在则新建)', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 关当前标签;上游拒关「独占停靠的 guide」,被拒即 no-op 不吞键
+  { id: 'sidebarRight.closeTab', label: '右侧栏:关闭当前标签', group: '会话', states: ['card', 'editing', 'browse'] },
   // 同 /new(uiWorkspace.startSession)
   { id: 'session.new', label: '新建会话并跳转(等同 /new)', group: '会话', states: ['card', 'editing', 'browse'] },
   // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
@@ -77,6 +79,8 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'sidebarRight.files': 'mod+\\',
   // 浏览器保留键(聚焦地址栏)
   'sidebarRight.terminal': 'mod+l',
+  // 关标签的点号:与右栏开关 / 定位同属单修饰键这一档,`code` 判定(Period)不受布局影响
+  'sidebarRight.closeTab': 'mod+.',
   // 浏览器保留键(新建窗口)
   'session.new': 'mod+n',
   // J = Jump;终端里 ⌃J(LF)不再送给 PTY

@@ -1,4 +1,4 @@
-/** dsh-kbd-hotkeys — 右栏标签 / 文件浏览器 / 终端访问层（⌘/Ctrl+Alt+←→、⌘/Ctrl+\、⌘/Ctrl+L）。
+/** dsh-kbd-hotkeys — 右栏标签 / 文件浏览器 / 终端访问层（⌘/Ctrl+Alt+←→、⌘/Ctrl+\、⌘/Ctrl+L、⌘/Ctrl+.）。
  * 取数走 slot store 三步（entries → uiSession.resolve → resolveStore）；无降级；terminal 是 multiple 页、每次 openTab 铸 UUID，故认页由插件读 store。
  */
 import type {
@@ -52,6 +52,58 @@ export function cycleRightSidebarTab(services: Services, delta: number): boolean
   } catch {
     return false
   }
+}
+
+/* 关闭当前标签（⌘/Ctrl+.） */
+
+/**
+ * ⌘/Ctrl+.：关闭右栏当前面板的当前标签（任意态）。现场仍取会话级 store 布局（与标签切换同源），
+ * 关闭调公开的 `sidebarRight.close(tabId)`——上游自带关闭钩子，并拒关「独占停靠的 guide」。
+ * 关完读回布局确认标签真的消失：未消失（上游拒关 / 作用到别的会话）或任一环不可用一律
+ * no-op 不吞键，不复制上游的可行性判定。
+ */
+export function closeRightSidebarTab(services: Services): boolean {
+  const sidebarRight = services.sidebarRight
+  if (sidebarRight === null || sidebarRight === undefined) return false
+  if (typeof sidebarRight.close !== 'function') return false
+  const resolved = rightbarStore(services)
+  if (resolved === undefined) return false
+  const sessionId = currentSessionId(services)
+  if (sessionId === undefined) return false
+  const layout = resolved.snapshot.bySession?.[sessionId]?.layout
+  if (layout === undefined) return false
+  const tabId = activeTabId(layout)
+  if (tabId === undefined) return false
+  try {
+    sidebarRight.close(tabId)
+  } catch {
+    return false
+  }
+  return !tabStillOpen(resolved.instance, sessionId, tabId)
+}
+
+/** 当前面板的当前标签 id；无激活标签 / 标签不在面板里即 undefined。 */
+function activeTabId(layout: SidebarRightLayoutLike): string | undefined {
+  const pane = paneOf(layout, layout.activePaneId)
+  if (pane === undefined) return undefined
+  const active = pane.activeTabId
+  if (typeof active !== 'string' || active === '') return undefined
+  return (pane.tabs ?? []).includes(active) ? active : undefined
+}
+
+/** 关闭后回读同一份活实例：该标签是否仍在（读不回布局按「仍在」处理，宁可放行）。 */
+function tabStillOpen(instance: SidebarRightStoreLike, sessionId: string, tabId: string): boolean {
+  const getSnapshot = instance.getSnapshot
+  if (typeof getSnapshot !== 'function') return true
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(instance)
+  } catch {
+    return true
+  }
+  const layout = (snapshot as SidebarRightTabsStateLike | undefined)?.bySession?.[sessionId]?.layout
+  if (layout === undefined) return false
+  return layout.tabs?.[tabId] !== undefined
 }
 
 /* 文件浏览器：打开并置于首位（⌘/Ctrl+\） */
