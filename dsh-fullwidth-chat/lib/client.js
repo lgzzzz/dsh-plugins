@@ -1,9 +1,10 @@
 window.__ModuleLoader__.load({ id: 'dsh-fullwidth-chat', factory: (require) => {
 var module = { exports: {} }; var exports = module.exports;
-/** 全宽对话列:`[data-slot="main.conversation"] [data-phase]`(wrapper 为 display:contents,须打在属性节点)设
- * `--dsh-chat-content-width: 100%`;两个属性选择器 (0,2,0) 压过上游 `.wSkVaW_root` (0,1,0);
- * composer 卡片宽经 calc(卡片宽 + 2×--dsh-composer-side-clearance(16px)) 跟随,`[data-width-handle]` 负责收起。 */
-let CSS = "[data-slot='main.conversation'] [data-phase] { --dsh-chat-content-width: 100%; }";
+/** 全宽对话列:在会话内容节点 `[data-slot="main.conversation"] [data-conversation-content]`(上游 `.wSkVaW_body`)
+ * 置 `--dsh-chat-content-width: 100%`。上游在该节点自身声明此变量,祖先上的同名声明会被它覆盖,故锚点必须
+ * 落在同一元素 (0,2,0 压过 `.wSkVaW_body` 0,1,0);composer 卡片经同元素重算的
+ * `--dsh-composer-card-max-width` 跟随,`[data-width-handle]` 随内容边缘归零。 */
+let CSS = "[data-slot='main.conversation'] [data-conversation-content] { --dsh-chat-content-width: 100%; }";
 module.exports = {
   name: 'fullwidth-chat',
   apply: function (ctx) {
