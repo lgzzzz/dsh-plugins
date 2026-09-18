@@ -1,54 +1,29 @@
 # dsh-directory-picker-browse
 
-把目录选择器固定为 **browse（浏览）** 交互，并关闭 `ui-deliverables` 产物行。
+把目录选择器固定为 **browse（浏览）** 交互。
 
-这是一个纯 **bundle patch** 插件：自身没有任何宿主或浏览器代码，只通过
-`package.json` 的 `dsh.bundle.patch` 声明一个 `cordis.patch.yml` 覆盖层。
-安装后它会被加入 web profile 的 `dsh.profile.bundles`，随每个 bundle 层一起
-挂载；覆盖内容如下：
+纯 **bundle patch** 插件：自身没有宿主 / 浏览器代码，只通过 `package.json` 的
+`dsh.bundle.patch` 声明一个 `cordis.patch.yml` 覆盖层，随 bundle 层挂载：
 
 - `disabled: true` 关闭默认的 `directory-picker`
-  （`@deepseek-ai/dsh-host-directory-picker-auto`）与 `ui-deliverables`
-  （`@deepseek-ai/dsh-client-ui-deliverables`）。
-- `insert` 挂载 browse 变体：
-  - 宿主半部 `@deepseek-ai/dsh-host-directory-picker-browse`（列表 / 新建原语）；
-  - 浏览器半部 `@deepseek-ai/dsh-client-ui-directory-picker-browse`（浏览界面）。
+  （`@deepseek-ai/dsh-host-directory-picker-auto`）；
+- `insert` 挂载 browse 变体：宿主半部 `@deepseek-ai/dsh-host-directory-picker-browse`
+  （列表 / 新建原语）与浏览器半部 `@deepseek-ai/dsh-client-ui-directory-picker-browse`
+  （浏览界面）。两个都是随部署内置的 in-box 包，由安装锚点解析，无需在 Profile 里额外声明。
 
-两个 browse 包都是随部署内置的 in-box 包，由安装锚点解析，无需在 profile 里
-额外声明依赖。
+**不要停用上游 `ui-deliverables`**（`@deepseek-ai/dsh-client-ui-deliverables`）：它承载整个
+turn-tail 产物面——回合改动文件卡片、`present` 交付卡片、收尾正文里可点击的文件路径、
+`changes-review` 右栏 tab 类型，以及其 Node 半部注册的 `ui:deliverable-file-references`
+系统提示词段。本插件只换目录选择器，不触碰 deliverables 面。
 
-## 安装
-
-本插件以本地 npm 包形式经 Web Profile 的 `link:` 依赖挂载（详见工作区
-`AGENTS.md`「挂载与激活」）。
+## 安装 / 卸载（用户操作）
 
 ```sh
-dsh plugin --profile web add link:<仓库根>/dsh-directory-picker-browse
-```
-
-（或从插件目录内执行 `dsh plugin --profile web add link:.`，pnpm 会把相对路径
-锚定到当前目录。）
-
-`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会自动核对
-`dsh.profile.bundles` —— 声明了 `dsh.bundle` 的依赖自动并入 bundle 列表，
-无需手动改 `~/.dsh/profiles/web/package.json`。
-
-安装完成后重启 App 生效。可在 profile 的
-`$HOME/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里看到新增的
-`dsh-directory-picker-browse`。
-
-> 加载属于用户操作：代理交付插件后不得自行执行 `dsh plugin add`、
-> `pnpm install` 或重启 App（强制规范第 1 条）。
-
-## 卸载
-
-```sh
+dsh plugin --profile web add link:<仓库根>/dsh-directory-picker-browse   # 重启 App 生效
 dsh plugin --profile web remove dsh-directory-picker-browse
 ```
 
-## 说明
-
-- 覆盖层只由本插件的 `cordis.patch.yml` 提供；Profile 自身的 `cordis.patch.yml`
-  当前为空（`[]`），无需再在其中重复声明这些行。
-- `dsh.profile.patchReload: live` 只热重载 profile 自身的 `cordis.patch.yml`；
-  bundle 层是常驻挂载，改动本插件后需重启 App 生效。
+`dsh plugin` 是 pnpm 转发器：执行 `pnpm add` 后会自动把本插件并入
+`dsh.profile.bundles`，无需手改 Profile 清单。覆盖层只由本插件的 `cordis.patch.yml` 提供，
+Profile 自身的 `cordis.patch.yml` 无需重复声明。`patchReload: live` 只热重载 Profile 自身的
+补丁；bundle 层是常驻挂载，改动本插件后需重启 App 生效。

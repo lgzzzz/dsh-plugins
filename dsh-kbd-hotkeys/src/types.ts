@@ -1,18 +1,16 @@
 /** 运行时服务 / 上下文的最小结构类型切片,只含本插件消费的字段;取数不可用即 no-op,不回退 DOM。 */
 
-/** apply(ctx) 的运行时上下文最小面。 */
 export interface ClientContext {
   get?(name: string): unknown
   effect?(callback: () => void | (() => void)): void
 }
 
-/** 问答请求里的一个选项。 */
 export interface PendingQuestionOptionLike {
   label: string
   description?: string
 }
 
-/** 问答请求里的一道题;计划评审由 intent.kind==='plan-review' 标识。 */
+/** 计划评审由 intent.kind === 'plan-review' 标识。 */
 export interface PendingQuestionItemLike {
   id: string
   question?: string
@@ -34,7 +32,7 @@ export interface PendingInteractionLike {
   cancel?(): Promise<void> | void
 }
 
-/** uiSession 待处理交互的公开观察面。 */
+/** uiSession 待处理交互的公开观察面;私有回退字段 pendingSnapshot 见下。 */
 export interface PendingInteractionsLike {
   getSnapshot?(): ReadonlyMap<string, PendingInteractionLike>
 }
@@ -52,12 +50,10 @@ export interface ScopeBindingLike {
   ctx?: unknown
 }
 
-/** 会话摘要行消费面。 */
 export interface SessionSummaryLike {
   id: string
   displayTitle?: string
   title?: string
-  /** 会话工作目录(浮窗次行)。 */
   cwd?: string
   running?: boolean
   /** 已结束未查看(缺席 = false)。 */
@@ -68,7 +64,6 @@ export interface SessionSummaryLike {
   origin?: string
 }
 
-/** workspaces 快照里的工作区实体。 */
 export interface WorkspaceItemLike {
   workspaceId: string
   path?: string
@@ -79,7 +74,6 @@ export interface WorkspaceItemLike {
   updatedAt?: string
 }
 
-/** workspaces 列表快照消费面。 */
 export interface WorkspaceSnapshotLike {
   items?: readonly WorkspaceItemLike[]
   archivedSessionIds?: readonly string[]
@@ -87,41 +81,32 @@ export interface WorkspaceSnapshotLike {
   phase?: string
 }
 
-/** workspaces 服务消费面。 */
 export interface WorkspacesLike {
   list?: { getSnapshot?(): WorkspaceSnapshotLike }
 }
 
 /* ---- 近期对话浮窗(⌘/Ctrl+I):列表取数 + 打开落点 ---- */
 
-/** 近期对话浮窗的一行(纯展示数据)。 */
+/** 近期对话行(纯展示数据)。 */
 export interface RecentSessionRowLike {
   sessionId: string
-  /** 主标签(会话标题)。 */
   label: string
   /** 次行('' = 省略)。 */
   detail: string
-  /** 是否为当前会话。 */
   current: boolean
-  /** 是否运行中。 */
   running: boolean
-  /** 是否有未查看的完成提醒。 */
   completed: boolean
-  /** 是否有待处理交互卡片。 */
   pending: boolean
 }
 
 /** 一个工作区分组(无归属桶 label 为空串)。 */
 export interface RecentSessionGroupLike {
-  /** 工作区 id(无归属桶为 '')。 */
   workspaceId: string
-  /** 组标题(无归属桶为空串)。 */
   label: string
   /** 组内会话行(最近更新在前)。 */
   rows: readonly RecentSessionRowLike[]
 }
 
-/** 浮窗的完整渲染数据。 */
 export interface RecentSessionsViewLike {
   /** 分组(空组已剔除;无归属桶在最后;全局最多 10 行)。 */
   groups: readonly RecentSessionGroupLike[]
@@ -135,16 +120,14 @@ export interface RecentSessionsViewLike {
 
 /* ---- 工作区浮窗(⌘/Ctrl+K):列表取数 + 切换落点 ---- */
 
-/** 工作区浮窗的一行(纯展示数据)。 */
+/** 工作区行(纯展示数据)。 */
 export interface WorkspaceRowLike {
   workspaceId: string
   /** 主标签:title → 路径末段 → 原路径。 */
   label: string
   /** 次行:规范路径(与 label 相同则留空)。 */
   detail: string
-  /** 名下会话数。 */
   sessionCount: number
-  /** 当前会话是否属于该工作区。 */
   current: boolean
 }
 
@@ -163,13 +146,11 @@ export interface WorkspaceViewStateLike {
   groupBy?: string
   /** 排序方式:manual / updated(默认)。 */
   orderBy?: string
-  /** 分组展开状态:组 key → 是否展开。 */
   groupExpansion?: Readonly<Record<string, boolean | undefined>>
-  /** 每组本地会话顺序账号:组 key → 会话 id 顺序。 */
+/** 组 key → 本地会话顺序账号。 */
   sessionOrderByAccount?: Readonly<Record<string, readonly string[] | undefined>>
 }
 
-/** store 实例消费面。 */
 export interface StoreInstanceLike {
   getSnapshot?(): unknown
 }
@@ -195,7 +176,6 @@ export interface QuestionDraftLike {
   skipped: boolean
 }
 
-/** 一次问答请求的草稿进度(当前题号 + 每题草稿)。 */
 export interface QuestionProgressLike {
   index: number
   drafts: QuestionDraftLike[]
@@ -207,13 +187,11 @@ export interface QuestionDraftSnapshotLike {
   progress?: QuestionProgressLike
 }
 
-/** 草稿 store 动作面(仅本插件用到的两个)。 */
 export interface QuestionDraftActionsLike {
   replace?(requestKey: string, progress: QuestionProgressLike): void
   clear?(requestKey: string): void
 }
 
-/** 草稿 store 活实例。 */
 export interface QuestionDraftStoreLike extends StoreInstanceLike {
   actions?: QuestionDraftActionsLike
 }
@@ -224,14 +202,12 @@ export interface SlotsLike {
   resolveStore?(handle: unknown, scopeBinding: unknown): StoreInstanceLike | undefined
 }
 
-/** 会话快照消费面。 */
 export interface SessionSnapshotLike {
   running?: boolean
   /** 直系父地址;普通会话为 null。 */
   subagent?: { address?: { mode?: string } } | null
 }
 
-/** 单个会话的面(getSnapshot / cancel)。 */
 export interface SessionFaceLike {
   getSnapshot?(): SessionSnapshotLike
   cancel?(): Promise<unknown> | void
@@ -249,21 +225,17 @@ export interface SubagentCatalogEntryLike {
   id?: string
 }
 
-/** 子代理目录快照。 */
 export interface SubagentCatalogLike {
   entries?: readonly SubagentCatalogEntryLike[]
 }
 
-/** sessions.list 快照消费面。 */
 export interface SessionListSnapshotLike {
   ids?: readonly string[]
   byId?: Readonly<Record<string, SessionSummaryLike>>
   current?: string
-  /** 直系子代理目录:父会话 id → 目录。 */
   subagentsByParent?: Readonly<Record<string, SubagentCatalogLike | undefined>>
 }
 
-/** sessions 服务消费面。 */
 export interface SessionsLike {
   list?: { getSnapshot?(): SessionListSnapshotLike }
   open?(sessionId: string): void
@@ -279,7 +251,6 @@ export interface LayoutLike {
 
 /** 打开落点;无 index,置顶只能经 store 的 placeTab。 */
 export interface SidebarRightPlacementLike {
-  /** 落到这个面板(非当前停靠面板)。 */
   paneId?: string
   /** 顶掉该标签槽位并在同一步关掉它。 */
   replaceTab?: string
@@ -291,7 +262,6 @@ export interface SidebarRightPlacementLike {
 export interface SidebarRightLike {
   toggleExpanded?(): void
   isExpanded?(): boolean
-  /** 取当前激活标签;无会话面则 undefined。 */
   active?(): SidebarRightTabRecordLike | undefined
   /** 聚焦标签(与 chip 点击同一入口);标签不存在则静默跳过。 */
   focus?(tabId: string): void
@@ -320,7 +290,6 @@ export interface SidebarRightLayoutNodeLike {
   activeTabId?: string
 }
 
-/** 一个会话的 docking 布局。 */
 export interface SidebarRightLayoutLike {
   nodes?: Readonly<Record<string, SidebarRightLayoutNodeLike | undefined>>
   tabs?: Readonly<Record<string, SidebarRightTabRecordLike | undefined>>
@@ -329,7 +298,6 @@ export interface SidebarRightLayoutLike {
   expanded?: boolean
 }
 
-/** 一个会话的面板状态(只消费 layout)。 */
 export interface SidebarRightSurfaceLike {
   layout?: SidebarRightLayoutLike
 }
@@ -356,7 +324,6 @@ export interface SidebarRightStoreLike extends StoreInstanceLike {
 /** composer 的 contenteditable 宿主元素;只声明 focus / contains,引用来自服务链路。 */
 export interface ComposerEditableLike {
   focus?(options?: { preventScroll?: boolean }): void
-  /** 事件目标是否落在宿主元素内(⇧Tab 门闸用)。 */
   contains?(node: unknown): boolean
 }
 
@@ -365,7 +332,6 @@ export interface ComposerEditorLike {
   getRootElement?(): ComposerEditableLike | null
 }
 
-/** 一个会话的 input facade(含 editor)。 */
 export interface SessionInputShellLike {
   editor?: ComposerEditorLike
 }
@@ -376,7 +342,6 @@ export interface InputHubLike {
   shell?(id: string): SessionInputShellLike | undefined
 }
 
-/** conversation 服务:聚焦所需的 editor 经 input 取。 */
 export interface ConversationLike {
   input?: InputHubLike
 }
@@ -402,27 +367,23 @@ export interface Services {
 
 /* ---- 模型浮窗(⌘/Ctrl+M)与强度循环(⇧Tab):会话级模型目录 ---- */
 
-/** 一次完整模型选择。 */
 export interface ModelSelectionLike {
   provider: string
   model: string
   reasoningEffort?: string
 }
 
-/** 一档推理强度。 */
 export interface ModelReasoningEffortLike {
   id: string
   name?: string
   description?: string
 }
 
-/** 某模型的推理元数据。 */
 export interface ModelReasoningLike {
   efforts?: readonly ModelReasoningEffortLike[]
   defaultEffort?: string
 }
 
-/** 目录里的一个模型。 */
 export interface ModelCatalogModelLike {
   id: string
   name?: string
@@ -430,7 +391,6 @@ export interface ModelCatalogModelLike {
   reasoning?: ModelReasoningLike
 }
 
-/** 一个提供方分组。 */
 export interface ModelProviderGroupLike {
   id: string
   name?: string
@@ -444,7 +404,6 @@ export interface ModelCatalogFailureLike {
   message?: string
 }
 
-/** 会话级模型目录快照。 */
 export interface ModelDirectoryStateLike {
   current?: ModelSelectionLike | null
   routable?: boolean | null
@@ -471,21 +430,16 @@ export interface ModelDirectoryResolverLike {
   directoryFor?(sessionId: string): ModelDirectoryLike | undefined
 }
 
-/** 模型浮窗的一行。 */
 export interface ModelPickerRowLike {
   /** 该行的完整选择(含推理强度)。 */
   selection: ModelSelectionLike
-  /** 主标签:模型名。 */
   label: string
-  /** 次行:提供方名。 */
   detail: string
   /** 分组显示名(同组行共用)。 */
   provider: string
-  /** 是否当前有效选择。 */
   current: boolean
 }
 
-/** 浮窗顶部「当前」行。 */
 export interface ModelPickerCurrentLike {
   /** 模型名(找不到时回退 provider/model)。 */
   label: string
@@ -493,7 +447,6 @@ export interface ModelPickerCurrentLike {
   effort: string
 }
 
-/** 模型浮窗的完整渲染数据。 */
 export interface ModelPickerViewLike {
   current: ModelPickerCurrentLike | null
   rows: readonly ModelPickerRowLike[]

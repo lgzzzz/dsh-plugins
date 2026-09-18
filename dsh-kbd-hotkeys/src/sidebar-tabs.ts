@@ -1,6 +1,5 @@
-/** dsh-kbd-hotkeys — 右栏标签 / 文件浏览器 / 终端访问层（⌘/Ctrl+Alt+←→、⌘/Ctrl+\、⌘/Ctrl+L、⌘/Ctrl+.）。
- * 取数走 slot store 三步（entries → uiSession.resolve → resolveStore）；无降级；terminal 是 multiple 页、每次 openTab 铸 UUID，故认页由插件读 store。
- */
+/** 右栏标签 / 文件浏览器 / 终端访问层(⌘/Ctrl+Alt+←→、⌘/Ctrl+\、⌘/Ctrl+L、⌘/Ctrl+.)。
+ * 三步取数:entries → uiSession.resolve → resolveStore;无降级;terminal 是 multiple 页,认页由插件读 store。 */
 import type {
   Services,
   SidebarRightLayoutLike,
@@ -27,7 +26,6 @@ const TERMINAL_KIND = 'terminal'
 /** 终端页地址前缀：multiple 页的 contentId 带 UUID，故认前缀而非全等。 */
 const TERMINAL_PAGE_PREFIX = 'sidebar://terminal'
 
-/** 当前面板的标签现场。 */
 interface TabAxis {
   readonly ids: readonly string[]
   /** 当前激活标签在 `ids` 里的下标;找不到时为 -1。 */
@@ -56,12 +54,8 @@ export function cycleRightSidebarTab(services: Services, delta: number): boolean
 
 /* 关闭当前标签（⌘/Ctrl+.） */
 
-/**
- * ⌘/Ctrl+.：关闭右栏当前面板的当前标签（任意态）。现场仍取会话级 store 布局（与标签切换同源），
- * 关闭调公开的 `sidebarRight.close(tabId)`——上游自带关闭钩子，并拒关「独占停靠的 guide」。
- * 关完读回布局确认标签真的消失：未消失（上游拒关 / 作用到别的会话）或任一环不可用一律
- * no-op 不吞键，不复制上游的可行性判定。
- */
+/** ⌘/Ctrl+.:关闭右栏当前面板的当前标签(任意态);现场仍取会话级 store 布局(与标签切换同源),
+ * 关闭调公开的 sidebarRight.close(tabId)(上游拒关独占停靠的 guide);关完回读布局确认消失,否则 no-op 不吞键。 */
 export function closeRightSidebarTab(services: Services): boolean {
   const sidebarRight = services.sidebarRight
   if (sidebarRight === null || sidebarRight === undefined) return false
@@ -108,7 +102,6 @@ function tabStillOpen(instance: SidebarRightStoreLike, sessionId: string, tabId:
 
 /* 文件浏览器：打开并置于首位（⌘/Ctrl+\） */
 
-/** 文件浏览器 tab 的现场：所在停靠面板、标签 id、下标。 */
 interface FilesTab {
   readonly paneId: string
   readonly tabId: string
@@ -180,7 +173,6 @@ function paneOrder(layout: SidebarRightLayoutLike): string[] {
 
 /* 终端：定位（已有则聚焦）/ 缺则新建（⌘/Ctrl+L） */
 
-/** 一笔布局里认出的终端现场。 */
 interface TerminalTab {
   readonly paneId: string
   readonly tabId: string
@@ -188,11 +180,8 @@ interface TerminalTab {
   readonly current: boolean
 }
 
-/**
- * ⌘/Ctrl+L：任意态；定位终端——已有则 focus(tabId)(折叠时补 toggleExpanded)、不置顶；没有才 openTab 新建。
- * terminal 是 multiple 页、每次 openTab 铸 UUID contentId, 故认页由插件读 store。
- * 无降级(任一环失败即 no-op 不吞键); 已知限制: 会抢地址栏与 shell 清屏。
- */
+/** ⌘/Ctrl+L:任意态;定位终端——已有则 focus(tabId)(折叠时补 toggleExpanded)、不置顶,没有才 openTab 新建。
+ * terminal 是 multiple 页、每次 openTab 铸 UUID,故认页由插件读 store;无降级;已知限制:抢地址栏与 shell 清屏。 */
 export function revealRightSidebarTerminal(services: Services): boolean {
   const sidebarRight = services.sidebarRight
   if (sidebarRight === null || sidebarRight === undefined) return false
@@ -222,7 +211,7 @@ export function revealRightSidebarTerminal(services: Services): boolean {
   return true
 }
 
-/** 把 DOM 焦点移进终端的 xterm：唯一一处有界选择器查询（按 store 的 paneId 找面板，再取 textarea.xterm-helper-textarea）；失败即 no-op。 */
+/** 把 DOM 焦点移进终端的 xterm:唯一一处有界选择器查询(按 paneId 找面板再取 textarea.xterm-helper-textarea);失败即 no-op。 */
 function focusTerminalScreen(paneId: string): boolean {
   if (typeof document === 'undefined') return false
   const pane = paneElement(paneId)
@@ -326,7 +315,6 @@ function currentPaneTabs(services: Services): TabAxis | undefined {
   }
 }
 
-/** 当前会话的右栏 docking 布局。 */
 function currentLayout(services: Services): SidebarRightLayoutLike | undefined {
   const resolved = rightbarStore(services)
   if (resolved === undefined) return undefined
@@ -335,7 +323,6 @@ function currentLayout(services: Services): SidebarRightLayoutLike | undefined {
   return resolved.snapshot.bySession?.[sessionId]?.layout
 }
 
-/** 当前会话 id（无则 undefined）。 */
 function currentSessionId(services: Services): string | undefined {
   const current = services.sessions?.list?.getSnapshot?.()?.current
   return current === undefined || current === '' ? undefined : current

@@ -1,47 +1,6 @@
 /**
- * 诊断脚本(非插件产物):用最小 DOM 桩加载 lib/client.js,验证
- * 「服务化后的动作路径」是否只走服务面,不触碰 DOM。
- *
- * 关键点:DOM 桩的 querySelector/querySelectorAll 一律返回空——若问答/审批
- * 仍依赖卡片 DOM,断言必然失败。
- *
- * 审批为固定单键:当前会话有待审批卡片时 Enter = 允许一次、Esc = 拒绝(不受焦点
- * 位置影响),组合键形式的审批键位不作为动作执行;
- * 无审批卡片时 Esc 仍走 session.stop。
- *
- * 通用问答的断言对象是**卡片自己的草稿 store**(conversation.composer 注册项
- * 上的 store handle → uiSession.resolve(sessionId) → slots.resolveStore):
- * 数字键必须写进这份 store(卡片才会高亮,且不翻题)、←/→ 必须只改题号(草稿原样保留)、
- * Enter 必须从这份 store 取草稿(非末题推进、末题结算)——插件内不另存镜像状态。
- *
- * 另含侧栏开关断言:⌘/Ctrl+B → `layout.toggleSidebar()`(左栏)、
- * ⌘/Ctrl+O → `sidebarRight.toggleExpanded()`(右栏),两者在 browse / editing
- * 两态都生效且互不串场;服务缺席或抛错(无挂载会话面)时 no-op 且不吞键;左栏键位
- * 可经 localStorage 自定义且不影响右栏默认键位。
- *
- * 另含新建会话断言(⌘/Ctrl+N,等同侧栏「新建会话」按钮):必须调公开的
- * `uiWorkspace.startSession()`(与该按钮是同一条服务调用);三态放行,服务缺席 / 无
- * startSession / 抛错一律 no-op 且不吞键,键位可自定义。
- *
- * 另含右栏标签切换断言(⌘/Ctrl+Alt+← / →):标签顺序必须取自右栏自己的会话级 slot
- * store(`rightbar.session` 注册项上的 store handle → `uiSession.resolve(sessionId)`
- * → `slots.resolveStore` → `getSnapshot().bySession[sessionId].layout`),切换必须调
- * 公开的 `sidebarRight.focus(tabId)`;首/末标签**循环**,只有一个标签时 no-op 且不吞键,
- * 焦点在输入框(editing 态)同样可用,任一环不可用一律 no-op。
- *
- * 另含右栏终端定位断言(⌘/Ctrl+L):terminal 是 `multiple: true` 的页类型(上游每次
- * `openTab` 都铸带 UUID 的 contentId、不按 (kind, contentId) 去重),所以「认页」必须由
- * 插件自己读会话级 store 的布局完成(`record.kind === 'terminal'`):已有终端 → 只调
- * 公开的 `sidebarRight.focus(tabId)`(折叠时补一步 `toggleExpanded`)、**不**再 openTab
- * (重复按不堆积终端、不重排);没有才调 `openTab('terminal')` 新建。另覆盖面板内优先
- * 当前激活的终端 / 跨停靠面板定位 / 浮窗不参与 / 折叠与 expanded 读不到 / 凭页地址前缀
- * 认页,以及各层不可用或抛错时的 no-op 不吞键(已有终端时不退化成再开一个)。
- * 另有**元素级聚焦**断言:终端本来就是所在面板的当前标签时,上游 TerminalBody 的自动
- * 聚焦 effect(依赖 [visible, state.writable])不会重跑,插件按 store 给出的 paneId 找
- * `[data-dockkit-pane]` 里 xterm 的 `textarea.xterm-helper-textarea` 并 focus
- * (注入假面板;其余用例的 DOM 桩仍然一律返回空——认页 / 取数不得依赖 DOM)。
- *
- * 用法: node test-services.mjs
+ * 诊断脚本(非插件产物):最小 DOM 桩加载 lib/client.js,验证各动作只走服务面、不触碰 DOM(桩的 querySelector 恒空);
+ * 覆盖交互/草稿 store、左右栏与标签、文件/终端、聚焦输入框、强度循环与三个数据浮窗;桩里上游方法须写成读 this 的类方法形态。
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -49,7 +8,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// ---- 最小 DOM 桩(刻意不提供任何卡片元素;仅记录浮层自建的 DOM 子树) ----
+// ---- 最小 DOM 桩:不提供任何卡片元素,仅记录浮层自建的 DOM 子树 ----
 class FakeNode {}
 class FakeHTMLElement extends FakeNode {
   constructor(tag = 'DIV') {
@@ -57,8 +16,7 @@ class FakeHTMLElement extends FakeNode {
     this.tagName = tag
     this.isContentEditable = false
     this.disabled = false
-    // 仅用于观察插件浮层(overlay.ts)自建的子树:appendChild/remove 维护父子关系,
-    // textContent 由浮层赋值。业务代码不读 DOM(卡片元素一律不存在)。
+    // 仅用于观察插件浮层自建的子树;业务代码不读 DOM(卡片元素一律不存在)。
     this.children = []
     this.parent = null
     this.textContent = null
@@ -80,7 +38,7 @@ class FakeHTMLElement extends FakeNode {
 class FakeDocument {
   constructor() {
     this.listeners = new Map()
-    // body / head 必须是稳定实例,浮层挂载点才可观察(每次返回新实例会丢掉子树)
+    // body / head 须是稳定实例,否则浮层挂载点不可观察(子树会被丢掉)
     this._body = new FakeHTMLElement('BODY')
     this._head = new FakeHTMLElement('HEAD')
   }
@@ -96,11 +54,7 @@ class FakeDocument {
   get body() { return this._body }
   get head() { return this._head }
 }
-/**
- * 可注入的「右栏停靠面板」DOM:默认空——业务代码的**认页 / 取数**必须全部走服务面,
- * 空 DOM 下所有既有断言照旧成立。只有 ⌘/Ctrl+L 的**元素级聚焦**需要 DOM,故相关用例
- * 临时注入假面板(见阶段 7 的 ⑮),测完清空。
- */
+/** 可注入的假停靠面板:仅 ⌘/Ctrl+L 的元素级聚焦需要 DOM(见阶段 7 的 ⑮),默认空。 */
 let dockPanes = []
 class FakeKeyboardEvent {
   constructor(init) {
@@ -141,7 +95,7 @@ function check(label, condition, detail) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
-// ---- 浮层观察工具(只读插件自建的 DOM 子树,业务代码不读 DOM) --------------
+// ---- 浮层观察工具(只读插件自建子树) ----------------------------------------
 /** 深度优先收集满足条件的元素。 */
 function collectNodes(node, predicate, out = []) {
   for (const child of node.children ?? []) {
@@ -193,10 +147,7 @@ const snapshot = {
 }
 const sessions = { list: { getSnapshot: () => snapshot }, open() {}, binding: () => undefined }
 
-/**
- * 假问答草稿 store:复刻上游 defineStore 的 replace/clear 语义
- * (replace 覆盖 requestKey + progress,clear 只在 requestKey 匹配时清空)。
- */
+/** 假草稿 store:复刻上游 replace(覆盖 requestKey + progress)/ clear(仅 requestKey 匹配时清空)。 */
 function makeDraftStore() {
   const handle = { spec: {} }
   let state = { progress: { index: 0, drafts: [] } }
@@ -214,15 +165,15 @@ function makeDraftStore() {
   return { handle, instance, read: () => state, seed: (next) => { state = clone(next) } }
 }
 
-/** conversation.composer 的假 slots:问答注册项(带 store)+ 干扰项(无 store / select 不匹配)。 */
+/** conversation.composer 假 slots:承载 store 的注册项 + 干扰项(无 store / select 不匹配)。 */
 function composerSlots(draft) {
   const otherHandle = { spec: {} }
   return {
     entries: (key) => {
       if (key !== 'conversation.composer') return []
       return [
-        { store: otherHandle, select: () => null }, // select 不匹配 → 必须跳过
-        { select: () => ({}) }, // 无 store → 必须跳过
+        { store: otherHandle, select: () => null }, // select 不匹配,必须跳过
+        { select: () => ({}) }, // 无 store,必须跳过
         {
           store: draft.handle,
           select: ({ pendingInteraction }) =>
@@ -238,9 +189,7 @@ function composerSlots(draft) {
   }
 }
 
-// ===========================================================================
-// 阶段 1:公开面 uiSession.pendingInteractions(服务级路径)
-// ===========================================================================
+// ---- 阶段 1:公开面 uiSession.pendingInteractions(服务级路径) ----
 const pending = new Map()
 const draft = makeDraftStore()
 const services = {
@@ -605,9 +554,7 @@ console.log('\n--- 权威来源不可用 → no-op(无降级) ---')
   }
 }
 
-// ===========================================================================
-// 阶段 2:仅私有字段 pendingSnapshot(兼容回退)
-// ===========================================================================
+// ---- 阶段 2:仅私有字段 pendingSnapshot(兼容回退) ----
 console.log('\n--- 兼容回退:仅 pendingSnapshot ---')
 {
   const legacy = new Map()
@@ -629,10 +576,7 @@ console.log('\n--- 兼容回退:仅 pendingSnapshot ---')
   check('回退路径吞键', event.propagationStopped === true)
 }
 
-// ===========================================================================
-// 阶段 3:⌘/Ctrl+B → 左栏(layout.toggleSidebar)、⌘/Ctrl+O → 右栏
-//          (sidebarRight.toggleExpanded);两键互不串场,服务缺席一律不吞键
-// ===========================================================================
+// ---- 阶段 3:⌘/Ctrl+B → layout.toggleSidebar、⌘/Ctrl+O → sidebarRight.toggleExpanded(互不串场) ----
 console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+O → 左右栏开关 ---')
 {
   const base = {
@@ -702,11 +646,7 @@ console.log('\n--- ⌘/Ctrl+B / ⌘/Ctrl+O → 左右栏开关 ---')
   check('无挂载会话面(抛错)→ ⌘/Ctrl+O 不吞键', event.propagationStopped !== true)
 }
 
-// ===========================================================================
-// 阶段 3b:⌘/Ctrl+N → 新建会话并跳转(等同侧栏「新建会话」按钮)
-//          路径 = 公开的 uiWorkspace.startSession()(与侧栏「新建会话」按钮是同一调用,
-//          无参形态);三态放行;服务缺席 / 无 startSession / 抛错一律 no-op 且不吞键。
-// ===========================================================================
+// ---- 阶段 3b:⌘/Ctrl+N → uiWorkspace.startSession();三态放行,服务缺席 / 无动词 / 抛错 no-op 不吞键 ----
 console.log('\n--- ⌘/Ctrl+N → 新建会话并跳转(uiWorkspace.startSession) ---')
 {
   const base = {
@@ -771,23 +711,18 @@ console.log('\n--- ⌘/Ctrl+N → 新建会话并跳转(uiWorkspace.startSession
   check('startSession 抛错 → ⌘/Ctrl+N 不吞键', event.propagationStopped !== true)
 }
 
-// ===========================================================================
-// 阶段 4:⌘/Ctrl+J → 聚焦对话输入框(J = Jump,焦点跳转)
-//         路径 = sessions.binding(id).ctx → conversation.input.for(actx)
-//                → shell.editor.getRootElement() → element.focus({preventScroll:true})
-//         只允许走服务链路:DOM 桩的 querySelector/querySelectorAll 恒空,任何
-//         选择器式实现都拿不到元素;断言对象是服务图里的假元素与 binding.ctx 同一性。
-//         键位是 mod+j(旧键位 mod+i 已不再绑定,见下方回归断言)。
-// ===========================================================================
+// ---- 阶段 4:⌘/Ctrl+J → 聚焦对话输入框(J = Jump);只走服务链路(DOM 桩查询恒空) ----
+// 路径 = binding.ctx → input.for(actx) → editor.getRootElement() → focus({preventScroll:true})
+// 键位 mod+j;旧键位 mod+i 已不再绑定(见下方回归断言)。
 console.log('\n--- ⌘/Ctrl+J → 聚焦输入框(conversation.input → shell.editor) ---')
 {
-  const actx = { scope: 'sess-b' } // sessions.binding('sess-b').ctx(必须原样传给 input.for)
+  const actx = { scope: 'sess-b' } // binding('sess-b').ctx,必须原样传给 input.for
   const makeComposerSessions = (ctx = actx) => ({
     list: { getSnapshot: () => snapshot },
     open() {},
     binding: (id) => (id === 'sess-b' ? { ctx } : undefined),
   })
-  const makeRoot = () => new FakeHTMLElement('DIV') // editor 宿主内容(ComposerContentEditable 绑定的 div)
+  const makeRoot = () => new FakeHTMLElement('DIV') // composer editor 宿主 div
   const base = {
     uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
     workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
@@ -813,8 +748,7 @@ console.log('\n--- ⌘/Ctrl+J → 聚焦输入框(conversation.input → shell.e
   check('input.for 收到 binding.ctx 本身', same(seenActx, [actx]))
   check('主路径不触碰 shell(id)', shellCalls.length === 0, JSON.stringify(shellCalls))
 
-  // --- 旧键位 ⌘/Ctrl+I 已不再绑定「聚焦输入框」:焦点不动;它现在是近期对话浮窗,
-  //     故按键仍被吞掉(浮窗层见文末「近期对话浮窗」阶段) ---
+  // --- 旧键位 ⌘/Ctrl+I 不再聚焦输入框(现为近期对话浮窗,按键仍被吞掉) ---
   const oldRoot = makeRoot()
   const old = loadPlugin({
     ...base,
@@ -837,12 +771,10 @@ console.log('\n--- ⌘/Ctrl+J → 聚焦输入框(conversation.input → shell.e
   check('macOS ⌘J(metaKey)→ 同样聚焦', macRoot.focused === true)
   check('macOS ⌘J 被吞', event.propagationStopped === true)
 
-  // --- 元素级门闸:editing 态 = 焦点在某个可编辑元素里,但不一定是 composer ---
-  // 右栏终端(xterm 的隐藏 .xterm-helper-textarea)与 Monaco(.inputarea textarea)
-  // 都是真实 <textarea>,同样被判成 editing;焦点在那里时 ⌘/Ctrl+J 的意图恰恰是
-  // 「跳回对话输入框」,故 editing 态只在焦点**不在** composer 内时执行聚焦。
+  // --- 元素级门闸:editing = 焦点在可编辑元素里,但不一定是 composer ---
+  // 右栏终端(.xterm-helper-textarea)与 Monaco(.inputarea)都是真 textarea;焦点在那里时正是要跳回输入框。
   const elsewhereRoot = makeRoot()
-  const seenEditing = [] // 门闸的 contains 与动作的 focus 各取一次元素,故同一次按键会取两次
+  const seenEditing = [] // contains 与 focus 各取一次元素,故一次按键取两次
   const editing = loadPlugin({
     ...base,
     sessions: makeComposerSessions(),
@@ -855,9 +787,7 @@ console.log('\n--- ⌘/Ctrl+J → 聚焦输入框(conversation.input → shell.e
   check('editing 态 + 焦点在别处 → Ctrl+J 被吞', event.propagationStopped === true)
   check('editing 态 + 焦点在别处 → 走服务链路且 for 收到 binding.ctx', same(seenEditing, [actx, actx]), JSON.stringify(seenEditing))
 
-  // 焦点已在 composer 自己的编辑区内:不重复聚焦,但组合键仍被吞掉
-  // (旧键位 I 在此放行是为了保住 contenteditable 的「斜体」默认键;J 没有
-  //  等价的默认行为,放行只会让 Win/Linux 浏览器的 Ctrl+J(下载页)跑出来)
+  // 焦点已在 composer 内:不重复聚焦,但组合键仍被吞掉(放行会触发 Win/Linux 浏览器 Ctrl+J = 下载页)
   const inComposerTarget = new FakeHTMLElement('DIV')
   inComposerTarget.isContentEditable = true
   const inComposerRoot = makeRoot()
@@ -958,8 +888,7 @@ console.log('\n--- ⌘/Ctrl+J → 聚焦输入框(conversation.input → shell.e
     check(`${label} → Ctrl+J 不吞键`, event.propagationStopped !== true)
   }
 
-  // 键位可经 localStorage 覆盖(与左右栏同一套 bindings 机制;
-  // 这里刻意避开默认键位 ⌘/Ctrl+K = 工作区浮窗,改用 ⌘/Ctrl+Alt+J)
+  // 键位可经 localStorage 覆盖(刻意避开默认 ⌘/Ctrl+K,改用 ⌘/Ctrl+Alt+J);
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'composer.focus': 'mod+alt+j' } }))
   const customRoot = makeRoot()
   const custom = loadPlugin({
@@ -975,20 +904,15 @@ console.log('\n--- ⌘/Ctrl+J → 聚焦输入框(conversation.input → shell.e
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
-// ===========================================================================
-// 阶段 5:⌘/Ctrl+Alt+← / → → 右侧栏标签切换
-//         标签顺序 = rightbar.session 注册项 store handle → uiSession.resolve →
-//         slots.resolveStore → bySession[sessionId].layout(activePaneId 面板);
-//         切换 = 公开的 sidebarRight.focus(tabId)。DOM 桩无任何标签元素,
-//         任何选择器式实现都拿不到顺序。
-// ===========================================================================
+// ---- 阶段 5:⌘/Ctrl+Alt+← / → → 右栏标签切换 ----
+// 顺序 = rightbar.session store(三步取数)→ bySession[id].layout;切换 = sidebarRight.focus(tabId)
 console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
 {
   /** 假右栏会话级 store:快照形状 = { bySession: { <id>: { layout } } }。 */
   function makeTabsStore() {
     const handle = { spec: {} }
     let state = { bySession: {} }
-    /** 复刻上游 focusTab 语义:改当前面板的 activeTabId(下一次按键据此重新计算)。 */
+    /** 复刻上游 focusTab:改当前面板的 activeTabId。 */
     const focusTab = (tabId, sessionId = 'sess-b') => {
       const layout = state.bySession[sessionId]?.layout
       if (layout === undefined) throw new Error('sidebarRight: no session surface is mounted')
@@ -1019,7 +943,7 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
     },
     ...over,
   })
-  /** rightbar.session 的假 slots:无 store 的干扰项 + 承载 store handle 的注册项。 */
+  /** rightbar.session 假 slots:干扰项 + 承载 store handle 的注册项。 */
   function tabsSlots(tabs) {
     return {
       entries: (key) => (key !== 'rightbar.session' ? [] : [{ select: () => ({}) }, { store: tabs.handle }]),
@@ -1178,14 +1102,8 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
-// ===========================================================================
-// 阶段 5b:⌘/Ctrl+. → 右侧栏关闭当前标签
-//         现场与标签切换同源(rightbar.session 会话级 store 布局的**当前面板**的
-//         **当前标签**),关闭走公开的 `sidebarRight.close(tabId)`;关完回读同一份活实例,
-//         标签真的消失才算处理 —— 上游拒关(独占停靠的 guide)/作用到别的会话 / 任一环
-//         不可用一律 no-op 且**不吞键**(不复制上游的可行性判定)。
-//         DOM 桩没有任何标签元素:任何选择器式实现都拿不到当前标签。
-// ===========================================================================
+// ---- 阶段 5b:⌘/Ctrl+. → 关闭右栏当前标签(现场与标签切换同源) ----
+// 关闭 = sidebarRight.close(tabId);关完回读布局确认标签消失才吞键,否则 no-op(不复制上游判定)
 console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
 {
   /** 假右栏会话级 store:快照 { bySession: { <id>: { layout } } } + 复刻上游 closeTab 的可见结果。 */
@@ -1379,13 +1297,8 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
-// ===========================================================================
-// 阶段 6:⌘/Ctrl+\ → 右侧栏打开文件浏览器并置于首位
-//         打开必须走公开的 `sidebarRight.openTab('files')`;
-//         置顶必须走**同一份**会话级 slot store 实例的动作面
-//         `actions.placeTab(sessionId, tabId, paneId, 0)`(与标签拖拽同一入口)。
-//         DOM 桩没有任何标签元素:任何选择器式实现都拿不到标签顺序。
-// ===========================================================================
+// ---- 阶段 6:⌘/Ctrl+\ → 右栏文件浏览器定位并置顶 ----
+// 打开 = sidebarRight.openTab('files');置顶 = store 的 actions.placeTab(…, 0)(与标签拖拽同一入口)
 console.log('\n--- ⌘/Ctrl+\\ → 右栏打开文件浏览器并置于首位 ---')
 {
   const FILES_KIND = 'files'
@@ -1658,17 +1571,9 @@ console.log('\n--- ⌘/Ctrl+\\ → 右栏打开文件浏览器并置于首位 --
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
-// ===========================================================================
-// 阶段 7:⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新建)
-//         terminal 是 `multiple: true` 的页类型:上游 placeTab 给**每次**打开都铸一个
-//         带 UUID 的 contentId(`sidebar://terminal/<uuid>`),planOpenContent 因此不按
-//         (kind, contentId) 去重 → 直接调 openTab('terminal') 会每按一次多开一个终端。
-//         所以「认页」必须由插件自己在会话级 store 的布局里完成(kind === 'terminal'):
-//         已有就只调公开的 `sidebarRight.focus(tabId)`(折叠时补一步 toggleExpanded)并
-//         把 DOM 焦点移进 xterm(focusTerminalScreen,见 ⑮),没有才调公开的
-//         `openTab('terminal')`。DOM 桩的 querySelector/querySelectorAll 默认返回空,
-//         选择器式实现拿不到标签顺序与 kind;只有 ⑮ 临时注入假面板观察元素级聚焦。
-// ===========================================================================
+// ---- 阶段 7:⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新建) ----
+// terminal 是 multiple 页:上游每次 openTab 都铸带 UUID 的 contentId,planOpenContent 不按 (kind, contentId) 去重,
+// 故直接 openTab('terminal') 会每按一次多开一个终端 ⇒ 认页由插件读 store 布局(kind === 'terminal' 或地址前缀)。
 console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新建) ---')
 {
   /** 假右栏会话级 store:快照 { bySession: { <id>: { layout } } } + 复刻上游口径的写入。 */
@@ -1866,9 +1771,7 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
   check('凭 sidebar://terminal/<uuid> 地址认页 → focus', same(byAddressEnv.focused, ['addr']), JSON.stringify(byAddressEnv.focused))
   check('凭地址认页 → 不新建', same(byAddressEnv.opened, []), JSON.stringify(byAddressEnv.opened))
 
-  // ⑨ 无降级:服务 / slot / store 任一层不可用,或上游抛错 → no-op 且不吞键
-  //    (openTab / focus 抛错时调用已经发生且被兜住 → 只断言「不吞键」;下一条单独
-  //     断言「已有终端而 focus 面抛错」不得退化成再开一个终端。)
+  // ⑨ 无降级:任一层不可用 / 上游抛错 → no-op 不吞键(已有终端而 focus 抛错时不得退化成再开一个)
   for (const [label, makeOver] of [
     ['sidebarRight 缺席', () => ({ sidebarRight: undefined })],
     ['sidebarRight 无 openTab(且无终端)', () => ({ sidebarRight: { toggleExpanded() {}, focus() {} } })],
@@ -1970,14 +1873,9 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
   check('自定义键位被吞', event.propagationStopped === true)
   storage.delete('dsh-kbd-hotkeys:v1')
 
-  // ⑮ ⌘/Ctrl+L 的**元素级聚焦**:上游 `sidebarRight.focus(tabId)` 只聚焦「标签」,终端
-  //     内容的 DOM 焦点由 TerminalBody 自己的 effect(依赖 [visible, state.writable])
-  //     完成;终端**本来就是所在面板的当前标签**时该依赖不变、effect 不重跑,焦点
-  //     仍留在原处(典型:对话输入框)——所以插件补一次有界聚焦:按 store 给出的
-  //     paneId 找 `[data-dockkit-pane="<paneId>"]`,再聚焦其内容里的
-  //     `textarea.xterm-helper-textarea`。取元素只用布局给的 paneId(不遍历标签 /
-  //     不合成事件 / 不点击),找不到即 no-op;终端**不是**当前标签时不代劳
-  //     (那时 visible 会翻转,上游自己聚焦)。
+  // ⑮ ⌘/Ctrl+L 的元素级聚焦:上游 focus(tabId) 只聚焦标签,终端内容的 DOM 焦点由 TerminalBody 的
+  //     [visible, state.writable] effect 完成;终端已是当前标签时该依赖不变、effect 不重跑,故插件按 store 的 paneId
+  //     找 [data-dockkit-pane] 里的 textarea.xterm-helper-textarea 补一次聚焦(不遍历标签 / 不合成事件)。
   {
     /** 带属性与子树查询的假元素:模拟 dockkit 面板 + xterm 隐藏输入框。 */
     class FakeAttributedElement extends FakeHTMLElement {
@@ -2059,8 +1957,7 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
     event = throwingEnv.press(combo)
     check('xterm 聚焦抛错 → no-op 不崩、仍吞键', event.propagationStopped === true)
 
-    // f) 右栏折叠着(但终端已是当前标签):展开会让 visible 翻转、上游随后自己聚焦 →
-    //    插件不在展开**之前**抢这一次聚焦(否则会对着还没显示的面板做无用功)
+    // f) 右栏折叠着(终端已是当前标签):展开会让 visible 翻转、上游自己聚焦 → 插件不在展开前抢这次聚焦
     const collapsedCurrent = makeTerminalStore()
     collapsedCurrent.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 'term-2', { expanded: false }))
     const collapsedCurrentEnv = env(collapsedCurrent)
@@ -2076,14 +1973,9 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
   }
 }
 
-// ===========================================================================
-// 阶段 5:⌘/Ctrl+K → 工作区浮窗(↑↓ 高亮 + Enter 切换)
-//         列表 = workspaces.list 快照(宿主顺序,不重排);切换 = 公开的
-//         uiWorkspace.openWorkspace(workspaceId)(连接工作区:复用空白会话 /
-//         新建一个再打开)。浮窗内 ↑/↓ 只移动高亮、**不触发导航**;Enter(或点击
-//         行)才切换;Esc / 再按一次组合键关闭;⌘/ 直接换成速查表。
-//         浮层 DOM 由插件自建,故这里只读它自己的子树(业务代码仍然不读 DOM)。
-// ===========================================================================
+// ---- 阶段 5(浮窗):⌘/Ctrl+K → 工作区浮窗(↑↓ 高亮 + Enter 切换) ----
+// 列表 = workspaces.list 快照(宿主顺序,不重排);切换 = 公开的 uiWorkspace.openWorkspace(workspaceId)。
+// ↑/↓ 只移动高亮、不触发导航;Esc / 同组合键关闭;浮层 DOM 由插件自建,这里只读它自己的子树。
 console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) ---')
 {
   const combo = { key: 'k', code: 'KeyK', ctrlKey: true }
@@ -2252,17 +2144,10 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) 
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
-// ===========================================================================
-// 阶段 6:⌘/Ctrl+M → 模型浮窗(↑↓ 选择 + Enter 切换)
-//         与 ⇧Tab → 循环切换当前模型的思考强度
-//         取数与提交都必须走上游**同一个** per-session 模型目录
-//         (ctx.modelDirectories.directoryFor(sessionId)):`/model` 弹层与 composer
-//         模型座位共用它,所以浮窗里的切换与两个上游入口同源、同一份状态。
-//         行的完整选择必须复刻上游弹层 selectionOf(无 defaultEffort 时省略
-//         reasoningEffort);⇧Tab 的循环集合必须复刻上游座位的 effortChoices
-//         (有 defaultEffort 时不含 Default 档),当前档 = current.reasoningEffort
-//         ?? reasoning.defaultEffort。
-// ===========================================================================
+// ---- 阶段 6(浮窗):⌘/Ctrl+M 模型浮窗 + ⇧Tab 思考强度循环 ----
+// 取数与提交都走上游同一 per-session 目录 ctx.modelDirectories.directoryFor(session)(与 /model 弹层同源)。
+// 行的选择复刻上游 selectionOf;⇧Tab 候选复刻 effortChoices(有 defaultEffort 时不含 Default 档),
+// 当前档 = current.reasoningEffort ?? reasoning.defaultEffort。
 console.log('\n--- ⌘/Ctrl+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
 {
   const combo = { key: 'm', code: 'KeyM', ctrlKey: true }
@@ -2301,10 +2186,7 @@ console.log('\n--- ⌘/Ctrl+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
   ]
   const proCurrent = { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' }
 
-  /**
-   * 假模型目录:复刻上游 ModelDirectory 的 store / load / select 语义。
-   * select 成功时把 current 换成新选择(durable 投影帧的效果),失败时 reject。
-   */
+  /** 假模型目录:复刻上游 ModelDirectory 的 store / load / select;select 成功换 current,失败 reject。 */
   function makeDirectory(over = {}) {
     const state = {
       current: over.current !== undefined ? over.current : proCurrent,
@@ -2570,16 +2452,9 @@ console.log('\n--- ⌘/Ctrl+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
-// ===========================================================================
-// 阶段 7:⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓ 跨组选择 + Enter 打开)
-//         列表 = sessions.list 快照(会话行)+ workspaces.list 快照(分组),由
-//         recent-sessions.ts 派生:组序 = 工作区宿主顺序、组内 = 最近更新在前、
-//         空白 / 归档 / 子代理会话不列出、无归属会话落在末尾的空标题组;
-//         打开 = 公开的 sessions.open(sessionId)(与侧栏点会话行同一条服务调用)。
-//         浮窗内 ↑/↓ 只移动高亮(**不打开会话**——免得连按就连开一串)、Enter
-//         (或点击行)才打开;Esc / 再按一次 ⌘/Ctrl+I 关闭;⌘/ 直接换成速查表。
-//         浮层 DOM 由插件自建,故这里只读它自己的子树(业务代码仍然不读 DOM)。
-// ===========================================================================
+// ---- 阶段 7(浮窗):⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓ 跨组选择 + Enter 打开) ----
+// 列表 = sessions.list + workspaces.list 快照,由 recent-sessions.ts 派生:组序 = 宿主顺序、组内 = 最近更新在前、
+// 空白 / 归档 / 子代理不列出、无归属落末尾空标题组;↑↓ 只移高亮(不打开会话),Enter / 点击行才打开(见 ③′)。
 console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓ 选择 + Enter 打开) ---')
 {
   const combo = { key: 'i', code: 'KeyI', ctrlKey: true }
@@ -2589,11 +2464,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
     id, displayTitle: `会话 ${id}`, title: `会话 ${id}`,
     cwd: `/work/${id}`, running: false, completed: false, blank: false, updatedAt, ...over,
   })
-  /**
-   * 两次会话:两个工作区 + 一个无归属 + 一个空白 + 一个归档 + 一个子代理。
-   * 覆盖了「组序 = 宿主顺序」「组内 = 最近更新在前」「blank / archived / subagent
-   * 不列出」以及「无归属落到空标题组」全部派生规则。
-   */
+  /** 夹具:两个工作区 + 无归属 + 空白 + 归档 + 子代理,覆盖全部派生规则。 */
   const sessionIds = ['a1', 'a2', 'b1', 'stray', 'blank', 'arch', 'sub']
   const byId = {
     a1: summary('a1', T - 1000),
@@ -2616,18 +2487,8 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
     },
   ]
 
-  /**
-   * 装配:默认「两个工作区就绪、当前会话 = b1」。
-   * - `over.sessions` 只替换**列表快照**,open() 仍由装配录制(`opened`);
-   * - `over.service` 替换**整个 sessions 服务**(用于「服务缺席 / 无 open」等边界),
-   *   显式传 `undefined` 才表示缺席(`in` 判据兜不住 `undefined` 值);
-   * - `extra` 里可再注入 uiWorkspace(验证「优先走 openSession」的确认路径)。
-   *
-   * 录制用的 `open` 刻意写成**读 `this`** 的方法:真机上的 `sessions.open` 是
-   * ClientSessions 的原型方法(内部执行 `this.manager.select(id)`),把方法摘下来
-   * (`const open = sessions.open; open(id)`)会丢 `this` 并抛 TypeError——那正是
-   * 「⌘/Ctrl+I 浮窗按 Enter 不跳转」的成因(见 src/recent-sessions.ts)。
-   */
+  /** 装配:默认「两个工作区就绪、当前会话 = b1」;over.sessions 只替换列表快照,over.service 替换整个服务(undefined = 缺席)。
+   * 录制用的 open 刻意写成读 this 的方法(真机 sessions.open 是原型方法,摘下来丢 this 抛 TypeError,这正是回归点)。 */
   function env(over = {}) {
     const opened = []
     let base
@@ -2723,11 +2584,8 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   event = first.press({ key: 'ArrowDown', code: 'ArrowDown' })
   check('浮窗关闭后裸 ↓ 不吞键', event.propagationStopped !== true)
 
-  // ③′ 确认路径:有 uiWorkspace.openSession 时**优先**走它(侧栏点会话行的同一条
-  //     服务调用 = sessions.open + layout.selectPanel(null),故有全局主面板打开时
-  //     也会切回对话视图);它缺席 / 抛错才回退同一份 sessions 实例上的 open。
-  //     两处都刻意用读 `this` 的类方法形态:摘下来调用会丢 `this` 抛错——这正是
-  //     「浮窗按 Enter 不跳转」的回归点。
+  // ③′ 确认路径:优先 uiWorkspace.openSession(= sessions.open + selectPanel(null)),缺席回退 sessions.open;
+  //     两处都刻意用读 this 的类方法形态(摘下来丢 this 抛错,正是「Enter 不跳转」的回归点)。
   const wsOpened = []
   const viaWorkspace = env({
     extra: {
@@ -2841,8 +2699,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   check('workspaces 服务缺席 → 同样退化为无归属组(不崩、不吞失败)', event.propagationStopped === true && sessionRows().length === 5)
   noService.press({ key: 'Escape', code: 'Escape' })
 
-  // ⑦′ 全局条数上限:可见会话再多也只列最近更新的 10 个(全局口径,不是每组 10 个);
-  //     当前会话不在前 10 名时被强制纳入并顶掉第 10 名,保证初始光标落在它上面。
+  // ⑦′ 全局条数上限:只列最近更新的 10 个(全局口径,不是每组 10 个);当前会话不在前 10 名时强制纳入并顶掉第 10 名。
   {
     const capIds = Array.from({ length: 13 }, (_, i) => `c${String(i + 1).padStart(2, '0')}`)
     const capById = {}
@@ -2866,8 +2723,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
 
     const capped = capEnv('c13')
     capped.press(combo)
-    // 浮窗高度:面板带 --recent 修饰类,上限从基线 64vh 抬到 calc(88vh - 24px),
-    // 让 10 行 + 组标题 + 页眉/页脚在常见窗口高度下无需滚动;其余浮窗不受影响。
+    // 浮窗高度:面板带 --recent 修饰类,max-height 由 64vh 抬到 calc(88vh - 24px) 以容 10 行 + 组标题 + 页眉页脚;
     const panels = () => collectNodes(globalThis.document.body, (el) => classHas(el, 'dsh-kbd-panel'))
     const sheetText = () => (globalThis.document.head.children ?? [])
       .map((el) => (typeof el.textContent === 'string' ? el.textContent : '')).join('\n')

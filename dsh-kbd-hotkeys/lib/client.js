@@ -706,7 +706,7 @@ var DEFAULT_BINDINGS = {
   "sidebarRight.files": "mod+\\",
   // 浏览器保留键(聚焦地址栏)
   "sidebarRight.terminal": "mod+l",
-  // 关标签的点号:与右栏开关 / 定位同属单修饰键这一档,`code` 判定(Period)不受布局影响
+  // 点号 = 关闭/取消联想:按 code 判定(Period),不受布局影响
   "sidebarRight.closeTab": "mod+.",
   // 浏览器保留键(新建窗口)
   "session.new": "mod+n",

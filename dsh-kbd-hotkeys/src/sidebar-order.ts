@@ -1,6 +1,4 @@
-/**
- * 侧栏可见顺序复刻:分组 + 组内本地顺序账号(slot store,root 作用域)+ 可见性;权威来源读不到即空轴(无降级)。
- */
+/** 侧栏可见顺序复刻:分组 + 组内本地顺序账号(slot store,root 作用域)+ 可见性;权威来源读不到即空轴(无降级)。 */
 import { compareRecency, sessionVisible } from './session-order.ts'
 import type {
   Services,

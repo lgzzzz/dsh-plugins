@@ -1,6 +1,4 @@
-/**
- * 工作区浮窗(⌘/Ctrl+K):列表取 workspaces.list 快照(宿主顺序),切换调 uiWorkspace.openWorkspace;无降级、不回退 DOM。
- */
+/** 工作区浮窗(⌘/Ctrl+K):列表取 workspaces.list 快照(宿主顺序),切换调 uiWorkspace.openWorkspace;无降级、不回退 DOM。 */
 import type { Services, WorkspaceItemLike, WorkspaceRowLike } from './types.ts'
 
 /** 取工作区候选行(宿主顺序,每次打开现取);服务缺席 / 缺 items → 空数组。 */

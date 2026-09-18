@@ -1,15 +1,7 @@
 /**
- * 诊断脚本(非插件产物):用最小 DOM 桩加载 lib/client.js,
- * 验证 Ctrl+Alt+↑/↓ 沿**侧栏可见顺序**跳转活跃会话,且**无任何降级**。
- *
- * 覆盖:
- * 1. 侧栏视图 store 经 slots 活实例读取 → 工作区分组 + 本地会话顺序;
- * 2. 单列表(`groupBy==='flat'`)模式;
- * 3. 权威来源不可用(服务缺失 / 无 resolveStore / 快照非对象 / groupBy 未知 /
- *    workspaces 缺 items)→ 一律 no-op,绝不按猜测顺序跳转。
- *
- * 用法: node test-dispatch.mjs
- */
+ * 诊断脚本(非插件产物):用最小 DOM 桩加载 lib/client.js,验证 Ctrl+Alt+↑/↓ 沿侧栏可见顺序跳转活跃会话且无降级。
+ * 覆盖:① 视图 store 活实例(工作区分组 + 本地顺序);② flat 单列表;③ 权威来源不可用(服务缺失 / 无 resolveStore /
+ * 快照非对象 / groupBy 未知 / workspaces 缺 items)→ 一律 no-op。用法: node test-dispatch.mjs */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -155,11 +147,7 @@ function check(label, actual, expected) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}: got=${JSON.stringify(actual)} want=${JSON.stringify(expected)}`)
 }
 
-/* ------------------------------------------------------------------ *
- * 场景 1:工作区分组 + 视图 store 活实例
- * 侧栏顺序 = ws-1 [s-1,s-2] + ws-2(本地账号倒序)[s-4,s-3]
- * 最近更新序 = [s-3,s-4,s-1,s-2](用于判别:跳转必须走侧栏顺序,而非最近更新序)
- * ------------------------------------------------------------------ */
+// 场景 1:工作区分组 + 视图 store 活实例 —— 跳转走侧栏顺序 [s-1,s-2,s-4,s-3],而非最近更新序
 {
   const snapshot = snapshotOf('s-2', [
     { id: 's-1', running: false, completed: true, updatedAt: 2000 },
@@ -197,10 +185,7 @@ function check(label, actual, expected) {
   check('↓ 侧栏下一行活跃会话 s-4(跳过 s-3)', env.opened, ['s-1', 's-4'])
 }
 
-/* ------------------------------------------------------------------ *
- * 场景 2:单列表模式(flat)——顺序来自视图 store 的扁平账号
- * 最近更新序 = [s-3,s-2,s-1];账号序 = [s-1,s-2,s-3]
- * ------------------------------------------------------------------ */
+// 场景 2:flat 单列表 —— 顺序来自视图 store 的扁平账号 [s-1,s-2,s-3],非最近更新序
 {
   const snapshot = snapshotOf('s-2', [
     { id: 's-1', running: false, completed: true, updatedAt: 1 },
@@ -224,9 +209,7 @@ function check(label, actual, expected) {
   check('↑ 落到 s-1(账号序,非最近更新序)', env.opened, ['s-1'])
 }
 
-/* ------------------------------------------------------------------ *
- * 场景 3:权威来源不可用 → 一律 no-op(无降级)
- * ------------------------------------------------------------------ */
+// 场景 3:权威来源不可用 → 一律 no-op(无降级)
 {
   console.log('\n--- 场景 3:权威来源不可用 → no-op ---')
   const snapshot = snapshotOf('s-2', [
@@ -258,9 +241,7 @@ function check(label, actual, expected) {
   }
 }
 
-/* ------------------------------------------------------------------ *
- * 场景 4:⌘/Ctrl+B(左栏)与 ⌘/Ctrl+O(右栏)在 browse / editing 态都生效
- * ------------------------------------------------------------------ */
+// 场景 4:⌘/Ctrl+B(左栏)/ ⌘/Ctrl+O(右栏)在 browse 与 editing 态都生效
 {
   console.log('\n--- 场景 4:侧栏开关的键位与态闸门 ---')
   const snapshot = snapshotOf('s-1', [{ id: 's-1', running: false, completed: false, updatedAt: 1 }])
@@ -282,7 +263,7 @@ function check(label, actual, expected) {
   event = env.press('b', { altKey: false, target: editable })
   check('editing 态 ⌘/Ctrl+B → 左栏 + 吞键', [left, right, event.propagationStopped], [2, 0, true])
 
-  // 右栏 = ⌘/Ctrl+O(单修饰键这一档;altKey 显式关掉,免得落到 mod+alt 的会话跳转上)
+  // 右栏 = ⌘/Ctrl+O;altKey 显式关掉,免得落到 mod+alt 的会话跳转上
   event = env.press('o', { altKey: false })
   check('browse 态 ⌘/Ctrl+O → 右栏 + 吞键', [left, right, event.propagationStopped], [2, 1, true])
   event = env.press('o', { altKey: false, target: editable })

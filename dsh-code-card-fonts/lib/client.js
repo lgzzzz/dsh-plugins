@@ -29,28 +29,28 @@ module.exports = __toCommonJS(client_exports);
 
 // src/css.ts
 var CSS = `
-/* \u6D88\u606F\u5361\u7247\u95F4\u8DDD 7px;\u987B\u8BBE\u5728 body(\u5B57\u53F7\u8F74\u662F body \u4E0A\u7684\u5185\u8054\u6837\u5F0F) */
+/* --dsh-chat-flow-gap \u987B\u8BBE\u5728 body:\u5B57\u53F7\u8F74\u662F body \u4E0A\u7684\u5185\u8054\u6837\u5F0F */
 body {
   --dsh-chat-flow-gap: calc(14px * 0.5);
 }
 
-/* \u5361\u7247\u6807\u9898 14px \u2014 DisclosureRow \u8868\u5934\u7B2C 2 \u4E2A\u76F4\u5C5E\u5B50\u5143\u7D20 */
+/* \u5361\u7247\u6807\u9898 = DisclosureRow \u8868\u5934\u7B2C 2 \u4E2A\u76F4\u5C5E\u5B50\u5143\u7D20 */
 [data-chat-flow-kind] [data-disclosure-row] > span:nth-child(2) {
   font-size: 14px !important;
 }
 
-/* Bash \u5361\u7247([data-sample]):\u6807\u9898 = \u8868\u5934\u5012\u6570\u7B2C 3 \u4E2A span */
+/* Bash \u5361\u7247([data-sample])\u6807\u9898 = \u8868\u5934\u5012\u6570\u7B2C 3 \u4E2A span */
 [data-sample] > span:nth-last-child(3) {
   font-size: 14px !important;
 }
 
-/* \u538B\u7F29\u6807\u8BB0:\u6807\u9898 = \u8868\u5934 button \u5185\u5012\u6570\u7B2C 3 \u4E2A span */
+/* \u538B\u7F29\u6807\u8BB0\u6807\u9898 = \u8868\u5934 button \u5185\u5012\u6570\u7B2C 3 \u4E2A span */
 [data-chat-flow-kind="compaction"] button > span:nth-last-child(3),
 [data-chat-flow-kind="manual-compaction"] button > span:nth-last-child(3) {
   font-size: 14px !important;
 }
 
-/* \u6458\u8981\u884C 14px:\u6807\u9898\u4E4B\u540E\u7684\u76F4\u5C5E\u5B50\u5143\u7D20(\u7B2C 3 \u4E2A\u8D77) */
+/* \u6458\u8981\u884C = \u6807\u9898\u4E4B\u540E\u7684\u76F4\u5C5E\u5B50\u5143\u7D20(\u7B2C 3 \u4E2A\u8D77) */
 [data-chat-flow-kind] [data-disclosure-row] > :nth-child(n+3) {
   font-size: 14px !important;
 }
@@ -66,7 +66,6 @@ body {
   font-size: 14px !important;
 }
 
-/* \u4EE3\u7801\u5757 14px */
 [data-chat-flow-kind] pre,
 [data-chat-flow-kind] pre code {
   font-size: 14px !important;
@@ -77,7 +76,7 @@ body {
   font-size: 14px !important;
 }
 
-/* \u8868\u683C\u5355\u5143\u683C 14px:\u4E0A\u6E38 th/td \u53D6\u5B57\u53F7\u8F74\u51CF 1px \u7684 secondary \u53D8\u91CF;\u672C\u89C4\u5219 (0,1,2) \u538B\u8FC7 ._tableScroll_* (0,1,1) */
+/* \u8868\u683C\u5355\u5143\u683C:\u4E0A\u6E38 th/td \u53D6\u5B57\u53F7\u8F74\u51CF 1px \u7684 secondary \u53D8\u91CF;\u672C\u89C4\u5219 (0,1,2) \u538B\u8FC7 ._tableScroll_* (0,1,1) */
 [data-chat-flow-kind] table th,
 [data-chat-flow-kind] table td {
   font-size: 14px !important;

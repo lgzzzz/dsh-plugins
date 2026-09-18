@@ -1,6 +1,5 @@
-# dsh-git-guard 的 web bundle 补丁。
-# 声明本插件的挂载行,通过 dsh.profile.bundles 自动挂载到 web profile:
-# 宿主半部(index.ts,Node 22 Type Stripping 直接加载)挂钩 tools/pre-execute。
+# dsh-git-guard 的 web bundle 挂载行:随 dsh.profile.bundles 自动挂载。
+# 宿主半部(index.ts,Node Type Stripping 直载)挂钩 tools/pre-execute。
 - insert:
     - id: dsh-git-guard
       name: dsh-git-guard

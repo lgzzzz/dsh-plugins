@@ -1,6 +1,4 @@
-/**
- * 浏览器半部入口:单个 keydown 捕获监听,按 card / editing / browse 三态分发;全走服务,无降级、不回退 DOM。
- */
+/** 浏览器半部入口:单个 keydown 捕获监听,按 card / editing / browse 三态分发;全走服务、无降级、不回退 DOM。 */
 import {
   answerApproval,
   focusComposer,
@@ -210,8 +208,7 @@ export function apply(ctx: ClientContext): void {
     if (!def.states.includes(state)) return
     // ⇧Tab 是编辑核心键,editing 仅在 composer 内接管
     if (actionId === 'model.effortNext' && state === 'editing' && !isComposerTarget(services, event.target)) return
-    // ⌘J:焦点不在 composer 才聚焦
-    // 在 composer 内仍吞键(浏览器 Ctrl+J 是下载页)
+    // ⌘J:焦点不在 composer 才聚焦;在 composer 内仍吞键(浏览器 Ctrl+J = 下载页)
     if (actionId === 'composer.focus' && state === 'editing' && isComposerTarget(services, event.target)) {
       swallow(event)
       return

@@ -1,6 +1,5 @@
-/** dsh-kbd-hotkeys — 插件自建浮层（纯 DOM，不消费 react）：速查表、工作区、近期对话、模型。
- * 同一时刻只有一个浮层，四者共用模态分发（未处理的按键一律吞掉）；Esc 或再按同一组合键关闭，按别的浮层组合键直接互切。
- */
+/** 插件自建浮层(纯 DOM,不消费 react):速查表、工作区、近期对话、模型。
+ * 同一时刻只有一个浮层,共用模态分发(未处理的按键一律吞掉);Esc 或同组合键关闭,按别的浮层组合键互切。 */
 import { ACTIONS, FIXED_KEYS, comboOf, prettyCombo, type HotkeyConfig } from './config.ts'
 import type {
   EffortCycleResultLike,
@@ -12,7 +11,6 @@ import type {
   WorkspaceRowLike,
 } from './types.ts'
 
-/** 浮层依赖。 */
 export interface OverlayDeps {
   getConfig(): HotkeyConfig
   listWorkspaces(): readonly WorkspaceRowLike[]
@@ -24,7 +22,6 @@ export interface OverlayDeps {
   cycleEffort(): EffortCycleResultLike
 }
 
-/** 浮层宿主面。 */
 export interface OverlayHost {
   isOpen(): boolean
   contains(target: Node | null): boolean
@@ -90,12 +87,9 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
   ensureStyle()
   let root: HTMLDivElement | null = null
   let kind: PanelKind | null = null
-  /** 当前列表浮窗的行元素（高亮 / 确认按同一下标走）。 */
   let rowEls: HTMLElement[] = []
-  /** 与 rowEls 同下标的确认载荷（工作区 id / 会话 id / 模型选择）。 */
   let rowTargets: RowTarget[] = []
   let cursor = 0
-  /** 模型浮窗的异步渲染落点与「当前」行。 */
   let modelList: HTMLElement | null = null
   let modelCurrentEl: HTMLElement | null = null
   let modelLabel = ''
@@ -221,9 +215,7 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
     setCursor(Math.max(0, rows.findIndex((row) => row.current)))
   }
 
-  /** 画近期对话浮窗：标题 + 按工作区分组的只读组标题与会话行 + 提示。
-   * 组标题不参与高亮；↑/↓ 跨组连续移动，Enter / 点行才打开会话。
-   */
+  /** 画近期对话浮窗:组标题不参与高亮;↑/↓ 跨组连续移动,Enter / 点行才打开会话。 */
   function renderRecentPicker(panel: HTMLElement): void {
     const heading = document.createElement('div')
     heading.className = 'dsh-kbd-panelHeading'
@@ -288,7 +280,6 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
     return main
   }
 
-  /** 行内右侧标记。 */
   function renderBadge(text: string): HTMLElement {
     const badge = document.createElement('span')
     badge.className = 'dsh-kbd-rowBadge'
@@ -316,7 +307,6 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
     })
   }
 
-  /** 底部提示行。 */
   function renderHint(text: string): HTMLElement {
     const hint = document.createElement('div')
     hint.className = 'dsh-kbd-hint'
@@ -418,7 +408,6 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
     return footnote
   }
 
-  /** 提供方分组标题。 */
   function renderGroupHeading(row: ModelPickerRowLike): HTMLElement {
     const heading = document.createElement('div')
     heading.className = 'dsh-kbd-group'

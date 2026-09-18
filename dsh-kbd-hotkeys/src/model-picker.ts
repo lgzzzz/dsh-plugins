@@ -1,6 +1,5 @@
-/** dsh-kbd-hotkeys — 模型浮窗（⌘/Ctrl+M）与思考强度循环（⇧Tab）的数据面与动作。
- * 两者共用 ctx.modelDirectories.directoryFor(session) 的同一份 per-session 目录（与 /model 弹层、composer 座位同源）；无降级，目录不可用即 no-op。
- */
+/** 模型浮窗(⌘/Ctrl+M)与思考强度循环(⇧Tab)的数据面与动作。
+ * 共用 ctx.modelDirectories.directoryFor(session) 的 per-session 目录(与 /model 弹层、composer 座位同源);无降级。 */
 import { currentSessionId } from './actions.ts'
 import type {
   EffortCycleResultLike,
@@ -19,7 +18,6 @@ import type {
 /** 提供方默认档显示名（同上游 effort.providerDefault）。 */
 const PROVIDER_DEFAULT = 'Default'
 
-/** 无可用会话的空态文案。 */
 const NO_SESSION_NOTICE = '当前没有可切换模型的会话'
 
 /* 服务链路取数 */
@@ -186,7 +184,7 @@ export function selectModel(services: Services, selection: ModelSelectionLike): 
   return fireSelect(directory, selection)
 }
 
-/** 目录缺席 / 动词缺席 / 参数非法 / 抛错 → false；否则发出并吞异步拒绝。 */
+/** 目录 / 动词缺席、参数非法或抛错 → false;否则发出并吞异步拒绝。 */
 function fireSelect(directory: ModelDirectoryLike, selection: ModelSelectionLike): boolean {
   if (typeof directory.select !== 'function') return false
   if (typeof selection.provider !== 'string' || selection.provider === '') return false

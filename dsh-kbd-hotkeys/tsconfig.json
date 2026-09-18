@@ -1,6 +1,5 @@
 {
-  // 仅类型检查(npm run typecheck),不产出文件:index.ts 由 Node 22+ Type
-  // Stripping 直接加载;src/**/*.ts 由 scripts/build-client.mjs(esbuild)打包。
+  // 仅类型检查:index.ts 走 Node Type Stripping,src/**/*.ts 由 scripts/build-client.mjs(esbuild)打包。
   "compilerOptions": {
     "target": "esnext",
     "module": "nodenext",

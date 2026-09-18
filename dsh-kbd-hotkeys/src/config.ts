@@ -1,18 +1,13 @@
-/**
- * 键位表 / 归一化 / localStorage 自定义;单修饰键给全局动作,mod+alt 给导航;浏览器保留键见 README。
- */
+/** 键位表 / 归一化 / localStorage 自定义;单修饰键给全局动作,mod+alt 给导航(浏览器保留键见 README)。 */
 
 /** 三态分发状态名(card 卡片 / editing 输入 / browse 浏览)。 */
 export type StateName = 'card' | 'editing' | 'browse'
 
-/** 单个动作定义。 */
 export interface ActionDef {
   id: string
   /** 展示名(速查表用)。 */
   label: string
-  /** 速查表分组。 */
   group: string
-  /** 允许触发的分发状态。 */
   states: StateName[]
 }
 
@@ -79,7 +74,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'sidebarRight.files': 'mod+\\',
   // 浏览器保留键(聚焦地址栏)
   'sidebarRight.terminal': 'mod+l',
-  // 关标签的点号:与右栏开关 / 定位同属单修饰键这一档,`code` 判定(Period)不受布局影响
+  // 点号 = 关闭/取消联想:按 code 判定(Period),不受布局影响
   'sidebarRight.closeTab': 'mod+.',
   // 浏览器保留键(新建窗口)
   'session.new': 'mod+n',
@@ -199,7 +194,7 @@ export function comboOf(event: KeyboardEvent): string {
   return parts.join('+')
 }
 
-/** 用户配置组合键字符串归一化(如 "Cmd+Alt+C" → "mod+alt+c")。 */
+/** 用户配置串归一化("Cmd+Alt+C" → "mod+alt+c")。 */
 export function normalizeComboString(combo: string): string {
   const key = combo.split('+').pop() ?? ''
   const parts: string[] = []

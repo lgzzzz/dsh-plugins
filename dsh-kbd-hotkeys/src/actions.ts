@@ -1,6 +1,5 @@
-/** dsh-kbd-hotkeys — 动作实现层：全走服务触发、不触碰 DOM（DOM 只有 keydown 入口、editing 判定、插件浮层）。
- * 无降级（任一环不可用即 no-op、不吞键）；上游方法须以「方法」形式调用（fn.call(owner, …)）；态门闸见各动作。
- */
+/** 动作实现层:全走服务触发、不触碰 DOM(DOM 只有 keydown 入口、editing 判定、插件浮层)。
+ * 无降级(任一环不可用即 no-op、不吞键);上游方法须以「方法」形式调用(fn.call(owner, …))。 */
 import type {
   ComposerEditableLike,
   PendingInteractionLike,
@@ -26,7 +25,6 @@ function pendingMap(services: Services): ReadonlyMap<string, PendingInteractionL
   return uiSession.pendingSnapshot
 }
 
-/** 当前会话 id（无则 undefined）。 */
 export function currentSessionId(services: Services): string | undefined {
   const current = services.sessions?.list?.getSnapshot?.()?.current
   return current === undefined || current === '' ? undefined : current

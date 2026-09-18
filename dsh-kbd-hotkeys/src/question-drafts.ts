@@ -1,6 +1,5 @@
-/** dsh-kbd-hotkeys — 通用问答草稿 store 访问层（卡片选中态的唯一真源，插件不镜像）。
- * 三步取数：slots.entries('conversation.composer') → uiSession.resolve(sessionId) → slots.resolveStore；无降级，任一环不可用即 no-op。
- */
+/** 通用问答草稿 store 访问层(卡片选中态唯一真源,插件不镜像)。
+ * 三步取数:slots.entries('conversation.composer') → uiSession.resolve → slots.resolveStore;无降级。 */
 import type {
   PendingInteractionLike,
   PendingQuestionItemLike,
@@ -120,7 +119,6 @@ export function readProgress(
   }
 }
 
-/** 快照形状校验。 */
 function asSnapshot(value: unknown): QuestionDraftSnapshotLike | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   return value as QuestionDraftSnapshotLike

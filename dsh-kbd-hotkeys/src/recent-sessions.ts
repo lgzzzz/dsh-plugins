@@ -1,6 +1,5 @@
-/** dsh-kbd-hotkeys — 近期对话浮窗（⌘/Ctrl+I）的数据面与打开落点（浮窗 DOM 在 overlay.ts）。
- * 列表按工作区分组、全局最多 10 行、当前会话强制纳入；打开走 uiWorkspace.openSession（回退 sessions.open，均以方法形式调用）；无降级。
- */
+/** 近期对话浮窗(⌘/Ctrl+I)的数据面与打开落点(浮窗 DOM 在 overlay.ts)。
+ * 列表按工作区分组、全局最多 10 行、当前会话强制纳入;打开走 uiWorkspace.openSession(回退 sessions.open,均以方法形式调用);无降级。 */
 import { recencyOrder, sessionVisible } from './session-order.ts'
 import { readWorkspaceSnapshot } from './sidebar-order.ts'
 import { pathBasename } from './workspace-switcher.ts'
@@ -16,7 +15,6 @@ import type {
 /** 无归属会话桶的组 key。 */
 const UNGROUPED_KEY = ''
 
-/** 空态提示。 */
 const EMPTY_NOTICE = '当前没有可打开的对话'
 
 /** 浮窗最多列出的会话数（全局口径）。 */
@@ -96,9 +94,8 @@ export function recentSessionsView(services: Services): RecentSessionsViewLike {
   }
 }
 
-/** 任意态；打开选中的会话：优先 uiWorkspace.openSession，缺失 / 抛错则回退 sessions.open。
- * 两者都是上游类实例的原型方法，必须以方法形式调用（摘下丢 this 会抛 TypeError）。
- */
+/** 任意态;打开选中会话:优先 uiWorkspace.openSession,缺失 / 抛错回退 sessions.open。
+ * 两者都是上游类实例原型方法,必须以方法形式调用(摘下丢 this 抛 TypeError)。 */
 export function openRecentSession(services: Services, sessionId: string): boolean {
   if (typeof sessionId !== 'string' || sessionId === '') return false
   const uiWorkspace = services.uiWorkspace
@@ -122,7 +119,6 @@ export function openRecentSession(services: Services, sessionId: string): boolea
   }
 }
 
-/** 空态（无可用会话）。 */
 function emptyView(): RecentSessionsViewLike {
   return { groups: [], rows: [], initialIndex: 0, notice: EMPTY_NOTICE }
 }
@@ -134,7 +130,6 @@ function initialIndex(rows: readonly RecentSessionRowLike[], current: string | u
   return index < 0 ? 0 : index
 }
 
-/** 一行会话的展示数据。 */
 function sessionRow(
   id: string,
   summary: SessionSummaryLike | undefined,

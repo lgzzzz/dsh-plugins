@@ -10,4 +10,4 @@ node_modules/
 # TypeScript 增量编译缓存
 *.tsbuildinfo
 
-# 构建产物：当前所有插件的 lib/*.js 均入仓以便离线加载，暂无忽略项
+# 构建产物:lib/*.js 均入仓以便离线加载,暂无忽略项
