@@ -28,14 +28,46 @@ __export(client_exports, {
 });
 module.exports = __toCommonJS(client_exports);
 
+// src/scope-binding.ts
+function sessionScopeBinding(services, sessionId) {
+  var _a;
+  const uiSession = services.uiSession;
+  const sessions = services.sessions;
+  if (uiSession === null || uiSession === void 0) return void 0;
+  if (sessions === null || sessions === void 0) return void 0;
+  const bindingSource = uiSession.bindingSource;
+  if (typeof bindingSource !== "function") return void 0;
+  const owner = (_a = sessions.binding) == null ? void 0 : _a.call(sessions, sessionId);
+  if (owner === null || owner === void 0) return void 0;
+  let source;
+  try {
+    source = bindingSource.call(uiSession, { sessionId, binding: owner });
+  } catch {
+    return void 0;
+  }
+  const getSnapshot = source == null ? void 0 : source.getSnapshot;
+  if (typeof getSnapshot !== "function") return void 0;
+  let binding;
+  try {
+    binding = getSnapshot.call(source);
+  } catch {
+    return void 0;
+  }
+  return asScopeBinding(binding);
+}
+function asScopeBinding(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const key = value.key;
+  return typeof key === "string" && key !== "" ? value : void 0;
+}
+
 // src/question-drafts.ts
 var COMPOSER_SLOT = "conversation.composer";
 function questionDraftStore(services, pending, sessionId) {
   const slots = services.slots;
-  const uiSession = services.uiSession;
-  if (slots === null || slots === void 0 || uiSession === null || uiSession === void 0) return void 0;
+  if (slots === null || slots === void 0) return void 0;
   if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
-  const binding = resolveBinding(uiSession, sessionId);
+  const binding = sessionScopeBinding(services, sessionId);
   if (binding === void 0) return void 0;
   for (const entry of entriesOf(slots)) {
     const handle = entry == null ? void 0 : entry.store;
@@ -69,19 +101,6 @@ function entriesOf(slots) {
   } catch {
     return [];
   }
-}
-function resolveBinding(uiSession, sessionId) {
-  const resolve = uiSession.resolve;
-  if (typeof resolve !== "function") return void 0;
-  let binding;
-  try {
-    binding = resolve.call(uiSession, sessionId);
-  } catch {
-    return void 0;
-  }
-  if (typeof binding !== "object" || binding === null) return void 0;
-  const key = binding.key;
-  return typeof key === "string" && key !== "" ? binding : void 0;
 }
 function asDraftStore(value) {
   if (typeof value !== "object" || value === null) return void 0;
@@ -739,8 +758,8 @@ var DEFAULT_BINDINGS = {
   "sidebarRight.files": "mod+\\",
   // 浏览器保留键(聚焦地址栏)
   "sidebarRight.terminal": "mod+l",
-  // 点号 = 关闭/取消联想:按 code 判定(Period),不受布局影响
-  "sidebarRight.closeTab": "mod+.",
+  // 逗号 = 关闭标签;按 code 判定(Comma),不受布局影响
+  "sidebarRight.closeTab": "mod+,",
   // 浏览器保留键(新建窗口)
   "session.new": "mod+n",
   // J = Jump;终端里 ⌃J(LF)不再送给 PTY
@@ -1652,7 +1671,7 @@ function recentSessionsView(services) {
   return {
     groups,
     rows,
-    initialIndex: initialIndex(rows, current),
+    initialIndex: initialIndex(rows, groups, current, currentWorkspaceKey(workspaceSnapshot, current)),
     notice: ""
   };
 }
@@ -1671,10 +1690,28 @@ function openRecentSession(services, sessionId) {
 function emptyView() {
   return { groups: [], rows: [], initialIndex: 0, notice: EMPTY_NOTICE };
 }
-function initialIndex(rows, current) {
+function initialIndex(rows, groups, current, currentWorkspace) {
   if (current === void 0 || current === "") return 0;
   const index = rows.findIndex((row) => row.sessionId === current);
-  return index < 0 ? 0 : index;
+  if (index >= 0) return index;
+  if (currentWorkspace === void 0) return 0;
+  let offset = 0;
+  for (const group of groups) {
+    if (group.workspaceId === currentWorkspace) return group.rows.length > 0 ? offset : 0;
+    offset += group.rows.length;
+  }
+  return 0;
+}
+function currentWorkspaceKey(snapshot, current) {
+  var _a, _b;
+  if (current === void 0 || current === "") return void 0;
+  for (const item of (_a = snapshot == null ? void 0 : snapshot.items) != null ? _a : []) {
+    if (item === null || item === void 0) continue;
+    if (((_b = item.sessionIds) == null ? void 0 : _b.includes(current)) !== true) continue;
+    const workspaceId = item.workspaceId;
+    if (typeof workspaceId === "string" && workspaceId !== "") return workspaceId;
+  }
+  return UNGROUPED_KEY2;
 }
 function sessionRow(id, summary, current, pending, services) {
   const label = titleOf(summary, id);
@@ -1980,12 +2017,11 @@ function currentLayout(services) {
 }
 function rightbarStore(services) {
   const slots = services.slots;
-  const uiSession = services.uiSession;
-  if (slots === null || slots === void 0 || uiSession === null || uiSession === void 0) return void 0;
+  if (slots === null || slots === void 0) return void 0;
   if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
   const sessionId = currentSessionId(services);
   if (sessionId === void 0) return void 0;
-  const binding = resolveBinding2(uiSession, sessionId);
+  const binding = sessionScopeBinding(services, sessionId);
   if (binding === void 0) return void 0;
   for (const entry of entriesOf3(slots)) {
     const handle = entry == null ? void 0 : entry.store;
@@ -2009,19 +2045,6 @@ function entriesOf3(slots) {
   } catch {
     return [];
   }
-}
-function resolveBinding2(uiSession, sessionId) {
-  const resolve = uiSession.resolve;
-  if (typeof resolve !== "function") return void 0;
-  let binding;
-  try {
-    binding = resolve.call(uiSession, sessionId);
-  } catch {
-    return void 0;
-  }
-  if (typeof binding !== "object" || binding === null) return void 0;
-  const key = binding.key;
-  return typeof key === "string" && key !== "" ? binding : void 0;
 }
 function asRightbarStore(instance) {
   if (typeof instance !== "object" || instance === null) return void 0;

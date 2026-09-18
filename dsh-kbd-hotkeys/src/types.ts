@@ -50,7 +50,13 @@ export interface SessionStatusSourceLike {
   getSnapshot?(): ReadonlyMap<string, SessionStatusLike> | undefined
 }
 
-/** uiSession:当前会话绑定源 + resolve(sessionId) 取已物化的作用域绑定(供 slots.resolveStore 解析会话级 store)。 */
+/** 会话作用域绑定源:上游只校验 reference.binding 与 sessions.binding(sessionId) 同一。 */
+export interface SessionReferenceLike {
+  sessionId: string
+  binding: SessionBindingLike
+}
+
+/** uiSession:当前会话绑定源 + bindingSource 取已物化的作用域绑定(供 slots.resolveStore 解析会话级 store)。 */
 export interface UiSessionLike {
   pendingInteractions?: PendingInteractionsLike
   pendingSnapshot?: ReadonlyMap<string, PendingInteractionLike>
@@ -58,7 +64,8 @@ export interface UiSessionLike {
   current?: { getSnapshot?(): ScopeBindingLike | undefined }
   /** 会话状态源:completionUnread 替代已删除的 summary.completed。 */
   sessionStatus?: SessionStatusSourceLike
-  resolve?(sessionId: string): unknown
+  /** 物化一个会话的作用域绑定(0.1.6-alpha.2 起替代已删除的 resolve(sessionId));缺席投影的 key 为 undefined。 */
+  bindingSource?(reference: SessionReferenceLike): { getSnapshot?(): unknown } | undefined
 }
 
 /** 作用域绑定最小面(key = 会话 id,ctx = 该作用域上下文)。 */
@@ -213,7 +220,7 @@ export interface QuestionDraftStoreLike extends StoreInstanceLike {
   actions?: QuestionDraftActionsLike
 }
 
-/** slots 服务:entries → uiSession.resolve → resolveStore 三步取活实例,与渲染同一份内存态。 */
+/** slots 服务:entries → 会话作用域绑定(scope-binding.ts) → resolveStore 三步取活实例,与渲染同一份内存态。 */
 export interface SlotsLike {
   entries?(key: string): readonly SlotEntryLike[]
   resolveStore?(handle: unknown, scopeBinding: unknown): StoreInstanceLike | undefined

@@ -1,5 +1,5 @@
 /** 通用问答草稿 store 访问层(卡片选中态唯一真源,插件不镜像)。
- * 三步取数:slots.entries('conversation.composer') → uiSession.resolve → slots.resolveStore;无降级。 */
+ * 三步取数:slots.entries('conversation.composer') → 会话作用域绑定 → slots.resolveStore;无降级。 */
 import type {
   PendingInteractionLike,
   PendingQuestionItemLike,
@@ -10,8 +10,8 @@ import type {
   Services,
   SlotEntryLike,
   SlotsLike,
-  UiSessionLike,
 } from './types.ts'
+import { sessionScopeBinding } from './scope-binding.ts'
 
 /** 问答卡片注册的链式 slot 名（scope=session）。 */
 const COMPOSER_SLOT = 'conversation.composer'
@@ -23,11 +23,10 @@ export function questionDraftStore(
   sessionId: string,
 ): QuestionDraftStoreLike | undefined {
   const slots = services.slots
-  const uiSession = services.uiSession
-  if (slots === null || slots === undefined || uiSession === null || uiSession === undefined) return undefined
+  if (slots === null || slots === undefined) return undefined
   if (typeof slots.entries !== 'function' || typeof slots.resolveStore !== 'function') return undefined
 
-  const binding = resolveBinding(uiSession, sessionId)
+  const binding = sessionScopeBinding(services, sessionId)
   if (binding === undefined) return undefined
 
   for (const entry of entriesOf(slots)) {
@@ -66,21 +65,6 @@ function entriesOf(slots: SlotsLike): readonly SlotEntryLike[] {
   } catch {
     return []
   }
-}
-
-/** 会话作用域绑定（必须带字符串 key）。 */
-function resolveBinding(uiSession: UiSessionLike, sessionId: string): unknown {
-  const resolve = uiSession.resolve
-  if (typeof resolve !== 'function') return undefined
-  let binding: unknown
-  try {
-    binding = resolve.call(uiSession, sessionId)
-  } catch {
-    return undefined
-  }
-  if (typeof binding !== 'object' || binding === null) return undefined
-  const key = (binding as { key?: unknown }).key
-  return typeof key === 'string' && key !== '' ? binding : undefined
 }
 
 /** 形状校验：活实例须同时提供 getSnapshot() 与 actions.replace()。 */

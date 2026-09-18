@@ -20,9 +20,9 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `⌘/Ctrl+B` | 开关**左**侧栏（`layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+O` | 开关**右**侧栏（`sidebarRight.toggleExpanded`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+←` / `→` | 右栏当前面板的标签：上一个 / 下一个（循环；单标签不吞键） | 任意 |
-| `⌘/Ctrl+.` | 右栏关闭当前面板的**当前标签**（上游拒关独占停靠的引导页时不吞键） | 任意 |
+| `⌘/Ctrl+,` | 右栏关闭当前面板的**当前标签**（上游拒关独占停靠的引导页时不吞键） | 任意 |
 | `⌘/Ctrl+\` | 右栏定位文件浏览器：打开 / 聚焦该页并置顶（同时展开右栏） | 任意 |
-| `⌘/Ctrl+L` | 右栏定位终端：已有则聚焦并把 DOM 焦点移进 xterm，没有才新建；**不重排** | 任意 |
+| `⌘/Ctrl+L` | 右栏定位终端：已有终端则聚焦（多个终端时优先当前激活的那个，没有当前激活的落第一个）并把 DOM 焦点移进 xterm，一个都没有才新建；**不重排** | 任意 |
 | `⌘/Ctrl+J` | 聚焦对话输入框（J = Jump）；`editing` 时需焦点**不在** composer 内 | `browse` / `editing` |
 | `⌘/Ctrl+N` | 新建会话并跳转（`uiWorkspace.startSession()`，同侧栏「新建会话」按钮） | 任意 |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话**（沿侧栏顺序） | 任意 |
@@ -34,7 +34,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 - 「任意」= 三态均允许。带修饰键的组合与卡片占用的**裸** `←`/`→`/数字键不冲突，故右栏
   与浮窗类动作在 `card` 态照常生效。
 - 分档：**单修饰键 `mod+键` 给全局动作**（`B` 左栏、`O` 右栏、`K` 工作区、`I` 近期对话、
-  `M` 模型、`N` 新建会话、`J` 焦点跳转、`\` 文件浏览器、`L` 终端、`.` 关标签、`/` 速查表）；
+  `M` 模型、`N` 新建会话、`J` 焦点跳转、`\` 文件浏览器、`L` 终端、`,` 关标签、`/` 速查表）；
   **`mod+alt` 留给导航**（`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
 - 审批与问答的 `Enter`/`Esc`/数字键/方向键是**固定分发的单键**，不参与 `bindings` 自定义。
 - 活跃会话 = 正在运行（`running`）∪ 有待处理交互 ∪ 刚完成未查看（`uiSession.sessionStatus` 的 `completionUnread`）。
@@ -52,12 +52,12 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | 动作 | 服务接口 / 取数 |
 | --- | --- |
 | `approval.allow` / `approval.reject` | `uiSession.pendingInteractions.getSnapshot()`（私有字段 `pendingSnapshot` 仅作兼容回退）→ `PendingApproval.answer('allowed-once' \| 'rejected')` |
-| `question.*`（通用问答） | 卡片自己的 Session 级 slot store（`dsh-client-ui-user-questions` 的 `createQuestionDraftStore`，挂在 `conversation.composer` 注册项）：数字键 = 上游 `choose()` 的选中语义（**去掉自动翻题**）；`←`/`→` = pager `nav.prev`/`nav.next`（`replaceProgress(index ± 1, drafts)`，不循环）；`Enter` = `continueFlow()` 推进，末题仅在全部题目完成后 `answer({answers:[…]})`。取数：`slots.entries('conversation.composer')` → `uiSession.resolve(sessionId)` → `slots.resolveStore`；任一环不可用即 no-op（无降级） |
+| `question.*`（通用问答） | 卡片自己的 Session 级 slot store（`dsh-client-ui-user-questions` 的 `createQuestionDraftStore`，挂在 `conversation.composer` 注册项）：数字键 = 上游 `choose()` 的选中语义（**去掉自动翻题**）；`←`/`→` = pager `nav.prev`/`nav.next`（`replaceProgress(index ± 1, drafts)`，不循环）；`Enter` = `continueFlow()` 推进，末题仅在全部题目完成后 `answer({answers:[…]})`。取数：`slots.entries('conversation.composer')` → 会话作用域绑定（`src/scope-binding.ts`）→ `slots.resolveStore`；任一环不可用即 no-op（无降级） |
 | `question.*`（计划评审） | 同一待处理表的 `PendingQuestion`；`1` = 确认、`2` = 拒绝、`3` = 去聊天里说、`Enter` = 确认。标签取自 `questions[0].intent.approve`，与卡片按钮顺序无关 |
 | `card` 态判定 | 当前会话是否命中 `uiSession.pendingInteractions` 快照（无 DOM 查询） |
 | `sidebar.toggle` | `layout.toggleSidebar()`（宽屏在默认宽与 0 间切换，窄屏翻转 `narrowExpanded`） |
 | `sidebarRight.toggle` | `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；右侧 seat 自行同步 AppFrame 轨道） |
-| `sidebarRight.tabPrev` / `tabNext` | 右栏会话级 slot store：`slots.entries('rightbar.session')` → `uiSession.resolve(sessionId)` → `slots.resolveStore` → `bySession[sid].layout` 的 `activePaneId` 面板 `tabs`/`activeTabId`；切换调 `sidebarRight.focus(tabId)`。**只在当前面板内循环**，单标签 / 无面板 no-op 不吞键 |
+| `sidebarRight.tabPrev` / `tabNext` | 右栏会话级 slot store：`slots.entries('rightbar.session')` → 会话作用域绑定（`src/scope-binding.ts`）→ `slots.resolveStore` → `bySession[sid].layout` 的 `activePaneId` 面板 `tabs`/`activeTabId`；切换调 `sidebarRight.focus(tabId)`。**只在当前面板内循环**，单标签 / 无面板 no-op 不吞键 |
 | `sidebarRight.closeTab` | 与切标签同源取当前面板当前标签，调 `sidebarRight.close(tabId)`；调完回读同一活实例确认标签已从 `layout.tabs` 消失，仍在（上游拒关 / 服务面在别的会话）即 no-op 不吞键 |
 | `sidebarRight.files` | `sidebarRight.openTab('files')`（按目标面板去重：已有则聚焦、没有则创建；`openContent` 恒先展开右栏）；再经同一 store 的 `actions.placeTab(sessionId, tabId, paneId, 0)` 置顶（与标签拖拽同一入口，**不用** `replaceTab`）；已在首位不调用 |
 | `sidebarRight.terminal` | 终端是 `multiple: true` 页、上游每次 `openTab` 铸带 UUID 的 `contentId`、**不按 (kind, contentId) 去重**，故认页由插件读 store 完成（`record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先，再扫其余**停靠**面板，浮窗不参与）。**已有** → `sidebarRight.focus(tabId)`；`layout.expanded === false` 时补 `toggleExpanded()`；若该终端本来就是所在面板的当前标签且右栏已展开，再按 `paneId` 做元素级聚焦。**没有** → `openTab('terminal')` 新建（上游自动聚焦）。**不重排、不置顶** |
@@ -87,7 +87,9 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 - **条数上限 = 最近交互的 10 个（全局口径）**：先按最近更新取前 10、再按工作区分组，故
   某个工作区可能整组不出现（不留空标题）。当前会话**强制纳入**（不在前 10 时顶掉第 10 名）。
   面板带 `dsh-kbd-panel--recent`，`max-height` 由 `64vh` 抬到 `calc(88vh - 24px)`。
-- **初始高亮** = 当前会话所在行（当前是空白 / 被过滤 / 无当前会话时落首行）。
+- **初始高亮** = 当前会话所在行；当前会话本身**不列出**（新建空白会话、归档等被可见性裁掉）
+  时落**同工作区**的第一行（归属复刻上游 `owningGroupKey`：没有任何工作区登记即无归属组，
+  也按同组处理）；该工作区整组未上榜 / 无当前会话才退回首行。
 
 ## 工作区浮窗的列表规则（`src/workspace-switcher.ts`）
 
@@ -111,8 +113,13 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   `dsh-client-ui-session` 承载）；源不可读时回退 `sessions.list` 快照里
   `retainedBy.mainView > 0` 的那一行（与上游 `publishMain` 同判据）。
 - **完成未读** = `uiSession.sessionStatus.getSnapshot().get(id).completionUnread`。
+- **会话作用域绑定**（解析会话级 slot store 时传给 `slots.resolveStore`）= `src/scope-binding.ts`：
+  `uiSession.bindingSource({ sessionId, binding: sessions.binding(sessionId) })` 的
+  `getSnapshot()`（0.1.6-alpha.2 起 `uiSession.resolve(sessionId)` 已删除；上游只校验
+  `reference.binding` 与 `sessions.binding(sessionId)` 同一，缺席投影的 `key` 为 undefined）。
+  这一环缺失时所有会话级 store 取数（问答草稿、右栏标签 / 终端认页）整条 no-op/退化。
 - 已删除、不得再引用：快照字段 `current` / `currentAddress` / `summary.completed`，
-  服务方法 `sessions.open()` / `openSubagent()` / `clear()`。
+  服务方法 `sessions.open()` / `openSubagent()` / `clear()` / `uiSession.resolve()`。
 
 ## 自定义键位
 
@@ -136,6 +143,9 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   `preventDefault` 后接管；**焦点不在本页面时**浏览器仍按默认处理。`⌘/Ctrl+N`
   （新建窗口）最硬：多数浏览器**不把该键派发给页面**，Win/Linux 可能始终打开新窗口
   （macOS `⌃N` 通常可用）。不生效时用 `localStorage` 改绑。
+- **`⌘/Ctrl+,` 在 macOS 上可能被菜单截获**：`⌘,` 是 Chrome / Safari 的「设置 / 偏好设置」
+  菜单键，与 `⌘N` 同理（菜单键先由菜单系统消费，可能不派发给页面）；`⌃,` 通常可用
+  （`mod` 兼收 `ctrlKey`）。被截获时用 `localStorage` 改绑。
 - **`⌘/Ctrl+L` 与终端清屏同键**：焦点在右栏终端时 `Ctrl+L` 被插件抢走，清屏可用
   shell 的 `clear`。
 - **`⌘/Ctrl+I` 抢走 contenteditable 的斜体**；**`⌘/Ctrl+J` 抢走终端的 `⌃J`**（= LF，
@@ -153,9 +163,11 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   标签切换 / 关闭只覆盖**当前面板**，单标签与「独占停靠的引导页」均不吞键。
 - **文件浏览器置顶只作用于它所在的停靠面板**（优先当前面板）；上游「页唯一性按面板」，
   跨面板可能各有一份；极窄窗口下右栏会被上游再折叠回去。
-- **终端定位不重排、不置顶**；浮窗里的终端不参与认页。若 slots / 作用域绑定整条链路
-  不可用则无从判重，退化为每次按键 `openTab('terminal')` 新建一个（与直接调上游一致）；
-  已有终端而 `focus` 面缺失 / 抛错只 no-op，绝不重复开。
+- **终端定位不重排、不置顶**；多个终端时优先当前激活的那个，没有当前激活的落第一个（面板内
+  以标签顺序、跨面板以当前面板优先），浮窗里的终端不参与认页。若 slots / 会话作用域绑定
+  （`uiSession.bindingSource` + `sessions.binding`）整条链路不可用则无从判重，退化为每次按键
+  `openTab('terminal')` 新建一个（与直接调上游一致）；已有终端而 `focus` 面缺失 / 抛错只
+  no-op，绝不重复开。
 - **工作区浮窗的「切换」= 连接工作区**：`uiWorkspace.openWorkspace` 复用该工作区已挂载的
   空白会话、没有就新建（与侧栏分组「＋」一致），不保证打开上一次的对话；列表只含已登记的
   工作区（活跃度前 10，当前工作区强制保留），未分组桶与榜单外的工作区不在其中，需要时用侧栏。
@@ -175,14 +187,17 @@ npm run check       # node --check 产物与宿主
 
 诊断脚本（纯 Node + 最小 DOM 桩，无需浏览器）；桩按 **0.1.6-alpha.2 契约**装配
 （当前会话只经 `uiSession.current` 提供、快照里没有 `current`、`sessions` 没有 `open`，
-完成未读只经 `uiSession.sessionStatus`）：
+完成未读只经 `uiSession.sessionStatus`，会话作用域绑定只经
+`uiSession.bindingSource(reference)`——桩复刻上游「`reference.binding` 与
+`sessions.binding(sessionId)` 同一才物化」的校验，退化用例显式声明该面缺席）：
 
 - `node test-services.mjs` — 服务级动作路径：审批 / 问答 / 计划评审与 `card` 态判定（问答
   断言落在卡片草稿 store 上）；两个侧栏开关；右栏标签切换 / 关闭当前标签 / 文件浏览器定位
-  与置顶 / 终端定位（含认页不重复 `openTab`、折叠补 `toggleExpanded`、元素级聚焦注入假
-  面板）；新建会话（必须调 `uiWorkspace.startSession`）、聚焦输入框（J = Jump 的三态与
-  门闸）、会话跳转（Esc 停止会话树）；工作区（活跃度排序 / 前 10 / 当前工作区保留）/ 近期对话 /
-  模型三个浮窗的列表顺序、分页上限、确认路径与空态；`⇧Tab` 候选档与编辑态门闸；各动作的无降级边界。
+  与置顶 / 终端定位（含认页不重复 `openTab`、多个终端时聚焦当前激活的那个、没有当前激活即
+  落第一个、折叠补 `toggleExpanded`、元素级聚焦注入假面板）；新建会话（必须调
+  `uiWorkspace.startSession`）、聚焦输入框（J = Jump 的三态与门闸）、会话跳转（Esc 停止会话树）；
+  工作区（活跃度排序 / 前 10 / 当前工作区保留）/ 近期对话 / 模型三个浮窗的列表顺序、分页上限、
+  确认路径与空态；`⇧Tab` 候选档与编辑态门闸；各动作的无降级边界。
 - `node test-dispatch.mjs` — 会话跳转分发：按侧栏顺序（分组 / flat / 权威来源不可用时
   no-op、`uiSession.current` 缺席时回退 `retainedBy.mainView`）与两个侧栏开关的键位、
   态闸门。

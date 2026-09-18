@@ -95,7 +95,7 @@ function check(label, condition, detail) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
-// ---- 视图层两源(alpha.2 契约) -------------------------------------------------
+// ---- 视图层两源 + 会话作用域绑定(alpha.2 契约) --------------------------------
 // 0.1.6-alpha.2 起 sessions.list 快照不再带 current / summary.completed:
 // 当前会话在 uiSession.current(绑定源),完成未读在 uiSession.sessionStatus(completionUnread)。
 // 用例通过 viewCurrent / completionUnread 控制这两个源;`withView` 把它们补进每处 uiSession 桩。
@@ -107,7 +107,25 @@ const currentSource = () => ({
 const statusSource = () => ({
   getSnapshot: () => new Map([...completionUnread].map((id) => [id, { completionUnread: true }])),
 })
-const withView = (uiSession) => ({ current: currentSource(), sessionStatus: statusSource(), ...uiSession })
+/** 会话作用域绑定:0.1.6-alpha.2 起 uiSession.resolve(sessionId) 已删除,改由 bindingSource(reference) 物化,
+ * reference = { sessionId, binding: sessions.binding(sessionId) };桩复刻上游的身份校验(不同一即缺席投影)。 */
+const bindingSourceStub = (sessions) => (reference) => ({
+  getSnapshot: () => {
+    const owner = sessions?.binding?.(reference?.sessionId)
+    if (owner === undefined || owner !== reference?.binding) return undefined
+    return { key: reference.sessionId, ctx: owner.ctx }
+  },
+})
+/** 补视图层两源;未显式声明 bindingSource 的桩由本函数按上游契约补上(声明 undefined 即模拟该面缺席)。 */
+const withView = (uiSession, services) => {
+  const stub = uiSession ?? {}
+  return {
+    current: currentSource(),
+    sessionStatus: statusSource(),
+    ...stub,
+    ...(Object.hasOwn(stub, 'bindingSource') ? {} : { bindingSource: bindingSourceStub(services?.sessions) }),
+  }
+}
 
 // ---- 浮层观察工具(只读插件自建子树) ----------------------------------------
 /** 深度优先收集满足条件的元素。 */
@@ -136,8 +154,8 @@ function loadPlugin(services) {
   if (registration === null) throw new Error('bundle did not register')
   const plugin = registration.factory(() => { throw new Error('unexpected external require') })
   const ctx = {
-    // uiSession 桩统一补上视图层两源(真实上游由 dsh-client-ui-session 提供)
-    get: (name) => (name === 'uiSession' ? withView(services[name]) : services[name]),
+    // uiSession 桩统一补上视图层两源与 bindingSource(真实上游由 dsh-client-ui-session 提供)
+    get: (name) => (name === 'uiSession' ? withView(services[name], services) : services[name]),
     effect: (cb) => { const dispose = cb(); if (typeof dispose === 'function') dispose() },
   }
   plugin.apply(ctx)
@@ -159,7 +177,9 @@ const snapshot = {
   },
   subagentsByParent: {},
 }
-const sessions = { list: { getSnapshot: () => snapshot }, binding: () => undefined }
+/** 会话绑定对象(SessionBinding):作用域绑定的物化只认 sessions.binding(id) 返回的这一个身份。 */
+const sessionOwner = { ctx: {} }
+const sessions = { list: { getSnapshot: () => snapshot }, binding: (id) => (id === 'sess-b' ? sessionOwner : undefined) }
 
 /** 假草稿 store:复刻上游 replace(覆盖 requestKey + progress)/ clear(仅 requestKey 匹配时清空)。 */
 function makeDraftStore() {
@@ -210,7 +230,6 @@ const services = {
   sessions,
   uiSession: {
     pendingInteractions: { getSnapshot: () => pending },
-    resolve: (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined),
   },
   sidebarRight: { toggleExpanded() {} },
   workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
@@ -525,7 +544,7 @@ console.log('\n--- 权威来源不可用 → no-op(无降级) ---')
   const cases = [
     ['slots 服务缺失', { slots: undefined }],
     ['slots 无 resolveStore', { slots: { entries: () => [{ store: {} }] } }],
-    ['uiSession 无 resolve', { uiSession: { pendingInteractions: { getSnapshot: () => pending } } }],
+    ['uiSession 无 bindingSource', { uiSession: { pendingInteractions: { getSnapshot: () => pending }, bindingSource: undefined } }],
     ['注册项 select 不匹配', {
       slots: {
         entries: () => [{ store: {}, select: () => null }],
@@ -552,7 +571,6 @@ console.log('\n--- 权威来源不可用 → no-op(无降级) ---')
       sessions,
       uiSession: {
         pendingInteractions: { getSnapshot: () => isolated },
-        resolve: (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined),
       },
       sidebarRight: { toggleExpanded() {} },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
@@ -966,13 +984,12 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
       },
     }
   }
-  const okBinding = (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined)
   /** 装一个「右栏完整可用」的环境,返回按键函数与 focus 调用记录。 */
   function env(tabs, over = {}) {
     const focused = []
     const pressKey = loadPlugin({
-      sessions: { ...sessions, binding: () => undefined },
-      uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, resolve: okBinding },
+      sessions,
+      uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
       slots: tabsSlots(tabs),
       sidebarRight: {
@@ -1054,7 +1071,7 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
     ['slots 缺席', { slots: undefined }],
     ['slots 无 resolveStore', { slots: { entries: () => [{ store: tabs.handle }] } }],
     ['注册项都没有 store', { slots: { entries: () => [{ select: () => ({}) }], resolveStore: () => tabs.instance } }],
-    ['uiSession 无 resolve', { uiSession: { pendingInteractions: { getSnapshot: () => new Map() } } }],
+    ['uiSession 无 bindingSource', { uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, bindingSource: undefined } }],
     ['resolveStore 抛错(handle 未注册)', {
       slots: { entries: () => [{ store: tabs.handle }], resolveStore: () => { throw new Error('store handle is not registered') } },
     }],
@@ -1089,7 +1106,6 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
   const cardEnv = env(cardTabs, {
     uiSession: {
       pendingInteractions: { getSnapshot: () => new Map([['sess-b', { kind: 'question', key: 'question:20', sessionId: 'sess-b', questions: [{ id: 'q1', question: 'Q?', options: [{ label: 'A' }] }] }]]) },
-      resolve: okBinding,
     },
   })
   event = cardEnv.press({ key: 'ArrowRight', code: 'ArrowRight', ctrlKey: true, altKey: true })
@@ -1114,9 +1130,9 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
   storage.delete('dsh-kbd-hotkeys:v1')
 }
 
-// ---- 阶段 5b:⌘/Ctrl+. → 关闭右栏当前标签(现场与标签切换同源) ----
+// ---- 阶段 5b:⌘/Ctrl+, → 关闭右栏当前标签(现场与标签切换同源) ----
 // 关闭 = sidebarRight.close(tabId);关完回读布局确认标签消失才吞键,否则 no-op(不复制上游判定)
-console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
+console.log('\n--- ⌘/Ctrl+, → 右侧栏关闭当前标签 ---')
 {
   /** 假右栏会话级 store:快照 { bySession: { <id>: { layout } } } + 复刻上游 closeTab 的可见结果。 */
   function makeCloseStore() {
@@ -1169,8 +1185,8 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
   function env(store, over = {}) {
     const closed = []
     const pressKey = loadPlugin({
-      sessions: { ...sessions, binding: () => undefined },
-      uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, resolve: (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined) },
+      sessions,
+      uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
       slots: closeSlots(store),
       sidebarRight: {
@@ -1187,9 +1203,9 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
   const store = makeCloseStore()
   store.seed(layoutClose())
   const base = env(store)
-  let event = base.press({ key: '.', code: 'Period', ctrlKey: true })
-  check('⌘/Ctrl+. → close(当前标签 t2)', same(base.closed, ['t2']), JSON.stringify(base.closed))
-  check('⌘/Ctrl+. 被吞', event.propagationStopped === true)
+  let event = base.press({ key: ',', code: 'Comma', ctrlKey: true })
+  check('⌘/Ctrl+, → close(当前标签 t2)', same(base.closed, ['t2']), JSON.stringify(base.closed))
+  check('⌘/Ctrl+, 被吞', event.propagationStopped === true)
   check('标签真的从布局里消失', same(base.tabs(), ['t1']), JSON.stringify(base.tabs()))
 
   // 关的必须是**当前面板**的当前标签,不是第一个面板
@@ -1203,7 +1219,7 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
     tabs: { t1: { id: 't1', kind: 'guide' }, t2: { id: 't2' }, t3: { id: 't3', kind: 'terminal' } },
   }))
   const twoEnv = env(twoPanes)
-  event = twoEnv.press({ key: '.', code: 'Period', ctrlKey: true })
+  event = twoEnv.press({ key: ',', code: 'Comma', ctrlKey: true })
   check('多面板时关当前面板的当前标签 t3', same(twoEnv.closed, ['t3']), JSON.stringify(twoEnv.closed))
   check('另一个面板的标签不受影响', same(twoEnv.tabs(), ['t1', 't2']), JSON.stringify(twoEnv.tabs()))
 
@@ -1211,7 +1227,7 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
   const noActive = makeCloseStore()
   noActive.seed(layoutClose({ nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t1', 't2'], activeTabId: 'nope' } } }))
   const noActiveEnv = env(noActive)
-  event = noActiveEnv.press({ key: '.', code: 'Period', ctrlKey: true })
+  event = noActiveEnv.press({ key: ',', code: 'Comma', ctrlKey: true })
   check('activeTabId 失配 → 不调 close', same(noActiveEnv.closed, []), JSON.stringify(noActiveEnv.closed))
   check('activeTabId 失配 → 不吞键', event.propagationStopped !== true)
 
@@ -1219,7 +1235,7 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
   const soleGuide = makeCloseStore()
   soleGuide.seed(layoutClose({ nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t1'], activeTabId: 't1' } }, tabs: { t1: { id: 't1', kind: 'guide' } } }))
   const soleGuideEnv = env(soleGuide)
-  event = soleGuideEnv.press({ key: '.', code: 'Period', ctrlKey: true })
+  event = soleGuideEnv.press({ key: ',', code: 'Comma', ctrlKey: true })
   check('独占停靠的 guide → 标签未消失', same(soleGuideEnv.closed, ['t1']) && same(soleGuideEnv.tabs(), ['t1']), JSON.stringify(soleGuideEnv.tabs()))
   check('独占停靠的 guide → 不吞键', event.propagationStopped !== true)
 
@@ -1227,22 +1243,22 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
   const guideWithPeer = makeCloseStore()
   guideWithPeer.seed(layoutClose({ nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t1', 't2'], activeTabId: 't1' } } }))
   const peerEnv = env(guideWithPeer)
-  event = peerEnv.press({ key: '.', code: 'Period', ctrlKey: true })
+  event = peerEnv.press({ key: ',', code: 'Comma', ctrlKey: true })
   check('guide 与其它标签共存时可关', same(peerEnv.closed, ['t1']) && same(peerEnv.tabs(), ['t2']), JSON.stringify(peerEnv.tabs()))
   check('guide 与其它标签共存时吞键', event.propagationStopped === true)
 
   // 面板无标签 / 非 pane 节点 / 该会话尚无布局:全部 no-op
   const noTabs = makeCloseStore()
   noTabs.seed(layoutClose({ nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: [], activeTabId: undefined } } }))
-  event = env(noTabs).press({ key: '.', code: 'Period', ctrlKey: true })
+  event = env(noTabs).press({ key: ',', code: 'Comma', ctrlKey: true })
   check('面板无标签 → 不吞键', event.propagationStopped !== true)
   const notPane = makeCloseStore()
   notPane.seed(layoutClose({ nodes: { 'pane-1': { kind: 'split' } } }))
-  event = env(notPane).press({ key: '.', code: 'Period', ctrlKey: true })
+  event = env(notPane).press({ key: ',', code: 'Comma', ctrlKey: true })
   check('activePaneId 指向非 pane 节点 → 不吞键', event.propagationStopped !== true)
   const otherSession = makeCloseStore()
   otherSession.seed(layoutClose(), 'sess-other')
-  event = env(otherSession).press({ key: '.', code: 'Period', ctrlKey: true })
+  event = env(otherSession).press({ key: ',', code: 'Comma', ctrlKey: true })
   check('该会话尚无布局 → 不吞键', event.propagationStopped !== true)
 
   // 无降级:服务 / 注册项 / store / close 面任一环不可用 → no-op 且不吞键
@@ -1252,7 +1268,7 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
     ['slots 缺席', { slots: undefined }],
     ['slots 无 resolveStore', { slots: { entries: () => [{ store: store.handle }] } }],
     ['注册项都没有 store', { slots: { entries: () => [{ select: () => ({}) }], resolveStore: () => store.instance } }],
-    ['uiSession 无 resolve', { uiSession: { pendingInteractions: { getSnapshot: () => new Map() } } }],
+    ['uiSession 无 bindingSource', { uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, bindingSource: undefined } }],
     ['resolveStore 抛错(handle 未注册)', {
       slots: { entries: () => [{ store: store.handle }], resolveStore: () => { throw new Error('store handle is not registered') } },
     }],
@@ -1266,43 +1282,42 @@ console.log('\n--- ⌘/Ctrl+. → 右侧栏关闭当前标签 ---')
   ]
   for (const [label, extra] of noopCases) {
     const envCase = env(makeCloseStore(), extra)
-    const pressed = envCase.press({ key: '.', code: 'Period', ctrlKey: true })
+    const pressed = envCase.press({ key: ',', code: 'Comma', ctrlKey: true })
     check(`${label} → 不吞键(no-op)`, pressed.propagationStopped !== true)
   }
 
-  // editing / card 态同样可用:mod+. 与卡片裸键、文本编辑都不冲突
+  // editing / card 态同样可用:mod+, 与卡片裸键、文本编辑都不冲突
   const editingStore = makeCloseStore()
   editingStore.seed(layoutClose())
   const editingEnv = env(editingStore)
-  event = editingEnv.press({ key: '.', code: 'Period', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
-  check('editing 态 ⌘/Ctrl+. 仍关标签', same(editingEnv.closed, ['t2']), JSON.stringify(editingEnv.closed))
-  check('editing 态 ⌘/Ctrl+. 被吞', event.propagationStopped === true)
+  event = editingEnv.press({ key: ',', code: 'Comma', ctrlKey: true, target: new FakeHTMLElement('TEXTAREA') })
+  check('editing 态 ⌘/Ctrl+, 仍关标签', same(editingEnv.closed, ['t2']), JSON.stringify(editingEnv.closed))
+  check('editing 态 ⌘/Ctrl+, 被吞', event.propagationStopped === true)
   const cardStore = makeCloseStore()
   cardStore.seed(layoutClose())
   const cardEnv = env(cardStore, {
     uiSession: {
       pendingInteractions: { getSnapshot: () => new Map([['sess-b', { kind: 'question', key: 'question:21', sessionId: 'sess-b', questions: [{ id: 'q1', options: [{ label: 'A' }] }] }]]) },
-      resolve: (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined),
     },
   })
-  event = cardEnv.press({ key: '.', code: 'Period', ctrlKey: true })
-  check('card 态 ⌘/Ctrl+. 仍关标签', same(cardEnv.closed, ['t2']), JSON.stringify(cardEnv.closed))
-  check('card 态 ⌘/Ctrl+. 被吞', event.propagationStopped === true)
+  event = cardEnv.press({ key: ',', code: 'Comma', ctrlKey: true })
+  check('card 态 ⌘/Ctrl+, 仍关标签', same(cardEnv.closed, ['t2']), JSON.stringify(cardEnv.closed))
+  check('card 态 ⌘/Ctrl+, 被吞', event.propagationStopped === true)
 
-  // 裸 . / 别的组合键不触发(不误伤页面)
-  event = base.press({ key: '.', code: 'Period' })
-  check('裸 . 不关标签、不吞键', event.propagationStopped !== true)
-  event = base.press({ key: '.', code: 'Period', ctrlKey: true, altKey: true })
-  check('⌘/Ctrl+Alt+. 不关标签、不吞键', event.propagationStopped !== true)
+  // 裸 , / 别的组合键不触发(不误伤页面)
+  event = base.press({ key: ',', code: 'Comma' })
+  check('裸 , 不关标签、不吞键', event.propagationStopped !== true)
+  event = base.press({ key: ',', code: 'Comma', ctrlKey: true, altKey: true })
+  check('⌘/Ctrl+Alt+, 不关标签、不吞键', event.propagationStopped !== true)
 
   // 键位可经 localStorage 独立覆盖
   storage.set('dsh-kbd-hotkeys:v1', JSON.stringify({ bindings: { 'sidebarRight.closeTab': 'mod+alt+8' } }))
   const customStore = makeCloseStore()
   customStore.seed(layoutClose())
   const custom = env(customStore)
-  event = custom.press({ key: '.', code: 'Period', ctrlKey: true })
-  check('覆盖键位后 ⌘/Ctrl+. 不再关标签', same(custom.closed, []), JSON.stringify(custom.closed))
-  check('覆盖键位后 ⌘/Ctrl+. 不吞键', event.propagationStopped !== true)
+  event = custom.press({ key: ',', code: 'Comma', ctrlKey: true })
+  check('覆盖键位后 ⌘/Ctrl+, 不再关标签', same(custom.closed, []), JSON.stringify(custom.closed))
+  check('覆盖键位后 ⌘/Ctrl+, 不吞键', event.propagationStopped !== true)
   event = custom.press({ key: '8', code: 'Digit8', ctrlKey: true, altKey: true })
   check('自定义 ⌘/Ctrl+Alt+8 → 关标签', same(custom.closed, ['t2']), JSON.stringify(custom.closed))
   check('自定义键位被吞', event.propagationStopped === true)
@@ -1385,13 +1400,12 @@ console.log('\n--- ⌘/Ctrl+\\ → 右栏打开文件浏览器并置于首位 --
       },
     }
   }
-  const okBinding = (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined)
   /** 装一个「右栏完整可用」的环境;`openTab` 落到假 store 上(下一次读快照即新状态)。 */
   function env(tabs, over = {}) {
     const opened = []
     const press = loadPlugin({
-      sessions: { ...sessions, binding: () => undefined },
-      uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, resolve: okBinding },
+      sessions,
+      uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
       slots: filesSlots(tabs),
       sidebarRight: {
@@ -1554,7 +1568,6 @@ console.log('\n--- ⌘/Ctrl+\\ → 右栏打开文件浏览器并置于首位 --
   const cardFilesEnv = env(cardFiles, {
     uiSession: {
       pendingInteractions: { getSnapshot: () => new Map([['sess-b', { kind: 'question', key: 'question:21', sessionId: 'sess-b', questions: [{ id: 'q1', question: 'Q?', options: [{ label: 'A' }] }] }]]) },
-      resolve: okBinding,
     },
   })
   event = cardFilesEnv.press(combo)
@@ -1637,7 +1650,6 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
     tabs,
     ...over,
   })
-  const okBinding = (sessionId) => (sessionId === 'sess-b' ? { key: 'sess-b', ctx: {} } : undefined)
   /** rightbar.session 的假 slots:无 store 的干扰项 + 承载 store handle 的注册项。 */
   function terminalSlots(tabs) {
     return {
@@ -1655,8 +1667,8 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
     const focused = []
     const toggled = []
     const press = loadPlugin({
-      sessions: { ...sessions, binding: () => undefined },
-      uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, resolve: okBinding },
+      sessions,
+      uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
       slots: terminalSlots(tabs),
       sidebarRight: {
@@ -1827,6 +1839,22 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
   event = noSlotsEnv.press(combo)
   check('slots 缺席 → 无从判重,按 openTab 新建', same(noSlotsEnv.opened, ['terminal']), JSON.stringify(noSlotsEnv.opened))
   check('slots 缺席 → 吞键', event.propagationStopped === true)
+  // 会话作用域绑定面缺席(alpha.1 的 resolve(sessionId) 已删除时的退化形态)→ 同样无从判重
+  const noBinding = makeTerminalStore()
+  noBinding.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 't1'))
+  const noBindingEnv = env(noBinding, {
+    uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, bindingSource: undefined },
+  })
+  event = noBindingEnv.press(combo)
+  check('无作用域绑定面 → 取不到布局,按 openTab 新建', same(noBindingEnv.opened, ['terminal']), JSON.stringify(noBindingEnv.opened))
+  check('无作用域绑定面 → 吞键', event.propagationStopped === true)
+  // 当前会话在 Controller 里没有绑定(未物化)→ 同上
+  const noOwner = makeTerminalStore()
+  noOwner.seed(singlePane(['t1', 'term-2'], { t1: guideTab, 'term-2': termTab('term-2', 'u2') }, 't1'))
+  const noOwnerEnv = env(noOwner, { sessions: { list: sessions.list, binding: () => undefined } })
+  event = noOwnerEnv.press(combo)
+  check('sessions.binding 无该会话 → 取不到布局,按 openTab 新建', same(noOwnerEnv.opened, ['terminal']), JSON.stringify(noOwnerEnv.opened))
+  check('sessions.binding 无该会话 → 吞键', event.propagationStopped === true)
 
   // ⑩ 无当前会话 / 该会话尚无面板 → 取不到布局,openTab 在无挂载会话面时抛错 → no-op 不吞键
   const noSession = makeTerminalStore()
@@ -1849,7 +1877,6 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
   const cardSearchEnv = env(cardSearch, {
     uiSession: {
       pendingInteractions: { getSnapshot: () => new Map([['sess-b', { kind: 'question', key: 'question:22', sessionId: 'sess-b', questions: [{ id: 'q1', question: 'Q?', options: [{ label: 'A' }] }] }]]) },
-      resolve: okBinding,
     },
   })
   event = cardSearchEnv.press(combo)
@@ -2041,7 +2068,7 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(活跃度前 10 + ↑↓ 选�
     const workspacesService = 'workspaces' in over ? over.workspaces : workspaces
     const press = loadPlugin({
       sessions: over.sessions ?? makeSessions(over.snapshot),
-      uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, resolve: () => undefined },
+      uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
       workspaces: workspacesService,
       uiWorkspace,
       ...over.extra,
@@ -2153,7 +2180,6 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(活跃度前 10 + ↑↓ 选�
         pendingInteractions: {
           getSnapshot: () => new Map([['sess-b', { kind: 'question', key: 'question:9', sessionId: 'sess-b', questions: [{ id: 'q1', options: [{ label: 'A' }] }] }]]),
         },
-        resolve: () => undefined,
       },
     },
   })
@@ -2736,13 +2762,98 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   event = first.press({ key: '/', code: 'Slash', ctrlKey: true })
   check('速查表再按 ⌘/ 关闭', event.propagationStopped === true)
 
-  // ⑤ 当前会话不在列表里(空白会话 / 无 current)→ 初始高亮首行,Enter 打开首行
+  // ⑤ 当前会话不在列表里(空白会话 / 无 current)→ 初始高亮 = 同工作区第一行;无归属 / 无 current 退回首行
   viewCurrent = 'blank'
   const blankCurrent = env()
   blankCurrent.press(combo)
-  check('当前是空白会话(不列出)→ 初始高亮首行', activeSessionIndex() === 0, String(activeSessionIndex()))
+  check('当前是空白会话(不列出,同工作区组在榜首)→ 初始高亮第 1 行', activeSessionIndex() === 0, String(activeSessionIndex()))
   blankCurrent.press({ key: 'Enter', code: 'Enter' })
   check('Enter → openSession(a2)', same(blankCurrent.opened, ['a2']), JSON.stringify(blankCurrent.opened))
+
+  // ⑤′ 空白当前会话的工作区不在榜首 → 落**同工作区**的第一行(不再固定落全局首行)
+  viewCurrent = 'blankB'
+  const blankInBeta = env({
+    sessions: {
+      list: {
+        getSnapshot: () => ({
+          ids: [...sessionIds, 'blankB'],
+          byId: { ...byId, blankB: summary('blankB', T + 800, { blank: true }) },
+          subagentsByParent: {},
+        }),
+      },
+      binding: () => undefined,
+    },
+    workspaces: {
+      list: {
+        getSnapshot: () => ({
+          items: [workspaceItems[0], { ...workspaceItems[1], sessionIds: ['b1', 'blankB', 'sub'] }],
+          archivedSessionIds: ['arch'],
+          phase: 'ready',
+        }),
+      },
+    },
+  })
+  blankInBeta.press(combo)
+  check(
+    '空白当前会话(beta 组在第 2 组)→ 初始高亮 = 同工作区第一行(b1,第 3 行)',
+    activeSessionIndex() === 2,
+    String(activeSessionIndex()),
+  )
+  blankInBeta.press({ key: 'Enter', code: 'Enter' })
+  check('Enter → openSession(b1)', same(blankInBeta.opened, ['b1']), JSON.stringify(blankInBeta.opened))
+
+  // ⑤″ 空白当前会话不属于任何工作区 → 落无归属组第一行(与上游 owningGroupKey 同判据)
+  viewCurrent = 'blankU'
+  const blankUngrouped = env({
+    sessions: {
+      list: {
+        getSnapshot: () => ({
+          ids: [...sessionIds, 'blankU'],
+          byId: { ...byId, blankU: summary('blankU', T + 700, { blank: true }) },
+          subagentsByParent: {},
+        }),
+      },
+      binding: () => undefined,
+    },
+  })
+  blankUngrouped.press(combo)
+  check(
+    '空白当前会话无工作区归属 → 初始高亮 = 无归属组第一行(stray,第 4 行)',
+    activeSessionIndex() === 3,
+    String(activeSessionIndex()),
+  )
+  blankUngrouped.press({ key: 'Escape', code: 'Escape' })
+
+  // ⑤‴ 空白当前会话的工作区整组未上榜(组内没有可见会话)→ 退回首行
+  viewCurrent = 'blankC'
+  const blankTrimmed = env({
+    sessions: {
+      list: {
+        getSnapshot: () => ({
+          ids: [...sessionIds, 'blankC'],
+          byId: { ...byId, blankC: summary('blankC', T + 600, { blank: true }) },
+          subagentsByParent: {},
+        }),
+      },
+      binding: () => undefined,
+    },
+    workspaces: {
+      list: {
+        getSnapshot: () => ({
+          items: [
+            { workspaceId: 'w3', title: 'gamma', path: '/work/gamma', sessionIds: ['blankC'] },
+            workspaceItems[0],
+            workspaceItems[1],
+          ],
+          archivedSessionIds: ['arch'],
+          phase: 'ready',
+        }),
+      },
+    },
+  })
+  blankTrimmed.press(combo)
+  check('空白当前会话的工作区整组未上榜 → 退回首行', activeSessionIndex() === 0, String(activeSessionIndex()))
+  blankTrimmed.press({ key: 'Escape', code: 'Escape' })
 
   viewCurrent = undefined
   const noCurrent = env()

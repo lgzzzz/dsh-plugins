@@ -1,5 +1,5 @@
-/** 右栏标签 / 文件浏览器 / 终端访问层(⌘/Ctrl+Alt+←→、⌘/Ctrl+\、⌘/Ctrl+L、⌘/Ctrl+.)。
- * 三步取数:entries → uiSession.resolve → resolveStore;无降级;terminal 是 multiple 页,认页由插件读 store。 */
+/** 右栏标签 / 文件浏览器 / 终端访问层(⌘/Ctrl+Alt+←→、⌘/Ctrl+\、⌘/Ctrl+L、⌘/Ctrl+,)。
+ * 三步取数:entries → 会话作用域绑定 → resolveStore;无降级;terminal 是 multiple 页,认页由插件读 store。 */
 import type {
   Services,
   SidebarRightLayoutLike,
@@ -8,9 +8,9 @@ import type {
   SidebarRightStoreLike,
   SidebarRightTabsStateLike,
   SlotsLike,
-  UiSessionLike,
 } from './types.ts'
 import { currentSessionId } from './session-view.ts'
+import { sessionScopeBinding } from './scope-binding.ts'
 
 /** sidebar-right seat 注册的会话级 slot 名（store handle 挂在该注册项上）。 */
 const RIGHTBAR_SLOT = 'rightbar.session'
@@ -53,9 +53,9 @@ export function cycleRightSidebarTab(services: Services, delta: number): boolean
   }
 }
 
-/* 关闭当前标签（⌘/Ctrl+.） */
+/* 关闭当前标签（⌘/Ctrl+,） */
 
-/** ⌘/Ctrl+.:关闭右栏当前面板的当前标签(任意态);现场仍取会话级 store 布局(与标签切换同源),
+/** ⌘/Ctrl+,:关闭右栏当前面板的当前标签(任意态);现场仍取会话级 store 布局(与标签切换同源),
  * 关闭调公开的 sidebarRight.close(tabId)(上游拒关独占停靠的 guide);关完回读布局确认消失,否则 no-op 不吞键。 */
 export function closeRightSidebarTab(services: Services): boolean {
   const sidebarRight = services.sidebarRight
@@ -332,12 +332,11 @@ interface RightbarStore {
 /** 解析 rightbar.session 注册项 store handle 的活实例（三步取数，任一步不可用即 undefined）。 */
 function rightbarStore(services: Services): RightbarStore | undefined {
   const slots = services.slots
-  const uiSession = services.uiSession
-  if (slots === null || slots === undefined || uiSession === null || uiSession === undefined) return undefined
+  if (slots === null || slots === undefined) return undefined
   if (typeof slots.entries !== 'function' || typeof slots.resolveStore !== 'function') return undefined
   const sessionId = currentSessionId(services)
   if (sessionId === undefined) return undefined
-  const binding = resolveBinding(uiSession, sessionId)
+  const binding = sessionScopeBinding(services, sessionId)
   if (binding === undefined) return undefined
 
   for (const entry of entriesOf(slots)) {
@@ -363,21 +362,6 @@ function entriesOf(slots: SlotsLike): readonly { store?: unknown }[] {
   } catch {
     return []
   }
-}
-
-/** 会话作用域绑定（必须带字符串 key）。 */
-function resolveBinding(uiSession: UiSessionLike, sessionId: string): unknown {
-  const resolve = uiSession.resolve
-  if (typeof resolve !== 'function') return undefined
-  let binding: unknown
-  try {
-    binding = resolve.call(uiSession, sessionId)
-  } catch {
-    return undefined
-  }
-  if (typeof binding !== 'object' || binding === null) return undefined
-  const key = (binding as { key?: unknown }).key
-  return typeof key === 'string' && key !== '' ? binding : undefined
 }
 
 /** 活实例形状校验：必须能 getSnapshot() 出 { bySession }；actions 为可选面。 */

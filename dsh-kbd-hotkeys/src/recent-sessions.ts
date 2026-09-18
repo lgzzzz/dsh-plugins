@@ -1,5 +1,6 @@
 /** 近期对话浮窗(⌘/Ctrl+I)的数据面与打开落点(浮窗 DOM 在 overlay.ts)。
- * 列表按工作区分组、全局最多 10 行、当前会话强制纳入;打开只走 uiWorkspace.openSession(方法形式调用);无降级。 */
+ * 列表按工作区分组、全局最多 10 行、当前会话强制纳入;初始落点优先当前会话所在行,
+ * 当前是新建空白会话等不列出的情形落**同工作区**第一行;打开只走 uiWorkspace.openSession(方法形式调用);无降级。 */
 import { recencyOrder, sessionVisible } from './session-order.ts'
 import { completionUnread, currentSessionId } from './session-view.ts'
 import { readWorkspaceSnapshot } from './sidebar-order.ts'
@@ -11,6 +12,7 @@ import type {
   Services,
   SessionSummaryLike,
   WorkspaceItemLike,
+  WorkspaceSnapshotLike,
 } from './types.ts'
 
 /** 无归属会话桶的组 key。 */
@@ -91,7 +93,7 @@ export function recentSessionsView(services: Services): RecentSessionsViewLike {
   return {
     groups,
     rows,
-    initialIndex: initialIndex(rows, current),
+    initialIndex: initialIndex(rows, groups, current, currentWorkspaceKey(workspaceSnapshot, current)),
     notice: '',
   }
 }
@@ -116,11 +118,41 @@ function emptyView(): RecentSessionsViewLike {
   return { groups: [], rows: [], initialIndex: 0, notice: EMPTY_NOTICE }
 }
 
-/** 初始高亮：当前会话所在行，否则首行。 */
-function initialIndex(rows: readonly RecentSessionRowLike[], current: string | undefined): number {
+/** 初始高亮：当前会话所在行。当前会话**不列出**（新建空白会话、归档等被可见性裁掉）时，
+ *  落**同工作区**的第一行（⌘/Ctrl+I 的邻域是当前工作区，而非整份列表的榜首）；
+ *  无当前会话、归属组未上榜才退回首行。 */
+function initialIndex(
+  rows: readonly RecentSessionRowLike[],
+  groups: readonly RecentSessionGroupLike[],
+  current: string | undefined,
+  currentWorkspace: string | undefined,
+): number {
   if (current === undefined || current === '') return 0
   const index = rows.findIndex((row) => row.sessionId === current)
-  return index < 0 ? 0 : index
+  if (index >= 0) return index
+  if (currentWorkspace === undefined) return 0
+  let offset = 0
+  for (const group of groups) {
+    if (group.workspaceId === currentWorkspace) return group.rows.length > 0 ? offset : 0
+    offset += group.rows.length
+  }
+  return 0
+}
+
+/** 当前会话的归属工作区（复刻上游 `owningGroupKey`）：无当前会话 → undefined；
+ *  快照缺 items / 没有任何工作区登记该会话 → 无归属桶（与列表末尾的无标题组同 key）。 */
+function currentWorkspaceKey(
+  snapshot: WorkspaceSnapshotLike | undefined,
+  current: string | undefined,
+): string | undefined {
+  if (current === undefined || current === '') return undefined
+  for (const item of snapshot?.items ?? []) {
+    if (item === null || item === undefined) continue
+    if (item.sessionIds?.includes(current) !== true) continue
+    const workspaceId = item.workspaceId
+    if (typeof workspaceId === 'string' && workspaceId !== '') return workspaceId
+  }
+  return UNGROUPED_KEY
 }
 
 function sessionRow(

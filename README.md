@@ -1,6 +1,6 @@
 # dsh-plugins — DSH Web 本地插件仓库
 
-本仓库包含 **7 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**：每个插件是
+本仓库包含 **8 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**：每个插件是
 一个自包含的本地 npm 包，经 web Profile 的 `link:` 依赖挂载进正在运行的应用。
 
 仓库根**不作为「一个插件」整体安装**（没有集合包、也没有根 `cordis.patch.yml`，
@@ -17,6 +17,7 @@
 | `dsh-git-guard` | 敏感 git 操作（`git commit`、`git push`，以及 force push 与 rebase / merge / cherry-pick / reset --hard / revert / am / filter-branch / filter-repo 等）一律需用户授权，本插件不直接拒绝；完全权限（danger-full-access）下整体退出 |
 | `dsh-kbd-hotkeys` | 全局快捷键：审批 / 问答键盘化、左右栏开关、右栏标签切换 / 关闭 / 文件浏览器与终端定位、新建会话、活跃会话跳转、工作区 / 近期对话 / 模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表 |
 | `dsh-rightbar-tab-width` | 右栏 tab 胶囊定宽 100px（= 上游地板值，分栏判定与上游默认一致） |
+| `dsh-sidebar-default-collapsed` | 左侧边栏默认关闭：每次加载页面时读活布局 store 后一次性收起（宽窗才写；窄窗上游本就收起），判定标记在 `window` 上，不重复插手用户的手动开关 |
 
 跨插件的工程规范（包结构、挂载机制、生效机制、构建与验证、共性注意事项）见
 [`AGENTS.md`](AGENTS.md)；各插件的功能与已知限制见其目录内 `README.md`。
@@ -45,7 +46,7 @@ cd <仓库根>/<name> && dsh plugin --profile web add link:.   # 或在任意目
 dsh plugin --profile web remove <name>
 
 # 全部本地插件（写成一行即可）
-dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-rightbar-tab-width
+dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-rightbar-tab-width dsh-sidebar-default-collapsed
 # 重启 App 生效
 ```
 

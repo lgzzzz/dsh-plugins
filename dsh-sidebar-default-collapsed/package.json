@@ -1,0 +1,35 @@
+{
+  "name": "dsh-sidebar-default-collapsed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web UI patch: the left sidebar starts collapsed on every page load (upstream hardcodes its initial preference to 280px and exposes no config / no persistence). Boot-time, one-shot: on a frame at or above upstream's 1024px auto-collapse breakpoint the plugin reads the live layout store (slots.entries('root') → resolveStore) and calls ctx.layout.toggleSidebar() once; narrow frames need nothing (upstream is already collapsed there, and toggling would expand). TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test-boot.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}
