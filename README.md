@@ -3,21 +3,21 @@
 本仓库包含 **8 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**：每个插件是
 一个自包含的本地 npm 包，经 web Profile 的 `link:` 依赖挂载进正在运行的应用。
 
-仓库根**不作为「一个插件」整体安装**（没有集合包、也没有根 `cordis.patch.yml`，
+仓库根 **不作为「一个插件」整体安装**（没有集合包、也没有根 `cordis.patch.yml`，
 不提供集合安装 / 卸载脚本）：每个插件作为 Profile 中独立的 `link:` 依赖逐个装入，
 经其自身的 `cordis.patch.yml` 独立挂载。
 
 ## 插件清单
 
-| 目录 | 说明 |
-| --- | --- |
-| `dsh-code-card-fonts` | 卡片标题 / 摘要行 / 展开内容 / 代码块 / 内联代码 / Markdown 表格单元格统一 14px，卡片间距 7px；内容字号轴不受影响，设置里的「字号大小」仍可调 |
-| `dsh-directory-picker-browse` | 纯补丁插件：停用上游 auto 目录选择器，挂载 browse 变体；不触碰上游 `ui-deliverables` |
-| `dsh-fullwidth-chat` | 对话列全宽展示 |
-| `dsh-git-guard` | 敏感 git 操作（`git commit`、`git push`，以及 force push 与 rebase / merge / cherry-pick / reset --hard / revert / am / filter-branch / filter-repo 等）一律需用户授权，本插件不直接拒绝；完全权限（danger-full-access）下整体退出 |
-| `dsh-kbd-hotkeys` | 全局快捷键：审批 / 问答键盘化、左右栏开关、右栏标签切换 / 关闭 / 文件浏览器与终端定位、新建会话、活跃会话跳转、工作区 / 近期对话 / 模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表 |
-| `dsh-rightbar-tab-width` | 右栏 tab 胶囊定宽 100px（= 上游地板值，分栏判定与上游默认一致） |
-| `dsh-sidebar-default-collapsed` | 左侧边栏默认关闭：每次加载页面时读活布局 store 后一次性收起（宽窗才写；窄窗上游本就收起），判定标记在 `window` 上，不重复插手用户的手动开关 |
+| 目录                            | 说明                                                                                                                                                                                                                               |
+|---------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `dsh-code-card-fonts`           | 卡片标题 / 摘要行 / 展开内容 / 代码块 / 内联代码 / Markdown 表格单元格统一 14px，卡片间距 7px；内容字号轴不受影响，设置里的「字号大小」仍可调                                                                                      |
+| `dsh-directory-picker-browse`   | 纯补丁插件：停用上游 auto 目录选择器，挂载 browse 变体；不触碰上游 `ui-deliverables`                                                                                                                                               |
+| `dsh-fullwidth-chat`            | 对话列全宽展示                                                                                                                                                                                                                     |
+| `dsh-git-guard`                 | 敏感 git 操作（`git commit`、`git push`，以及 force push 与 rebase / merge / cherry-pick / reset --hard / revert / am / filter-branch / filter-repo 等）一律需用户授权，本插件不直接拒绝；完全权限（danger-full-access）下整体退出 |
+| `dsh-kbd-hotkeys`               | 全局快捷键：审批 / 问答键盘化、左右栏开关、右栏标签切换 / 关闭 / 文件浏览器与终端定位、新建会话、活跃会话跳转、工作区 / 近期对话 / 模型浮窗、思考强度循环、聚焦输入框、⌘/ 速查表                                                   |
+| `dsh-rightbar-tab-width`        | 右栏 tab 胶囊定宽 100px（= 上游地板值，分栏判定与上游默认一致）                                                                                                                                                                    |
+| `dsh-sidebar-default-collapsed` | 左侧边栏默认关闭：每次加载页面时读活布局 store 后一次性收起（宽窗才写；窄窗上游本就收起），判定标记在 `window` 上，不重复插手用户的手动开关                                                                                        |
 
 跨插件的工程规范（包结构、挂载机制、生效机制、构建与验证、共性注意事项）见
 [`AGENTS.md`](AGENTS.md)；各插件的功能与已知限制见其目录内 `README.md`。
@@ -55,8 +55,7 @@ dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse 
 
 ## 重复执行与代码变更
 
-`link:` 依赖已存在时重复执行是幂等 no-op；`link:` 实时指向本仓库目录，之后修改插件代码
-**无需重装**：
+`link:` 依赖已存在时重复执行是幂等 no-op；`link:` 实时指向本仓库目录，之后修改插件代码 **无需重装**：
 
 - 浏览器半部改动：在插件目录执行其 `build` 脚本，产物 mtime 变化后由 client-hmr 在
   500ms 内热推送（页面无需重启 / 刷新，只要页面打开）；

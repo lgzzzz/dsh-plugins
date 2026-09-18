@@ -719,7 +719,7 @@ var ACTIONS = [
   { id: "sidebarRight.files", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u6587\u4EF6\u6D4F\u89C8\u5668(\u4E0D\u5B58\u5728\u5219\u521B\u5EFA)\u5E76\u7F6E\u9876", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 定位终端但不去重、不置顶,故先读 store 认页
   { id: "sidebarRight.terminal", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u7EC8\u7AEF\u5E76\u805A\u7126(\u4E0D\u5B58\u5728\u5219\u65B0\u5EFA)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  // 关当前标签;上游拒关「独占停靠的 guide」,被拒即 no-op 不吞键
+  // 关当前标签;上游拒关「独占停靠的 guide」时只 no-op——该键位恒吞,不留给浏览器
   { id: "sidebarRight.closeTab", label: "\u53F3\u4FA7\u680F:\u5173\u95ED\u5F53\u524D\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 等同侧栏「新建会话」按钮(uiWorkspace.startSession)
   { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD\u5E76\u8DF3\u8F6C", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
@@ -758,7 +758,7 @@ var DEFAULT_BINDINGS = {
   "sidebarRight.files": "mod+\\",
   // 浏览器保留键(聚焦地址栏)
   "sidebarRight.terminal": "mod+l",
-  // 逗号 = 关闭标签;按 code 判定(Comma),不受布局影响
+  // 逗号 = 关闭标签;按 code 判定(Comma),不受布局影响;无可关标签也吞键(键位不留给浏览器)
   "sidebarRight.closeTab": "mod+,",
   // 浏览器保留键(新建窗口)
   "session.new": "mod+n",
@@ -2228,6 +2228,11 @@ function apply(ctx) {
     const def = ACTION_BY_ID.get(actionId);
     if (def === void 0) return;
     if (!def.states.includes(state)) return;
+    if (actionId === "sidebarRight.closeTab") {
+      runAction(actionId, services, overlays);
+      swallow(event);
+      return;
+    }
     if (actionId === "model.effortNext" && state === "editing" && !isComposerTarget(services, event.target)) return;
     if (actionId === "composer.focus" && state === "editing" && isComposerTarget(services, event.target)) {
       swallow(event);

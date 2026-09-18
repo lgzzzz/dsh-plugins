@@ -20,7 +20,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `⌘/Ctrl+B` | 开关**左**侧栏（`layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+O` | 开关**右**侧栏（`sidebarRight.toggleExpanded`） | `browse` / `editing` |
 | `⌘/Ctrl+Alt+←` / `→` | 右栏当前面板的标签：上一个 / 下一个（循环；单标签不吞键） | 任意 |
-| `⌘/Ctrl+,` | 右栏关闭当前面板的**当前标签**（上游拒关独占停靠的引导页时不吞键） | 任意 |
+| `⌘/Ctrl+,` | 右栏关闭当前面板的**当前标签**（无可关标签时只 no-op，但键位恒被吞、不留给浏览器） | 任意 |
 | `⌘/Ctrl+\` | 右栏定位文件浏览器：打开 / 聚焦该页并置顶（同时展开右栏） | 任意 |
 | `⌘/Ctrl+L` | 右栏定位终端：已有终端则聚焦（多个终端时优先当前激活的那个，没有当前激活的落第一个）并把 DOM 焦点移进 xterm，一个都没有才新建；**不重排** | 任意 |
 | `⌘/Ctrl+J` | 聚焦对话输入框（J = Jump）；`editing` 时需焦点**不在** composer 内 | `browse` / `editing` |
@@ -39,6 +39,9 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 - 审批与问答的 `Enter`/`Esc`/数字键/方向键是**固定分发的单键**，不参与 `bindings` 自定义。
 - 活跃会话 = 正在运行（`running`）∪ 有待处理交互 ∪ 刚完成未查看（`uiSession.sessionStatus` 的 `completionUnread`）。
 - `Esc` 双职责：有审批卡片时拒绝并吞键；否则只停止运行中的会话树，**不吞键**。
+- **`⌘/Ctrl+,`（关标签）恒吞键**：该键位完全归插件——没有当前标签、上游拒关独占停靠的引导页、
+  右栏 / store 链路整条不可用时都只 no-op，仍照常 `preventDefault`，浏览器不会因它执行
+  「打开设置」等默认行为。其余动作仍遵循「no-op 不吞键」。
 
 ## 动作触发路径（服务 / DOM）
 
@@ -58,7 +61,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `sidebar.toggle` | `layout.toggleSidebar()`（宽屏在默认宽与 0 间切换，窄屏翻转 `narrowExpanded`） |
 | `sidebarRight.toggle` | `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；右侧 seat 自行同步 AppFrame 轨道） |
 | `sidebarRight.tabPrev` / `tabNext` | 右栏会话级 slot store：`slots.entries('rightbar.session')` → 会话作用域绑定（`src/scope-binding.ts`）→ `slots.resolveStore` → `bySession[sid].layout` 的 `activePaneId` 面板 `tabs`/`activeTabId`；切换调 `sidebarRight.focus(tabId)`。**只在当前面板内循环**，单标签 / 无面板 no-op 不吞键 |
-| `sidebarRight.closeTab` | 与切标签同源取当前面板当前标签，调 `sidebarRight.close(tabId)`；调完回读同一活实例确认标签已从 `layout.tabs` 消失，仍在（上游拒关 / 服务面在别的会话）即 no-op 不吞键 |
+| `sidebarRight.closeTab` | 与切标签同源取当前面板当前标签，调 `sidebarRight.close(tabId)`；调完回读同一活实例确认标签已从 `layout.tabs` 消失，仍在（上游拒关 / 服务面在别的会话）即只 no-op——**吞键与动作结果无关**（见下） |
 | `sidebarRight.files` | `sidebarRight.openTab('files')`（按目标面板去重：已有则聚焦、没有则创建；`openContent` 恒先展开右栏）；再经同一 store 的 `actions.placeTab(sessionId, tabId, paneId, 0)` 置顶（与标签拖拽同一入口，**不用** `replaceTab`）；已在首位不调用 |
 | `sidebarRight.terminal` | 终端是 `multiple: true` 页、上游每次 `openTab` 铸带 UUID 的 `contentId`、**不按 (kind, contentId) 去重**，故认页由插件读 store 完成（`record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先，再扫其余**停靠**面板，浮窗不参与）。**已有** → `sidebarRight.focus(tabId)`；`layout.expanded === false` 时补 `toggleExpanded()`；若该终端本来就是所在面板的当前标签且右栏已展开，再按 `paneId` 做元素级聚焦。**没有** → `openTab('terminal')` 新建（上游自动聚焦）。**不重排、不置顶** |
 | `composer.focus` | 当前会话（`uiSession.current`）→ `sessions.binding(id).ctx` → `conversation.input.for(actx)`（缺席回退 `InputHub.shell(id)`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。`editing` 态另有 `contains` 门闸：焦点已在 composer 内则不重复聚焦但**仍吞键** |
@@ -144,8 +147,9 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   （新建窗口）最硬：多数浏览器**不把该键派发给页面**，Win/Linux 可能始终打开新窗口
   （macOS `⌃N` 通常可用）。不生效时用 `localStorage` 改绑。
 - **`⌘/Ctrl+,` 在 macOS 上可能被菜单截获**：`⌘,` 是 Chrome / Safari 的「设置 / 偏好设置」
-  菜单键，与 `⌘N` 同理（菜单键先由菜单系统消费，可能不派发给页面）；`⌃,` 通常可用
-  （`mod` 兼收 `ctrlKey`）。被截获时用 `localStorage` 改绑。
+  菜单键，与 `⌘N` 同理（菜单键先由菜单系统消费，可能不派发给页面；页面收不到 `keydown`
+  时插件的 `preventDefault` 无从生效）；`⌃,` 通常可用（`mod` 兼收 `ctrlKey`）。被截获时用
+  `localStorage` 改绑。
 - **`⌘/Ctrl+L` 与终端清屏同键**：焦点在右栏终端时 `Ctrl+L` 被插件抢走，清屏可用
   shell 的 `clear`。
 - **`⌘/Ctrl+I` 抢走 contenteditable 的斜体**；**`⌘/Ctrl+J` 抢走终端的 `⌃J`**（= LF，
@@ -160,7 +164,8 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   composer 被 block）时 `getRootElement()` 为 `null`，动作 no-op 不吞键。
 - **右栏动作依赖右栏已挂载且该会话开过面板**：`rightbar.session` 注册项、会话级 store、
   `bySession[sessionId]` 任一缺失即 no-op 不吞键（可先按 `⌘/Ctrl+O` 展开一次）。
-  标签切换 / 关闭只覆盖**当前面板**，单标签与「独占停靠的引导页」均不吞键。
+  标签切换只覆盖**当前面板**，单标签不吞键；**关闭标签（`⌘/Ctrl+,`）是唯一例外**：上述
+  任一环缺失、独占停靠的引导页被上游拒关、面板内没有当前标签，都照样吞键。
 - **文件浏览器置顶只作用于它所在的停靠面板**（优先当前面板）；上游「页唯一性按面板」，
   跨面板可能各有一份；极窄窗口下右栏会被上游再折叠回去。
 - **终端定位不重排、不置顶**；多个终端时优先当前激活的那个，没有当前激活的落第一个（面板内

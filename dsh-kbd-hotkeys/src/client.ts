@@ -57,7 +57,7 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         // 终端:上游不去重,认页由 sidebar-tabs 完成
         return revealRightSidebarTerminal(services)
       case 'sidebarRight.closeTab':
-        // 关当前标签:上游自带拒绝(独占 guide)时读回布局判定,no-op 不吞键
+        // 关当前标签:上游自带拒绝(独占 guide)时读回布局判定;返回值被分发器忽略(该键位恒吞)
         return closeRightSidebarTab(services)
       case 'composer.focus':
         return focusComposer(services)
@@ -206,6 +206,12 @@ export function apply(ctx: ClientContext): void {
     if (def === undefined) return
     // 态闸门:仅动作声明的状态触发
     if (!def.states.includes(state)) return
+    // ⌘/Ctrl+,:该键位恒归插件——没有可关的标签也吞键(macOS 的 ⌘, 是浏览器「设置」)
+    if (actionId === 'sidebarRight.closeTab') {
+      runAction(actionId, services, overlays)
+      swallow(event)
+      return
+    }
     // ⇧Tab 是编辑核心键,editing 仅在 composer 内接管
     if (actionId === 'model.effortNext' && state === 'editing' && !isComposerTarget(services, event.target)) return
     // ⌘J:焦点不在 composer 才聚焦;在 composer 内仍吞键(浏览器 Ctrl+J = 下载页)

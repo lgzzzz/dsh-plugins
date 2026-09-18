@@ -30,7 +30,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'sidebarRight.files', label: '右侧栏:定位文件浏览器(不存在则创建)并置顶', group: '会话', states: ['card', 'editing', 'browse'] },
   // 定位终端但不去重、不置顶,故先读 store 认页
   { id: 'sidebarRight.terminal', label: '右侧栏:定位终端并聚焦(不存在则新建)', group: '会话', states: ['card', 'editing', 'browse'] },
-  // 关当前标签;上游拒关「独占停靠的 guide」,被拒即 no-op 不吞键
+  // 关当前标签;上游拒关「独占停靠的 guide」时只 no-op——该键位恒吞,不留给浏览器
   { id: 'sidebarRight.closeTab', label: '右侧栏:关闭当前标签', group: '会话', states: ['card', 'editing', 'browse'] },
   // 等同侧栏「新建会话」按钮(uiWorkspace.startSession)
   { id: 'session.new', label: '新建会话并跳转', group: '会话', states: ['card', 'editing', 'browse'] },
@@ -74,7 +74,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'sidebarRight.files': 'mod+\\',
   // 浏览器保留键(聚焦地址栏)
   'sidebarRight.terminal': 'mod+l',
-  // 逗号 = 关闭标签;按 code 判定(Comma),不受布局影响
+  // 逗号 = 关闭标签;按 code 判定(Comma),不受布局影响;无可关标签也吞键(键位不留给浏览器)
   'sidebarRight.closeTab': 'mod+,',
   // 浏览器保留键(新建窗口)
   'session.new': 'mod+n',

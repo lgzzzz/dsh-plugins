@@ -1223,21 +1223,21 @@ console.log('\n--- ⌘/Ctrl+, → 右侧栏关闭当前标签 ---')
   check('多面板时关当前面板的当前标签 t3', same(twoEnv.closed, ['t3']), JSON.stringify(twoEnv.closed))
   check('另一个面板的标签不受影响', same(twoEnv.tabs(), ['t1', 't2']), JSON.stringify(twoEnv.tabs()))
 
-  // 未被激活的标签不关(当前标签缺失 → no-op 不吞键)
+  // 未被激活的标签不关(当前标签缺失 → no-op,但键位恒吞:不留给浏览器)
   const noActive = makeCloseStore()
   noActive.seed(layoutClose({ nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t1', 't2'], activeTabId: 'nope' } } }))
   const noActiveEnv = env(noActive)
   event = noActiveEnv.press({ key: ',', code: 'Comma', ctrlKey: true })
   check('activeTabId 失配 → 不调 close', same(noActiveEnv.closed, []), JSON.stringify(noActiveEnv.closed))
-  check('activeTabId 失配 → 不吞键', event.propagationStopped !== true)
+  check('activeTabId 失配 → 仍吞键', event.propagationStopped === true)
 
-  // 独占停靠的 guide:上游拒关 → 不吞键
+  // 独占停靠的 guide:上游拒关 → 只 no-op,仍吞键
   const soleGuide = makeCloseStore()
   soleGuide.seed(layoutClose({ nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t1'], activeTabId: 't1' } }, tabs: { t1: { id: 't1', kind: 'guide' } } }))
   const soleGuideEnv = env(soleGuide)
   event = soleGuideEnv.press({ key: ',', code: 'Comma', ctrlKey: true })
   check('独占停靠的 guide → 标签未消失', same(soleGuideEnv.closed, ['t1']) && same(soleGuideEnv.tabs(), ['t1']), JSON.stringify(soleGuideEnv.tabs()))
-  check('独占停靠的 guide → 不吞键', event.propagationStopped !== true)
+  check('独占停靠的 guide → 仍吞键', event.propagationStopped === true)
 
   // guide 不是独占(面板里还有别的标签)→ 可以关
   const guideWithPeer = makeCloseStore()
@@ -1247,21 +1247,21 @@ console.log('\n--- ⌘/Ctrl+, → 右侧栏关闭当前标签 ---')
   check('guide 与其它标签共存时可关', same(peerEnv.closed, ['t1']) && same(peerEnv.tabs(), ['t2']), JSON.stringify(peerEnv.tabs()))
   check('guide 与其它标签共存时吞键', event.propagationStopped === true)
 
-  // 面板无标签 / 非 pane 节点 / 该会话尚无布局:全部 no-op
+  // 面板无标签 / 非 pane 节点 / 该会话尚无布局:全部 no-op,但都吞键
   const noTabs = makeCloseStore()
   noTabs.seed(layoutClose({ nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: [], activeTabId: undefined } } }))
   event = env(noTabs).press({ key: ',', code: 'Comma', ctrlKey: true })
-  check('面板无标签 → 不吞键', event.propagationStopped !== true)
+  check('面板无标签 → 仍吞键', event.propagationStopped === true)
   const notPane = makeCloseStore()
   notPane.seed(layoutClose({ nodes: { 'pane-1': { kind: 'split' } } }))
   event = env(notPane).press({ key: ',', code: 'Comma', ctrlKey: true })
-  check('activePaneId 指向非 pane 节点 → 不吞键', event.propagationStopped !== true)
+  check('activePaneId 指向非 pane 节点 → 仍吞键', event.propagationStopped === true)
   const otherSession = makeCloseStore()
   otherSession.seed(layoutClose(), 'sess-other')
   event = env(otherSession).press({ key: ',', code: 'Comma', ctrlKey: true })
-  check('该会话尚无布局 → 不吞键', event.propagationStopped !== true)
+  check('该会话尚无布局 → 仍吞键', event.propagationStopped === true)
 
-  // 无降级:服务 / 注册项 / store / close 面任一环不可用 → no-op 且不吞键
+  // 无降级:服务 / 注册项 / store / close 面任一环不可用 → no-op,但键位恒吞(不留给浏览器)
   const noopCases = [
     ['sidebarRight 缺席', { sidebarRight: undefined }],
     ['sidebarRight 无 close', { sidebarRight: { toggleExpanded() {}, focus() {} } }],
@@ -1283,7 +1283,7 @@ console.log('\n--- ⌘/Ctrl+, → 右侧栏关闭当前标签 ---')
   for (const [label, extra] of noopCases) {
     const envCase = env(makeCloseStore(), extra)
     const pressed = envCase.press({ key: ',', code: 'Comma', ctrlKey: true })
-    check(`${label} → 不吞键(no-op)`, pressed.propagationStopped !== true)
+    check(`${label} → 仍吞键(no-op)`, pressed.propagationStopped === true)
   }
 
   // editing / card 态同样可用:mod+, 与卡片裸键、文本编辑都不冲突
