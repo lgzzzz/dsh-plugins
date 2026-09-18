@@ -30,7 +30,7 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 
 ## 插件清单
 
-仓库含 **8 个插件目录**。每个插件在 web Profile 中对应 **1 条 `link:` 依赖**与
+仓库含 **7 个插件目录**。每个插件在 web Profile 中对应 **1 条 `link:` 依赖**与
 **1 项 `dsh.profile.bundles`**（bundles 另含 2 个上游 bundle：`@deepseek-ai/dsh-base`、
 `@deepseek-ai/dsh-web-app`）。
 
@@ -68,7 +68,7 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 
 - 每个插件都必须带 `insert` 挂载行；纯补丁插件可直接 `disabled` / `insert` 修改组合
   （见 `dsh-directory-picker-browse`）。
-- 宿主半部依赖宿主服务时在该行声明 `inject`；当前没有插件需要。
+- 宿主半部依赖宿主服务时在该行声明 `inject`；当前没有插件需要（各挂载行均无 `inject`）。
 - **宿主入口必须存在且可解析**：即使插件是纯浏览器半部（`dsh-code-card-fonts`、
   `dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`、`dsh-sidebar-default-collapsed`），其
   `exports["."]` 指向的 `index.ts` 也必须是合法加载项（当前为空宿主 `apply() {}`）
@@ -76,9 +76,9 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务由挂载行 `inject`
   声明；浏览器半部按需 `export const inject = [...]`（由模块加载器读取）。
 
-宿主半部：TypeScript 写在 `index.ts`（可拆分多文件），由
-Node 22 Type Stripping 直接加载；相对导入须携带 `.ts` 扩展名；仅允许可擦除语法
-（不使用 enum、命名空间、参数属性），由 `tsconfig.json` 的 `erasableSyntaxOnly` 强制。
+宿主半部：TypeScript 写在 `index.ts`（需要时可拆成多文件），由 Node 22 Type Stripping
+直接加载；相对导入须携带 `.ts` 扩展名；仅允许可擦除语法（不使用 enum、命名空间、参数
+属性），由 `tsconfig.json` 的 `erasableSyntaxOnly` 强制。
 
 浏览器半部：TypeScript 写在 `src/`，`scripts/` 用 esbuild 打包成经
 `window.__ModuleLoader__.load({ id, factory })` 包装的单文件 `lib/client.js`（入仓）。
@@ -169,8 +169,8 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
   Node 运行时、不依赖 `node_modules`。
 - 部分类型包（`dsh-client-ui-slots`、`dsh-client-ui-primitives`）不在内置 bundle 中，
   故启用 `skipLibCheck`，并在源码中自行声明结构切片类型（模板：
-  `dsh-kbd-hotkeys/src/types.ts`，仅覆盖实际消费的字段，
-  以上游 `lib` 源码为准）。
+  `dsh-kbd-hotkeys/src/types.ts`、`dsh-sidebar-default-collapsed/src/types.ts`，仅覆盖
+  实际消费的字段，以上游 `lib` 源码为准）。
 - 宿主 TypeScript 中 `import type` 在 Type Stripping 下被擦除，运行时无 cordis 依赖；
   `devDependencies` 仅供语言服务器与类型检查使用。
 

@@ -1,6 +1,6 @@
 # dsh-plugins — DSH Web 本地插件仓库
 
-本仓库包含 **8 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**：每个插件是
+本仓库包含 **7 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**：每个插件是
 一个自包含的本地 npm 包，经 web Profile 的 `link:` 依赖挂载进正在运行的应用。
 
 仓库根 **不作为「一个插件」整体安装**（没有集合包、也没有根 `cordis.patch.yml`，
@@ -35,7 +35,9 @@ cd <仓库根>/<name> && dsh plugin --profile web add link:.   # 或在任意目
 `dsh plugin` 转发 `pnpm add` 后会自动核对 `dsh.profile.bundles`：声明了
 `dsh.bundle.patch` 的依赖自动并入 bundle 列表，无需手改 Profile 清单。
 
-挂载前确保插件产物就绪：`lib/*.js` 已入仓，可直接挂载。
+挂载前确保插件产物就绪：`lib/*.js` 已入仓，可直接挂载；如需重新构建，进入插件目录执行
+`npm install && npm run build`（浏览器半部产物变更由 client-hmr 在 500ms 内热推送，
+无需重启）。
 
 装入其它 Profile：把 `--profile web` 换成目标 Profile 名。
 
