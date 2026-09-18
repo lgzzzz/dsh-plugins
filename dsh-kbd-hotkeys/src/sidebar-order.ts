@@ -1,5 +1,6 @@
 /** 侧栏可见顺序复刻:分组 + 组内本地顺序账号(slot store,root 作用域)+ 可见性;权威来源读不到即空轴(无降级)。 */
 import { compareRecency, sessionVisible } from './session-order.ts'
+import { currentSessionId } from './session-view.ts'
 import type {
   Services,
   SessionListSnapshotLike,
@@ -30,7 +31,8 @@ export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, serv
   if (workspaceSnapshot === undefined) return []
 
   const byId = snapshot.byId ?? {}
-  const current = snapshot.current
+  // 当前会话来自视图层(0.1.6-alpha.2 起 sessions.list 快照不再带 current);读不到即 undefined
+  const current = currentSessionId(services)
   const archived = new Set<string>(workspaceSnapshot.archivedSessionIds ?? [])
   const order = view.sessionOrderByAccount
 

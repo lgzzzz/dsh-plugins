@@ -1,6 +1,7 @@
 /** 近期对话浮窗(⌘/Ctrl+I)的数据面与打开落点(浮窗 DOM 在 overlay.ts)。
- * 列表按工作区分组、全局最多 10 行、当前会话强制纳入;打开走 uiWorkspace.openSession(回退 sessions.open,均以方法形式调用);无降级。 */
+ * 列表按工作区分组、全局最多 10 行、当前会话强制纳入;打开只走 uiWorkspace.openSession(方法形式调用);无降级。 */
 import { recencyOrder, sessionVisible } from './session-order.ts'
+import { completionUnread, currentSessionId } from './session-view.ts'
 import { readWorkspaceSnapshot } from './sidebar-order.ts'
 import { pathBasename } from './workspace-switcher.ts'
 import type {
@@ -29,7 +30,8 @@ export function recentSessionsView(services: Services): RecentSessionsViewLike {
     return emptyView()
   }
 
-  const current = snapshot?.current
+  // 当前会话来自视图层(0.1.6-alpha.2 起 sessions.list 快照不再带 current)
+  const current = currentSessionId(services)
   const pending = pendingSessionIds(services)
   const workspaceSnapshot = readWorkspaceSnapshot(services)
   const archived = new Set<string>(workspaceSnapshot?.archivedSessionIds ?? [])
@@ -80,7 +82,7 @@ export function recentSessionsView(services: Services): RecentSessionsViewLike {
   for (const bucket of buckets) {
     const members = bucket.members.filter((id) => kept.has(id))
     if (members.length === 0) continue
-    const groupRows = recencyOrder(members, byId).map((id) => sessionRow(id, byId[id], current, pending))
+    const groupRows = recencyOrder(members, byId).map((id) => sessionRow(id, byId[id], current, pending, services))
     groups.push({ workspaceId: bucket.workspaceId, label: bucket.label, rows: groupRows })
     rows.push(...groupRows)
   }
@@ -94,25 +96,16 @@ export function recentSessionsView(services: Services): RecentSessionsViewLike {
   }
 }
 
-/** 任意态;打开选中会话:优先 uiWorkspace.openSession,缺失 / 抛错回退 sessions.open。
- * 两者都是上游类实例原型方法,必须以方法形式调用(摘下丢 this 抛 TypeError)。 */
+/** 任意态;打开选中会话:只走 uiWorkspace.openSession(与侧栏点会话行同一路径);
+ * 是上游类实例原型方法,必须以方法形式调用(摘下丢 this 抛 TypeError);不可用即 no-op。 */
 export function openRecentSession(services: Services, sessionId: string): boolean {
   if (typeof sessionId !== 'string' || sessionId === '') return false
   const uiWorkspace = services.uiWorkspace
   const openSession = uiWorkspace?.openSession
-  if (uiWorkspace !== null && uiWorkspace !== undefined && typeof openSession === 'function') {
-    try {
-      // 与侧栏点会话行同一路径（含 layout.selectPanel(null)）。
-      openSession.call(uiWorkspace, sessionId)
-      return true
-    } catch {
-    }
-  }
-  const sessions = services.sessions
-  const open = sessions?.open
-  if (sessions === null || sessions === undefined || typeof open !== 'function') return false
+  if (uiWorkspace === null || uiWorkspace === undefined || typeof openSession !== 'function') return false
   try {
-    open.call(sessions, sessionId)
+    // 与侧栏点会话行同一路径（含 layout.selectPanel(null)）。
+    openSession.call(uiWorkspace, sessionId)
     return true
   } catch {
     return false
@@ -135,6 +128,7 @@ function sessionRow(
   summary: SessionSummaryLike | undefined,
   current: string | undefined,
   pending: ReadonlySet<string>,
+  services: Services,
 ): RecentSessionRowLike {
   const label = titleOf(summary, id)
   const cwd = typeof summary?.cwd === 'string' ? summary.cwd.trim() : ''
@@ -144,7 +138,8 @@ function sessionRow(
     detail: cwd === label ? '' : cwd,
     current: id === current,
     running: summary?.running === true,
-    completed: summary?.completed === true,
+    // 完成未读来自 uiSession.sessionStatus(替代已删除的 summary.completed)
+    completed: completionUnread(services, id),
     pending: pending.has(id),
   }
 }

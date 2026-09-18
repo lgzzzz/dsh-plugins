@@ -125,7 +125,7 @@ export function apply(ctx: ClientContext): void {
     selectWorkspace: (workspaceId) => {
       switchWorkspace(services, workspaceId)
     },
-    // 近期对话:现取快照;openSession 缺失回退 sessions.open
+    // 近期对话:现取快照;打开只走 uiWorkspace.openSession
     listRecentSessions: () => recentSessionsView(services),
     selectRecentSession: (sessionId) => {
       openRecentSession(services, sessionId)

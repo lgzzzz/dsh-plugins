@@ -1,6 +1,6 @@
 /** 模型浮窗(⌘/Ctrl+M)与思考强度循环(⇧Tab)的数据面与动作。
  * 共用 ctx.modelDirectories.directoryFor(session) 的 per-session 目录(与 /model 弹层、composer 座位同源);无降级。 */
-import { currentSessionId } from './actions.ts'
+import { currentSessionId } from './session-view.ts'
 import type {
   EffortCycleResultLike,
   ModelCatalogModelLike,

@@ -13,6 +13,7 @@ import type {
 } from './types.ts'
 import { clearProgress, questionDraftStore, readProgress, writeProgress } from './question-drafts.ts'
 import { sidebarOrderedSessionIds } from './sidebar-order.ts'
+import { completionUnread, currentSessionId } from './session-view.ts'
 
 /* 服务级：待处理交互读取（card 态判定与审批 / 问答载体） */
 
@@ -23,11 +24,6 @@ function pendingMap(services: Services): ReadonlyMap<string, PendingInteractionL
   const snapshot = uiSession.pendingInteractions?.getSnapshot?.()
   if (snapshot !== undefined) return snapshot
   return uiSession.pendingSnapshot
-}
-
-export function currentSessionId(services: Services): string | undefined {
-  const current = services.sessions?.list?.getSnapshot?.()?.current
-  return current === undefined || current === '' ? undefined : current
 }
 
 /** card 态判定：当前会话有无待处理交互（服务级，不受渲染时序影响）。 */
@@ -346,7 +342,8 @@ export function stopCurrentSessionTree(services: Services): boolean {
   const sessions = services.sessions
   const snapshot = sessions?.list?.getSnapshot?.()
   if (sessions === null || sessions === undefined || snapshot === null || snapshot === undefined) return false
-  const current = snapshot.current
+  // 当前会话来自视图层(0.1.6-alpha.2 起 sessions.list 快照不再带 current)
+  const current = currentSessionId(services)
   if (current === undefined || current === '') return false
   const cancelled = new Set<string>()
   const visit = (id: string | undefined, seen: Set<string>): void => {
@@ -390,17 +387,14 @@ export function openNeighborSession(services: Services, delta: number): boolean 
   const sessions = services.sessions
   const snapshot = sessions?.list?.getSnapshot?.()
   if (sessions === null || sessions === undefined || snapshot === null || snapshot === undefined) return false
-  if (
-    snapshot.ids === undefined ||
-    snapshot.ids.length === 0 ||
-    snapshot.byId === undefined ||
-    typeof sessions.open !== 'function'
-  ) {
-    return false
-  }
+  if (snapshot.ids === undefined || snapshot.ids.length === 0 || snapshot.byId === undefined) return false
+  // 打开会话的选择权 0.1.6-alpha.2 起在 uiWorkspace（与侧栏点会话行同一入口）；sessions.open 已删除。
+  const uiWorkspace = services.uiWorkspace
+  const openSession = uiWorkspace?.openSession
+  if (uiWorkspace === null || uiWorkspace === undefined || typeof openSession !== 'function') return false
   const axis = sidebarOrderedSessionIds(snapshot, services)
   if (axis.length === 0) return false
-  const current = snapshot.current
+  const current = currentSessionId(services)
   const anchor = current === undefined ? -1 : axis.indexOf(current)
   if (anchor < 0) return false
   const active = activeSessionIds(snapshot, services)
@@ -408,21 +402,25 @@ export function openNeighborSession(services: Services, delta: number): boolean 
     const id = axis[i]
     if (id === undefined) continue
     if (active.has(id)) {
-      sessions.open(id)
-      return true
+      try {
+        openSession.call(uiWorkspace, id)
+        return true
+      } catch {
+        return false
+      }
     }
   }
   return false
 }
 
-/** 活跃会话 id 集合：running ∪ 待处理交互命中 ∪ completed。 */
+/** 活跃会话 id 集合：running ∪ 待处理交互命中 ∪ 完成未读（completionUnread，替代已删除的 summary.completed）。 */
 function activeSessionIds(snapshot: SessionListSnapshotLike, services: Services): ReadonlySet<string> {
   const pending = pendingMap(services)
   const active = new Set<string>()
   for (const id of snapshot.ids ?? []) {
     const summary = snapshot.byId?.[id]
     if (summary === undefined) continue
-    if (summary.running === true || summary.completed === true || (pending !== undefined && pending.has(id))) {
+    if (summary.running === true || completionUnread(services, id) || (pending !== undefined && pending.has(id))) {
       active.add(id)
     }
   }

@@ -26,7 +26,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `⌘/Ctrl+J` | 聚焦对话输入框（J = Jump）；`editing` 时需焦点**不在** composer 内 | `browse` / `editing` |
 | `⌘/Ctrl+N` | 新建会话并跳转（`uiWorkspace.startSession()`，同侧栏「新建会话」按钮） | 任意 |
 | `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话**（沿侧栏顺序） | 任意 |
-| `⌘/Ctrl+K` | 工作区浮窗（`↑`/`↓` 选择、`Enter` 切换、`Esc` 关闭） | 任意 |
+| `⌘/Ctrl+K` | 工作区浮窗：最近活跃的 10 个工作区（`↑`/`↓` 选择、`Enter` 切换、`Esc` 关闭） | 任意 |
 | `⌘/Ctrl+I` | 近期对话浮窗：最近交互的 10 个会话、按工作区分组（`↑`/`↓` 跨组、`Enter` 打开） | 任意 |
 | `⌘/Ctrl+M` | 模型浮窗（`↑`/`↓` 选择、`Enter` 切换、`⇧Tab` 调强度、`Esc` 关闭） | 任意 |
 | `⇧Tab` | 循环切换当前模型的思考强度（无强度档 / 只有一档 / 目录不可用即 no-op 不吞键） | `browse` / `editing`（`editing` 需焦点在 composer 内） |
@@ -37,7 +37,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   `M` 模型、`N` 新建会话、`J` 焦点跳转、`\` 文件浏览器、`L` 终端、`.` 关标签、`/` 速查表）；
   **`mod+alt` 留给导航**（`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
 - 审批与问答的 `Enter`/`Esc`/数字键/方向键是**固定分发的单键**，不参与 `bindings` 自定义。
-- 活跃会话 = 正在运行（`running`）∪ 有待处理交互 ∪ 刚完成未查看（`completed`）。
+- 活跃会话 = 正在运行（`running`）∪ 有待处理交互 ∪ 刚完成未查看（`uiSession.sessionStatus` 的 `completionUnread`）。
 - `Esc` 双职责：有审批卡片时拒绝并吞键；否则只停止运行中的会话树，**不吞键**。
 
 ## 动作触发路径（服务 / DOM）
@@ -61,14 +61,14 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `sidebarRight.closeTab` | 与切标签同源取当前面板当前标签，调 `sidebarRight.close(tabId)`；调完回读同一活实例确认标签已从 `layout.tabs` 消失，仍在（上游拒关 / 服务面在别的会话）即 no-op 不吞键 |
 | `sidebarRight.files` | `sidebarRight.openTab('files')`（按目标面板去重：已有则聚焦、没有则创建；`openContent` 恒先展开右栏）；再经同一 store 的 `actions.placeTab(sessionId, tabId, paneId, 0)` 置顶（与标签拖拽同一入口，**不用** `replaceTab`）；已在首位不调用 |
 | `sidebarRight.terminal` | 终端是 `multiple: true` 页、上游每次 `openTab` 铸带 UUID 的 `contentId`、**不按 (kind, contentId) 去重**，故认页由插件读 store 完成（`record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先，再扫其余**停靠**面板，浮窗不参与）。**已有** → `sidebarRight.focus(tabId)`；`layout.expanded === false` 时补 `toggleExpanded()`；若该终端本来就是所在面板的当前标签且右栏已展开，再按 `paneId` 做元素级聚焦。**没有** → `openTab('terminal')` 新建（上游自动聚焦）。**不重排、不置顶** |
-| `composer.focus` | `sessions.list` 快照 `current` → `sessions.binding(id).ctx` → `conversation.input.for(actx)`（缺席回退 `InputHub.shell(id)`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。`editing` 态另有 `contains` 门闸：焦点已在 composer 内则不重复聚焦但**仍吞键** |
+| `composer.focus` | 当前会话（`uiSession.current`）→ `sessions.binding(id).ctx` → `conversation.input.for(actx)`（缺席回退 `InputHub.shell(id)`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。`editing` 态另有 `contains` 门闸：焦点已在 composer 内则不重复聚焦但**仍吞键** |
 | `session.new` | `uiWorkspace.startSession()`（无参）；不触碰 composer 草稿 |
-| `session.prev` / `next` | `sessions.list` 快照 + `sidebar.workspaces` 注册项的侧栏视图 store（顺序，root 作用域传 `undefined`）→ `sessions.open(id)`。锚点不在可见轴 / 方向尽头无活跃会话即 no-op；顺序读不到**不跳转**（无降级） |
-| `session.recent` | 插件自建浮窗。列表 = `sessions.list` 快照 + `workspaces.list` 快照分组 + `src/session-order.ts`；`Enter`/点击调 `uiWorkspace.openSession(sessionId)`（缺席回退 `sessions.open`，两者都必须以**方法**形式调用） |
-| `workspace.pick` | 插件自建浮窗。列表 = `workspaces.list.getSnapshot().items` 宿主顺序；`Enter`/点击调 `uiWorkspace.openWorkspace(workspaceId)`（= 侧栏分组「＋」的连接工作区路径） |
+| `session.prev` / `next` | `sessions.list` 快照 + `sidebar.workspaces` 注册项的侧栏视图 store（顺序，root 作用域传 `undefined`）；锚点 = 当前会话（`uiSession.current`），跳转调 `uiWorkspace.openSession(id)`（`sessions.open` 自 0.1.6-alpha.2 起已删除）。锚点不在可见轴 / 方向尽头无活跃会话即 no-op；顺序读不到**不跳转**（无降级） |
+| `session.recent` | 插件自建浮窗。列表 = `sessions.list` 快照 + `workspaces.list` 快照分组 + `src/session-order.ts`；`Enter`/点击调 `uiWorkspace.openSession(sessionId)`（必须以**方法**形式调用；无回退，`sessions.open` 已删除） |
+| `workspace.pick` | 插件自建浮窗。列表 = `workspaces.list` 快照 + `sessions.list` 快照派生（按组内可见会话最新的 `updatedAt` 降序取前 10，当前工作区强制保留；见 `src/workspace-switcher.ts`）；`Enter`/点击调 `uiWorkspace.openWorkspace(workspaceId)`（= 侧栏分组「＋」的连接工作区路径） |
 | `model.pick` | 插件自建浮窗。`ctx.modelDirectories.directoryFor(当前会话)`（与 `/model` 弹层、composer 模型座位**同一份** per-session 目录）→ `load()` → `store.getSnapshot().groups` 按宿主顺序展开；提交调 `directory.select(selection)`，每行选择复刻上游 `selectionOf` |
 | `model.effortNext` | 同一目录实例上循环：候选档复刻上游 `effortChoices`（`[Default（仅当模型无 defaultEffort）] + reasoning.efforts`），当前档 = `current.reasoningEffort ?? reasoning.defaultEffort`；`select` 只改强度 |
-| `session.stop` | `sessions.binding(id).session.cancel()`（递归直系 `kind==='child'` 子代理；one-shot 跳过） |
+| `session.stop` | 当前会话（`uiSession.current`）→ `sessions.binding(id).session.cancel()`（递归直系 `kind==='child'` 子代理；one-shot 跳过） |
 | `help.toggle` | 插件自建纯 DOM 速查表 |
 
 浮层（`src/overlay.ts`，纯 DOM）：速查表 / 工作区 / 近期对话 / 模型同一时刻只有一个，
@@ -87,7 +87,32 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 - **条数上限 = 最近交互的 10 个（全局口径）**：先按最近更新取前 10、再按工作区分组，故
   某个工作区可能整组不出现（不留空标题）。当前会话**强制纳入**（不在前 10 时顶掉第 10 名）。
   面板带 `dsh-kbd-panel--recent`，`max-height` 由 `64vh` 抬到 `calc(88vh - 24px)`。
-- **初始高亮** = 当前会话所在行（当前是空白 / 被过滤 / 无 `current` 时落首行）。
+- **初始高亮** = 当前会话所在行（当前是空白 / 被过滤 / 无当前会话时落首行）。
+
+## 工作区浮窗的列表规则（`src/workspace-switcher.ts`）
+
+- **活跃度** = 该工作区组内可见会话里最新的 `updatedAt`；无可见会话（或 `sessions.list`
+  不可读）为 `-Infinity`，沉底但仍按宿主顺序列出。
+- **可见性** = 与近期对话同判据（`sessionVisible(..., keepBlank=false)`）：排除子代理、
+  归档、空白会话；会话成员取自 `workspaces.list` 各项的 `sessionIds`。
+- **顺序** = 活跃度降序，同活跃度保持宿主顺序（确定性）。
+- **条数上限 = 10（全局口径）**：先按活跃度取前 10，当前会话所属工作区不在榜内时
+  **强制保留**（顶掉第 10 名、排在第 10 行），与近期对话强制纳入当前会话同口径；
+  总工作区数 ≤ 10 时全部列出，只是按活跃度重排。
+- **初始高亮** = 当前会话所属工作区所在行（无归属 / 无当前会话时落首行）。
+- 只列已登记的 `workspaces.list` 工作区，未分组桶不在其中；行上的 `N 个会话` 仍是该
+  工作区登记的会话总数（含被可见性裁掉的会话）。
+
+## 上游 API 依赖（0.1.6-alpha.2）
+
+`session.stop`（Esc）与所有「按当前会话取数」的动作共用 `src/session-view.ts`：
+
+- **当前会话** = `uiSession.current.getSnapshot().key`（视图层选择，0.1.6-alpha.2 起由
+  `dsh-client-ui-session` 承载）；源不可读时回退 `sessions.list` 快照里
+  `retainedBy.mainView > 0` 的那一行（与上游 `publishMain` 同判据）。
+- **完成未读** = `uiSession.sessionStatus.getSnapshot().get(id).completionUnread`。
+- 已删除、不得再引用：快照字段 `current` / `currentAddress` / `summary.completed`，
+  服务方法 `sessions.open()` / `openSubagent()` / `clear()`。
 
 ## 自定义键位
 
@@ -132,8 +157,8 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   不可用则无从判重，退化为每次按键 `openTab('terminal')` 新建一个（与直接调上游一致）；
   已有终端而 `focus` 面缺失 / 抛错只 no-op，绝不重复开。
 - **工作区浮窗的「切换」= 连接工作区**：`uiWorkspace.openWorkspace` 复用该工作区已挂载的
-  空白会话、没有就新建（与侧栏分组「＋」一致），不保证打开上一次的对话；只列已登记的
-  工作区，未分组桶不在其中。
+  空白会话、没有就新建（与侧栏分组「＋」一致），不保证打开上一次的对话；列表只含已登记的
+  工作区（活跃度前 10，当前工作区强制保留），未分组桶与榜单外的工作区不在其中，需要时用侧栏。
 - **模型浮窗只对普通会话可用**（`subagentAddress(id) === undefined`）；目录是宿主代数的
   共享目录，只列已公告的模型、不显示模型描述（上游 `/model` 有本地化描述）。
   `⇧Tab` 只在候选档中**向前**循环，且 `editing` 态只在焦点位于 composer 内时接管。
@@ -148,16 +173,19 @@ npm run build       # esbuild → lib/client.js（入仓，禁手改）
 npm run check       # node --check 产物与宿主
 ```
 
-诊断脚本（纯 Node + 最小 DOM 桩，无需浏览器）：
+诊断脚本（纯 Node + 最小 DOM 桩，无需浏览器）；桩按 **0.1.6-alpha.2 契约**装配
+（当前会话只经 `uiSession.current` 提供、快照里没有 `current`、`sessions` 没有 `open`，
+完成未读只经 `uiSession.sessionStatus`）：
 
 - `node test-services.mjs` — 服务级动作路径：审批 / 问答 / 计划评审与 `card` 态判定（问答
   断言落在卡片草稿 store 上）；两个侧栏开关；右栏标签切换 / 关闭当前标签 / 文件浏览器定位
   与置顶 / 终端定位（含认页不重复 `openTab`、折叠补 `toggleExpanded`、元素级聚焦注入假
   面板）；新建会话（必须调 `uiWorkspace.startSession`）、聚焦输入框（J = Jump 的三态与
-  门闸）、会话跳转；工作区 / 近期对话 / 模型三个浮窗的列表顺序、分页上限、确认路径与空态；
-  `⇧Tab` 候选档与编辑态门闸；各动作的无降级边界。
+  门闸）、会话跳转（Esc 停止会话树）；工作区（活跃度排序 / 前 10 / 当前工作区保留）/ 近期对话 /
+  模型三个浮窗的列表顺序、分页上限、确认路径与空态；`⇧Tab` 候选档与编辑态门闸；各动作的无降级边界。
 - `node test-dispatch.mjs` — 会话跳转分发：按侧栏顺序（分组 / flat / 权威来源不可用时
-  no-op）与两个侧栏开关的键位、态闸门。
+  no-op、`uiSession.current` 缺席时回退 `retainedBy.mainView`）与两个侧栏开关的键位、
+  态闸门。
 
 ## 加载（用户操作）
 

@@ -10,6 +10,7 @@ import type {
   SlotsLike,
   UiSessionLike,
 } from './types.ts'
+import { currentSessionId } from './session-view.ts'
 
 /** sidebar-right seat 注册的会话级 slot 名（store handle 挂在该注册项上）。 */
 const RIGHTBAR_SLOT = 'rightbar.session'
@@ -321,11 +322,6 @@ function currentLayout(services: Services): SidebarRightLayoutLike | undefined {
   const sessionId = currentSessionId(services)
   if (sessionId === undefined) return undefined
   return resolved.snapshot.bySession?.[sessionId]?.layout
-}
-
-function currentSessionId(services: Services): string | undefined {
-  const current = services.sessions?.list?.getSnapshot?.()?.current
-  return current === undefined || current === '' ? undefined : current
 }
 
 interface RightbarStore {

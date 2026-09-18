@@ -161,6 +161,39 @@ function recencyOrder(ids, byId) {
   return ids.map((id, index) => ({ id, index })).sort((a, b) => compareRecency(a.id, b.id, byId) || a.index - b.index).map((entry) => entry.id);
 }
 
+// src/session-view.ts
+function currentSessionId(services) {
+  var _a, _b, _c, _d, _e, _f, _g;
+  let key;
+  try {
+    key = (_d = (_c = (_b = (_a = services.uiSession) == null ? void 0 : _a.current) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.key;
+  } catch {
+    key = void 0;
+  }
+  if (key !== void 0 && key !== "") return key;
+  return mainViewSessionId((_g = (_f = (_e = services.sessions) == null ? void 0 : _e.list) == null ? void 0 : _f.getSnapshot) == null ? void 0 : _g.call(_f));
+}
+function mainViewSessionId(snapshot) {
+  var _a, _b, _c;
+  const byId = snapshot == null ? void 0 : snapshot.byId;
+  if (byId === void 0 || byId === null) return void 0;
+  for (const id of Object.keys(byId)) {
+    if (((_c = (_b = (_a = byId[id]) == null ? void 0 : _a.retainedBy) == null ? void 0 : _b.mainView) != null ? _c : 0) > 0) return id;
+  }
+  return void 0;
+}
+function completionUnread(services, sessionId) {
+  var _a, _b, _c, _d;
+  let map;
+  try {
+    map = (_c = (_b = (_a = services.uiSession) == null ? void 0 : _a.sessionStatus) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
+  } catch {
+    map = void 0;
+  }
+  if (map === void 0 || map === null || typeof map.get !== "function") return false;
+  return ((_d = map.get(sessionId)) == null ? void 0 : _d.completionUnread) === true;
+}
+
 // src/sidebar-order.ts
 var FLAT_ORDER_KEY = "__flat_session_order__";
 var UNGROUPED_KEY = "";
@@ -172,7 +205,7 @@ function sidebarOrderedSessionIds(snapshot, services) {
   const workspaceSnapshot = readWorkspaceSnapshot(services);
   if (workspaceSnapshot === void 0) return [];
   const byId = (_a = snapshot.byId) != null ? _a : {};
-  const current = snapshot.current;
+  const current = currentSessionId(services);
   const archived = new Set((_b = workspaceSnapshot.archivedSessionIds) != null ? _b : []);
   const order = view.sessionOrderByAccount;
   const visible = (id) => {
@@ -295,11 +328,6 @@ function pendingMap(services) {
   const snapshot = (_b = (_a = uiSession.pendingInteractions) == null ? void 0 : _a.getSnapshot) == null ? void 0 : _b.call(_a);
   if (snapshot !== void 0) return snapshot;
   return uiSession.pendingSnapshot;
-}
-function currentSessionId(services) {
-  var _a, _b, _c, _d;
-  const current = (_d = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.current;
-  return current === void 0 || current === "" ? void 0 : current;
 }
 function hasPendingCard(services) {
   const map = pendingMap(services);
@@ -571,7 +599,7 @@ function stopCurrentSessionTree(services) {
   const sessions = services.sessions;
   const snapshot = (_b = (_a = sessions == null ? void 0 : sessions.list) == null ? void 0 : _a.getSnapshot) == null ? void 0 : _b.call(_a);
   if (sessions === null || sessions === void 0 || snapshot === null || snapshot === void 0) return false;
-  const current = snapshot.current;
+  const current = currentSessionId(services);
   if (current === void 0 || current === "") return false;
   const cancelled = /* @__PURE__ */ new Set();
   const visit = (id, seen) => {
@@ -615,12 +643,13 @@ function openNeighborSession(services, delta) {
   const sessions = services.sessions;
   const snapshot = (_b = (_a = sessions == null ? void 0 : sessions.list) == null ? void 0 : _a.getSnapshot) == null ? void 0 : _b.call(_a);
   if (sessions === null || sessions === void 0 || snapshot === null || snapshot === void 0) return false;
-  if (snapshot.ids === void 0 || snapshot.ids.length === 0 || snapshot.byId === void 0 || typeof sessions.open !== "function") {
-    return false;
-  }
+  if (snapshot.ids === void 0 || snapshot.ids.length === 0 || snapshot.byId === void 0) return false;
+  const uiWorkspace = services.uiWorkspace;
+  const openSession = uiWorkspace == null ? void 0 : uiWorkspace.openSession;
+  if (uiWorkspace === null || uiWorkspace === void 0 || typeof openSession !== "function") return false;
   const axis = sidebarOrderedSessionIds(snapshot, services);
   if (axis.length === 0) return false;
-  const current = snapshot.current;
+  const current = currentSessionId(services);
   const anchor = current === void 0 ? -1 : axis.indexOf(current);
   if (anchor < 0) return false;
   const active = activeSessionIds(snapshot, services);
@@ -628,8 +657,12 @@ function openNeighborSession(services, delta) {
     const id = axis[i];
     if (id === void 0) continue;
     if (active.has(id)) {
-      sessions.open(id);
-      return true;
+      try {
+        openSession.call(uiWorkspace, id);
+        return true;
+      } catch {
+        return false;
+      }
     }
   }
   return false;
@@ -641,7 +674,7 @@ function activeSessionIds(snapshot, services) {
   for (const id of (_a = snapshot.ids) != null ? _a : []) {
     const summary = (_b = snapshot.byId) == null ? void 0 : _b[id];
     if (summary === void 0) continue;
-    if (summary.running === true || summary.completed === true || pending !== void 0 && pending.has(id)) {
+    if (summary.running === true || completionUnread(services, id) || pending !== void 0 && pending.has(id)) {
       active.add(id);
     }
   }
@@ -1475,29 +1508,66 @@ function createOverlays(deps) {
 }
 
 // src/workspace-switcher.ts
+var WORKSPACE_LIMIT = 10;
 function workspaceRows(services) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
-  const snapshot = (_c = (_b = (_a = services.workspaces) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b);
+  var _a, _b, _c, _d, _e, _f;
+  const snapshot = readWorkspaceSnapshot(services);
   const items = snapshot == null ? void 0 : snapshot.items;
   if (!Array.isArray(items)) return [];
-  const current = (_g = (_f = (_e = (_d = services.sessions) == null ? void 0 : _d.list) == null ? void 0 : _e.getSnapshot) == null ? void 0 : _f.call(_e)) == null ? void 0 : _g.current;
-  const rows = [];
-  for (const item of items) {
-    if (item === null || item === void 0) continue;
-    const id = item.workspaceId;
-    if (typeof id !== "string" || id === "") continue;
-    rows.push({
-      workspaceId: id,
-      label: workspaceLabel(item),
-      detail: typeof item.path === "string" ? item.path : "",
-      sessionCount: (_i = (_h = item.sessionIds) == null ? void 0 : _h.length) != null ? _i : 0,
-      current: current !== void 0 && current !== "" && ((_k = (_j = item.sessionIds) == null ? void 0 : _j.includes(current)) != null ? _k : false)
-    });
+  const current = currentSessionId(services);
+  const byId = (_e = (_d = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.byId) != null ? _e : {};
+  const archived = new Set((_f = snapshot == null ? void 0 : snapshot.archivedSessionIds) != null ? _f : []);
+  const entries = [];
+  items.forEach((item, index) => {
+    if (item === null || item === void 0) return;
+    const workspaceId = item.workspaceId;
+    if (typeof workspaceId !== "string" || workspaceId === "") return;
+    entries.push({ item, workspaceId, activity: workspaceActivity(item, byId, current, archived), index });
+  });
+  const ordered = entries.sort((a, b) => b.activity - a.activity || a.index - b.index);
+  const kept = ordered.slice(0, WORKSPACE_LIMIT);
+  const currentWorkspaceId = workspaceIdOfSession(entries, current);
+  if (currentWorkspaceId !== void 0 && kept.length === WORKSPACE_LIMIT) {
+    if (!kept.some((entry) => entry.workspaceId === currentWorkspaceId)) {
+      const forced = ordered.find((entry) => entry.workspaceId === currentWorkspaceId);
+      if (forced !== void 0) kept[WORKSPACE_LIMIT - 1] = forced;
+    }
   }
+  const rows = kept.map((entry) => {
+    var _a2, _b2, _c2, _d2;
+    return {
+      workspaceId: entry.workspaceId,
+      label: workspaceLabel(entry.item),
+      detail: typeof entry.item.path === "string" ? entry.item.path : "",
+      sessionCount: (_b2 = (_a2 = entry.item.sessionIds) == null ? void 0 : _a2.length) != null ? _b2 : 0,
+      current: current !== void 0 && current !== "" && ((_d2 = (_c2 = entry.item.sessionIds) == null ? void 0 : _c2.includes(current)) != null ? _d2 : false)
+    };
+  });
   for (const row of rows) {
     if (row.detail === row.label) row.detail = "";
   }
   return rows;
+}
+function workspaceActivity(item, byId, current, archived) {
+  var _a;
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const id of (_a = item.sessionIds) != null ? _a : []) {
+    const summary = byId[id];
+    if (summary === void 0) continue;
+    if (!sessionVisible(summary, current, archived, false)) continue;
+    const updatedAt = summary.updatedAt;
+    if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt)) continue;
+    if (updatedAt > latest) latest = updatedAt;
+  }
+  return latest;
+}
+function workspaceIdOfSession(entries, current) {
+  var _a;
+  if (current === void 0 || current === "") return void 0;
+  for (const entry of entries) {
+    if (((_a = entry.item.sessionIds) == null ? void 0 : _a.includes(current)) === true) return entry.workspaceId;
+  }
+  return void 0;
 }
 function switchWorkspace(services, workspaceId) {
   const uiWorkspace = services.uiWorkspace;
@@ -1537,7 +1607,7 @@ function recentSessionsView(services) {
   if (byId === void 0 || byId === null || !Array.isArray(ids) || ids.length === 0) {
     return emptyView();
   }
-  const current = snapshot == null ? void 0 : snapshot.current;
+  const current = currentSessionId(services);
   const pending = pendingSessionIds(services);
   const workspaceSnapshot = readWorkspaceSnapshot(services);
   const archived = new Set((_d = workspaceSnapshot == null ? void 0 : workspaceSnapshot.archivedSessionIds) != null ? _d : []);
@@ -1574,7 +1644,7 @@ function recentSessionsView(services) {
   for (const bucket of buckets) {
     const members = bucket.members.filter((id) => kept.has(id));
     if (members.length === 0) continue;
-    const groupRows = recencyOrder(members, byId).map((id) => sessionRow(id, byId[id], current, pending));
+    const groupRows = recencyOrder(members, byId).map((id) => sessionRow(id, byId[id], current, pending, services));
     groups.push({ workspaceId: bucket.workspaceId, label: bucket.label, rows: groupRows });
     rows.push(...groupRows);
   }
@@ -1590,18 +1660,9 @@ function openRecentSession(services, sessionId) {
   if (typeof sessionId !== "string" || sessionId === "") return false;
   const uiWorkspace = services.uiWorkspace;
   const openSession = uiWorkspace == null ? void 0 : uiWorkspace.openSession;
-  if (uiWorkspace !== null && uiWorkspace !== void 0 && typeof openSession === "function") {
-    try {
-      openSession.call(uiWorkspace, sessionId);
-      return true;
-    } catch {
-    }
-  }
-  const sessions = services.sessions;
-  const open = sessions == null ? void 0 : sessions.open;
-  if (sessions === null || sessions === void 0 || typeof open !== "function") return false;
+  if (uiWorkspace === null || uiWorkspace === void 0 || typeof openSession !== "function") return false;
   try {
-    open.call(sessions, sessionId);
+    openSession.call(uiWorkspace, sessionId);
     return true;
   } catch {
     return false;
@@ -1615,7 +1676,7 @@ function initialIndex(rows, current) {
   const index = rows.findIndex((row) => row.sessionId === current);
   return index < 0 ? 0 : index;
 }
-function sessionRow(id, summary, current, pending) {
+function sessionRow(id, summary, current, pending, services) {
   const label = titleOf(summary, id);
   const cwd = typeof (summary == null ? void 0 : summary.cwd) === "string" ? summary.cwd.trim() : "";
   return {
@@ -1624,7 +1685,8 @@ function sessionRow(id, summary, current, pending) {
     detail: cwd === label ? "" : cwd,
     current: id === current,
     running: (summary == null ? void 0 : summary.running) === true,
-    completed: (summary == null ? void 0 : summary.completed) === true,
+    // 完成未读来自 uiSession.sessionStatus(替代已删除的 summary.completed)
+    completed: completionUnread(services, id),
     pending: pending.has(id)
   };
 }
@@ -1695,7 +1757,7 @@ function closeRightSidebarTab(services) {
   if (typeof sidebarRight.close !== "function") return false;
   const resolved = rightbarStore(services);
   if (resolved === void 0) return false;
-  const sessionId = currentSessionId2(services);
+  const sessionId = currentSessionId(services);
   if (sessionId === void 0) return false;
   const layout = (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
   if (layout === void 0) return false;
@@ -1746,7 +1808,7 @@ function promoteFilesTab(services) {
   var _a, _b;
   const resolved = rightbarStore(services);
   if (resolved === void 0) return;
-  const sessionId = currentSessionId2(services);
+  const sessionId = currentSessionId(services);
   if (sessionId === void 0) return;
   const actions = resolved.instance.actions;
   const placeTab = actions == null ? void 0 : actions.placeTab;
@@ -1912,21 +1974,16 @@ function currentLayout(services) {
   var _a, _b;
   const resolved = rightbarStore(services);
   if (resolved === void 0) return void 0;
-  const sessionId = currentSessionId2(services);
+  const sessionId = currentSessionId(services);
   if (sessionId === void 0) return void 0;
   return (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
-}
-function currentSessionId2(services) {
-  var _a, _b, _c, _d;
-  const current = (_d = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.current;
-  return current === void 0 || current === "" ? void 0 : current;
 }
 function rightbarStore(services) {
   const slots = services.slots;
   const uiSession = services.uiSession;
   if (slots === null || slots === void 0 || uiSession === null || uiSession === void 0) return void 0;
   if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
-  const sessionId = currentSessionId2(services);
+  const sessionId = currentSessionId(services);
   if (sessionId === void 0) return void 0;
   const binding = resolveBinding2(uiSession, sessionId);
   if (binding === void 0) return void 0;
@@ -2078,7 +2135,7 @@ function apply(ctx) {
     selectWorkspace: (workspaceId) => {
       switchWorkspace(services, workspaceId);
     },
-    // 近期对话:现取快照;openSession 缺失回退 sessions.open
+    // 近期对话:现取快照;打开只走 uiWorkspace.openSession
     listRecentSessions: () => recentSessionsView(services),
     selectRecentSession: (sessionId) => {
       openRecentSession(services, sessionId);

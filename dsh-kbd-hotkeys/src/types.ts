@@ -37,10 +37,27 @@ export interface PendingInteractionsLike {
   getSnapshot?(): ReadonlyMap<string, PendingInteractionLike>
 }
 
-/** uiSession:resolve(sessionId) 取已物化的作用域绑定,供 slots.resolveStore 解析会话级 store。 */
+/** 会话状态行(running / 待处理交互 / 完成未读)。 */
+export interface SessionStatusLike {
+  running?: boolean
+  pendingInteraction?: PendingInteractionLike
+  /** 已结束未查看(替代 0.1.6-alpha.1 的 summary.completed)。 */
+  completionUnread?: boolean
+}
+
+/** id → 会话状态的可观察表。 */
+export interface SessionStatusSourceLike {
+  getSnapshot?(): ReadonlyMap<string, SessionStatusLike> | undefined
+}
+
+/** uiSession:当前会话绑定源 + resolve(sessionId) 取已物化的作用域绑定(供 slots.resolveStore 解析会话级 store)。 */
 export interface UiSessionLike {
   pendingInteractions?: PendingInteractionsLike
   pendingSnapshot?: ReadonlyMap<string, PendingInteractionLike>
+  /** 视图层当前会话绑定源(0.1.6-alpha.2 起选择权在此);getSnapshot().key 即会话 id,缺席为 undefined。 */
+  current?: { getSnapshot?(): ScopeBindingLike | undefined }
+  /** 会话状态源:completionUnread 替代已删除的 summary.completed。 */
+  sessionStatus?: SessionStatusSourceLike
   resolve?(sessionId: string): unknown
 }
 
@@ -56,8 +73,8 @@ export interface SessionSummaryLike {
   title?: string
   cwd?: string
   running?: boolean
-  /** 已结束未查看(缺席 = false)。 */
-  completed?: boolean
+  /** 本地引用来源计数(0.1.6-alpha.2 起):mainView > 0 即主视图当前持有的会话。 */
+  retainedBy?: { mainView?: number }
   blank?: boolean
   updatedAt?: number
   /** 粗粒度持久来源(过滤子代理用)。 */
@@ -232,13 +249,11 @@ export interface SubagentCatalogLike {
 export interface SessionListSnapshotLike {
   ids?: readonly string[]
   byId?: Readonly<Record<string, SessionSummaryLike>>
-  current?: string
   subagentsByParent?: Readonly<Record<string, SubagentCatalogLike | undefined>>
 }
 
 export interface SessionsLike {
   list?: { getSnapshot?(): SessionListSnapshotLike }
-  open?(sessionId: string): void
   binding?(sessionId: string): SessionBindingLike | undefined
   /** 子代理地址(普通会话 = undefined);上游据此判定可否选模型。 */
   subagentAddress?(sessionId: string): unknown

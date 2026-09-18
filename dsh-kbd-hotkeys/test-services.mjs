@@ -95,6 +95,20 @@ function check(label, condition, detail) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
+// ---- 视图层两源(alpha.2 契约) -------------------------------------------------
+// 0.1.6-alpha.2 起 sessions.list 快照不再带 current / summary.completed:
+// 当前会话在 uiSession.current(绑定源),完成未读在 uiSession.sessionStatus(completionUnread)。
+// 用例通过 viewCurrent / completionUnread 控制这两个源;`withView` 把它们补进每处 uiSession 桩。
+let viewCurrent = 'sess-b'
+let completionUnread = new Set()
+const currentSource = () => ({
+  getSnapshot: () => (viewCurrent === undefined || viewCurrent === '' ? undefined : { key: viewCurrent }),
+})
+const statusSource = () => ({
+  getSnapshot: () => new Map([...completionUnread].map((id) => [id, { completionUnread: true }])),
+})
+const withView = (uiSession) => ({ current: currentSource(), sessionStatus: statusSource(), ...uiSession })
+
 // ---- 浮层观察工具(只读插件自建子树) ----------------------------------------
 /** 深度优先收集满足条件的元素。 */
 function collectNodes(node, predicate, out = []) {
@@ -122,7 +136,8 @@ function loadPlugin(services) {
   if (registration === null) throw new Error('bundle did not register')
   const plugin = registration.factory(() => { throw new Error('unexpected external require') })
   const ctx = {
-    get: (name) => services[name],
+    // uiSession 桩统一补上视图层两源(真实上游由 dsh-client-ui-session 提供)
+    get: (name) => (name === 'uiSession' ? withView(services[name]) : services[name]),
     effect: (cb) => { const dispose = cb(); if (typeof dispose === 'function') dispose() },
   }
   plugin.apply(ctx)
@@ -137,15 +152,14 @@ function loadPlugin(services) {
 
 const now = Date.now()
 const snapshot = {
-  current: 'sess-b',
   ids: ['sess-a', 'sess-b'],
   byId: {
-    'sess-a': { id: 'sess-a', running: false, completed: false, blank: false, updatedAt: now - 1000 },
-    'sess-b': { id: 'sess-b', running: true, completed: false, blank: false, updatedAt: now },
+    'sess-a': { id: 'sess-a', running: false, blank: false, updatedAt: now - 1000 },
+    'sess-b': { id: 'sess-b', running: true, blank: false, updatedAt: now },
   },
   subagentsByParent: {},
 }
-const sessions = { list: { getSnapshot: () => snapshot }, open() {}, binding: () => undefined }
+const sessions = { list: { getSnapshot: () => snapshot }, binding: () => undefined }
 
 /** 假草稿 store:复刻上游 replace(覆盖 requestKey + progress)/ clear(仅 requestKey 匹配时清空)。 */
 function makeDraftStore() {
@@ -256,7 +270,6 @@ console.log('\n--- 无审批卡片时 Esc 仍停止当前会话(不吞键) ---')
   const cancelled = []
   const stopSessions = {
     list: { getSnapshot: () => snapshot },
-    open() {},
     binding: (id) => ({
       session: {
         getSnapshot: () => ({ running: id === 'sess-b' }),
@@ -719,7 +732,6 @@ console.log('\n--- ⌘/Ctrl+J → 聚焦输入框(conversation.input → shell.e
   const actx = { scope: 'sess-b' } // binding('sess-b').ctx,必须原样传给 input.for
   const makeComposerSessions = (ctx = actx) => ({
     list: { getSnapshot: () => snapshot },
-    open() {},
     binding: (id) => (id === 'sess-b' ? { ctx } : undefined),
   })
   const makeRoot = () => new FakeHTMLElement('DIV') // composer editor 宿主 div
@@ -1062,14 +1074,14 @@ console.log('\n--- ⌘/Ctrl+Alt+← / → → 右侧栏标签切换 ---')
     check(`${label} → ← 不吞键(no-op)`, left.propagationStopped !== true)
   }
 
-  // 无当前会话 / current 为空串:sessions 服务也在,但不得切标签
+  // 无当前会话 / current 为空串:视图层源为空,不得切标签
   for (const [label, current] of [['无当前会话', undefined], ['current 为空串', '']]) {
-    const envCase = env(tabs, {
-      sessions: { ...sessions, list: { getSnapshot: () => ({ ...snapshot, current }) } },
-    })
+    viewCurrent = current
+    const envCase = env(tabs, { sessions })
     event = envCase.press({ key: 'ArrowRight', code: 'ArrowRight', ctrlKey: true, altKey: true })
     check(`${label} → 切标签不吞键`, event.propagationStopped !== true)
   }
+  viewCurrent = 'sess-b'
 
   // card 态(有待处理问答卡片)同样接管:卡片占用的是**裸** ← / →,带 mod+alt 的组合键不冲突
   const cardTabs = makeTabsStore()
@@ -1523,11 +1535,11 @@ console.log('\n--- ⌘/Ctrl+\\ → 右栏打开文件浏览器并置于首位 --
   // ⑧ 无当前会话 → 打开照旧,但不得置顶(取不到 sessionId)
   const noSession = makeFilesStore()
   noSession.seed(singlePane(['t1']))
-  const noSessionEnv = env(noSession, {
-    sessions: { ...sessions, list: { getSnapshot: () => ({ ...snapshot, current: undefined }) } },
-  })
+  viewCurrent = undefined
+  const noSessionEnv = env(noSession)
   event = noSessionEnv.press(combo)
   check('无当前会话 → 不调 placeTab', same(noSession.calls, []), JSON.stringify(noSession.calls))
+  viewCurrent = 'sess-b'
 
   // ⑨ editing / card 态同样生效(带修饰键的组合不与文本编辑、卡片的裸键冲突)
   const editable = makeFilesStore()
@@ -1818,11 +1830,11 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
 
   // ⑩ 无当前会话 / 该会话尚无面板 → 取不到布局,openTab 在无挂载会话面时抛错 → no-op 不吞键
   const noSession = makeTerminalStore()
-  const noSessionEnv = env(noSession, {
-    sessions: { ...sessions, list: { getSnapshot: () => ({ ...snapshot, current: undefined }) } },
-  })
+  viewCurrent = undefined
+  const noSessionEnv = env(noSession)
   event = noSessionEnv.press(combo)
   check('无当前会话 + 无面板 → 不吞键', event.propagationStopped !== true)
+  viewCurrent = 'sess-b'
 
   // ⑪ card / editing 态同样生效(带修饰键的组合不与卡片的裸键、文本编辑冲突)
   const editable = makeTerminalStore()
@@ -1973,21 +1985,39 @@ console.log('\n--- ⌘/Ctrl+L → 右栏定位终端(已有则聚焦、缺则新
   }
 }
 
-// ---- 阶段 5(浮窗):⌘/Ctrl+K → 工作区浮窗(↑↓ 高亮 + Enter 切换) ----
-// 列表 = workspaces.list 快照(宿主顺序,不重排);切换 = 公开的 uiWorkspace.openWorkspace(workspaceId)。
+// ---- 阶段 5(浮窗):⌘/Ctrl+K → 工作区浮窗(活跃度前 10 + ↑↓ 高亮 + Enter 切换) ----
+// 列表 = workspaces.list 快照,按「组内可见会话里最新的 updatedAt」降序取前 WORKSPACE_LIMIT(10) 个;
+// 当前会话所属工作区掉出榜单时强制保留(顶掉第 10 名);切换 = 公开的 uiWorkspace.openWorkspace(workspaceId)。
 // ↑/↓ 只移动高亮、不触发导航;Esc / 同组合键关闭;浮层 DOM 由插件自建,这里只读它自己的子树。
-console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) ---')
+console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(活跃度前 10 + ↑↓ 选择 + Enter 切换) ---')
 {
   const combo = { key: 'k', code: 'KeyK', ctrlKey: true }
+  const wsNow = Date.now()
   const item = (workspaceId, title, path, sessionIds = []) => ({
     workspaceId, title, path, sessionIds,
     createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z',
   })
+  /** 会话摘要:活跃度只看 updatedAt(越大越活跃)。 */
+  const summary = (id, updatedAt, extra = {}) => ({ id, running: false, blank: false, updatedAt, ...extra })
+  const wsSnapshot = {
+    ids: ['sess-a', 'sess-b', 'sess-e'],
+    byId: {
+      'sess-a': summary('sess-a', wsNow - 1000),
+      'sess-b': summary('sess-b', wsNow - 2000),
+      'sess-e': summary('sess-e', wsNow),
+    },
+    subagentsByParent: {},
+  }
+  /** sessions 桩:默认用 wsSnapshot,可换成自定义目录。 */
+  const makeSessions = (snapshot = wsSnapshot) => ({ list: { getSnapshot: () => snapshot }, binding: () => undefined })
+
+  // 宿主顺序 = w1 w2 w3 w4 w5;活跃度顺序 = w5 w1 w2(w3 / w4 无可见会话 → 沉底且保持宿主顺序)
   const items = [
     item('w1', 'alpha', '/work/alpha', ['sess-a']),
     item('w2', 'beta', '/work/beta', ['sess-b']),
     item('w3', '', '/work/gamma'), // 无 title → 回退路径末段
     item('w4', '', 'plain'), // 末段 = 原路径 → 次行省略
+    item('w5', 'epsilon', '/work/epsilon', ['sess-e']),
   ]
   const workspaces = { list: { getSnapshot: () => ({ items, archivedSessionIds: [], phase: 'ready' }) } }
 
@@ -2004,13 +2034,13 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) 
       },
     }
   }
-  /** 装配:默认「服务齐全、当前会话 sess-b(属于 w2)」。 */
+  /** 装配:默认「服务齐全、当前会话 sess-b(属于 w2,活跃度第 3)」。 */
   function env(over = {}) {
     const uiWorkspace = over.uiWorkspace !== undefined ? over.uiWorkspace : makeUiWorkspace(over.mode)
     // 显式传 { workspaces: undefined } 表示「服务缺席」,不能用 `=== undefined` 兜底
     const workspacesService = 'workspaces' in over ? over.workspaces : workspaces
     const press = loadPlugin({
-      sessions: over.sessions ?? { ...sessions, binding: () => undefined },
+      sessions: over.sessions ?? makeSessions(over.snapshot),
       uiSession: { pendingInteractions: { getSnapshot: () => new Map() }, resolve: () => undefined },
       workspaces: workspacesService,
       uiWorkspace,
@@ -2019,13 +2049,14 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) 
     return { press, uiWorkspace }
   }
 
-  // ① 打开浮窗:列表按宿主顺序渲染,初始高亮 = 当前会话所属工作区(w2)
+  // ① 打开浮窗:按活跃度降序渲染(宿主顺序 ≠ 活跃度顺序),初始高亮 = 当前会话所属工作区(w2 第 3 行)
   const first = env()
   let event = first.press(combo)
   check('⌘/Ctrl+K 打开工作区浮窗并吞键', event.propagationStopped === true)
   check(
-    '浮窗按宿主顺序渲染工作区行(标题 / 路径 / 当前标记 / 会话数)',
+    '浮窗按活跃度降序渲染工作区行(标题 / 路径 / 当前标记 / 会话数)',
     same(pickerRows().map(nodeText), [
+      'epsilon /work/epsilon 1 个会话',
       'alpha /work/alpha 1 个会话',
       'beta /work/beta 当前 1 个会话',
       'gamma /work/gamma 0 个会话',
@@ -2033,20 +2064,22 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) 
     ]),
     JSON.stringify(pickerRows().map(nodeText)),
   )
-  check('初始高亮 = 当前会话所属工作区(第 2 行)', activeRowIndex() === 1, String(activeRowIndex()))
+  check('初始高亮 = 当前会话所属工作区(第 3 行)', activeRowIndex() === 2, String(activeRowIndex()))
 
   // ② ↑ / ↓ 只移动高亮(不触发导航),Enter 才切换
   event = first.press({ key: 'ArrowDown', code: 'ArrowDown' })
-  check('↓ 移动高亮到第 3 行', activeRowIndex() === 2, String(activeRowIndex()))
+  check('↓ 移动高亮到第 4 行', activeRowIndex() === 3, String(activeRowIndex()))
   check('↓ 被浮窗吞掉', event.propagationStopped === true)
   check('↓ 不触发切换(只有 Enter 才调 openWorkspace)', same(first.uiWorkspace.calls, []), JSON.stringify(first.uiWorkspace.calls))
   first.press({ key: 'ArrowUp', code: 'ArrowUp' })
-  check('↑ 移回第 2 行', activeRowIndex() === 1, String(activeRowIndex()))
+  check('↑ 移回第 3 行', activeRowIndex() === 2, String(activeRowIndex()))
+  first.press({ key: 'ArrowUp', code: 'ArrowUp' })
   first.press({ key: 'ArrowUp', code: 'ArrowUp' })
   first.press({ key: 'ArrowUp', code: 'ArrowUp' })
   check('首行 clamp(不循环,仍停在第 1 行)', activeRowIndex() === 0, String(activeRowIndex()))
   first.press({ key: 'ArrowDown', code: 'ArrowDown' })
-  check('高亮回到当前工作区行', activeRowIndex() === 1, String(activeRowIndex()))
+  first.press({ key: 'ArrowDown', code: 'ArrowDown' })
+  check('高亮回到当前工作区行', activeRowIndex() === 2, String(activeRowIndex()))
   event = first.press({ key: 'Enter', code: 'Enter' })
   check('Enter → uiWorkspace.openWorkspace(高亮工作区)', same(first.uiWorkspace.calls, ['w2']), JSON.stringify(first.uiWorkspace.calls))
   check('Enter 被吞', event.propagationStopped === true)
@@ -2056,7 +2089,7 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) 
 
   // ③ Esc 关闭 / 同组合键再按一次关闭(开关语义)/ ⌘/ 直接换成速查表
   first.press(combo)
-  check('可再次打开', pickerRows().length === 4, String(pickerRows().length))
+  check('可再次打开', pickerRows().length === 5, String(pickerRows().length))
   first.press({ key: 'ArrowDown', code: 'ArrowDown' })
   event = first.press({ key: 'Escape', code: 'Escape' })
   check('Esc 关闭浮窗并吞键', event.propagationStopped === true && pickerRows().length === 0)
@@ -2071,15 +2104,15 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) 
   check('速查表再按 ⌘/ 关闭', event.propagationStopped === true)
 
   // ④ 初始高亮:当前会话不属于任何工作区 → 首行;↑ 在首行 clamp
-  const stray = env({
-    sessions: { list: { getSnapshot: () => ({ ...snapshot, current: 'sess-x' }) }, open() {}, binding: () => undefined },
-  })
+  viewCurrent = 'sess-x'
+  const stray = env()
   stray.press(combo)
   check('当前会话无归属 → 初始高亮第 1 行', activeRowIndex() === 0, String(activeRowIndex()))
   stray.press({ key: 'ArrowUp', code: 'ArrowUp' })
   check('首行再按 ↑ 仍停在第 1 行', activeRowIndex() === 0, String(activeRowIndex()))
   stray.press({ key: 'Enter', code: 'Enter' })
-  check('Enter → openWorkspace(w1)', same(stray.uiWorkspace.calls, ['w1']), JSON.stringify(stray.uiWorkspace.calls))
+  check('Enter → openWorkspace(w5,活跃度最高)', same(stray.uiWorkspace.calls, ['w5']), JSON.stringify(stray.uiWorkspace.calls))
+  viewCurrent = 'sess-b'
 
   // ⑤ 空列表 / workspaces 服务缺席:浮窗照样打开(空态),Enter 不切换、不崩
   const empty = env({ workspaces: { list: { getSnapshot: () => ({ items: [], archivedSessionIds: [], phase: 'ready' }) } } })
@@ -2125,11 +2158,11 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) 
     },
   })
   event = carded.press(combo)
-  check('card 态 ⌘/Ctrl+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 4)
+  check('card 态 ⌘/Ctrl+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 5)
   carded.press({ key: 'Escape', code: 'Escape' })
   const editing = env()
   event = editing.press({ ...combo, target: new FakeHTMLElement('TEXTAREA') })
-  check('editing 态 ⌘/Ctrl+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 4)
+  check('editing 态 ⌘/Ctrl+K 仍打开浮窗', event.propagationStopped === true && pickerRows().length === 5)
   editing.press({ key: 'Escape', code: 'Escape' })
 
   // ⑧ 键位可独立覆盖(与其它动作同一套 bindings 机制)
@@ -2138,10 +2171,93 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(↑↓ 选择 + Enter 切换) 
   event = custom.press(combo)
   check('覆盖键位后 ⌘/Ctrl+K 不再打开', event.propagationStopped !== true && pickerRows().length === 0)
   event = custom.press({ key: '9', code: 'Digit9', ctrlKey: true, altKey: true })
-  check('自定义 ⌘/Ctrl+Alt+9 打开浮窗并吞键', event.propagationStopped === true && pickerRows().length === 4)
+  check('自定义 ⌘/Ctrl+Alt+9 打开浮窗并吞键', event.propagationStopped === true && pickerRows().length === 5)
   custom.press({ key: 'Enter', code: 'Enter' })
-  check('自定义键位下 Enter 切换当前工作区', same(custom.uiWorkspace.calls, ['w2']), JSON.stringify(custom.uiWorkspace.calls))
+  check('自定义键位下 Enter 切换当前高亮工作区(w2)', same(custom.uiWorkspace.calls, ['w2']), JSON.stringify(custom.uiWorkspace.calls))
   storage.delete('dsh-kbd-hotkeys:v1')
+
+  // ⑨ 活跃度裁剪:超过 10 个只列最近活跃的 10 个;当前工作区掉出榜单时顶掉第 10 名
+  const manyItems = []
+  const manyById = {}
+  const manyIds = []
+  for (let i = 1; i <= 12; i += 1) {
+    const sid = 'm' + i
+    manyItems.push(item('mw' + i, 'ws' + i, '/work/ws' + i, [sid]))
+    manyById[sid] = summary(sid, wsNow + i) // i 越大越活跃 → 活跃度顺序 mw12 … mw1
+    manyIds.push(sid)
+  }
+  const manySessions = makeSessions({ ids: manyIds, byId: manyById, subagentsByParent: {} })
+  const manyWorkspaces = { list: { getSnapshot: () => ({ items: manyItems, archivedSessionIds: [], phase: 'ready' }) } }
+
+  // 当前会话 m2(工作区 mw2,活跃度第 11)→ 强制保留,顶掉第 10 名 mw3
+  viewCurrent = 'm2'
+  const capped = env({ workspaces: manyWorkspaces, sessions: manySessions })
+  capped.press(combo)
+  check('12 个工作区只列 10 行', pickerRows().length === 10, String(pickerRows().length))
+  check('首行 = 活跃度最高的 mw12', nodeText(pickerRows()[0]) === 'ws12 /work/ws12 1 个会话', nodeText(pickerRows()[0]))
+  check(
+    '当前工作区 mw2 顶掉第 10 名(第 10 行带当前标记)',
+    nodeText(pickerRows()[9]) === 'ws2 /work/ws2 当前 1 个会话',
+    nodeText(pickerRows()[9]),
+  )
+  check(
+    '被顶掉的 mw3 与更低排名的 mw1 都不出现',
+    pickerRows().every((row) => !nodeText(row).startsWith('ws3 ') && !nodeText(row).startsWith('ws1 ')),
+    JSON.stringify(pickerRows().map(nodeText)),
+  )
+  check('初始高亮 = 被强制保留的当前工作区(第 10 行)', activeRowIndex() === 9, String(activeRowIndex()))
+  capped.press({ key: 'Escape', code: 'Escape' })
+
+  // 当前工作区已在榜内 → 不顶替,严格按活跃度取前 10(mw12 … mw3)
+  viewCurrent = 'm12'
+  const onList = env({ workspaces: manyWorkspaces, sessions: manySessions })
+  onList.press(combo)
+  check(
+    '当前工作区已在榜内 → 严格前 10(首行 mw12、第 10 行 mw3)',
+    pickerRows().length === 10 && nodeText(pickerRows()[0]) === 'ws12 /work/ws12 当前 1 个会话' && nodeText(pickerRows()[9]) === 'ws3 /work/ws3 1 个会话',
+    JSON.stringify(pickerRows().map(nodeText)),
+  )
+  onList.press({ key: 'Escape', code: 'Escape' })
+
+  // 恰好 10 个 → 全部列出(不裁剪)
+  viewCurrent = 'sess-b'
+  const exactly = env({
+    workspaces: { list: { getSnapshot: () => ({ items: manyItems.slice(0, 10), archivedSessionIds: [], phase: 'ready' }) } },
+    sessions: manySessions,
+  })
+  exactly.press(combo)
+  check('恰好 10 个工作区 → 全部列出', pickerRows().length === 10, String(pickerRows().length))
+  exactly.press({ key: 'Escape', code: 'Escape' })
+
+  // 活跃度只看可见会话:归档 / 子代理 / 空白会话不贡献活跃度(real 是唯一有活跃度的工作区)
+  const hiddenSnapshot = {
+    ids: ['arch', 'sub', 'blank', 'sess-a'],
+    byId: {
+      arch: summary('arch', wsNow + 100),
+      sub: summary('sub', wsNow + 200, { origin: 'subagent' }),
+      blank: summary('blank', wsNow + 300, { blank: true }),
+      'sess-a': summary('sess-a', wsNow - 5000),
+    },
+    subagentsByParent: {},
+  }
+  const hiddenItems = [
+    item('h1', 'archivedOnly', '/work/h1', ['arch']),
+    item('h2', 'subagentOnly', '/work/h2', ['sub']),
+    item('h3', 'blankOnly', '/work/h3', ['blank']),
+    item('h4', 'real', '/work/h4', ['sess-a']),
+  ]
+  const hidden = env({
+    workspaces: { list: { getSnapshot: () => ({ items: hiddenItems, archivedSessionIds: ['arch'], phase: 'ready' }) } },
+    sessions: makeSessions(hiddenSnapshot),
+  })
+  hidden.press(combo)
+  check(
+    '归档 / 子代理 / 空白会话不算活跃(real 首行,其余按宿主顺序沉底)',
+    same(pickerRows().map((row) => nodeText(row).split(' ')[0]), ['real', 'archivedOnly', 'subagentOnly', 'blankOnly']),
+    JSON.stringify(pickerRows().map(nodeText)),
+  )
+  hidden.press({ key: 'Escape', code: 'Escape' })
+  viewCurrent = 'sess-b'
 }
 
 // ---- 阶段 6(浮窗):⌘/Ctrl+M 模型浮窗 + ⇧Tab 思考强度循环 ----
@@ -2325,10 +2441,10 @@ console.log('\n--- ⌘/Ctrl+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
   check('只有一档强度 → ⇧Tab no-op 且不吞键', event.propagationStopped !== true && oneDir.calls.length === 0)
 
   // ⑦ 无降级:服务 / 会话 / 子代理 / directoryFor 抛错 → 浮窗空态、⇧Tab no-op
-  for (const [label, over] of [
+  for (const [label, over, current = 'sess-b'] of [
     ['modelDirectories 服务缺席', { modelDirectories: undefined }],
     ['directoryFor 抛错(未知会话 / 无挂载会话面)', { throwOnDirectory: true }],
-    ['无当前会话', { sessions: { list: { getSnapshot: () => ({ ...snapshot, current: undefined }) }, binding: () => undefined } }],
+    ['无当前会话', { sessions: { ...sessions, binding: () => undefined } }, null],
     [
       '被寻址的子代理会话',
       {
@@ -2340,6 +2456,7 @@ console.log('\n--- ⌘/Ctrl+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
       },
     ],
   ]) {
+    viewCurrent = current === null ? undefined : current
     const target = env(over)
     event = target.press(combo)
     await flush()
@@ -2350,6 +2467,7 @@ console.log('\n--- ⌘/Ctrl+M → 模型浮窗 + ⇧Tab 循环思考强度 ---')
     event = target.press(shiftTab)
     check(`${label} → ⇧Tab no-op 且不吞键`, event.propagationStopped !== true)
   }
+  viewCurrent = 'sess-b'
 
   // ⑧ load() 拒绝 / select() 拒绝:浮窗照常开关,失败只落在提示与 store 上
   const broken = env({ directory: makeDirectory({ loadError: 'host catalog unavailable' }) })
@@ -2462,20 +2580,23 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   /** 会话摘要工厂(与上游 client SessionSummary 同形的最小子集)。 */
   const summary = (id, updatedAt, over = {}) => ({
     id, displayTitle: `会话 ${id}`, title: `会话 ${id}`,
-    cwd: `/work/${id}`, running: false, completed: false, blank: false, updatedAt, ...over,
+    cwd: `/work/${id}`, running: false, blank: false, updatedAt, ...over,
   })
   /** 夹具:两个工作区 + 无归属 + 空白 + 归档 + 子代理,覆盖全部派生规则。 */
   const sessionIds = ['a1', 'a2', 'b1', 'stray', 'blank', 'arch', 'sub']
   const byId = {
     a1: summary('a1', T - 1000),
     a2: summary('a2', T, { running: true }),
-    b1: summary('b1', T - 500, { completed: true }),
+    b1: summary('b1', T - 500),
     stray: summary('stray', T - 200),
     blank: summary('blank', T + 500, { blank: true }),
     arch: summary('arch', T + 900),
     sub: summary('sub', T + 1000, { origin: 'subagent' }),
   }
-  const listSnapshot = (current) => ({ current, ids: sessionIds, byId, subagentsByParent: {} })
+  // 当前会话与「完成未读」都来自 uiSession(alpha.2);sessions.list 快照里已无 current / completed。
+  viewCurrent = 'b1'
+  completionUnread = new Set(['b1'])
+  const listSnapshot = () => ({ ids: sessionIds, byId, subagentsByParent: {} })
   const workspaceItems = [
     {
       workspaceId: 'w1', title: 'alpha', path: '/work/alpha', sessionIds: ['a1', 'a2', 'blank', 'arch'],
@@ -2488,40 +2609,28 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   ]
 
   /** 装配:默认「两个工作区就绪、当前会话 = b1」;over.sessions 只替换列表快照,over.service 替换整个服务(undefined = 缺席)。
-   * 录制用的 open 刻意写成读 this 的方法(真机 sessions.open 是原型方法,摘下来丢 this 抛 TypeError,这正是回归点)。 */
+   * 打开只经 uiWorkspace.openSession(alpha.2 起 sessions.open 已删除),录制用的 openSession 刻意写成读 this 的方法
+   * (真机是原型方法,摘下来丢 this 抛 TypeError,这正是「Enter 不跳转」的回归点)。 */
   function env(over = {}) {
     const opened = []
-    let base
-    if ('sessions' in over) {
-      const given = over.sessions
-      base = {
-        list: { getSnapshot: () => given.list.getSnapshot() },
-        open(id) {
-          if (this.list === undefined) throw new Error('sessions.open lost its receiver')
-          opened.push(id)
-          const custom = given.open
-          if (typeof custom === 'function') custom(id)
-        },
-        binding: () => undefined,
-      }
-    } else {
-      base = {
-        list: { getSnapshot: () => listSnapshot('b1') },
-        open(id) {
-          if (this.list === undefined) throw new Error('sessions.open lost its receiver')
-          opened.push(id)
-        },
-        binding: () => undefined,
-      }
+    const listOf = () => ('sessions' in over ? over.sessions.list.getSnapshot() : listSnapshot())
+    const base = { list: { getSnapshot: listOf }, binding: () => undefined }
+    const recorder = {
+      openSession(id) {
+        if (this === undefined || this === null) throw new Error('uiWorkspace.openSession lost its receiver')
+        opened.push(id)
+      },
     }
     const workspacesService = 'workspaces' in over
       ? over.workspaces
       : { list: { getSnapshot: () => ({ items: workspaceItems, archivedSessionIds: ['arch'], phase: 'ready' }) } }
+    const extra = over.extra ?? {}
     const press = loadPlugin({
       sessions: 'service' in over ? over.service : base,
       uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
       workspaces: workspacesService,
-      ...over.extra,
+      uiWorkspace: 'uiWorkspace' in extra ? extra.uiWorkspace : recorder,
+      ...extra,
     })
     return { press, opened }
   }
@@ -2566,7 +2675,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   event = first.press({ key: 'ArrowDown', code: 'ArrowDown' })
   check('↓ 移入下一个工作区分组(跨组)', activeSessionIndex() === 3, String(activeSessionIndex()))
   check('↓ 被浮窗吞掉', event.propagationStopped === true)
-  check('↑/↓ 不打开会话(只有 Enter 才调 sessions.open)', same(first.opened, []), JSON.stringify(first.opened))
+  check('↑/↓ 不打开会话(只有 Enter 才打开)', same(first.opened, []), JSON.stringify(first.opened))
   first.press({ key: 'ArrowUp', code: 'ArrowUp' })
   first.press({ key: 'ArrowUp', code: 'ArrowUp' })
   first.press({ key: 'ArrowUp', code: 'ArrowUp' })
@@ -2576,22 +2685,22 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   first.press({ key: 'ArrowDown', code: 'ArrowDown' })
   check('末行 clamp(不循环,仍停在第 4 行)', activeSessionIndex() === 3, String(activeSessionIndex()))
 
-  // ③ Enter → sessions.open(高亮会话)并关闭浮窗
+  // ③ Enter → uiWorkspace.openSession(高亮会话)并关闭浮窗
   event = first.press({ key: 'Enter', code: 'Enter' })
-  check('Enter → sessions.open(stray)', same(first.opened, ['stray']), JSON.stringify(first.opened))
+  check('Enter → openSession(stray)', same(first.opened, ['stray']), JSON.stringify(first.opened))
   check('Enter 被吞', event.propagationStopped === true)
   check('打开后浮窗关闭(会话行清空)', sessionRows().length === 0, String(sessionRows().length))
   event = first.press({ key: 'ArrowDown', code: 'ArrowDown' })
   check('浮窗关闭后裸 ↓ 不吞键', event.propagationStopped !== true)
 
-  // ③′ 确认路径:优先 uiWorkspace.openSession(= sessions.open + selectPanel(null)),缺席回退 sessions.open;
-  //     两处都刻意用读 this 的类方法形态(摘下来丢 this 抛错,正是「Enter 不跳转」的回归点)。
+  // ③′ 确认路径只走 uiWorkspace.openSession(alpha.2 起 sessions.open 已删除,无回退);
+  //     刻意用读 this 的类方法形态(摘下来丢 this 抛错,正是「Enter 不跳转」的回归点)。
   const wsOpened = []
   const viaWorkspace = env({
     extra: {
       uiWorkspace: {
         openSession(id) {
-          if (wsOpened === undefined) throw new Error('uiWorkspace.openSession lost its receiver')
+          if (this === undefined || this === null) throw new Error('uiWorkspace.openSession lost its receiver')
           wsOpened.push(id)
         },
       },
@@ -2599,18 +2708,17 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   })
   viaWorkspace.press(combo)
   viaWorkspace.press({ key: 'Enter', code: 'Enter' })
-  check('有 uiWorkspace.openSession → Enter 优先走它', same(wsOpened, ['b1']), JSON.stringify(wsOpened))
-  check('走 openSession 时不再直接调 sessions.open', same(viaWorkspace.opened, []), JSON.stringify(viaWorkspace.opened))
+  check('Enter → uiWorkspace.openSession(b1)', same(wsOpened, ['b1']), JSON.stringify(wsOpened))
 
   const wsNoMethod = env({ extra: { uiWorkspace: {} } })
   wsNoMethod.press(combo)
-  wsNoMethod.press({ key: 'Enter', code: 'Enter' })
-  check('uiWorkspace 无 openSession → 回退 sessions.open', same(wsNoMethod.opened, ['b1']), JSON.stringify(wsNoMethod.opened))
+  event = wsNoMethod.press({ key: 'Enter', code: 'Enter' })
+  check('无 openSession → 确认时 no-op、不崩、浮窗关闭', event.propagationStopped === true && sessionRows().length === 0)
 
   const wsThrowing = env({ extra: { uiWorkspace: { openSession: () => { throw new Error('no mounted session surface') } } } })
   wsThrowing.press(combo)
-  wsThrowing.press({ key: 'Enter', code: 'Enter' })
-  check('openSession 抛错 → 回退 sessions.open 仍然打开', same(wsThrowing.opened, ['b1']), JSON.stringify(wsThrowing.opened))
+  event = wsThrowing.press({ key: 'Enter', code: 'Enter' })
+  check('openSession 抛错 → 确认时 no-op、不崩、浮窗关闭', event.propagationStopped === true && sessionRows().length === 0)
 
   // ④ Esc 关闭 / 再按 ⌘/Ctrl+I 关闭(开关语义)/ ⌘/ 换成速查表
   first.press(combo)
@@ -2629,25 +2737,29 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   check('速查表再按 ⌘/ 关闭', event.propagationStopped === true)
 
   // ⑤ 当前会话不在列表里(空白会话 / 无 current)→ 初始高亮首行,Enter 打开首行
-  const blankCurrent = env({ sessions: { list: { getSnapshot: () => listSnapshot('blank') } } })
+  viewCurrent = 'blank'
+  const blankCurrent = env()
   blankCurrent.press(combo)
   check('当前是空白会话(不列出)→ 初始高亮首行', activeSessionIndex() === 0, String(activeSessionIndex()))
   blankCurrent.press({ key: 'Enter', code: 'Enter' })
-  check('Enter → sessions.open(a2)', same(blankCurrent.opened, ['a2']), JSON.stringify(blankCurrent.opened))
+  check('Enter → openSession(a2)', same(blankCurrent.opened, ['a2']), JSON.stringify(blankCurrent.opened))
 
-  const noCurrent = env({ sessions: { list: { getSnapshot: () => listSnapshot(undefined) } } })
+  viewCurrent = undefined
+  const noCurrent = env()
   noCurrent.press(combo)
   check('无 current → 初始高亮首行', activeSessionIndex() === 0, String(activeSessionIndex()))
   noCurrent.press({ key: 'Escape', code: 'Escape' })
-  // ⑥ sessions 服务缺席 / 快照缺 ids / open 缺失 / open 抛错:空态或 no-op,一律不崩
+  viewCurrent = 'b1'
+
+  // ⑥ sessions 服务缺席 / 快照缺 ids / 无 openSession:空态或 no-op,一律不崩
   const empty = env({
-    sessions: { list: { getSnapshot: () => ({ current: 'x', ids: [], byId: {}, subagentsByParent: {} }) }, open() {}, binding: () => undefined },
+    sessions: { list: { getSnapshot: () => ({ ids: [], byId: {}, subagentsByParent: {} }) }, binding: () => undefined },
   })
   event = empty.press(combo)
   check('无可用会话 → 浮窗打开为空态并吞键', event.propagationStopped === true && sessionRows().length === 0)
   check('空态给出提示文本', nodeText(globalThis.document.body).includes('当前没有可打开的对话'))
   event = empty.press({ key: 'Enter', code: 'Enter' })
-  check('空态 Enter 不触发 sessions.open', same(empty.opened, []), JSON.stringify(empty.opened))
+  check('空态 Enter 不打开会话', same(empty.opened, []), JSON.stringify(empty.opened))
   check('空态 Enter 仍被模态吞掉', event.propagationStopped === true)
   empty.press({ key: 'Escape', code: 'Escape' })
 
@@ -2656,22 +2768,23 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   check('sessions 服务缺席 → 浮窗空态、不崩、吞键', event.propagationStopped === true && sessionRows().length === 0)
   noSessions.press({ key: 'Escape', code: 'Escape' })
 
-  const noIds = env({ sessions: { list: { getSnapshot: () => ({ current: 'a2', byId }) } } })
+  const noIds = env({ sessions: { list: { getSnapshot: () => ({ byId }) } } })
   event = noIds.press(combo)
   check('快照缺 ids → 浮窗空态、不崩', event.propagationStopped === true && sessionRows().length === 0)
   noIds.press({ key: 'Escape', code: 'Escape' })
 
-  // open 缺失:整个服务换成一个只有 list 的壳(装配的录制 open 不参与)
-  const noOpen = env({ service: { list: { getSnapshot: () => listSnapshot('a2') } } })
-  event = noOpen.press(combo)
-  check('open 缺失时浮窗照开', event.propagationStopped === true && sessionRows().length === 4)
-  event = noOpen.press({ key: 'Enter', code: 'Enter' })
-  check('open 缺失 → 确认时 no-op、不崩、浮窗关闭', event.propagationStopped === true && sessionRows().length === 0)
+  // sessions 只有 list 的壳:浮窗照常渲染,确认仍走 uiWorkspace.openSession
+  const listOnly = env({ service: { list: { getSnapshot: listSnapshot } } })
+  event = listOnly.press(combo)
+  check('sessions 只有 list → 浮窗照开', event.propagationStopped === true && sessionRows().length === 4)
+  event = listOnly.press({ key: 'Enter', code: 'Enter' })
+  check('sessions 只有 list → Enter 仍打开会话', same(listOnly.opened, ['b1']), JSON.stringify(listOnly.opened))
 
-  const throwing = env({ sessions: { list: { getSnapshot: () => listSnapshot('a2') }, open: () => { throw new Error('unknown id') } } })
+  // 确认抛错:no-op、不崩、浮窗照关
+  const throwing = env({ extra: { uiWorkspace: { openSession: () => { throw new Error('unknown id') } } } })
   throwing.press(combo)
   event = throwing.press({ key: 'Enter', code: 'Enter' })
-  check('open 抛错 → 确认时 no-op、不崩、浮窗关闭', event.propagationStopped === true && sessionRows().length === 0)
+  check('openSession 抛错 → 确认时 no-op、不崩、浮窗关闭', event.propagationStopped === true && sessionRows().length === 0)
 
   // ⑦ workspaces 服务缺席 / 快照缺 items → 全部会话落入无归属组(仍可用,不假装没有会话)
   const flat = env({
@@ -2716,10 +2829,13 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
         createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z',
       },
     ]
-    const capEnv = (current) => env({
-      sessions: { list: { getSnapshot: () => ({ current, ids: [...capIds, 'blankTop'], byId: capById, subagentsByParent: {} }) } },
-      workspaces: { list: { getSnapshot: () => ({ items: capWorkspaces, archivedSessionIds: [], phase: 'ready' }) } },
-    })
+    const capEnv = (current) => {
+      viewCurrent = current
+      return env({
+        sessions: { list: { getSnapshot: () => ({ ids: [...capIds, 'blankTop'], byId: capById, subagentsByParent: {} }) } },
+        workspaces: { list: { getSnapshot: () => ({ items: capWorkspaces, archivedSessionIds: [], phase: 'ready' }) } },
+      })
+    }
 
     const capped = capEnv('c13')
     capped.press(combo)
@@ -2800,6 +2916,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
     forced.press({ key: 'Enter', code: 'Enter' })
     check('强制纳入的当前会话可被 Enter 打开', same(forced.opened, ['c01']), JSON.stringify(forced.opened))
   }
+  viewCurrent = 'b1'
 
   // ⑧ card / editing 态同样可用(带修饰键的组合不与卡片裸键、文本编辑冲突)
   const carded = env({
@@ -2829,6 +2946,8 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   event = custom.press({ key: 'Enter', code: 'Enter' })
   check('自定义键位下 Enter 打开高亮会话', same(custom.opened, ['b1']), JSON.stringify(custom.opened))
   storage.delete('dsh-kbd-hotkeys:v1')
+  viewCurrent = 'sess-b'
+  completionUnread = new Set()
 }
 
 console.log(`\n${failures === 0 ? 'ALL PASS' : `${String(failures)} FAILED`}`)
