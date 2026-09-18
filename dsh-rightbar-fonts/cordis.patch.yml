@@ -1,0 +1,5 @@
+# dsh-rightbar-fonts 的 web bundle 挂载行:随 dsh.profile.bundles 自动挂载。
+# 宿主半部按 <name>/package.json 解析;客户端半部由 dsh.client.platform=web + immediately 注册进浏览器 roster。
+- insert:
+    - id: dsh-rightbar-fonts
+      name: dsh-rightbar-fonts

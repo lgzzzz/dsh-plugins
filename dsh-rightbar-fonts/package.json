@@ -1,0 +1,34 @@
+{
+  "name": "dsh-rightbar-fonts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web UI patch: the right-sidebar file/Markdown preview and the turn's changes-review diff stop rendering at upstream's fixed 11px code token. Both surfaces follow the ui-theme content font-size axis (--dsh-content-font-size, 14px by default) instead, with the diff row height travelling with it. TypeScript: host half index.ts (type stripping), browser half src/client.ts -> lib/client.js (esbuild).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}
