@@ -2,7 +2,7 @@
   "name": "dsh-rightbar-fonts",
   "version": "1.0.0",
   "private": true,
-  "description": "Local persistent Web UI patch: the right-sidebar file/Markdown preview and the turn's changes-review diff stop rendering at upstream's fixed 11px code token. Both surfaces follow the ui-theme content font-size axis (--dsh-content-font-size, 14px by default) instead, with the diff row height travelling with it. TypeScript: host half index.ts (type stripping), browser half src/client.ts -> lib/client.js (esbuild).",
+  "description": "Local persistent Web UI patch: the right-sidebar file/Markdown preview and the turn's changes-review diff stop rendering at upstream's fixed 11px code token. Both surfaces follow the ui-theme content font-size axis (--dsh-content-font-size, 14px by default) instead, with the diff row height travelling with it. The right-sidebar Markdown preview additionally pulls its table cells (upstream secondary step), inline code (hard-coded 0.875em, 11px inside tables) and code fences onto the same axis, so body, tables, inline code and fenced code render at one size. TypeScript: host half index.ts (type stripping), browser half src/client.ts -> lib/client.js (esbuild).",
   "type": "module",
   "exports": {
     ".": {

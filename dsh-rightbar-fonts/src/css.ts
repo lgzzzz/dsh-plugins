@@ -9,7 +9,11 @@
  * 选择器全部是稳定 data 属性(抗 CSS-module 哈希):`[data-textpreview-body]` 是
  * ui-sidebar-documentpreview 的正文容器(纯文本页 / Markdown / CodeBlock 预览都在其中),
  * `[data-changes-review]` 是 ui-deliverables 的变更审阅 tab 根,`[data-diff-line]` 打在它的每个
- * diff 行上。 */
+ * diff 行上。
+ *
+ * ③ 段再收口右栏 **Markdown 预览**里三处不肯走字号轴的正文:表格单元格(上游 secondary 档)、
+ * 代码围栏(固定 11px 代码 token)、行内代码(上游写死 0.875em,表格内另有 11px 硬编码),
+ * 统一到字号轴主档(默认 14px),与该容器里本来就吃 `--dsw-font-markdown-base` 的正文同号。 */
 
 /** 目标字号来源。
  *  - `null`(默认):跟随设置里的「字号大小」(默认 14px),用户改设置即整体联动;
@@ -29,6 +33,10 @@ const LINE_HEIGHT = FIXED_FONT_SIZE_PX === null
 
 // 代码/正文的 font 简写:上游把整个 token 当 `font:` 简写消费,故这里必须是完整简写。
 const CODE_FONT = `400 ${FONT_SIZE} / ${LINE_HEIGHT} var(--ds-font-family-code)`
+
+// 表格单元格的 font 简写:上游 table token 不带字重(即 normal),表头另带 500,故两者分开写。
+const TABLE_FONT = `${FONT_SIZE} / ${LINE_HEIGHT} var(--dsw-font-family)`
+const TABLE_HEAD_FONT = `500 ${FONT_SIZE} / ${LINE_HEIGHT} var(--dsw-font-family)`
 
 // 注入的样式表;首行注释供 DevTools 核对来源。
 export const CSS = `/* dsh-rightbar-fonts: right-sidebar preview + changes review follow the content font-size axis */
@@ -50,5 +58,28 @@ export const CSS = `/* dsh-rightbar-fonts: right-sidebar preview + changes revie
 [data-changes-review] [data-diff-line] {
   min-height: ${LINE_HEIGHT} !important;
   line-height: ${LINE_HEIGHT} !important;
+}
+
+/* ③ 右栏 Markdown 预览(锚点是 MarkdownBody 根 [data-document-markdown];其内 MarkdownText
+   根是 CSS-module 哈希类名,选不中也不该选,只当 token 继承层用):正文本来就走字号轴,但同容器内
+   —— 表格 th/td 吃 secondary 档(设置 −1px)、代码围栏吃固定 11px 的代码 token、
+      行内代码被上游写死 0.875em(表格里再写死 11px);
+   这里把三者一并提到字号轴主档,与正文同号(默认 14px)。 */
+[data-document-markdown] {
+  --dsw-font-markdown-table: ${TABLE_FONT};
+  --dsw-font-markdown-table-head: ${TABLE_HEAD_FONT};
+  --dsw-font-markdown-code-block: ${CODE_FONT};
+}
+
+/* 行内代码:上游源码 \`.markdown :not(pre) > code{font: var(--dsw-font-markdown-code);
+   font-size: .875em !important}\`(类名构建后哈希为 ._markdown_xxx,不能写 .markdown)。
+   表格内另有 \`.tableScroll table code{font-size: 11px}\`,但它被上游自己那条 !important 压掉,
+   实测表格内基线是 0.875 × 13px = 11.375px。
+   选择器用两个 data 属性锚点([data-textpreview-body] 是 MarkdownBody 的唯一渲染父级),
+   特异性 (0,2,2) 压过上游 (0,1,2),!important 再压过上游那条 !important。
+   1em 即父级字号 ⇒ 正文 / 列表 / 引用 / 表格单元格里就是字号轴(默认 14px),标题里随标题阶梯。
+   行高保持上游代码 token 的 19px(芯片高 20px 仍小于正文 24px 行高),避免行内代码把整行撑高。 */
+[data-textpreview-body] [data-document-markdown] :not(pre) > code {
+  font-size: 1em !important;
 }
 `
