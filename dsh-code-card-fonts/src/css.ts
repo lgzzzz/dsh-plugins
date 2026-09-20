@@ -57,8 +57,16 @@ body {
   font-size: 14px !important;
 }
 
-/* 展开正文:展开根 [data-open] 内、表头外的兄弟节点(turn-process 也带 data-open,已排除) */
+/* 展开正文包裹层:展开根 [data-open] 内、表头外的兄弟节点(turn-process 也带 data-open,已排除) */
 [data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row]) {
+  font-size: 14px !important;
+}
+
+/* 展开正文的 Markdown 根:上游 0.1.6-alpha.2 起 ReasoningRow 的展开正文由纯文本改为
+   MarkdownText(variant="compact"),该根自带 font-size(--dsh-content-font-size-secondary,
+   默认 13px)且是包裹层的孙元素;元素自身声明恒胜继承,故须在 Markdown 根上直接命中。
+   不设 line-height:上游 alpha.1 该正文行高亦取 secondary 轴,本规则只改字号以保持原状。 */
+[data-chat-flow-kind] [data-open]:not([data-turn-process]) [data-markdown-variant="compact"] {
   font-size: 14px !important;
 }
 

@@ -82,8 +82,16 @@ body {
   font-size: 14px !important;
 }
 
-/* \u5C55\u5F00\u6B63\u6587:\u5C55\u5F00\u6839 [data-open] \u5185\u3001\u8868\u5934\u5916\u7684\u5144\u5F1F\u8282\u70B9(turn-process \u4E5F\u5E26 data-open,\u5DF2\u6392\u9664) */
+/* \u5C55\u5F00\u6B63\u6587\u5305\u88F9\u5C42:\u5C55\u5F00\u6839 [data-open] \u5185\u3001\u8868\u5934\u5916\u7684\u5144\u5F1F\u8282\u70B9(turn-process \u4E5F\u5E26 data-open,\u5DF2\u6392\u9664) */
 [data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row]) {
+  font-size: 14px !important;
+}
+
+/* \u5C55\u5F00\u6B63\u6587\u7684 Markdown \u6839:\u4E0A\u6E38 0.1.6-alpha.2 \u8D77 ReasoningRow \u7684\u5C55\u5F00\u6B63\u6587\u7531\u7EAF\u6587\u672C\u6539\u4E3A
+   MarkdownText(variant="compact"),\u8BE5\u6839\u81EA\u5E26 font-size(--dsh-content-font-size-secondary,
+   \u9ED8\u8BA4 13px)\u4E14\u662F\u5305\u88F9\u5C42\u7684\u5B59\u5143\u7D20;\u5143\u7D20\u81EA\u8EAB\u58F0\u660E\u6052\u80DC\u7EE7\u627F,\u6545\u987B\u5728 Markdown \u6839\u4E0A\u76F4\u63A5\u547D\u4E2D\u3002
+   \u4E0D\u8BBE line-height:\u4E0A\u6E38 alpha.1 \u8BE5\u6B63\u6587\u884C\u9AD8\u4EA6\u53D6 secondary \u8F74,\u672C\u89C4\u5219\u53EA\u6539\u5B57\u53F7\u4EE5\u4FDD\u6301\u539F\u72B6\u3002 */
+[data-chat-flow-kind] [data-open]:not([data-turn-process]) [data-markdown-variant="compact"] {
   font-size: 14px !important;
 }
 

@@ -9,7 +9,8 @@
 - 每条规则精确命中目标元素，**不使用** `[data-x], [data-x] * { … }` 全量覆盖选择器；
   摘要行以外的元信息（inspect 按钮 11px、时间戳等）与用户 / 助手正文保持组件自身字号。
 - 保留 `!important`：用于压过子元素自带的显式 `font-size`（`.summary`、`.ioText`、
-  `.ioCard`、`font:` 简写、内联代码的 `.875em !important` 等）。
+  `.ioCard`、展开正文 Markdown 根的 `.compact`、`font:` 简写、内联代码的
+  `.875em !important` 等）。
 
 ## 选择器（稳定 data 属性，抗 CSS-module 哈希）
 
@@ -22,13 +23,20 @@
 | 代码块 | `[data-chat-flow-kind] pre`、`[data-chat-flow-kind] pre code` |
 | 内联代码 | `[data-chat-flow-kind] :not(pre) > code` |
 | Markdown 表格单元格 | `[data-chat-flow-kind] table th`、`[data-chat-flow-kind] table td` |
-| 卡片展开正文（DisclosureRow 系） | `[data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row])` |
+| 卡片展开正文（DisclosureRow 系） | 包裹层 `[data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row])`；正文 Markdown 根 `… [data-markdown-variant="compact"]` |
 | 卡片展开正文（压缩标记） | `[data-chat-flow-kind="compaction"] button[aria-expanded="true"] + div`（`manual-compaction` 同形） |
 | 工具 / bash 卡片内容 | 在 `[data-tool]` / `[data-sample]` 上重指 `--dsw-font-markdown-code-block-small` 与 `--dsw-font-markdown-code-block`（主题默认 11px）；BashRow 的展开正文是表头 `[data-sample]` 的**相邻兄弟**，另在 `[data-sample] + *` 重指 |
 
 要点：`[data-chat-flow-kind]` 打在聊天流条目根上，`[data-tool]` / `[data-sample]` 打在卡片
 根上；`DisclosureRow` 表头带 `data-disclosure-row`、根在展开时带 `data-open`，展开正文恒为
 表头的兄弟节点（`turn-process` 开关也带 `data-open`，故用 `:not([data-turn-process])` 排除）。
+
+展开正文须**两层都命中**：自上游 `0.1.6-alpha.2` 起 `ReasoningRow` 的展开正文由纯文本改为
+`MarkdownText variant="compact"`，`font-size` 也随之从正文包裹层移到 Markdown 根的自带
+`.compact` 上（取 `--dsh-content-font-size-secondary`，默认设置下为 13px）。元素自身的
+`font-size` 声明恒胜过从父级继承的值，因此只在包裹层写 14px 对正文无效——必须在带
+`data-markdown-variant="compact"` 的 Markdown 根上直接命中（该属性是上游显式出口，非
+CSS-module 哈希类名）。
 
 ## 卡片间距
 
