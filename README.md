@@ -1,6 +1,6 @@
 # dsh-plugins — DSH Web 本地插件仓库
 
-本仓库包含 **8 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**：每个插件是
+本仓库包含 **9 个相互独立的 DSH（DeepSeek Harness）Web 本地持久化插件**：每个插件是
 一个自包含的本地 npm 包，经 web Profile 的 `link:` 依赖挂载进正在运行的应用。
 
 仓库根 **不作为「一个插件」整体安装**（没有集合包、也没有根 `cordis.patch.yml`，
@@ -12,6 +12,7 @@
 | 目录                            | 说明                                                                                                                                                                                                                               |
 |---------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `dsh-code-card-fonts`           | 卡片标题 / 摘要行 / 展开内容 / 代码块 / 内联代码 / Markdown 表格单元格统一 14px，卡片间距 7px；内容字号轴不受影响，设置里的「字号大小」仍可调                                                                                      |
+| `dsh-desktop-notify`            | 桌面通知：会话标题栏铃铛按钮负责授权 + 开关；页面开着但不在前台时，顶层会话「回合结束」或「等你审批 / 回答 / 确认计划」弹 Windows 系统通知（关掉页面不送达）                                                                        |
 | `dsh-directory-picker-browse`   | 纯补丁插件：停用上游 auto 目录选择器，挂载 browse 变体；不触碰上游 `ui-deliverables`                                                                                                                                               |
 | `dsh-fullwidth-chat`            | 对话列全宽展示                                                                                                                                                                                                                     |
 | `dsh-git-guard`                 | 敏感 git 操作（`git commit`、`git push`，以及 force push 与 rebase / merge / cherry-pick / reset --hard / revert / am / filter-branch / filter-repo 等）一律需用户授权，本插件不直接拒绝；完全权限（danger-full-access）下整体退出 |
@@ -49,7 +50,7 @@ cd <仓库根>/<name> && dsh plugin --profile web add link:.   # 或在任意目
 dsh plugin --profile web remove <name>
 
 # 全部本地插件（写成一行即可）
-dsh plugin --profile web remove dsh-code-card-fonts dsh-directory-picker-browse dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-rightbar-fonts dsh-rightbar-tab-width dsh-sidebar-default-collapsed
+dsh plugin --profile web remove dsh-code-card-fonts dsh-desktop-notify dsh-directory-picker-browse dsh-fullwidth-chat dsh-git-guard dsh-kbd-hotkeys dsh-rightbar-fonts dsh-rightbar-tab-width dsh-sidebar-default-collapsed
 # 重启 App 生效
 ```
 

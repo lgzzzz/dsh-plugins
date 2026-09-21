@@ -30,13 +30,14 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 
 ## 插件清单
 
-仓库含 **8 个插件目录**。每个插件在 web Profile 中对应 **1 条 `link:` 依赖**与
+仓库含 **9 个插件目录**。每个插件在 web Profile 中对应 **1 条 `link:` 依赖**与
 **1 项 `dsh.profile.bundles`**（bundles 另含 2 个上游 bundle：`@deepseek-ai/dsh-base`、
 `@deepseek-ai/dsh-web-app`）。
 
 | 目录 | 形态 | 说明 |
 | --- | --- | --- |
 | `dsh-code-card-fonts` | Client only（TS；宿主占位） | 卡片标题 / 摘要行 / 展开内容 / 代码块 / 内联代码 / Markdown 表格单元格统一 14px，卡片间距 7px；**不覆盖**内容字号轴 `--dsh-content-font-size`，设置里的「字号大小」仍可调 |
+| `dsh-desktop-notify` | Client only（TS；宿主占位；**唯一声明 external**） | 桌面通知：标题栏铃铛按钮做授权 + 开关（`conversation.session.header.actions`）；订阅 `ctx.uiSession.sessionStatus`，页面不在前台时对顶层会话的「回合结束」（`running` true→false）与「等你处理」（`pendingInteraction` 出现 / 换 key）发系统通知；`react` 作 external（平台 seed 词），自声明 `src/react.d.ts` 切片 |
 | `dsh-directory-picker-browse` | Patch only（无代码） | `disabled` 停用上游 `directory-picker`，`insert` 挂载 browse 变体；**不触碰** `ui-deliverables`（上游 turn-tail 产物面） |
 | `dsh-fullwidth-chat` | Client only（纯 JS；宿主占位） | 对话列全宽展示 |
 | `dsh-git-guard` | Host only（TS） | 敏感 git 操作一律 `ask`（需用户授权），不产生 `deny`；**完全权限（`danger-full-access`）下整体退出** |
@@ -72,7 +73,7 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 - 宿主半部依赖宿主服务时在该行声明 `inject`；当前没有插件需要（各挂载行均无 `inject`）。
 - **宿主入口必须存在且可解析**：即使插件是纯浏览器半部（`dsh-code-card-fonts`、
   `dsh-rightbar-fonts`、`dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`、
-  `dsh-sidebar-default-collapsed`），其
+  `dsh-sidebar-default-collapsed`、`dsh-desktop-notify`），其
   `exports["."]` 指向的 `index.ts` 也必须是合法加载项（当前为空宿主 `apply() {}`）
   ——`dsh-client-modules` 靠扫描这些 Loader 条目发现声明了 `dsh.client.platform: "web"` 的包。
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务由挂载行 `inject`
@@ -86,11 +87,16 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 `window.__ModuleLoader__.load({ id, factory })` 包装的单文件 `lib/client.js`（入仓）。
 **浏览器运行时不支持 Type Stripping**：源码变更后必须重新构建，否则改动不生效。
 
-- external 依赖按插件实际 import 配置（当前无插件声明 external）；
+- external 依赖按插件实际 import 配置（当前仅 `dsh-desktop-notify` 声明 `react`
+  external：它是上游 ModuleLoader 的平台 seed 词，`window.__DSH_BOOT__` 引导的
+  `staticModules` 含 `react` / `react/jsx-runtime`，故 `require('react')` 由工厂的
+  `require` 命中宿主同一份实例，无需 Profile 侧声明 `dsh.client.external`）；
   `@deepseek-ai/*` 的客户端 import 均为 type-only，运行时服务一律经 `ctx.get(name)` 取用。
+- `@types/react` 不在 dsh 内置 bundle 里：需要 react 的插件与 `dsh-client-ui-slots`
+  等类型包同理，在源码里自声明结构切片（模板：`dsh-desktop-notify/src/react.d.ts`）。
 - 两种构建流派（产物等价）：esbuild JS API（`dsh-code-card-fonts`）；
   直接执行平台二进制（`dsh-rightbar-fonts`、`dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`、
-  `dsh-sidebar-default-collapsed`）——JS API 以 stdin/stdout 管道与子进程通信，受限
+  `dsh-sidebar-default-collapsed`、`dsh-desktop-notify`）——JS API 以 stdin/stdout 管道与子进程通信，受限
   沙箱下 `spawn` 报 `EPERM`。
 
 ## 挂载与激活（Web Profile）
@@ -150,6 +156,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | 插件 | 命令 | 说明 |
 | --- | --- | --- |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild（JS API）→ `lib/client.js`；`check` 对产物与宿主执行 `node --check` |
+| `dsh-desktop-notify` | `npm run typecheck && npm run build && npm run check`；`node test-notify.mjs` | esbuild（平台二进制，`--external:react`）→ `lib/client.js`；诊断脚本纯 Node：判定器 / 开关 store / 订阅运行时与发送侧分支，并用 `__ModuleLoader__` 桩载入产物校验装配与「后台回合结束 → 发通知」 |
 | `dsh-directory-picker-browse` | 无 | 纯补丁插件，无源码与产物 |
 | `dsh-fullwidth-chat` | 无 | 纯 JS 插件，`lib/*.js` 即源码 |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 ask / 放行各分支、完全权限放行、权限逐会话生效、服务缺席 / 抛错的失败关闭、提示词区段的动态求值 |
