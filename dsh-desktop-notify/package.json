@@ -1,0 +1,35 @@
+{
+  "name": "dsh-desktop-notify",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web plugin: desktop notifications through the browser's Notification API. A bell button in the conversation header grants the permission (one user gesture) and toggles the feature; the plugin then watches ctx.uiSession.sessionStatus and fires a system notification when a top-level session's turn finishes (running true → false) or when the agent starts waiting for you (approval / question / plan-review pending). Notifies only while the page is open and not focused. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild, react left external as a platform seed).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test-notify.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}
