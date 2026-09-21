@@ -1,7 +1,8 @@
 /**
- * 诊断脚本(非插件产物):用最小 DOM 桩加载 lib/client.js,验证 Ctrl+Alt+↑/↓ 沿侧栏可见顺序跳转活跃会话且无降级。
+ * 诊断脚本(非插件产物):用最小 DOM 桩加载 lib/client.js,验证 Ctrl+Alt+↑/↓ 沿侧栏可见顺序**循环**跳转活跃会话且无降级。
  * 覆盖:① 视图 store 活实例(工作区分组 + 本地顺序);② flat 单列表;③ 权威来源不可用(服务缺失 / 无 resolveStore /
- * 快照非对象 / groupBy 未知 / workspaces 缺 items)→ 一律 no-op。用法: node test-dispatch.mjs */
+ * 快照非对象 / groupBy 未知 / workspaces 缺 items)→ 一律 no-op;④ 轴尽头回绕与「只跳其他活跃会话」的循环。
+ * 用法: node test-dispatch.mjs */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -80,15 +81,15 @@ if (registration === null) throw new Error('bundle did not register')
 const plugin = registration.factory(() => { throw new Error('unexpected external require') })
 console.log('plugin name:', plugin.name, '| inject:', JSON.stringify(plugin.inject))
 
-/** 用给定服务集合装配一次插件,返回按键函数与 open 记录。 */
-function boot(services) {
+/** 用给定服务集合装配一次插件,返回按键函数与 open 记录;onOpen 用于让桩的「当前会话」跟随跳转。 */
+function boot(services, onOpen) {
   const doc = new FakeDocument()
   globalThis.document = doc
   const opened = []
   const withOpen = {
     ...services,
     // 0.1.6-alpha.2:sessions.open 已删除,打开会话只走 uiWorkspace.openSession
-    uiWorkspace: { ...services.uiWorkspace, openSession: (id) => { opened.push(id) } },
+    uiWorkspace: { ...services.uiWorkspace, openSession: (id) => { opened.push(id); onOpen?.(id) } },
   }
   const ctx = {
     get: (name) => withOpen[name],
@@ -310,6 +311,84 @@ function check(label, actual, expected) {
   console.log('\n--- 场景 5:uiSession.current 缺席 → retainedBy.mainView 回退 ---')
   env.press('ArrowUp')
   check('↑ 以 s-2 为锚 → s-1', env.opened, ['s-1'])
+}
+
+// 场景 6:循环 —— 到轴尽头回绕到另一端;只落别的活跃会话(跳过非活跃),锚点自身不作落点
+{
+  console.log('\n--- 场景 6:轴尽头回绕(循环) ---')
+  const snapshot = snapshotOf([
+    { id: 's-1', running: true, updatedAt: 4 },
+    { id: 's-2', running: false, updatedAt: 3 },
+    { id: 's-3', running: true, updatedAt: 2 },
+    { id: 's-4', running: true, updatedAt: 1 },
+  ])
+  const { slots } = liveSlots({
+    groupBy: 'flat',
+    orderBy: 'manual',
+    sessionOrderByAccount: { __flat_session_order__: ['s-1', 's-2', 's-3', 's-4'] },
+  })
+  // 活跃集 = {s-1, s-3, s-4}(s-2 非活跃);当前会话随 openSession 前进
+  let current = 's-4'
+  const env = boot({
+    sessions: { list: { getSnapshot: () => snapshot } },
+    uiSession: {
+      pendingInteractions: { getSnapshot: () => new Map() },
+      current: { getSnapshot: () => ({ key: current }) },
+      sessionStatus: { getSnapshot: () => new Map() },
+    },
+    sidebarRight,
+    workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    slots,
+  }, (id) => { current = id })
+  const step = (key) => {
+    const event = env.press(key)
+    return [env.opened[env.opened.length - 1], event.propagationStopped === true]
+  }
+
+  check('末行 s-4 ↓ → 回绕到 s-1 + 吞键', step('ArrowDown'), ['s-1', true])
+  check('首行 s-1 ↑ → 回绕到 s-4 + 吞键', step('ArrowUp'), ['s-4', true])
+  check('s-4 ↑ → s-3(常规方向)', step('ArrowUp'), ['s-3', true])
+  check('s-3 ↓ → s-4', step('ArrowDown'), ['s-4', true])
+  check('s-4 ↓ → 回绕 s-1(循环一圈)', step('ArrowDown'), ['s-1', true])
+  check('s-1 ↓ → 跳过非活跃 s-2 落 s-3', step('ArrowDown'), ['s-3', true])
+  check('s-3 ↓ → s-4(同上循环,顺序稳定)', step('ArrowDown'), ['s-4', true])
+}
+
+// 场景 7:除当前会话外没有活跃会话 → 不跳转、也不吞键;锚点不在可见轴同样 no-op
+{
+  console.log('\n--- 场景 7:无可跳的活跃会话 / 锚点缺席 ---')
+  const snapshot = snapshotOf([
+    { id: 's-1', running: true, updatedAt: 2 },
+    { id: 's-2', running: false, updatedAt: 1 },
+  ])
+  const { slots } = liveSlots({
+    groupBy: 'flat',
+    orderBy: 'manual',
+    sessionOrderByAccount: { __flat_session_order__: ['s-1', 's-2'] },
+  })
+  const view = (currentId) => ({
+    pendingInteractions: { getSnapshot: () => new Map() },
+    current: { getSnapshot: () => (currentId === undefined ? undefined : { key: currentId }) },
+    sessionStatus: { getSnapshot: () => new Map() },
+  })
+  const base = {
+    sessions: { list: { getSnapshot: () => snapshot } },
+    sidebarRight,
+    workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    slots,
+  }
+
+  // 唯一的活跃会话就是当前会话(锚点自身不作落点)
+  const onlySelf = boot({ ...base, uiSession: view('s-1') })
+  let event = onlySelf.press('ArrowUp')
+  check('唯一活跃会话 = 自身 → ↑ no-op 不吞键', [onlySelf.opened, event.propagationStopped === true], [[], false])
+  event = onlySelf.press('ArrowDown')
+  check('唯一活跃会话 = 自身 → ↓ no-op 不吞键', [onlySelf.opened, event.propagationStopped === true], [[], false])
+
+  // 当前会话不在可见轴上(如已归档 / 未登记)→ 无锚点,no-op
+  const noAnchor = boot({ ...base, uiSession: view('s-9') })
+  event = noAnchor.press('ArrowDown')
+  check('锚点不在可见轴 → no-op 不吞键', [noAnchor.opened, event.propagationStopped === true], [[], false])
 }
 
 console.log(failures === 0 ? '\nall dispatch probes passed' : `\n${failures} probe(s) FAILED`)

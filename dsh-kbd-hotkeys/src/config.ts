@@ -36,8 +36,8 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'session.new', label: '新建会话并跳转', group: '会话', states: ['card', 'editing', 'browse'] },
   // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
   { id: 'composer.focus', label: '聚焦输入框', group: '会话', states: ['browse', 'editing'] },
-  { id: 'session.prev', label: '上一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
-  { id: 'session.next', label: '下一个活跃会话', group: '会话', states: ['card', 'editing', 'browse'] },
+  { id: 'session.prev', label: '上一个活跃会话(循环)', group: '会话', states: ['card', 'editing', 'browse'] },
+  { id: 'session.next', label: '下一个活跃会话(循环)', group: '会话', states: ['card', 'editing', 'browse'] },
   // mod+K:浮窗内 ↑↓ 只移高亮,Enter 才 openWorkspace
   { id: 'workspace.pick', label: '切换工作区(浮窗:↑↓ 选择、Enter 切换)', group: '会话', states: ['card', 'editing', 'browse'] },
   // mod+M:与上游两个入口共用同一 per-session 目录

@@ -25,7 +25,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `⌘/Ctrl+L` | 右栏定位终端：已有终端则聚焦（多个终端时优先当前激活的那个，没有当前激活的落第一个）并把 DOM 焦点移进 xterm，一个都没有才新建；**不重排** | 任意 |
 | `⌘/Ctrl+J` | 聚焦对话输入框（J = Jump）；`editing` 时需焦点**不在** composer 内 | `browse` / `editing` |
 | `⌘/Ctrl+N` | 新建会话并跳转（`uiWorkspace.startSession()`，同侧栏「新建会话」按钮） | 任意 |
-| `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话**（沿侧栏顺序） | 任意 |
+| `⌘/Ctrl+Alt+↑` / `↓` | 上一个 / 下一个**活跃会话**（沿侧栏顺序**循环**，到尽头回绕） | 任意 |
 | `⌘/Ctrl+K` | 工作区浮窗：最近活跃的 10 个工作区（`↑`/`↓` 选择、`Enter` 切换、`Esc` 关闭） | 任意 |
 | `⌘/Ctrl+I` | 近期对话浮窗：最近交互的 10 个会话、按工作区分组（`↑`/`↓` 跨组、`Enter` 打开） | 任意 |
 | `⌘/Ctrl+M` | 模型浮窗（`↑`/`↓` 选择、`Enter` 切换、`⇧Tab` 调强度、`Esc` 关闭） | 任意 |
@@ -38,6 +38,8 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   **`mod+alt` 留给导航**（`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
 - 审批与问答的 `Enter`/`Esc`/数字键/方向键是**固定分发的单键**，不参与 `bindings` 自定义。
 - 活跃会话 = 正在运行（`running`）∪ 有待处理交互 ∪ 刚完成未查看（`uiSession.sessionStatus` 的 `completionUnread`）。
+- `⌘/Ctrl+Alt+↑`/`↓` 在**活跃会话之间**沿侧栏顺序循环：跳过非活跃会话，走到可见轴尽头
+  **回绕**到另一端；锚点（当前会话）**不作落点**，故除当前会话外没有活跃会话时 no-op 不吞键。
 - `Esc` 双职责：有审批卡片时拒绝并吞键；否则只停止运行中的会话树，**不吞键**。
 - **`⌘/Ctrl+,`（关标签）恒吞键**：该键位完全归插件——没有当前标签、上游拒关独占停靠的引导页、
   右栏 / store 链路整条不可用时都只 no-op，仍照常 `preventDefault`，浏览器不会因它执行
@@ -66,7 +68,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `sidebarRight.terminal` | 终端是 `multiple: true` 页、上游每次 `openTab` 铸带 UUID 的 `contentId`、**不按 (kind, contentId) 去重**，故认页由插件读 store 完成（`record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先，再扫其余**停靠**面板，浮窗不参与）。**已有** → `sidebarRight.focus(tabId)`；`layout.expanded === false` 时补 `toggleExpanded()`；若该终端本来就是所在面板的当前标签且右栏已展开，再按 `paneId` 做元素级聚焦。**没有** → `openTab('terminal')` 新建（上游自动聚焦）。**不重排、不置顶** |
 | `composer.focus` | 当前会话（`uiSession.current`）→ `sessions.binding(id).ctx` → `conversation.input.for(actx)`（缺席回退 `InputHub.shell(id)`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。`editing` 态另有 `contains` 门闸：焦点已在 composer 内则不重复聚焦但**仍吞键** |
 | `session.new` | `uiWorkspace.startSession()`（无参）；不触碰 composer 草稿 |
-| `session.prev` / `next` | `sessions.list` 快照 + `sidebar.workspaces` 注册项的侧栏视图 store（顺序，root 作用域传 `undefined`）；锚点 = 当前会话（`uiSession.current`），跳转调 `uiWorkspace.openSession(id)`（`sessions.open` 自 0.1.6-alpha.2 起已删除）。锚点不在可见轴 / 方向尽头无活跃会话即 no-op；顺序读不到**不跳转**（无降级） |
+| `session.prev` / `next` | `sessions.list` 快照 + `sidebar.workspaces` 注册项的侧栏视图 store（顺序，root 作用域传 `undefined`）；锚点 = 当前会话（`uiSession.current`），跳转调 `uiWorkspace.openSession(id)`（`sessions.open` 自 0.1.6-alpha.2 起已删除）。从锚点沿方向扫**其他**会话（锚点自身不作落点），跳过非活跃、到轴尽头**回绕**（循环一圈无其他活跃会话 / 锚点不在可见轴即 no-op）；顺序读不到**不跳转**（无降级） |
 | `session.recent` | 插件自建浮窗。列表 = `sessions.list` 快照 + `workspaces.list` 快照分组 + `src/session-order.ts`；`Enter`/点击调 `uiWorkspace.openSession(sessionId)`（必须以**方法**形式调用；无回退，`sessions.open` 已删除） |
 | `workspace.pick` | 插件自建浮窗。列表 = `workspaces.list` 快照 + `sessions.list` 快照派生（按组内可见会话最新的 `updatedAt` 降序取前 10，当前工作区强制保留；见 `src/workspace-switcher.ts`）；`Enter`/点击调 `uiWorkspace.openWorkspace(workspaceId)`（= 侧栏分组「＋」的连接工作区路径） |
 | `model.pick` | 插件自建浮窗。`ctx.modelDirectories.directoryFor(当前会话)`（与 `/model` 弹层、composer 模型座位**同一份** per-session 目录）→ `load()` → `store.getSnapshot().groups` 按宿主顺序展开；提交调 `directory.select(selection)`，每行选择复刻上游 `selectionOf` |
@@ -146,6 +148,10 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   `preventDefault` 后接管；**焦点不在本页面时**浏览器仍按默认处理。`⌘/Ctrl+N`
   （新建窗口）最硬：多数浏览器**不把该键派发给页面**，Win/Linux 可能始终打开新窗口
   （macOS `⌃N` 通常可用）。不生效时用 `localStorage` 改绑。
+- **`⌘/Ctrl+Alt+↑`/`↓` 可能被系统级快捷键抢占**：部分 Windows 机器上 `Ctrl+Alt+方向键` 是
+  显卡驱动（Intel 屏幕旋转）的热键，在操作系统层就被消费、页面收不到 `keydown`，插件的
+  `preventDefault` 无从生效。完全没反应时先关掉该驱动热键，或在 `localStorage` 里改绑
+  （如 `{"bindings":{"session.prev":"mod+alt+pageup","session.next":"mod+alt+pagedown"}}`）。
 - **`⌘/Ctrl+,` 在 macOS 上可能被菜单截获**：`⌘,` 是 Chrome / Safari 的「设置 / 偏好设置」
   菜单键，与 `⌘N` 同理（菜单键先由菜单系统消费，可能不派发给页面；页面收不到 `keydown`
   时插件的 `preventDefault` 无从生效）；`⌃,` 通常可用（`mod` 兼收 `ctrlKey`）。被截获时用
@@ -204,8 +210,9 @@ npm run check       # node --check 产物与宿主
   工作区（活跃度排序 / 前 10 / 当前工作区保留）/ 近期对话 / 模型三个浮窗的列表顺序、分页上限、
   确认路径与空态；`⇧Tab` 候选档与编辑态门闸；各动作的无降级边界。
 - `node test-dispatch.mjs` — 会话跳转分发：按侧栏顺序（分组 / flat / 权威来源不可用时
-  no-op、`uiSession.current` 缺席时回退 `retainedBy.mainView`）与两个侧栏开关的键位、
-  态闸门。
+  no-op、`uiSession.current` 缺席时回退 `retainedBy.mainView`）、**循环回绕**（首 / 末行两端、
+  跳过非活跃会话、锚点自身不作落点、除当前会话外无活跃会话即 no-op 不吞键）与两个侧栏开关的
+  键位、态闸门。
 
 ## 加载（用户操作）
 

@@ -667,21 +667,21 @@ function openNeighborSession(services, delta) {
   const openSession = uiWorkspace == null ? void 0 : uiWorkspace.openSession;
   if (uiWorkspace === null || uiWorkspace === void 0 || typeof openSession !== "function") return false;
   const axis = sidebarOrderedSessionIds(snapshot, services);
-  if (axis.length === 0) return false;
+  const total = axis.length;
+  if (total === 0) return false;
   const current = currentSessionId(services);
   const anchor = current === void 0 ? -1 : axis.indexOf(current);
   if (anchor < 0) return false;
   const active = activeSessionIds(snapshot, services);
-  for (let i = anchor + delta; i >= 0 && i < axis.length; i += delta) {
-    const id = axis[i];
+  for (let step = 1; step < total; step += 1) {
+    const id = axis[((anchor + delta * step) % total + total) % total];
     if (id === void 0) continue;
-    if (active.has(id)) {
-      try {
-        openSession.call(uiWorkspace, id);
-        return true;
-      } catch {
-        return false;
-      }
+    if (!active.has(id)) continue;
+    try {
+      openSession.call(uiWorkspace, id);
+      return true;
+    } catch {
+      return false;
     }
   }
   return false;
@@ -725,8 +725,8 @@ var ACTIONS = [
   { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD\u5E76\u8DF3\u8F6C", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
   { id: "composer.focus", label: "\u805A\u7126\u8F93\u5165\u6846", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
-  { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
-  { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  { id: "session.prev", label: "\u4E0A\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD(\u5FAA\u73AF)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  { id: "session.next", label: "\u4E0B\u4E00\u4E2A\u6D3B\u8DC3\u4F1A\u8BDD(\u5FAA\u73AF)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // mod+K:浮窗内 ↑↓ 只移高亮,Enter 才 openWorkspace
   { id: "workspace.pick", label: "\u5207\u6362\u5DE5\u4F5C\u533A(\u6D6E\u7A97:\u2191\u2193 \u9009\u62E9\u3001Enter \u5207\u6362)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // mod+M:与上游两个入口共用同一 per-session 目录

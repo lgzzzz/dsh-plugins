@@ -382,7 +382,11 @@ function cancelIfRunning(id: string, sessions: SessionsLike, cancelled: Set<stri
   }
 }
 
-/** 活跃会话跳转（⌘/Ctrl+Alt+↑↓）：按侧栏顺序轴找方向上最近的活跃会话；轴不可读即 no-op（无降级）。 */
+/**
+ * 活跃会话循环跳转（⌘/Ctrl+Alt+↑↓）：按侧栏顺序轴从当前会话出发、找方向上最近的其他活跃会话，
+ * 走到轴尽头**回绕**到另一端（循环）；锚点自身不作落点，故除当前会话外没有活跃会话即 no-op；
+ * 轴 / 锚点不可读即 no-op（无降级）。
+ */
 export function openNeighborSession(services: Services, delta: number): boolean {
   const sessions = services.sessions
   const snapshot = sessions?.list?.getSnapshot?.()
@@ -393,21 +397,22 @@ export function openNeighborSession(services: Services, delta: number): boolean 
   const openSession = uiWorkspace?.openSession
   if (uiWorkspace === null || uiWorkspace === undefined || typeof openSession !== 'function') return false
   const axis = sidebarOrderedSessionIds(snapshot, services)
-  if (axis.length === 0) return false
+  const total = axis.length
+  if (total === 0) return false
   const current = currentSessionId(services)
   const anchor = current === undefined ? -1 : axis.indexOf(current)
   if (anchor < 0) return false
   const active = activeSessionIds(snapshot, services)
-  for (let i = anchor + delta; i >= 0 && i < axis.length; i += delta) {
-    const id = axis[i]
+  // 从 anchor ± 1 起沿方向扫；越过任一端即回绕（取模）。step 只到 total - 1，锚点自身不会被再次落点
+  for (let step = 1; step < total; step += 1) {
+    const id = axis[(((anchor + delta * step) % total) + total) % total]
     if (id === undefined) continue
-    if (active.has(id)) {
-      try {
-        openSession.call(uiWorkspace, id)
-        return true
-      } catch {
-        return false
-      }
+    if (!active.has(id)) continue
+    try {
+      openSession.call(uiWorkspace, id)
+      return true
+    } catch {
+      return false
     }
   }
   return false
