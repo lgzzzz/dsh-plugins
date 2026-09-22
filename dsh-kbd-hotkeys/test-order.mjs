@@ -5,7 +5,9 @@
  *      两源去重、缺失来源的降级、无运行会话 / 锚点不可读的 no-op);
  *   B. 侧栏顺序复刻:sessionVisible 的 archivedFilter 三分支、reconcileOrder(存档序 / 置顶前置 / 归档沉底 /
  *      fork 紧随其源 / **缺摘要成员剔除**)、sectionMembers 分区、pinCurrentBlank,
- *      以及 sidebarOrderedSessionIds 端到端(workspace / flat × default|show|only × updated|manual)。
+ *      以及 sidebarOrderedSessionIds 端到端(workspace / flat × default|show|only × updated|manual);
+ *   C. 近期对话浮窗:归档会话恒不列出(recentSessionsView 不跟随侧栏 archivedFilter)、
+ *      打开归档行仍被拒(与上游 guardedOpen 同款门闸)。
  * 上游方法一律写成读 this 的类方法形态:插件若摘引用调用会抛错,本脚本能测出该类缺陷。
  * 用法:node test-order.mjs
  */
@@ -20,7 +22,7 @@ import {
   sessionVisible,
 } from './src/session-order.ts'
 import { sidebarOrderedSessionIds } from './src/sidebar-order.ts'
-import { openRecentSession } from './src/recent-sessions.ts'
+import { openRecentSession, recentSessionsView } from './src/recent-sessions.ts'
 
 let failures = 0
 /** 断言并按仓库脚本惯例记账。 */
@@ -369,6 +371,14 @@ console.log('--- C③ 浮窗打开归档会话 → 与上游 guardedOpen 同款�
   check('openRecentSession(归档) → false 且不调用 openSession', openRecentSession(services, 'arch'), false)
   check('openRecentSession(普通) → true 且调用一次', openRecentSession(services, 'a'), true)
   check('openSession 只被调用一次', services.uiWorkspace.opened, 1)
+}
+
+console.log('--- C④ 近期对话浮窗:归档会话恒不列出(不跟随侧栏 archivedFilter) ---')
+for (const archivedFilter of ['default', 'show', 'only']) {
+  const rows = recentSessionsView(env({ groupBy: 'flat', orderBy: 'updated', archivedFilter }))
+    .rows.map((row) => row.sessionId)
+  check(`recent(archivedFilter=${archivedFilter}):不含归档行`, rows.includes('arch'), false)
+  check(`recent(archivedFilter=${archivedFilter}):普通行仍列出`, rows.includes('b'), true)
 }
 
 console.log(failures === 0 ? '\nall order probes passed' : `\n${failures} probe(s) FAILED`)

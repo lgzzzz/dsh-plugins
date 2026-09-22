@@ -1,7 +1,8 @@
 /**
  * 会话可见性与顺序的唯一权威(侧栏顺序与近期对话浮窗共用);浮窗传 keepBlank=false,连当前空白会话也裁掉。
  * 全量复刻上游 workspace 浏览器 0.1.7-alpha.1 的 sessionVisible / reconcileManualOrder / sectionMembers /
- * pinCurrentBlank;浮窗与侧栏共用同一套可见性判据(含归档筛选)。
+ * pinCurrentBlank;`archivedFilter` 由调用方选择:侧栏与工作区浮窗跟随侧栏视图筛选,
+ * 近期对话浮窗恒传 default(归档会话一律打不开,列出即死行)。
  */
 import type { RowStateLike, SessionSummaryLike } from './types.ts'
 

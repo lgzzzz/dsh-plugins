@@ -69,7 +69,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `composer.focus` | 当前会话（`uiSession.current`）→ `sessions.binding(id).ctx` → `conversation.input.for(actx)`（缺席回退 `InputHub.shell(id)`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。`editing` 态另有 `contains` 门闸：焦点已在 composer 内则不重复聚焦但**仍吞键** |
 | `session.new` | `uiWorkspace.startSession()`（无参）；不触碰 composer 草稿 |
 | `session.prev` / `next` | `sessions.list` 快照 + `sidebar.workspaces` 注册项的侧栏视图 store（顺序，root 作用域传 `undefined`）；锚点 = 当前会话（`uiSession.current`），跳转调 `uiWorkspace.openSession(id)`（`sessions.open` 自 0.1.6-alpha.2 起已删除）。顺序**逐条复刻上游 0.1.7-alpha.1 渲染序**（含置顶前置、归档沉底、归档筛选、fork 紧随其源、blank 顶前）；从锚点沿方向扫**其他**会话（锚点自身不作落点），跳过非活跃、到轴尽头**回绕**（循环一圈无其他活跃会话 / 锚点不在可见轴即 no-op）；顺序读不到**不跳转**（无降级） |
-| `session.recent` | 插件自建浮窗。列表 = `sessions.list` 快照 + `workspaces.list` 快照分组 + `src/session-order.ts`；`Enter`/点击调 `uiWorkspace.openSession(sessionId)`（必须以**方法**形式调用；无回退，`sessions.open` 已删除）。**归档行是例外**：`openRecentSession` 先查归档集合，命中即 `return false`、不调 `openSession`（与上游 `guardedOpen` 同款门闸；见「已知限制」） |
+| `session.recent` | 插件自建浮窗。列表 = `sessions.list` 快照 + `workspaces.list` 快照分组 + `src/session-order.ts`；`Enter`/点击调 `uiWorkspace.openSession(sessionId)`（必须以**方法**形式调用；无回退，`sessions.open` 已删除）。**归档会话不列出**（恒按 `default` 口径取数，不跟随侧栏 `archivedFilter`）；`openRecentSession` 仍先查归档集合做防御（命中即 `return false`、不调 `openSession`，与上游 `guardedOpen` 同款门闸） |
 | `workspace.pick` | 插件自建浮窗。列表 = `workspaces.list` 快照 + `sessions.list` 快照派生（按组内可见会话最新的 `updatedAt` 降序取前 10，当前工作区强制保留；见 `src/workspace-switcher.ts`）；`Enter`/点击调 `uiWorkspace.openWorkspace(workspaceId)`（= 侧栏分组「＋」的连接工作区路径） |
 | `model.pick` | 插件自建浮窗。`ctx.modelDirectories.directoryFor(当前会话)`（与 `/model` 弹层、composer 模型座位**同一份** per-session 目录）→ `load()` → `store.getSnapshot().groups` 按宿主顺序展开；提交调 `directory.select(selection)`，每行选择复刻上游 `selectionOf` |
 | `model.effortNext` | 同一目录实例上循环：候选档复刻上游 `effortChoices`（`[Default（仅当模型无 defaultEffort）] + reasoning.efforts`），当前档 = `current.reasoningEffort ?? reasoning.defaultEffort`；`select` 只改强度 |
@@ -87,19 +87,19 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 - **分组** = `workspaces.list` 快照的宿主顺序；无归属会话落末尾**无标题组**（`workspaces`
   缺席时全部落入该组）。
 - **组内顺序** = `updatedAt` 降序、id 升序决胜（即使侧栏切到手动排序）。
-- **可见性** = 复刻上游 `sessionVisible`（排除子代理、归档、非当前空白行），**再加**：
-  连**当前空白会话**也裁掉（本插件唯一的产品偏离）。归档行是否列出跟随侧栏的
-  `archivedFilter`（`default` 隐藏 / `show` 一并 / `only` 仅归档）；读不到视图 store 按 `default`。
+- **可见性** = 复刻上游 `sessionVisible` 的 **`default` 口径**（排除子代理、归档、非当前空白行），
+  **再加**：连**当前空白会话**也裁掉（本插件唯一的产品偏离）。归档会话**恒不列出**，
+  不跟随侧栏 `archivedFilter`：本浮窗的动作只有「打开」，而归档会话一律打不开，
+  列出它们只会得到「关窗、无导航、无提示」的死行；取消归档后自然回到列表。
 - **条数上限 = 最近交互的 10 个（全局口径）**：先按最近更新取前 10、再按工作区分组，故
   某个工作区可能整组不出现（不留空标题）。当前会话**强制纳入**（不在前 10 时顶掉第 10 名）。
   面板带 `dsh-kbd-panel--recent`，`max-height` 由 `64vh` 抬到 `calc(88vh - 24px)`。
 - **初始高亮** = 当前会话所在行；当前会话本身**不列出**（新建空白会话、归档等被可见性裁掉）
   时落**同工作区**的第一行（归属复刻上游 `owningGroupKey`：没有任何工作区登记即无归属组，
   也按同组处理）；该工作区整组未上榜 / 无当前会话才退回首行。
-- **打开**：归档会话**拒绝打开**（`openRecentSession` 返回 false、不调 `uiWorkspace.openSession`）。
-  上游侧栏的归档门闸在 UI 层（`guardedOpen` + 「归档会话不可打开」提示），
-  `uiWorkspace.openSession` 服务本身不设门闸，故本浮窗在跟随 `archivedFilter` 列出归档行后
-  必须补同等约束。
+- **打开**：`openRecentSession` 先查归档集合，命中即返回 false、不调 `uiWorkspace.openSession`
+  （与上游 `guardedOpen` 同款门闸）。因列表已恒不列出归档行，该分支只在「行已列出后被归档」
+  的竞态下触发，属防御性约束。
 
 ## 工作区浮窗的列表规则（`src/workspace-switcher.ts`）
 
@@ -215,13 +215,12 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   共享目录，只列已公告的模型、不显示模型描述（上游 `/model` 有本地化描述）。
   `⇧Tab` 只在候选档中**向前**循环，且 `editing` 态只在焦点位于 composer 内时接管。
 - 浮窗 `↑`/`↓` 越界 clamp、不循环；空态时 `Enter` 不消费（由浮层模态吞掉）。
-- **归档行在浮窗里可列出但不可打开**：`⌘/Ctrl+I` 跟随侧栏的 `archivedFilter` 取数，
-  故 `show` / `only` 下归档会话会作为行出现，但 `openRecentSession` 一律拒绝（与上游侧栏
-  `guardedOpen` 同款门闸，`uiWorkspace.openSession` 本身不设闸）。行上**没有**归档标记
-  （`RecentSessionRowLike` 无该字段），表现为「浮窗关闭、不发生导航」；`only` 下整榜因此
-  不可打开。**要先在侧栏对该会话「取消归档」才能打开**：上游的门闸只看归档集合、与
-  `archivedFilter` 无关，`show` 下点行 / 搜索命中同样被拒（提示「已归档对话暂时无法查看，
-  请取消归档后查看」）。
+- **归档会话在近期对话浮窗里恒不列出**（有意偏离侧栏 `show` / `only` 口径）：`⌘/Ctrl+I`
+  只用于「打开」，而归档会话在被上游 `guardedOpen` 同款门闸拒绝后只会表现为
+  「浮窗关闭、不发生导航、无提示」，且行结构（`RecentSessionRowLike`）没有归档标记字段，
+  留着就是无标记的死行。**要先在侧栏对该会话「取消归档」才能打开**（取消后自动回到列表）。
+  `openRecentSession` 仍保留归档检查，覆盖「行已列出后被归档」的竞态。工作区浮窗
+  （`⌘/Ctrl+K`）不受影响，其活跃度仍跟随侧栏筛选。
 - **工作区浮窗的活跃度口径跟随归档筛选**：`only` 下「活跃度」只由归档会话的 `updatedAt`
   决定（`default` 不算归档、`show` 两者都算），这是 0.1.7-alpha.1 起侧栏带筛选后的新语义；
   行内 `sessionCount` 仍是宿主全量条数、不随筛选收缩（纯展示字段，不参与排序与切换）。
@@ -257,7 +256,8 @@ npm run check       # node --check 产物与宿主
   `sessionRowVisible` 的 `archivedFilter` 三分支；
   `reconcileOrder`（存档序 / 置顶前置 / 归档沉底 / fork 紧随其源 / **缺摘要成员剔除**）；
   `sectionMembers` 分区；
-  `sidebarOrderedSessionIds` 端到端（workspace|flat × default|show|only × updated|manual）。
+  `sidebarOrderedSessionIds` 端到端（workspace|flat × default|show|only × updated|manual）；
+  `recentSessionsView` 恒不列出归档行（default|show|only 三档一致）与 `openRecentSession` 的归档拒绝。
 - `node test-dispatch.mjs` — 会话跳转分发：按侧栏顺序（分组 / flat / 权威来源不可用时
   no-op、`uiSession.current` 缺席时回退 `retainedBy.mainView`）、**循环回绕**（首 / 末行两端、
   跳过非活跃会话、锚点自身不作落点、除当前会话外无活跃会话即 no-op 不吞键）与两个侧栏开关的

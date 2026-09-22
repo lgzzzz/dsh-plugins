@@ -1,6 +1,6 @@
 # dsh-desktop-notify
 
-DSH Web 的**桌面通知**插件:在会话标题栏放一个铃铛按钮(「开启通知」),点击即请求浏览器的通知权限
+DSH Web 的**桌面通知**插件:在**设置 → 通用**里放一行「桌面通知」开关,打开即请求浏览器的通知权限
 (该调用发生在点击这个用户手势里);开启后,页面**开着但不在前台**时,回合结束或 Agent 开始等你处理
 都会弹出系统通知(Windows 通知中心 / macOS 通知中心)。通知由**浏览器**发出,两个平台共用同一条代码
 路径,平台差异只落在**权限引导**与**系统层放行**两处 —— 见「前置条件」。
@@ -9,11 +9,11 @@ DSH Web 的**桌面通知**插件:在会话标题栏放一个铃铛按钮(「开
 
 ## 功能
 
-- **按钮**:注册进会话标题栏动作区 `conversation.session.header.actions`(上游 jobs、终端恢复同区),
-  三态:
-  - 未授权:铃铛 + 右上角小点,点击 → 浏览器授权框;
-  - 已授权且开启:实心铃铛,点击 = 关闭;
-  - 已授权但关闭 / 已被拒绝:置灰铃铛(拒绝时提示去 Chrome 站点设置里改)。
+- **开关行**:注册进设置 →「通用」的条目区 `settings.general.item`(语言、聊天等设置条目同区);
+  一个 switch 同时承担授权与开关(外观与上游 `Switch` 一致:几何与令牌相同,状态由 `aria-checked` 表达):
+  - 未授权:switch 关着,点击 → 浏览器授权框,授权通过后立即开启;
+  - 已授权:点击即开 / 关;
+  - 已被拒绝:switch 置灰不可点,行描述提示去 Chrome 站点设置里改。
   - 环境完全没有 `Notification` API 时不占位(渲染 `null`)。
 - **通知**:页面不在前台(`document.visibilityState !== 'visible'` 或 `!document.hasFocus()`)时发两条链路:
   - **回合完成**:顶层会话 `running` 由 true 翻到 false;
@@ -36,7 +36,7 @@ DSH Web 的**桌面通知**插件:在会话标题栏放一个铃铛按钮(「开
 | --- | --- |
 | `ctx.uiSession.sessionStatus`(`HostObservable<Map<SessionId, { running, pendingInteraction, completionUnread }>>`) | 全部判定输入。由 `dsh-client-ui-session` 在 client 根上下文提供,只在状态真变化时通知订阅者 |
 | `ctx.sessions.list` 快照的 `byId[id]` | `displayTitle` 作通知正文;`origin === 'subagent'` 用于过滤子代理 |
-| `ctx.slots.inject/register` | 落点 `conversation.session.header.actions`(list / session 作用域),`id: 'desktop-notify'`,`order: 120` |
+| `ctx.slots.inject/register` | 落点 `settings.general.item`(list / root 作用域),`id: 'desktop-notify'`,`order: 100` |
 | `window.Notification` + `localStorage` | 授权、开关、真正弹出通知 |
 
 浏览器 bundle 里的 `require('react')` 是**唯一的外部依赖**:`react` 是上游 ModuleLoader 的平台 seed 词
@@ -49,9 +49,9 @@ DSH Web 的**桌面通知**插件:在会话标题栏放一个铃铛按钮(「开
 浏览器侧(两个平台一致):
 
 1. 页面是 `http://127.0.0.1:3080`。loopback 属「安全上下文」,`Notification` API 可用,**不需要 https**。
-2. 点铃铛 → 浏览器弹授权框 → 允许。**若曾误点拒绝**:`requestPermission()` 不会再弹,必须到
+2. 在设置 →「通用」里点这个开关 → 浏览器弹授权框 → 允许。**若曾误点拒绝**:`requestPermission()` 不会再弹,必须到
    `chrome://settings/content/notifications`(Chrome「设置 → 隐私和安全 → 网站设置 → 通知」)手动允许
-   `127.0.0.1:3080`(按钮的 tooltip 会这么提示);插件在窗口重新获得焦点时(`focus` 事件)会重读权限,
+   `127.0.0.1:3080`(开关行的描述与 tooltip 会这么提示);插件在窗口重新获得焦点时(`focus` 事件)会重读权限,
    不必刷新页面。
 3. 通知**只在页面打开时**送达(见「已知限制」)。
 
@@ -61,7 +61,7 @@ DSH Web 的**桌面通知**插件:在会话标题栏放一个铃铛按钮(「开
 
 macOS 比 Windows 多一层**操作系统级**放行,而这一层在浏览器侧**完全不可见**:站点权限已给、
 `new Notification(...)` 也构造成功,系统仍可以一条横幅都不弹,页面拿不到任何失败信号。
-所以「铃铛亮了但没通知」时,按下面三层从上往下核对:
+所以「开关已经打开但没通知」时,按下面三层从上往下核对:
 
 1. **Chrome 站点层**:`chrome://settings/content/notifications` 允许 `http://127.0.0.1:3080`(同上)。
 2. **macOS 应用层**:系统设置 → 通知 → 「Google Chrome」→ 打开「允许通知」。同一面板里还要看:
@@ -72,7 +72,7 @@ macOS 比 Windows 多一层**操作系统级**放行,而这一层在浏览器侧
 3. **专注模式**:系统设置 → 专注模式(旧系统叫「勿扰模式」)。任一专注模式开启,或「屏幕共享时勿扰」
    生效期间,通知会被静音或直接收进通知中心 —— 网页无从探测,插件也不会因此重试或稍后补发。
 
-把「插件没发」和「系统没放行」分开:铃铛点亮(已授权 + 已开启)后在页面 DevTools 控制台直接发一条
+把「插件没发」和「系统没放行」分开:开关打到「已开启」后在页面 DevTools 控制台直接发一条
 
 ```js
 new Notification('DSH 测试通知', { body: '看到这条横幅 = macOS 侧已放行', tag: 'dsh-test' })
@@ -102,7 +102,7 @@ new Notification('DSH 测试通知', { body: '看到这条横幅 = macOS 侧已�
 2. 系统层放行:Windows 设置 → 系统 → 通知 → 「Google Chrome」允许通知;并注意「专注助手」
    (Win 11 称「请勿打扰」)不要拦下横幅。
 
-## 排查:「铃铛亮着但没通知」
+## 排查:「开关已开启但没通知」
 
 按 macOS 三层从上往下核对时,可用页面 DevTools 控制台把「插件没发」与「系统没放行」分开。
 **最有效的一条对照**是绕开插件、直接用插件相同的参数构造通知:
@@ -117,7 +117,7 @@ new Notification('对照测试', { body: 'b', tag: 't', renotify: true, silent: 
   - 特别是**系统设置 → 通知里根本没有「Google Chrome」这一项**时:macOS 从未给 Chrome 注册通知权限,
     此时站点层给得再足也不会弹。先让 Chrome 发一次通知(就上面这句),再回系统设置看它是否出现并打开。
 - 这条**能弹** → 问题在插件判定 / 开关:时间点是否真在后台(窗口失焦或标签页不可见)、
-  铃铛是否是「已开启」状态(已授权时点一下就是关闭)、以及该会话是否为子代理。
+  设置里的 switch 是否是「已开启」(已授权时点一下就是关闭)、以及该会话是否为子代理。
 
 > 插件对**前台页面刻意不发**通知:`visibilityState` 为 `visible` 但 `hasFocus()` 为 false(窗口在屏幕上、
 > 焦点在别的应用)时**属于后台,会发**;真正可见且有焦点时不发,这是设计而非故障。
@@ -130,17 +130,17 @@ new Notification('对照测试', { body: 'b', tag: 't', renotify: true, silent: 
 - Chrome 的「内存节省程序」可能冻结长时间处于后台的标签页,冻结期间页面 JS 暂停 → 这段窗口里的状态变化会漏。
   可在 Chrome 里把该站点加入排除项。
 - 只覆盖顶层会话;子代理会话的结束 / 提问不通知。
-- 通知文案(含按钮 tooltip)是中文硬编码:插件不注册 `locale` 命名空间,不做多语言。
+- 通知文案与开关行的标题 / 描述 / tooltip 都是中文硬编码:插件不注册 `locale` 命名空间,不做多语言。
 - 判定完全依赖 `uiSession.sessionStatus`;该服务面缺席即整体 no-op,**不降级**为 DOM 观测或其他取数。
 - **系统级开关关掉时,插件无从察觉**:系统设置里禁掉浏览器(或 PWA)的通知后,`Notification.permission`
   仍是 `granted`,构造通知也不抛错,只是横幅不出现 —— 插件不猜、不做探测,只由本文档「前置条件」指路
-  (按钮 tooltip 只覆盖到 Chrome 站点层那一层)。
+  (开关行描述与 tooltip 只覆盖到 Chrome 站点层那一层)。
 - **macOS 上通知的持久性 / 声音 / 是否进通知中心,全由系统设置决定**:插件传的 `renotify: true`
   (同 tag 重新提醒)与 `silent: false` 只是意图;想让通知停在屏幕上,请在「系统设置 → 通知」里把对应应用
   (Google Chrome,或装成 PWA 后的 DSH)的提醒样式设为「持久」。通知归因为独立应用后,`requireInteraction`
   在 macOS 上也不再被 Chrome 遵循,故插件**不传**该选项。
-- **按钮 tooltip 的来源地址与浏览器路径是硬编码的**:文案写死 `127.0.0.1:3080` 与 Chrome 站点设置,
-  换端口、或改用 Safari / Firefox 时不再准确;tooltip 也**不会**提到 macOS 系统设置那一层,
+- **开关行文案里的来源地址与浏览器路径是硬编码的**:文案写死 `127.0.0.1:3080` 与 Chrome 站点设置,
+  换端口、或改用 Safari / Firefox 时不再准确;描述与 tooltip 也**不会**提到 macOS 系统设置那一层,
   macOS 上「授权了却收不到」以本文档「前置条件」为准。
 
 ## 源码结构
@@ -153,7 +153,7 @@ new Notification('对照测试', { body: 'b', tag: 't', renotify: true, silent: 
 | `src/notify-env.ts` | 浏览器环境缝:`Notification` 权限 / 授权 / localStorage |
 | `src/notify-runtime.ts` | 订阅 `uiSession.sessionStatus`,把判定结果交给 delivery |
 | `src/notify-delivery.ts` | 页面是否前台 + 真正构造系统通知 |
-| `src/notify-action.ts` | 标题栏铃铛按钮(React,`require('react')` 为 external) |
+| `src/notify-settings.ts` | 设置 →「通用」的通知开关行(React,`require('react')` 为 external) |
 | `src/react.d.ts` | 自声明的 react 最小切片 |
 | `src/client.ts` | 浏览器半部入口:`inject` + `apply` 装配 |
 
@@ -169,7 +169,7 @@ node test-notify.mjs         # 纯 Node,无需浏览器(需先 build)
 
 `test-notify.mjs` 四部分:A 判定器全部分支;B 授权 / 开关 / 拒绝 / 重读权限;C 订阅驱动、前台抑制、
 开关关闭时基线仍推进、dispose 退订、发送侧(含构造抛错与无 API);D 用 `window.__ModuleLoader__` 桩
-载入构建产物,校验包名 / `inject` / 外部依赖只有 `react` / 槽位注册参数 / 按钮三态,以及
+载入构建产物,校验包名 / `inject` / 外部依赖只有 `react` / 槽位注册参数 / 设置开关行三态,以及
 「后台回合结束 → 真发一条系统通知」的端到端装配。
 
 ## 加载(由用户执行)

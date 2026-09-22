@@ -98,4 +98,30 @@ body [data-step-process-body] {
   --dsw-font-markdown-code-block-small: 14px/16px var(--ds-font-family-code);
   --dsw-font-markdown-code-block: 14px/19px var(--ds-font-family-code);
 }
+
+/* ---- 上游 0.1.7-alpha.1 新增卡片面 ---- */
+
+/* ToolDetails 紧凑详情卡(工具历史结果):根自带 font: var(--dsw-font-xs-13),且**不吃**上面在
+   [data-tool] 上的 --dsw-font-markdown-code-block-small 重指(它用的是 xs-13 token)。
+   该根**没有**无条件稳定 data 属性(只有条件性的 data-inspect / data-caption;滚动类名是
+   CSS-module 哈希,不可写),故按 DisclosureRow 展开体结构定位:展开根 [data-open] 的 body
+   包裹 div 里,唯一「直接含 ul(条目列表)或 p(空态)」的 div 即该卡根。
+   只改 font-size:卡内按设计应为小号的元素(caption / statusText / badge / subtitle 12px、
+   prose / code 13px、状态图标 16px、inspect 按钮 11px)各自有显式 font-size 声明,
+   不继承本值,保持原状;其余正文(条目文本 / path / 字段 / 列表)统一 14px。
+   同结构命中的其它展开体根(如问答卡的 div.card)其文本子元素也都自带显式字号,无副作用。 */
+[data-tool] [data-open] > div > div:has(> ul),
+[data-tool] [data-open] > div > div:has(> p) {
+  font-size: 14px !important;
+}
+
+/* turn-trigger 节点卡(0.1.7-alpha.1 新增节点 kind;自带稳定出口 data-turn-trigger):
+   标题 = header button 内第 2 个 span(上游 font: var(--dsw-font-xs-13) 简写,须 !important);
+   展开体 = section 的 body div 内 p(说明)与 div(正文,其内 pre 已由上面的 code 规则覆盖);
+   time 时间戳按既有约定保持组件自身字号。 */
+[data-turn-trigger] > button > span:nth-child(2),
+[data-turn-trigger] > div > p,
+[data-turn-trigger] > div > div {
+  font-size: 14px !important;
+}
 `

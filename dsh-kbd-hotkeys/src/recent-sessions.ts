@@ -1,9 +1,10 @@
 /** 近期对话浮窗(⌘/Ctrl+I)的数据面与打开落点(浮窗 DOM 在 overlay.ts)。
- * 列表按工作区分组、全局最多 10 行、当前会话强制纳入;初始落点优先当前会话所在行,
- * 当前是新建空白会话等不列出的情形落**同工作区**第一行;打开只走 uiWorkspace.openSession(方法形式调用);无降级。 */
+ * 列表按工作区分组、全局最多 10 行、当前会话强制纳入、归档会话恒不列出;
+ * 初始落点优先当前会话所在行,当前是新建空白会话等不列出的情形落**同工作区**第一行;
+ * 打开只走 uiWorkspace.openSession(方法形式调用);无降级。 */
 import { recencyOrder, sessionVisible } from './session-order.ts'
 import { completionUnread, currentSessionId } from './session-view.ts'
-import { readArchivedFilter, readWorkspaceSnapshot } from './sidebar-order.ts'
+import { readWorkspaceSnapshot } from './sidebar-order.ts'
 import { pathBasename } from './workspace-switcher.ts'
 import type {
   RecentSessionGroupLike,
@@ -37,11 +38,11 @@ export function recentSessionsView(services: Services): RecentSessionsViewLike {
   const pending = pendingSessionIds(services)
   const workspaceSnapshot = readWorkspaceSnapshot(services)
   const archived = new Set<string>(workspaceSnapshot?.archivedSessionIds ?? [])
-  // 归档筛选跟随侧栏(0.1.7-alpha.1);读不到按 default
-  const archivedFilter = readArchivedFilter(services)
+  // 归档会话恒不列出（不跟随侧栏 archivedFilter）：本浮窗只用于「打开」，列出不可打开的行
+  // 只会得到「关窗无反馈」的死行；取消归档后自然回到列表。
   const visible = (id: string): boolean => {
     const summary = byId[id]
-    return summary !== undefined && sessionVisible(summary, current, archived, archivedFilter, false)
+    return summary !== undefined && sessionVisible(summary, current, archived, 'default', false)
   }
 
   const rows: RecentSessionRowLike[] = []
@@ -102,8 +103,8 @@ export function recentSessionsView(services: Services): RecentSessionsViewLike {
 
 /** 任意态;打开选中会话:只走 uiWorkspace.openSession(与侧栏点会话行同一路径);
  * 是上游类实例原型方法,必须以方法形式调用(摘下丢 this 抛 TypeError);不可用即 no-op。
- * 归档会话拒绝打开:上游侧栏的 `guardedOpen` 正是如此(`uiWorkspace.openSession` 本身不设门闸),
- * 浮窗既然跟随 `archivedFilter` 列出归档行,就必须补同等约束,不得绕过。 */
+ * 归档会话拒绝打开:列表已恒不列出归档行,此处只是与上游 `guardedOpen` 对齐的防御
+ * (`uiWorkspace.openSession` 本身不设门闸),覆盖「列出行后被归档」的竞态。 */
 export function openRecentSession(services: Services, sessionId: string): boolean {
   if (typeof sessionId !== 'string' || sessionId === '') return false
   const archived = new Set<string>(readWorkspaceSnapshot(services)?.archivedSessionIds ?? [])

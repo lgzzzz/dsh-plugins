@@ -4,8 +4,8 @@
  *   B. src/notify-store.ts —— 授权 / 开关 / 拒绝 / 重读权限的环境缝分支;
  *   C. src/notify-runtime.ts + src/notify-delivery.ts —— 订阅驱动、前台抑制、开关未开时基线仍推进、dispose;
  *   D. 构建产物 lib/client.js —— 以 window.__ModuleLoader__ 桩载入,校验包名 / inject / 外部依赖只有 react、
- *      槽位注册参数、按钮三态渲染,以及「后台回合结束 → 真发一条系统通知」的端到端装配。
- * 直接以 Node Type Stripping 载入 src/*.ts(不加载 notify-action.ts:它 require('react'))。
+ *      槽位注册参数、设置开关行三态渲染,以及「后台回合结束 → 真发一条系统通知」的端到端装配。
+ * 直接以 Node Type Stripping 载入 src/*.ts(不加载 notify-settings.ts:它 require('react'))。
  * 用法:node test-notify.mjs(需先 npm run build)
  */
 import { readFileSync } from 'node:fs'
@@ -536,21 +536,25 @@ function loadBundle(options = {}) {
   check('客服入口包名', bundle.module.name, 'dsh-desktop-notify')
   check('inject 声明', bundle.module.inject, ['sessions', 'uiSession', 'slots'])
   check('react 是唯一外部依赖', bundle.required, ['react'])
-  check('挂到会话标题栏动作区', bundle.calls.inject, ['conversation.session.header.actions'])
+  check('挂到设置-通用条目区', bundle.calls.inject, ['settings.general.item'])
   check('注册项 id', bundle.calls.register[0]?.options.id, 'desktop-notify')
-  check('注册项 name', bundle.calls.register[0]?.options.name, 'conversation.session.header.actions')
-  check('注册项 order', bundle.calls.register[0]?.options.order, 120)
+  check('注册项 name', bundle.calls.register[0]?.options.name, 'settings.general.item')
+  check('注册项 order', bundle.calls.register[0]?.options.order, 100)
   checkTrue('注册项有组件', typeof bundle.calls.register[0]?.component === 'function')
   check('注册了一个 fiber disposer', bundle.calls.effects.length, 1)
   check('已在窗口上登记 focus 监听', bundle.calls.addedFocus, 1)
 
   const element = bundle.calls.register[0].component()
-  check('按钮是 button 元素', element.type, 'button')
-  check('按钮类名', element.props.className, 'dsh-desktop-notify-action')
-  check('已授权且开启 → on', element.props['data-state'], 'on')
-  checkTrue('onclick 已挂', typeof element.props.onClick === 'function')
-  checkTrue('带铃铛图标', element.children[0]?.type === 'svg')
-  check('已授权时不显示待授权小点', element.children[1], null)
+  check('开关行是 div 元素', element.type, 'div')
+  check('开关行类名', element.props.className, 'dsh-desktop-notify-setting')
+  check('行左侧文案列', element.children[0]?.props?.className, 'dsh-desktop-notify-setting-text')
+  check('行标题', element.children[0]?.children[0]?.children[0], '桌面通知')
+  checkTrue('行描述非空', typeof element.children[0]?.children[1]?.children[0] === 'string')
+  const control = element.children[1]
+  check('控件是 switch', [control.type, control.props.role], ['button', 'switch'])
+  check('已授权且开启 → aria-checked', control.props['aria-checked'], true)
+  checkTrue('switch 已挂 onclick', typeof control.props.onClick === 'function')
+  checkTrue('带圆形滑块', control.children[0]?.props?.className === 'dsh-desktop-notify-switch-thumb')
 
   // 页面在后台:回合完成 → 真发一条系统通知
   bundle.push([['s-1', { running: true }]])
@@ -577,12 +581,14 @@ function loadBundle(options = {}) {
 }
 
 {
-  // 未授权:按钮提示 + 小点,且不发通知
+  // 未授权:switch 关着 + 提示先授权,且不发通知
   const bundle = loadBundle({ permission: 'default' })
   const element = bundle.calls.register[0].component()
-  check('未授权 → pending', element.props['data-state'], 'pending')
-  checkTrue('未授权带提示文案', element.props.title.includes('开启桌面通知'))
-  checkTrue('未授权有小点', element.children[1]?.type === 'span')
+  const control = element.children[1]
+  check('未授权 → aria-checked false', control.props['aria-checked'], false)
+  check('未授权可点击', control.props.disabled, false)
+  checkTrue('未授权提示先授权', control.props.title.includes('开启桌面通知'))
+  checkTrue('未授权行描述提到授权', element.children[0].children[1].children[0].includes('授权'))
 
   bundle.push([['s-1', { running: true }]])
   bundle.push([['s-1', { running: false }]])
@@ -590,28 +596,30 @@ function loadBundle(options = {}) {
 }
 
 {
-  // 已拒绝:off 态 + 指向 Chrome 设置的提示
+  // 已拒绝:switch 禁用 + 指向 Chrome 设置的提示
   const bundle = loadBundle({ permission: 'denied' })
   const element = bundle.calls.register[0].component()
-  check('已拒绝 → off', element.props['data-state'], 'off')
-  checkTrue('已拒绝提示去站点设置', element.props.title.includes('网站设置'))
-  check('已拒绝不显示小点', element.children[1], null)
+  const control = element.children[1]
+  check('已拒绝 → aria-checked false', control.props['aria-checked'], false)
+  check('已拒绝 disabled', control.props.disabled, true)
+  checkTrue('已拒绝提示去站点设置', control.props.title.includes('网站设置'))
+  checkTrue('已拒绝行描述指向站点设置', element.children[0].children[1].children[0].includes('站点设置'))
 }
 
 {
   // 已授权但用户关过开关:不发通知
   const bundle = loadBundle({ permission: 'granted', stored: false })
   const element = bundle.calls.register[0].component()
-  check('开关关着 → off', element.props['data-state'], 'off')
+  check('开关关着 → aria-checked false', element.children[1].props['aria-checked'], false)
   bundle.push([['s-1', { running: true }]])
   bundle.push([['s-1', { running: false }]])
   check('开关关着不发通知', bundle.notifications, [])
 }
 
 {
-  // 环境没有 Notification API:apply 仍装配成功,按钮渲染为空
+  // 环境没有 Notification API:apply 仍装配成功,开关行渲染为空
   const bundle = loadBundle({ supported: false })
-  checkTrue('无 Notification API 时按钮渲染空', bundle.calls.register[0].component() === null)
+  checkTrue('无 Notification API 时开关行渲染空', bundle.calls.register[0].component() === null)
   bundle.push([['s-1', { running: true }]])
   bundle.push([['s-1', { running: false }]])
   check('无 Notification API 时不发通知', bundle.notifications, [])

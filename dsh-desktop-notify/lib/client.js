@@ -28,17 +28,22 @@ __export(client_exports, {
 });
 module.exports = __toCommonJS(client_exports);
 
-// src/notify-action.ts
+// src/notify-settings.ts
 var import_react = require("react");
-var STYLE_TAG_ID = "dsh-desktop-notify/action.css";
+var STYLE_TAG_ID = "dsh-desktop-notify/settings.css";
 var CSS = [
-  ".dsh-desktop-notify-action{position:relative;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:9999px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;flex:none}",
-  ".dsh-desktop-notify-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
-  ".dsh-desktop-notify-action[data-state=off]{color:var(--dsw-alias-label-dimmed)}",
-  ".dsh-desktop-notify-action:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,currentColor);outline-offset:1px}",
-  ".dsh-desktop-notify-dot{position:absolute;top:4px;inset-inline-end:4px;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-brand-primary,currentColor)}"
+  ".dsh-desktop-notify-setting{display:flex;align-items:center;gap:8px;padding:16px 0;border-bottom:.5px solid var(--dsw-alias-border-l2)}",
+  ".dsh-desktop-notify-setting-text{display:flex;flex-direction:column;flex:1;gap:4px;min-width:0;padding-right:48px}",
+  ".dsh-desktop-notify-setting-title{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:400;line-height:22px}",
+  ".dsh-desktop-notify-setting-desc{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}",
+  ".dsh-desktop-notify-switch{box-sizing:border-box;position:relative;flex:0 0 auto;width:36px;height:20px;padding:2px;border:0;border-radius:10px;background:var(--dsw-alias-border-l3);cursor:pointer}",
+  ".dsh-desktop-notify-switch[aria-checked=true]{background:var(--dsw-alias-brand-primary)}",
+  ".dsh-desktop-notify-switch:disabled{cursor:default;opacity:.5}",
+  ".dsh-desktop-notify-switch:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}",
+  ".dsh-desktop-notify-switch-thumb{display:block;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-label-primary-foreground);transition:transform 120ms ease}",
+  ".dsh-desktop-notify-switch[aria-checked=true] .dsh-desktop-notify-switch-thumb{transform:translateX(16px)}"
 ].join("");
-function ensureActionStyles(doc) {
+function ensureNotifySettingsStyles(doc) {
   if (doc.querySelector(`style[data-plugin-css="${STYLE_TAG_ID}"]`) !== null) return;
   const tag = doc.createElement("style");
   tag.dataset.plugin = "dsh-desktop-notify";
@@ -54,26 +59,16 @@ function hintOf(state) {
   if (state.permission !== "granted") return "\u5F00\u542F\u684C\u9762\u901A\u77E5:\u56DE\u5408\u7ED3\u675F\u6216\u9700\u8981\u4F60\u5904\u7406\u65F6\u5F39\u7CFB\u7EDF\u901A\u77E5";
   return state.enabled ? "\u684C\u9762\u901A\u77E5\u5DF2\u5F00\u542F,\u70B9\u51FB\u5173\u95ED" : "\u684C\u9762\u901A\u77E5\u5DF2\u5173\u95ED,\u70B9\u51FB\u5F00\u542F";
 }
-function bellIcon() {
-  return (0, import_react.createElement)(
-    "svg",
-    {
-      width: 14,
-      height: 14,
-      viewBox: "0 0 16 16",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: 1.3,
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
-      "aria-hidden": "true"
-    },
-    (0, import_react.createElement)("path", { d: "M8 2.2a3.9 3.9 0 0 0-3.9 3.9c0 3-1 4.2-1 4.2h9.8s-1-1.2-1-4.2A3.9 3.9 0 0 0 8 2.2Z" }),
-    (0, import_react.createElement)("path", { d: "M6.7 12.4a1.5 1.5 0 0 0 2.6 0" })
-  );
+function descriptionOf(state) {
+  if (state.permission === "unsupported") return "\u672C\u6D4F\u89C8\u5668\u4E0D\u652F\u6301\u684C\u9762\u901A\u77E5";
+  if (state.permission === "denied") {
+    return "\u5DF2\u88AB\u6D4F\u89C8\u5668\u62D2\u7EDD:\u8BF7\u5728\u4E0A\u65B9\u7AD9\u70B9\u8BBE\u7F6E\u91CC\u5141\u8BB8\u901A\u77E5,\u518D\u56DE\u5230\u672C\u9875\u91CD\u65B0\u6253\u5F00";
+  }
+  if (state.permission !== "granted") return "\u5F00\u542F\u540E\u9700\u8981\u5148\u6388\u6743(\u6D4F\u89C8\u5668\u4F1A\u5F39\u51FA\u6388\u6743\u6846)";
+  return state.enabled ? "\u5DF2\u5F00\u542F:\u9875\u9762\u4E0D\u5728\u524D\u53F0\u65F6,\u56DE\u5408\u7ED3\u675F\u6216\u9700\u8981\u4F60\u5904\u7406\u4F1A\u5F39\u7CFB\u7EDF\u901A\u77E5" : "\u5DF2\u5173\u95ED:\u4E0D\u518D\u53D1\u9001\u7CFB\u7EDF\u901A\u77E5";
 }
-function createNotifyAction(store) {
-  return function NotifyAction() {
+function createNotifySettingsRow(store) {
+  return function NotifySettingsRow() {
     const [state, setState] = (0, import_react.useState)(() => store.getSnapshot());
     (0, import_react.useEffect)(
       () => store.subscribe(() => {
@@ -84,21 +79,31 @@ function createNotifyAction(store) {
     if (state.permission === "unsupported") return null;
     const hint = hintOf(state);
     const on = state.permission === "granted" && state.enabled;
-    const off = state.permission === "denied" || state.permission === "granted" && !state.enabled;
     return (0, import_react.createElement)(
-      "button",
-      {
-        type: "button",
-        className: "dsh-desktop-notify-action",
-        "data-state": on ? "on" : off ? "off" : "pending",
-        title: hint,
-        "aria-label": hint,
-        onClick: () => {
-          void store.activate();
-        }
-      },
-      bellIcon(),
-      state.permission === "default" ? (0, import_react.createElement)("span", { className: "dsh-desktop-notify-dot" }) : null
+      "div",
+      { className: "dsh-desktop-notify-setting" },
+      (0, import_react.createElement)(
+        "div",
+        { className: "dsh-desktop-notify-setting-text" },
+        (0, import_react.createElement)("div", { className: "dsh-desktop-notify-setting-title" }, "\u684C\u9762\u901A\u77E5"),
+        (0, import_react.createElement)("div", { className: "dsh-desktop-notify-setting-desc" }, descriptionOf(state))
+      ),
+      (0, import_react.createElement)(
+        "button",
+        {
+          type: "button",
+          role: "switch",
+          "aria-checked": on,
+          "aria-label": hint,
+          title: hint,
+          disabled: state.permission === "denied",
+          className: "dsh-desktop-notify-switch",
+          onClick: () => {
+            void store.activate();
+          }
+        },
+        (0, import_react.createElement)("span", { className: "dsh-desktop-notify-switch-thumb" })
+      )
     );
   };
 }
@@ -372,9 +377,9 @@ function startNotifyRuntime(deps) {
 // src/client.ts
 var name = "dsh-desktop-notify";
 var inject = ["sessions", "uiSession", "slots"];
-var ACTION_SLOT = "conversation.session.header.actions";
-var ACTION_ID = "desktop-notify";
-var ACTION_ORDER = 120;
+var SETTINGS_ITEM_SLOT = "settings.general.item";
+var SETTINGS_ITEM_ID = "desktop-notify";
+var SETTINGS_ITEM_ORDER = 100;
 function getService(ctx, serviceName) {
   if (ctx.get === void 0 || ctx.get === null) return void 0;
   const value = ctx.get(serviceName);
@@ -401,14 +406,18 @@ function apply(ctx) {
     store.refresh();
   };
   window.addEventListener("focus", onFocus);
-  ensureActionStyles(document);
+  ensureNotifySettingsStyles(document);
   const slots = services.slots;
   if ((slots == null ? void 0 : slots.inject) !== void 0 && slots.register !== void 0) {
     slots.inject(
-      ACTION_SLOT,
+      SETTINGS_ITEM_SLOT,
       () => {
         var _a;
-        return (_a = slots.register) == null ? void 0 : _a.call(slots, { name: ACTION_SLOT, id: ACTION_ID, order: ACTION_ORDER }, createNotifyAction(store));
+        return (_a = slots.register) == null ? void 0 : _a.call(
+          slots,
+          { name: SETTINGS_ITEM_SLOT, id: SETTINGS_ITEM_ID, order: SETTINGS_ITEM_ORDER },
+          createNotifySettingsRow(store)
+        );
       }
     );
   }

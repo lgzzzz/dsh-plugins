@@ -2,7 +2,8 @@
 
 本地持久化 Web UI 补丁：把消息区**卡片标题**、**表头摘要行**、**卡片展开内容**、
 **代码块**、**内联代码**与 **Markdown 表格单元格**统一为 **14px**，并把**卡片间距**设为
-`calc(14px * 0.5)` = **7px**。
+`calc(14px * 0.5)` = **7px**。0.1.7-alpha.1 新增的 `ToolDetails` 紧凑详情卡与
+`turn-trigger` 节点卡亦已纳入（见「0.1.7 新增卡片面」）。
 
 - **不覆盖**内容字号轴 `--dsh-content-font-size`：设置里的「字号大小」（范围 12..17）仍
   生效，正文、行高等派生变量随设置变化；卡片内文本字号恒为 14px。
@@ -26,6 +27,8 @@
 | 卡片展开正文（DisclosureRow 系） | 包裹层 `[data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row])`；正文 Markdown 根 `… [data-markdown-variant="compact"]` |
 | 卡片展开正文（压缩标记） | `[data-chat-flow-kind="compaction"] button[aria-expanded="true"] + div`（`manual-compaction` 同形） |
 | 工具 / bash 卡片内容 | 在 `[data-tool]` / `[data-sample]` 上重指 `--dsw-font-markdown-code-block-small` 与 `--dsw-font-markdown-code-block`（主题默认 11px）；BashRow 的展开正文是表头 `[data-sample]` 的**相邻兄弟**，另在 `[data-sample] + *` 重指 |
+| 工具历史结果卡（`ToolDetails`） | `[data-tool] [data-open] > div > div:has(> ul)`、`[data-tool] [data-open] > div > div:has(> p)`（结构锚点，见「0.1.7 新增卡片面」） |
+| 触发来源节点卡（`turn-trigger`） | 标题 `[data-turn-trigger] > button > span:nth-child(2)`；展开说明 / 正文 `[data-turn-trigger] > div > p`、`[data-turn-trigger] > div > div` |
 | 过程组内卡片间距 | `body [data-step-process-body]` 重指 `--dsh-chat-flow-gap` |
 
 要点：`[data-chat-flow-kind]` 打在聊天流条目根上，`[data-tool]` / `[data-sample]` 打在卡片
@@ -38,6 +41,27 @@
 `font-size` 声明恒胜过从父级继承的值，因此只在包裹层写 14px 对正文无效——必须在带
 `data-markdown-variant="compact"` 的 Markdown 根上直接命中（该属性是上游显式出口，非
 CSS-module 哈希类名）。
+
+## 0.1.7-alpha.1 新增卡片面
+
+上游 `0.1.7-alpha.1` 新增两类自带小字号的卡片，本插件已覆盖：
+
+- **工具历史结果卡（`ToolDetails`）**：根自带 `font: var(--dsw-font-xs-13)`，且**不吃**
+  `[data-tool]` 上的代码 token 重指（它用的是 `--dsw-font-xs-13`，不是
+  `--dsw-font-markdown-code-block-small`）。该根**没有无条件稳定 data 属性**——只有条件性的
+  `data-inspect` / `data-caption`，滚动相关类名是 CSS-module 哈希，故按 **DisclosureRow 展开体
+  结构**定位：展开根 `[data-open]` 的 body 包裹 `div` 里，唯一「直接含 `ul`（条目列表）或 `p`
+  （空态）」的 `div` 就是该卡根。
+  规则只在该根上写 `font-size: 14px`，靠**继承**覆盖原先 13px 的正文（条目文本 / path / 字段 /
+  列表）；卡内按设计应为小号的元素各自有**显式** `font-size` 声明（caption / statusText /
+  badge / subtitle 12px、prose / code 13px、状态图标 16px、inspect 按钮 11px），元素自身声明
+  恒胜继承，故保持原状，**无需**逐个写豁免。同结构命中的其它展开体根（如问答卡的
+  `div.card`）其文本子元素也都自带显式字号，无副作用。
+- **触发来源节点卡（`turn-trigger`）**：上游 0.1.7 新增的节点 kind，自带稳定出口
+  `data-turn-trigger`（`section[data-turn-trigger]`）。命中标题（`button` 内第 2 个 `span`
+  即 `.title`，上游 `font: var(--dsw-font-xs-13)` 简写，故须 `!important`）与展开体
+  （`> div > p` 说明、`> div > div` 正文；正文内的 `pre` 由既有代码规则覆盖）。
+  `time` 时间戳按既有约定保持组件自身字号，不选。
 
 ## 卡片间距
 

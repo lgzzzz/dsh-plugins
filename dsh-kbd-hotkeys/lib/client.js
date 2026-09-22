@@ -1706,10 +1706,9 @@ function recentSessionsView(services) {
   const pending = pendingSessionIds(services);
   const workspaceSnapshot = readWorkspaceSnapshot(services);
   const archived = new Set((_d = workspaceSnapshot == null ? void 0 : workspaceSnapshot.archivedSessionIds) != null ? _d : []);
-  const archivedFilter = readArchivedFilter(services);
   const visible = (id) => {
     const summary = byId[id];
-    return summary !== void 0 && sessionVisible(summary, current, archived, archivedFilter, false);
+    return summary !== void 0 && sessionVisible(summary, current, archived, "default", false);
   };
   const rows = [];
   const groups = [];

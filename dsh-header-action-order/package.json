@@ -1,0 +1,34 @@
+{
+  "name": "dsh-header-action-order",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web UI patch: reorder the session-header action icons (conversation.session.header.actions, a list slot) by rewriting each live entry's options.order in place and replaying on every slot registration change. Upstream sorts the rendered rows by that value, and the slot API has no reorder surface, so the plugin edits the live entry objects instead of shadowing/re-registering foreign components. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

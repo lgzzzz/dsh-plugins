@@ -123,6 +123,32 @@ body [data-step-process-body] {
   --dsw-font-markdown-code-block-small: 14px/16px var(--ds-font-family-code);
   --dsw-font-markdown-code-block: 14px/19px var(--ds-font-family-code);
 }
+
+/* ---- \u4E0A\u6E38 0.1.7-alpha.1 \u65B0\u589E\u5361\u7247\u9762 ---- */
+
+/* ToolDetails \u7D27\u51D1\u8BE6\u60C5\u5361(\u5DE5\u5177\u5386\u53F2\u7ED3\u679C):\u6839\u81EA\u5E26 font: var(--dsw-font-xs-13),\u4E14**\u4E0D\u5403**\u4E0A\u9762\u5728
+   [data-tool] \u4E0A\u7684 --dsw-font-markdown-code-block-small \u91CD\u6307(\u5B83\u7528\u7684\u662F xs-13 token)\u3002
+   \u8BE5\u6839**\u6CA1\u6709**\u65E0\u6761\u4EF6\u7A33\u5B9A data \u5C5E\u6027(\u53EA\u6709\u6761\u4EF6\u6027\u7684 data-inspect / data-caption;\u6EDA\u52A8\u7C7B\u540D\u662F
+   CSS-module \u54C8\u5E0C,\u4E0D\u53EF\u5199),\u6545\u6309 DisclosureRow \u5C55\u5F00\u4F53\u7ED3\u6784\u5B9A\u4F4D:\u5C55\u5F00\u6839 [data-open] \u7684 body
+   \u5305\u88F9 div \u91CC,\u552F\u4E00\u300C\u76F4\u63A5\u542B ul(\u6761\u76EE\u5217\u8868)\u6216 p(\u7A7A\u6001)\u300D\u7684 div \u5373\u8BE5\u5361\u6839\u3002
+   \u53EA\u6539 font-size:\u5361\u5185\u6309\u8BBE\u8BA1\u5E94\u4E3A\u5C0F\u53F7\u7684\u5143\u7D20(caption / statusText / badge / subtitle 12px\u3001
+   prose / code 13px\u3001\u72B6\u6001\u56FE\u6807 16px\u3001inspect \u6309\u94AE 11px)\u5404\u81EA\u6709\u663E\u5F0F font-size \u58F0\u660E,
+   \u4E0D\u7EE7\u627F\u672C\u503C,\u4FDD\u6301\u539F\u72B6;\u5176\u4F59\u6B63\u6587(\u6761\u76EE\u6587\u672C / path / \u5B57\u6BB5 / \u5217\u8868)\u7EDF\u4E00 14px\u3002
+   \u540C\u7ED3\u6784\u547D\u4E2D\u7684\u5176\u5B83\u5C55\u5F00\u4F53\u6839(\u5982\u95EE\u7B54\u5361\u7684 div.card)\u5176\u6587\u672C\u5B50\u5143\u7D20\u4E5F\u90FD\u81EA\u5E26\u663E\u5F0F\u5B57\u53F7,\u65E0\u526F\u4F5C\u7528\u3002 */
+[data-tool] [data-open] > div > div:has(> ul),
+[data-tool] [data-open] > div > div:has(> p) {
+  font-size: 14px !important;
+}
+
+/* turn-trigger \u8282\u70B9\u5361(0.1.7-alpha.1 \u65B0\u589E\u8282\u70B9 kind;\u81EA\u5E26\u7A33\u5B9A\u51FA\u53E3 data-turn-trigger):
+   \u6807\u9898 = header button \u5185\u7B2C 2 \u4E2A span(\u4E0A\u6E38 font: var(--dsw-font-xs-13) \u7B80\u5199,\u987B !important);
+   \u5C55\u5F00\u4F53 = section \u7684 body div \u5185 p(\u8BF4\u660E)\u4E0E div(\u6B63\u6587,\u5176\u5185 pre \u5DF2\u7531\u4E0A\u9762\u7684 code \u89C4\u5219\u8986\u76D6);
+   time \u65F6\u95F4\u6233\u6309\u65E2\u6709\u7EA6\u5B9A\u4FDD\u6301\u7EC4\u4EF6\u81EA\u8EAB\u5B57\u53F7\u3002 */
+[data-turn-trigger] > button > span:nth-child(2),
+[data-turn-trigger] > div > p,
+[data-turn-trigger] > div > div {
+  font-size: 14px !important;
+}
 `;
 
 // src/client.ts
