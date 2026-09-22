@@ -26,6 +26,7 @@
 | 卡片展开正文（DisclosureRow 系） | 包裹层 `[data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row])`；正文 Markdown 根 `… [data-markdown-variant="compact"]` |
 | 卡片展开正文（压缩标记） | `[data-chat-flow-kind="compaction"] button[aria-expanded="true"] + div`（`manual-compaction` 同形） |
 | 工具 / bash 卡片内容 | 在 `[data-tool]` / `[data-sample]` 上重指 `--dsw-font-markdown-code-block-small` 与 `--dsw-font-markdown-code-block`（主题默认 11px）；BashRow 的展开正文是表头 `[data-sample]` 的**相邻兄弟**，另在 `[data-sample] + *` 重指 |
+| 过程组内卡片间距 | `body [data-step-process-body]` 重指 `--dsh-chat-flow-gap` |
 
 要点：`[data-chat-flow-kind]` 打在聊天流条目根上，`[data-tool]` / `[data-sample]` 打在卡片
 根上；`DisclosureRow` 表头带 `data-disclosure-row`、根在展开时带 `data-open`，展开正文恒为
@@ -43,13 +44,27 @@ CSS-module 哈希类名）。
 聊天列用 `margin-top: var(--dsh-chat-flow-gap, 16px)` 控制卡片间距。本插件在 **`body`**
 （而非 `:root`）声明 `--dsh-chat-flow-gap: calc(14px * 0.5)`：自定义属性内的 `var()` 在
 **声明元素**上求值，而 `--dsh-content-font-size` 是主题以**内联样式**设在 `<body>` 上的，
-放 `:root` 会取不到实际设置值。紧凑回答卡的元素级例外（`.flowItem[data-turn-process-answer]`
-的 8px）保持不变。
+放 `:root` 会取不到实际设置值。
+
+上游 `0.1.7-alpha.1` 起「思考 / 工具调用」过程组由新容器 `ChatGroupSeat`（class 前缀
+`O_Ebla_`）承载，成员卡片不再直接挂在聊天列下，而是嵌在
+`[data-step-process] > [data-step-process-body] > [data-step-process-content]` 里；组内
+间距由 `.content > :not([hidden]):not(:empty) ~ …` 取 `--dsh-chat-flow-gap`。而该 **body
+元素自己声明**了 `--dsh-chat-flow-gap`：收起 / 滚动态 8px，展开态（`.expandedBody`，
+`data-group-expanded-mode`）16px。自定义属性按**最近声明者**继承，它比 `<body>` 更近，
+`body` 上的 7px 因此到不了成员卡片（与 `!important`、特异性、注入顺序无关）。故本插件在
+同一元素上以 `body [data-step-process-body]`（0,1,1）重指，压过上游 `.O_Ebla_body` /
+`.O_Ebla_expandedBody`（0,1,0）；两种状态共用 `data-step-process-body`，一条规则通吃。
+列级相邻卡（过程组 ↔ 回答 / 消息）仍走 `body` 声明。
+
+紧凑回答卡的元素级例外（`.flowItem[data-turn-process-answer]` 的 8px）写在成员元素自身，
+优先于继承，保持不变。
 
 ## 调整
 
 - 改字号：替换 `src/css.ts` 中所有 `14px`（含工具 / bash 卡片 token 的 `14px/…`）。
-- 改间距：改 `src/css.ts` 中 `--dsh-chat-flow-gap` 的 `calc(14px * 0.5)`。
+- 改间距：改 `src/css.ts` 中 `--dsh-chat-flow-gap` 的 `calc(14px * 0.5)`——`body` 与
+  `body [data-step-process-body]` 两处须同改（分别管列级与过程组内）。
 - 改完 `npm run typecheck && npm run build`；产物变化由 client-hmr 在 500ms 内热推送，
   页面无需重启 / 刷新。
 

@@ -9,6 +9,16 @@ body {
   --dsh-chat-flow-gap: calc(14px * 0.5);
 }
 
+/* 上游 0.1.7-alpha.1 起「思考/工具调用」过程组自带容器(ChatGroupSeat),其 body 元素
+   自己声明 --dsh-chat-flow-gap(收起滚动态 8px、展开态 .expandedBody 16px),组内成员卡片
+   的 margin-top 由 .content > 兄弟选择器取该变量。自定义属性按「最近声明者」继承,
+   它比 body 更近,故 body 上的 7px 到不了成员卡片——须在同一元素上以更高特异性重指
+   (0,1,1 压过上游 (0,1,0));两种状态共用 data-step-process-body,一条规则通吃。
+   成员自带的 [data-turn-process-answer]{--dsh-chat-flow-gap:8px} 是元素自身声明,不受影响。 */
+body [data-step-process-body] {
+  --dsh-chat-flow-gap: calc(14px * 0.5);
+}
+
 /* 卡片标题 = DisclosureRow 表头第 2 个直属子元素 */
 [data-chat-flow-kind] [data-disclosure-row] > span:nth-child(2) {
   font-size: 14px !important;
