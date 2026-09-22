@@ -84,8 +84,10 @@ export interface SessionSummaryLike {
   retainedBy?: { mainView?: number }
   blank?: boolean
   updatedAt?: number
-  /** 粗粒度持久来源(过滤子代理用)。 */
+  /** 粗粒度持久来源(过滤子代理用);**fork 缺席**(与上游 `runningDescendants` 同判据)。 */
   origin?: string
+  /** 直系父会话(0.1.7-alpha.1 起投影行必带);顶层会话缺席。**fork 行同样带,故不能单凭它判子代理**。 */
+  parentId?: string
 }
 
 export interface WorkspaceItemLike {
@@ -101,6 +103,8 @@ export interface WorkspaceItemLike {
 export interface WorkspaceSnapshotLike {
   items?: readonly WorkspaceItemLike[]
   archivedSessionIds?: readonly string[]
+  /** 置顶会话集合(0.1.7-alpha.1 新增);缺席按空集。 */
+  pinnedSessionIds?: readonly string[]
   /** 列表到达生命周期:pending / ready。 */
   phase?: string
 }
@@ -164,6 +168,12 @@ export interface UiWorkspaceLike {
 
 /* ---- 侧栏 workspace 浏览器视图状态:会话排序的权威来源 ---- */
 
+/** 置顶 / 归档全局集合(上游 rowState 的 orderState 部分;两者缺席按空集)。 */
+export interface RowStateLike {
+  archivedSessionIds?: readonly string[]
+  pinnedSessionIds?: readonly string[]
+}
+
 /** 侧栏 workspace 浏览器的视图 store 状态(持久化键 dsh.workspace.view.v5)。 */
 export interface WorkspaceViewStateLike {
   /** 分组方式:workspace(默认) / flat。 */
@@ -171,8 +181,10 @@ export interface WorkspaceViewStateLike {
   /** 排序方式:manual / updated(默认)。 */
   orderBy?: string
   groupExpansion?: Readonly<Record<string, boolean | undefined>>
-/** 组 key → 本地会话顺序账号。 */
+  /** 组 key → 本地会话顺序账号。 */
   sessionOrderByAccount?: Readonly<Record<string, readonly string[] | undefined>>
+  /** 归档筛选(0.1.7-alpha.1 新增):default 隐藏 / show 一并显示 / only 仅归档;缺席按 default。 */
+  archivedFilter?: string
 }
 
 export interface StoreInstanceLike {
@@ -243,20 +255,22 @@ export interface SessionBindingLike {
   ctx?: unknown
 }
 
-/** 子代理目录里的一行(kind==='child' 才是真子会话)。 */
+/** 子代理名册的一行(0.1.7-alpha.1 投影面;仅 id 与一次性/可续跑模式)。 */
 export interface SubagentCatalogEntryLike {
-  kind?: string
   id?: string
+  mode?: string
 }
 
-export interface SubagentCatalogLike {
-  entries?: readonly SubagentCatalogEntryLike[]
+/** 一个会话的投影值(子代理名册由 subagentCatalog 提供)。 */
+export interface SessionProjectionLike {
+  values?: { subagentCatalog?: readonly SubagentCatalogEntryLike[] }
 }
 
 export interface SessionListSnapshotLike {
   ids?: readonly string[]
   byId?: Readonly<Record<string, SessionSummaryLike>>
-  subagentsByParent?: Readonly<Record<string, SubagentCatalogLike | undefined>>
+  /** 按父会话聚合的投影(0.1.7-alpha.1 起取代已删除的 subagentsByParent)。 */
+  projectionsBySession?: Readonly<Record<string, SessionProjectionLike | undefined>>
 }
 
 export interface SessionsLike {

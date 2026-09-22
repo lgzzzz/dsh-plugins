@@ -337,7 +337,7 @@ export function isComposerTarget(services: Services, target: EventTarget | null 
   }
 }
 
-/** 停止当前会话整棵运行中交互树（Esc）：递归直系子代理、visited 去重、跳过 one-shot。 */
+/** 停止当前会话整棵运行中交互树（Esc）：递归直系**子代理**（不含 fork）、visited 去重、跳过 one-shot。 */
 export function stopCurrentSessionTree(services: Services): boolean {
   const sessions = services.sessions
   const snapshot = sessions?.list?.getSnapshot?.()
@@ -345,21 +345,57 @@ export function stopCurrentSessionTree(services: Services): boolean {
   // 当前会话来自视图层(0.1.6-alpha.2 起 sessions.list 快照不再带 current)
   const current = currentSessionId(services)
   if (current === undefined || current === '') return false
+  // 0.1.7-alpha.1 起子代理名册由投影提供(origin='subagent' 行 + subagentCatalog 两源并集),旧的 subagentsByParent 已删除
+  const children = childIdsByParent(snapshot)
   const cancelled = new Set<string>()
   const visit = (id: string | undefined, seen: Set<string>): void => {
     if (id === undefined || id === '' || seen.has(id)) return
     seen.add(id)
     cancelIfRunning(id, sessions, cancelled)
-    const catalog = snapshot.subagentsByParent?.[id]
-    const entries = catalog?.entries
-    if (entries === undefined) return
-    for (const entry of entries) {
-      if (entry.kind !== 'child') continue
-      visit(entry.id, seen)
-    }
+    for (const child of children.get(id) ?? []) visit(child, seen)
   }
   visit(current, new Set())
   return cancelled.size > 0
+}
+
+/**
+ * 父会话 → 直系子代理 id 索引:并集「byId 里 `origin === 'subagent'` 且 parentId 命中行」
+ * （同步、恒可用）与「projectionsBySession[parent].values.subagentCatalog」（投影已加载时补充）。
+ * 判据与上游一致(dsh-subagent `runningDescendants`:parentSession 有值且 origin === 'subagent'):
+ * **fork 也带 parentId 但 origin 缺席**,是独立会话而非子代理,不得递归取消。
+ * 任一来源不可读即视为空;不触碰 DOM、不触发投影加载（保持 Esc 的同步吞键语义）。
+ */
+function childIdsByParent(snapshot: SessionListSnapshotLike): ReadonlyMap<string, readonly string[]> {
+  const index = new Map<string, string[]>()
+  const push = (parent: string | undefined, child: string | undefined): void => {
+    if (parent === undefined || parent === '' || child === undefined || child === '') return
+    const known = index.get(parent)
+    if (known === undefined) {
+      index.set(parent, [child])
+      return
+    }
+    if (!known.includes(child)) known.push(child)
+  }
+  const byId = snapshot.byId
+  if (byId !== null && byId !== undefined) {
+    for (const summary of Object.values(byId)) {
+      if (summary === null || summary === undefined) continue
+      if (summary.origin !== 'subagent') continue
+      push(summary.parentId, summary.id)
+    }
+  }
+  const projections = snapshot.projectionsBySession
+  if (projections !== null && projections !== undefined) {
+    for (const [parent, projection] of Object.entries(projections)) {
+      const catalog = projection?.values?.subagentCatalog
+      if (catalog === undefined) continue
+      for (const entry of catalog) {
+        if (entry === null || entry === undefined) continue
+        push(parent, entry.id)
+      }
+    }
+  }
+  return index
 }
 
 /** 取消单个运行中的会话；one-shot 子代理不可取消；返回是否发出取消。 */

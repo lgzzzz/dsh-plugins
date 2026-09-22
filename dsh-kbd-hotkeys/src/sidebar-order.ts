@@ -1,7 +1,21 @@
-/** 侧栏可见顺序复刻:分组 + 组内本地顺序账号(slot store,root 作用域)+ 可见性;权威来源读不到即空轴(无降级)。 */
-import { compareRecency, sessionVisible } from './session-order.ts'
+/**
+ * 侧栏可见顺序复刻:分组 + 组内本地顺序账号(slot store,root 作用域)+ 可见性 + 置顶/归档语义;
+ * 权威来源读不到即空轴(无降级)。逐条对齐上游 workspace 浏览器 0.1.7-alpha.1:
+ * 成员集取宿主全量(含归档,上游 sessionMemberIds)、可见性走 archivedFilter、
+ * 渲染顺序再经 sectionMembers(blank → 置顶 → 其余),组内/降级桶与上游同序。
+ */
+import {
+  normalizeArchivedFilter,
+  pinCurrentBlank,
+  recencyOrder,
+  reconcileOrder,
+  sectionMembers,
+  sessionRowVisible,
+  type ArchivedFilter,
+} from './session-order.ts'
 import { currentSessionId } from './session-view.ts'
 import type {
+  RowStateLike,
   Services,
   SessionListSnapshotLike,
   SessionSummaryLike,
@@ -9,7 +23,6 @@ import type {
   SlotsLike,
   StoreHandleLike,
   StoreInstanceLike,
-  WorkspaceItemLike,
   WorkspaceSnapshotLike,
   WorkspaceViewStateLike,
 } from './types.ts'
@@ -23,7 +36,11 @@ const UNGROUPED_KEY = ''
 /** workspace 浏览器注册的 slot 名(注册项挂视图 store handle)。 */
 const WORKSPACE_SLOT = 'sidebar.workspaces'
 
-/** 侧栏渲染顺序下的可见会话 id(每次重新取数);权威来源不可读 → 空数组。 */
+/**
+ * 侧栏渲染顺序下的可见会话 id(每次重新取数);权威来源不可读 → 空数组。
+ * 复刻上游:成员集(含归档)→ 序(orderBy=manual 走对账,否则最近更新)→ pinCurrentBlank →
+ * 可见性(archivedFilter)→ sectionMembers(blank → 置顶 → 其余)。
+ */
 export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, services: Services): string[] {
   const view = readSidebarViewState(services)
   if (view === undefined) return []
@@ -31,47 +48,70 @@ export function sidebarOrderedSessionIds(snapshot: SessionListSnapshotLike, serv
   if (workspaceSnapshot === undefined) return []
 
   const byId = snapshot.byId ?? {}
+  const ids = snapshot.ids ?? []
   // 当前会话来自视图层(0.1.6-alpha.2 起 sessions.list 快照不再带 current);读不到即 undefined
   const current = currentSessionId(services)
   const archived = new Set<string>(workspaceSnapshot.archivedSessionIds ?? [])
-  const order = view.sessionOrderByAccount
-
-  const visible = (id: string): boolean => {
-    const summary = byId[id]
-    return summary !== undefined && sessionVisible(summary, current, archived)
+  const pinned = new Set<string>(workspaceSnapshot.pinnedSessionIds ?? [])
+  const archivedFilter = normalizeArchivedFilter(view.archivedFilter)
+  const rowState: RowStateLike = {
+    archivedSessionIds: [...archived],
+    pinnedSessionIds: [...pinned],
   }
-  const recency = (a: string, b: string): number => compareRecency(a, b, byId)
+  const manual = view.orderBy === 'manual'
+  const order = view.sessionOrderByAccount
+  const currentBlank = current !== undefined && byId[current]?.blank === true ? current : undefined
 
-  // flat:可见会话按最近更新排序,再与本地顺序对账
+  /** 账号内顺序:对账(manual)或最近更新(updated),再把选中空白会话顶到最前。 */
+  const accountOrder = (memberIds: readonly string[], key: string | undefined): string[] => {
+    const base = manual
+      ? reconcileOrder(memberIds, key === undefined ? undefined : order?.[key], byId, rowState)
+      : recencyOrder(memberIds, byId)
+    const blank = currentBlank !== undefined && memberIds.includes(currentBlank) ? currentBlank : undefined
+    return pinCurrentBlank(base, blank)
+  }
+  /** 渲染顺序:可见性过滤 → sectionMembers 分区。 */
+  const render = (orderedIds: readonly string[]): string[] => {
+    const members: SessionSummaryLike[] = []
+    for (const id of orderedIds) {
+      const summary = byId[id]
+      if (summary === undefined || summary === null) continue
+      if (!sessionRowVisible(summary, current, archived, archivedFilter)) continue
+      members.push(summary)
+    }
+    return sectionMembers(members, pinned, archived).map((member) => member.id)
+  }
+
+  // flat:成员集取上游 sessionMemberIds(含归档、排除子代理与非当前 blank),再按账号顺序渲染
   if (view.groupBy === 'flat') {
-    const base = (snapshot.ids ?? []).filter(visible)
-    base.sort(recency)
-    return reconcileOrder(base, order?.[FLAT_ORDER_KEY])
+    const members = ids.filter((id) => {
+      const summary = byId[id]
+      return summary !== undefined && summary !== null && sessionRowVisible(summary, current, new Set<string>(), 'show')
+    })
+    return render(accountOrder(members, FLAT_ORDER_KEY))
   }
   if (view.groupBy !== 'workspace') return []
   const items = workspaceSnapshot.items
   if (items === undefined) return []
 
-  // 组按宿主顺序,组内先与本地顺序对账
-  const ids: string[] = []
+  // 组按宿主顺序,组内先定序再分区
+  const idsOut: string[] = []
   const accounted = new Set<string>()
   for (const workspace of items) {
-    for (const id of groupOrder(workspace, order)) {
-      accounted.add(id)
-      if (visible(id)) ids.push(id)
-    }
+    const memberIds = workspace.sessionIds ?? []
+    for (const id of memberIds) accounted.add(id)
+    idsOut.push(...render(accountOrder(memberIds, workspace.workspaceId)))
   }
 
-  // 无归属:有本地顺序按顺序(新增按最近更新追加),否则整体按最近更新
-  const stray = (snapshot.ids ?? []).filter((id) => !accounted.has(id) && visible(id))
-  const ungrouped = order?.[UNGROUPED_KEY]
-  if (ungrouped === undefined) {
-    stray.sort(recency)
-    ids.push(...stray)
-  } else {
-    ids.push(...orderedUngrouped(stray, ungrouped, byId))
-  }
-  return ids
+  // 无归属:成员=未归属全量(上游 pinOrderSource 的 "" 桶),再走同一可见性/分区
+  const ungrouped = ids.filter((id) => !accounted.has(id) && byId[id] !== undefined)
+  idsOut.push(...render(accountOrder(ungrouped, UNGROUPED_KEY)))
+  return idsOut
+}
+
+/** 读侧栏视图 store 的归档筛选:读不到按 default(与上游 store 默认一致)。 */
+export function readArchivedFilter(services: Services): ArchivedFilter {
+  return normalizeArchivedFilter(readSidebarViewState(services)?.archivedFilter)
 }
 
 /** 读侧栏视图 store:slots.entries → resolveStore(handle, undefined) → 快照;任一环不可用 → undefined。 */
@@ -124,50 +164,4 @@ function liveInstance(slots: SlotsLike, handle: StoreHandleLike): StoreInstanceL
 function asViewState(raw: unknown): WorkspaceViewStateLike | undefined {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
   return raw as WorkspaceViewStateLike
-}
-
-/** 组内顺序:本地顺序账号对账 sessionIds(上游 reconciledSessionOrder)。 */
-function groupOrder(
-  workspace: WorkspaceItemLike,
-  order: Readonly<Record<string, readonly string[] | undefined>> | undefined,
-): readonly string[] {
-  const sessionIds = workspace.sessionIds ?? []
-  return reconcileOrder(sessionIds, order?.[workspace.workspaceId])
-}
-
-/** 对账:账号内且在册的按账号序,其余按原序追加。 */
-function reconcileOrder(ids: readonly string[], stored: readonly string[] | undefined): string[] {
-  if (stored === undefined) return [...ids]
-  const known = new Set(ids)
-  const out: string[] = []
-  const included = new Set<string>()
-  for (const id of stored) {
-    if (!known.has(id) || included.has(id)) continue
-    out.push(id)
-    included.add(id)
-  }
-  for (const id of ids) {
-    if (included.has(id)) continue
-    out.push(id)
-  }
-  return out
-}
-
-/** 无归属桶顺序:账号内在前,未记录的按最近更新追加。 */
-function orderedUngrouped(
-  ids: readonly string[],
-  stored: readonly string[],
-  byId: Readonly<Record<string, SessionSummaryLike>>,
-): string[] {
-  const known = new Set(ids)
-  const out: string[] = []
-  const included = new Set<string>()
-  for (const id of stored) {
-    if (!known.has(id) || included.has(id)) continue
-    out.push(id)
-    included.add(id)
-  }
-  const rest = ids.filter((id) => !included.has(id))
-  rest.sort((a, b) => compareRecency(a, b, byId))
-  return [...out, ...rest]
 }

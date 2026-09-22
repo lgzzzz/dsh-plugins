@@ -161,11 +161,18 @@ function clearProgress(store, requestKey) {
 }
 
 // src/session-order.ts
-function sessionRowVisible(summary, current, archived) {
-  return summary.origin !== "subagent" && !archived.has(summary.id) && (!summary.blank || summary.id === current);
+function normalizeArchivedFilter(value) {
+  return value === "show" || value === "only" ? value : "default";
 }
-function sessionVisible(summary, current, archived, keepBlank = true) {
-  if (!sessionRowVisible(summary, current, archived)) return false;
+function sessionRowVisible(summary, current, archived, archivedFilter = "default") {
+  if (summary.origin === "subagent") return false;
+  if (summary.blank === true && summary.id !== current) return false;
+  if (archivedFilter === "show") return true;
+  if (archivedFilter === "only") return archived.has(summary.id);
+  return !archived.has(summary.id);
+}
+function sessionVisible(summary, current, archived, archivedFilter = "default", keepBlank = true) {
+  if (!sessionRowVisible(summary, current, archived, archivedFilter)) return false;
   if (summary.blank === true && !keepBlank) return false;
   return true;
 }
@@ -177,7 +184,63 @@ function compareRecency(a, b, byId) {
   return a < b ? -1 : 1;
 }
 function recencyOrder(ids, byId) {
-  return ids.map((id, index) => ({ id, index })).sort((a, b) => compareRecency(a.id, b.id, byId) || a.index - b.index).map((entry) => entry.id);
+  return ids.filter((id) => byId[id] !== void 0).map((id, index) => ({ id, index })).sort((a, b) => compareRecency(a.id, b.id, byId) || a.index - b.index).map((entry) => entry.id);
+}
+function reconcileOrder(memberIds, savedOrder, byId, rowState) {
+  var _a, _b;
+  const members = new Map(memberIds.map((id) => [id, id]));
+  const included = /* @__PURE__ */ new Set();
+  const ordered = [];
+  for (const key of savedOrder != null ? savedOrder : []) {
+    const id = members.get(key);
+    if (id === void 0 || included.has(key)) continue;
+    ordered.push(id);
+    included.add(key);
+  }
+  const archived = new Set((_a = rowState == null ? void 0 : rowState.archivedSessionIds) != null ? _a : []);
+  const pins = [];
+  for (const sessionId of (_b = rowState == null ? void 0 : rowState.pinnedSessionIds) != null ? _b : []) {
+    const id = members.get(sessionId);
+    if (id === void 0 || included.has(id) || archived.has(id) || byId[id] === void 0) continue;
+    pins.push(id);
+    included.add(id);
+  }
+  const ordinary = [];
+  const archives = [];
+  const rest = [...members.values()].filter((id) => !included.has(id) && byId[id] !== void 0);
+  rest.sort((a, b) => compareRecency(a, b, byId));
+  for (const id of rest) {
+    if (archived.has(id)) archives.push(id);
+    else ordinary.push(id);
+  }
+  const result = [...pins, ...ordered, ...ordinary, ...archives];
+  const pending = new Set(ordinary);
+  const placeFork = (id) => {
+    var _a2;
+    if (!pending.delete(id)) return;
+    const parentId = (_a2 = byId[id]) == null ? void 0 : _a2.parentId;
+    if (parentId === void 0 || parentId === id || !result.includes(parentId)) return;
+    placeFork(parentId);
+    result.splice(result.indexOf(id), 1);
+    result.splice(result.indexOf(parentId), 0, id);
+  };
+  for (const id of [...ordinary].reverse()) placeFork(id);
+  return result;
+}
+function sectionMembers(members, pinned, archived) {
+  const placeholders = [];
+  const leading = [];
+  const rest = [];
+  for (const member of members) {
+    if (member.blank === true) placeholders.push(member);
+    else if (!archived.has(member.id) && pinned.has(member.id)) leading.push(member);
+    else rest.push(member);
+  }
+  return [...placeholders, ...leading, ...rest];
+}
+function pinCurrentBlank(order, currentBlank) {
+  if (currentBlank === void 0) return [...order];
+  return [currentBlank, ...order.filter((id) => id !== currentBlank)];
 }
 
 // src/session-view.ts
@@ -218,45 +281,63 @@ var FLAT_ORDER_KEY = "__flat_session_order__";
 var UNGROUPED_KEY = "";
 var WORKSPACE_SLOT = "sidebar.workspaces";
 function sidebarOrderedSessionIds(snapshot, services) {
-  var _a, _b, _c, _d;
+  var _a, _b, _c, _d, _e, _f;
   const view = readSidebarViewState(services);
   if (view === void 0) return [];
   const workspaceSnapshot = readWorkspaceSnapshot(services);
   if (workspaceSnapshot === void 0) return [];
   const byId = (_a = snapshot.byId) != null ? _a : {};
+  const ids = (_b = snapshot.ids) != null ? _b : [];
   const current = currentSessionId(services);
-  const archived = new Set((_b = workspaceSnapshot.archivedSessionIds) != null ? _b : []);
-  const order = view.sessionOrderByAccount;
-  const visible = (id) => {
-    const summary = byId[id];
-    return summary !== void 0 && sessionVisible(summary, current, archived);
+  const archived = new Set((_c = workspaceSnapshot.archivedSessionIds) != null ? _c : []);
+  const pinned = new Set((_d = workspaceSnapshot.pinnedSessionIds) != null ? _d : []);
+  const archivedFilter = normalizeArchivedFilter(view.archivedFilter);
+  const rowState = {
+    archivedSessionIds: [...archived],
+    pinnedSessionIds: [...pinned]
   };
-  const recency = (a, b) => compareRecency(a, b, byId);
+  const manual = view.orderBy === "manual";
+  const order = view.sessionOrderByAccount;
+  const currentBlank = current !== void 0 && ((_e = byId[current]) == null ? void 0 : _e.blank) === true ? current : void 0;
+  const accountOrder = (memberIds, key) => {
+    const base = manual ? reconcileOrder(memberIds, key === void 0 ? void 0 : order == null ? void 0 : order[key], byId, rowState) : recencyOrder(memberIds, byId);
+    const blank = currentBlank !== void 0 && memberIds.includes(currentBlank) ? currentBlank : void 0;
+    return pinCurrentBlank(base, blank);
+  };
+  const render = (orderedIds) => {
+    const members = [];
+    for (const id of orderedIds) {
+      const summary = byId[id];
+      if (summary === void 0 || summary === null) continue;
+      if (!sessionRowVisible(summary, current, archived, archivedFilter)) continue;
+      members.push(summary);
+    }
+    return sectionMembers(members, pinned, archived).map((member) => member.id);
+  };
   if (view.groupBy === "flat") {
-    const base = ((_c = snapshot.ids) != null ? _c : []).filter(visible);
-    base.sort(recency);
-    return reconcileOrder(base, order == null ? void 0 : order[FLAT_ORDER_KEY]);
+    const members = ids.filter((id) => {
+      const summary = byId[id];
+      return summary !== void 0 && summary !== null && sessionRowVisible(summary, current, /* @__PURE__ */ new Set(), "show");
+    });
+    return render(accountOrder(members, FLAT_ORDER_KEY));
   }
   if (view.groupBy !== "workspace") return [];
   const items = workspaceSnapshot.items;
   if (items === void 0) return [];
-  const ids = [];
+  const idsOut = [];
   const accounted = /* @__PURE__ */ new Set();
   for (const workspace of items) {
-    for (const id of groupOrder(workspace, order)) {
-      accounted.add(id);
-      if (visible(id)) ids.push(id);
-    }
+    const memberIds = (_f = workspace.sessionIds) != null ? _f : [];
+    for (const id of memberIds) accounted.add(id);
+    idsOut.push(...render(accountOrder(memberIds, workspace.workspaceId)));
   }
-  const stray = ((_d = snapshot.ids) != null ? _d : []).filter((id) => !accounted.has(id) && visible(id));
-  const ungrouped = order == null ? void 0 : order[UNGROUPED_KEY];
-  if (ungrouped === void 0) {
-    stray.sort(recency);
-    ids.push(...stray);
-  } else {
-    ids.push(...orderedUngrouped(stray, ungrouped, byId));
-  }
-  return ids;
+  const ungrouped = ids.filter((id) => !accounted.has(id) && byId[id] !== void 0);
+  idsOut.push(...render(accountOrder(ungrouped, UNGROUPED_KEY)));
+  return idsOut;
+}
+function readArchivedFilter(services) {
+  var _a;
+  return normalizeArchivedFilter((_a = readSidebarViewState(services)) == null ? void 0 : _a.archivedFilter);
 }
 function readSidebarViewState(services) {
   var _a;
@@ -303,40 +384,6 @@ function liveInstance(slots, handle) {
 function asViewState(raw) {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return void 0;
   return raw;
-}
-function groupOrder(workspace, order) {
-  var _a;
-  const sessionIds = (_a = workspace.sessionIds) != null ? _a : [];
-  return reconcileOrder(sessionIds, order == null ? void 0 : order[workspace.workspaceId]);
-}
-function reconcileOrder(ids, stored) {
-  if (stored === void 0) return [...ids];
-  const known = new Set(ids);
-  const out = [];
-  const included = /* @__PURE__ */ new Set();
-  for (const id of stored) {
-    if (!known.has(id) || included.has(id)) continue;
-    out.push(id);
-    included.add(id);
-  }
-  for (const id of ids) {
-    if (included.has(id)) continue;
-    out.push(id);
-  }
-  return out;
-}
-function orderedUngrouped(ids, stored, byId) {
-  const known = new Set(ids);
-  const out = [];
-  const included = /* @__PURE__ */ new Set();
-  for (const id of stored) {
-    if (!known.has(id) || included.has(id)) continue;
-    out.push(id);
-    included.add(id);
-  }
-  const rest = ids.filter((id) => !included.has(id));
-  rest.sort((a, b) => compareRecency(a, b, byId));
-  return [...out, ...rest];
 }
 
 // src/actions.ts
@@ -620,22 +667,50 @@ function stopCurrentSessionTree(services) {
   if (sessions === null || sessions === void 0 || snapshot === null || snapshot === void 0) return false;
   const current = currentSessionId(services);
   if (current === void 0 || current === "") return false;
+  const children = childIdsByParent(snapshot);
   const cancelled = /* @__PURE__ */ new Set();
   const visit = (id, seen) => {
     var _a2;
     if (id === void 0 || id === "" || seen.has(id)) return;
     seen.add(id);
     cancelIfRunning(id, sessions, cancelled);
-    const catalog = (_a2 = snapshot.subagentsByParent) == null ? void 0 : _a2[id];
-    const entries = catalog == null ? void 0 : catalog.entries;
-    if (entries === void 0) return;
-    for (const entry of entries) {
-      if (entry.kind !== "child") continue;
-      visit(entry.id, seen);
-    }
+    for (const child of (_a2 = children.get(id)) != null ? _a2 : []) visit(child, seen);
   };
   visit(current, /* @__PURE__ */ new Set());
   return cancelled.size > 0;
+}
+function childIdsByParent(snapshot) {
+  var _a;
+  const index = /* @__PURE__ */ new Map();
+  const push = (parent, child) => {
+    if (parent === void 0 || parent === "" || child === void 0 || child === "") return;
+    const known = index.get(parent);
+    if (known === void 0) {
+      index.set(parent, [child]);
+      return;
+    }
+    if (!known.includes(child)) known.push(child);
+  };
+  const byId = snapshot.byId;
+  if (byId !== null && byId !== void 0) {
+    for (const summary of Object.values(byId)) {
+      if (summary === null || summary === void 0) continue;
+      if (summary.origin !== "subagent") continue;
+      push(summary.parentId, summary.id);
+    }
+  }
+  const projections = snapshot.projectionsBySession;
+  if (projections !== null && projections !== void 0) {
+    for (const [parent, projection] of Object.entries(projections)) {
+      const catalog = (_a = projection == null ? void 0 : projection.values) == null ? void 0 : _a.subagentCatalog;
+      if (catalog === void 0) continue;
+      for (const entry of catalog) {
+        if (entry === null || entry === void 0) continue;
+        push(parent, entry.id);
+      }
+    }
+  }
+  return index;
 }
 function cancelIfRunning(id, sessions, cancelled) {
   var _a, _b;
@@ -1536,12 +1611,13 @@ function workspaceRows(services) {
   const current = currentSessionId(services);
   const byId = (_e = (_d = (_c = (_b = (_a = services.sessions) == null ? void 0 : _a.list) == null ? void 0 : _b.getSnapshot) == null ? void 0 : _c.call(_b)) == null ? void 0 : _d.byId) != null ? _e : {};
   const archived = new Set((_f = snapshot == null ? void 0 : snapshot.archivedSessionIds) != null ? _f : []);
+  const archivedFilter = readArchivedFilter(services);
   const entries = [];
   items.forEach((item, index) => {
     if (item === null || item === void 0) return;
     const workspaceId = item.workspaceId;
     if (typeof workspaceId !== "string" || workspaceId === "") return;
-    entries.push({ item, workspaceId, activity: workspaceActivity(item, byId, current, archived), index });
+    entries.push({ item, workspaceId, activity: workspaceActivity(item, byId, current, archived, archivedFilter), index });
   });
   const ordered = entries.sort((a, b) => b.activity - a.activity || a.index - b.index);
   const kept = ordered.slice(0, WORKSPACE_LIMIT);
@@ -1567,13 +1643,13 @@ function workspaceRows(services) {
   }
   return rows;
 }
-function workspaceActivity(item, byId, current, archived) {
+function workspaceActivity(item, byId, current, archived, archivedFilter) {
   var _a;
   let latest = Number.NEGATIVE_INFINITY;
   for (const id of (_a = item.sessionIds) != null ? _a : []) {
     const summary = byId[id];
     if (summary === void 0) continue;
-    if (!sessionVisible(summary, current, archived, false)) continue;
+    if (!sessionVisible(summary, current, archived, archivedFilter, false)) continue;
     const updatedAt = summary.updatedAt;
     if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt)) continue;
     if (updatedAt > latest) latest = updatedAt;
@@ -1630,9 +1706,10 @@ function recentSessionsView(services) {
   const pending = pendingSessionIds(services);
   const workspaceSnapshot = readWorkspaceSnapshot(services);
   const archived = new Set((_d = workspaceSnapshot == null ? void 0 : workspaceSnapshot.archivedSessionIds) != null ? _d : []);
+  const archivedFilter = readArchivedFilter(services);
   const visible = (id) => {
     const summary = byId[id];
-    return summary !== void 0 && sessionVisible(summary, current, archived, false);
+    return summary !== void 0 && sessionVisible(summary, current, archived, archivedFilter, false);
   };
   const rows = [];
   const groups = [];
@@ -1676,7 +1753,10 @@ function recentSessionsView(services) {
   };
 }
 function openRecentSession(services, sessionId) {
+  var _a, _b;
   if (typeof sessionId !== "string" || sessionId === "") return false;
+  const archived = new Set((_b = (_a = readWorkspaceSnapshot(services)) == null ? void 0 : _a.archivedSessionIds) != null ? _b : []);
+  if (archived.has(sessionId)) return false;
   const uiWorkspace = services.uiWorkspace;
   const openSession = uiWorkspace == null ? void 0 : uiWorkspace.openSession;
   if (uiWorkspace === null || uiWorkspace === void 0 || typeof openSession !== "function") return false;

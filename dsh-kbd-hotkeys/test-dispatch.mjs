@@ -133,7 +133,7 @@ function snapshotOf(rows) {
   return {
     ids: rows.map((row) => row.id),
     byId: Object.fromEntries(rows.map((row) => [row.id, { blank: false, ...row }])),
-    subagentsByParent: {},
+    projectionsBySession: {},
   }
 }
 
@@ -290,7 +290,7 @@ function check(label, actual, expected) {
       's-1': { id: 's-1', running: false, blank: false, updatedAt: 1 },
       's-2': { id: 's-2', running: true, blank: false, updatedAt: 2, retainedBy: { mainView: 1 } },
     },
-    subagentsByParent: {},
+    projectionsBySession: {},
   }
   const { slots } = liveSlots({
     groupBy: 'flat',

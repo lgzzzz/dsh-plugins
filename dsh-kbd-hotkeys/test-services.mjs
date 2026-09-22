@@ -175,7 +175,7 @@ const snapshot = {
     'sess-a': { id: 'sess-a', running: false, blank: false, updatedAt: now - 1000 },
     'sess-b': { id: 'sess-b', running: true, blank: false, updatedAt: now },
   },
-  subagentsByParent: {},
+  projectionsBySession: {},
 }
 /** 会话绑定对象(SessionBinding):作用域绑定的物化只认 sessions.binding(id) 返回的这一个身份。 */
 const sessionOwner = { ctx: {} }
@@ -2033,7 +2033,7 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(活跃度前 10 + ↑↓ 选�
       'sess-b': summary('sess-b', wsNow - 2000),
       'sess-e': summary('sess-e', wsNow),
     },
-    subagentsByParent: {},
+    projectionsBySession: {},
   }
   /** sessions 桩:默认用 wsSnapshot,可换成自定义目录。 */
   const makeSessions = (snapshot = wsSnapshot) => ({ list: { getSnapshot: () => snapshot }, binding: () => undefined })
@@ -2212,7 +2212,7 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(活跃度前 10 + ↑↓ 选�
     manyById[sid] = summary(sid, wsNow + i) // i 越大越活跃 → 活跃度顺序 mw12 … mw1
     manyIds.push(sid)
   }
-  const manySessions = makeSessions({ ids: manyIds, byId: manyById, subagentsByParent: {} })
+  const manySessions = makeSessions({ ids: manyIds, byId: manyById, projectionsBySession: {} })
   const manyWorkspaces = { list: { getSnapshot: () => ({ items: manyItems, archivedSessionIds: [], phase: 'ready' }) } }
 
   // 当前会话 m2(工作区 mw2,活跃度第 11)→ 强制保留,顶掉第 10 名 mw3
@@ -2264,7 +2264,7 @@ console.log('\n--- ⌘/Ctrl+K → 工作区浮窗(活跃度前 10 + ↑↓ 选�
       blank: summary('blank', wsNow + 300, { blank: true }),
       'sess-a': summary('sess-a', wsNow - 5000),
     },
-    subagentsByParent: {},
+    projectionsBySession: {},
   }
   const hiddenItems = [
     item('h1', 'archivedOnly', '/work/h1', ['arch']),
@@ -2622,7 +2622,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
   // 当前会话与「完成未读」都来自 uiSession(alpha.2);sessions.list 快照里已无 current / completed。
   viewCurrent = 'b1'
   completionUnread = new Set(['b1'])
-  const listSnapshot = () => ({ ids: sessionIds, byId, subagentsByParent: {} })
+  const listSnapshot = () => ({ ids: sessionIds, byId, projectionsBySession: {} })
   const workspaceItems = [
     {
       workspaceId: 'w1', title: 'alpha', path: '/work/alpha', sessionIds: ['a1', 'a2', 'blank', 'arch'],
@@ -2778,7 +2778,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
         getSnapshot: () => ({
           ids: [...sessionIds, 'blankB'],
           byId: { ...byId, blankB: summary('blankB', T + 800, { blank: true }) },
-          subagentsByParent: {},
+          projectionsBySession: {},
         }),
       },
       binding: () => undefined,
@@ -2810,7 +2810,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
         getSnapshot: () => ({
           ids: [...sessionIds, 'blankU'],
           byId: { ...byId, blankU: summary('blankU', T + 700, { blank: true }) },
-          subagentsByParent: {},
+          projectionsBySession: {},
         }),
       },
       binding: () => undefined,
@@ -2832,7 +2832,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
         getSnapshot: () => ({
           ids: [...sessionIds, 'blankC'],
           byId: { ...byId, blankC: summary('blankC', T + 600, { blank: true }) },
-          subagentsByParent: {},
+          projectionsBySession: {},
         }),
       },
       binding: () => undefined,
@@ -2864,7 +2864,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
 
   // ⑥ sessions 服务缺席 / 快照缺 ids / 无 openSession:空态或 no-op,一律不崩
   const empty = env({
-    sessions: { list: { getSnapshot: () => ({ ids: [], byId: {}, subagentsByParent: {} }) }, binding: () => undefined },
+    sessions: { list: { getSnapshot: () => ({ ids: [], byId: {}, projectionsBySession: {} }) }, binding: () => undefined },
   })
   event = empty.press(combo)
   check('无可用会话 → 浮窗打开为空态并吞键', event.propagationStopped === true && sessionRows().length === 0)
@@ -2943,7 +2943,7 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
     const capEnv = (current) => {
       viewCurrent = current
       return env({
-        sessions: { list: { getSnapshot: () => ({ ids: [...capIds, 'blankTop'], byId: capById, subagentsByParent: {} }) } },
+        sessions: { list: { getSnapshot: () => ({ ids: [...capIds, 'blankTop'], byId: capById, projectionsBySession: {} }) } },
         workspaces: { list: { getSnapshot: () => ({ items: capWorkspaces, archivedSessionIds: [], phase: 'ready' }) } },
       })
     }

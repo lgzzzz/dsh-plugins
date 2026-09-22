@@ -160,7 +160,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | `dsh-directory-picker-browse` | 无 | 纯补丁插件，无源码与产物 |
 | `dsh-fullwidth-chat` | 无 | 纯 JS 插件，`lib/*.js` 即源码 |
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 ask / 放行各分支、完全权限放行、权限逐会话生效、服务缺席 / 抛错的失败关闭、提示词区段的动态求值 |
-| `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check`；`node test-services.mjs`；`node test-dispatch.mjs` | esbuild（平台二进制）→ `lib/client.js`；两个诊断脚本是纯 Node + 最小 DOM 桩，无需浏览器 |
+| `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check`；`node test-services.mjs`；`node test-order.mjs`；`node test-dispatch.mjs` | esbuild（平台二进制）→ `lib/client.js`；三个诊断脚本均为纯 Node、无需浏览器：`test-services` / `test-dispatch` 用最小 DOM 桩 + `__ModuleLoader__` 载入产物，`test-order` 以 Type Stripping 直载 `src/*.ts` 校验 0.1.7 子代理枚举（`origin === 'subagent'` 判据，fork 不递归取消）与侧栏顺序复刻（含缺摘要成员剔除） |
 | `dsh-rightbar-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild（平台二进制）→ `lib/client.js`；纯样式补丁，无行为测试 |
 | `dsh-rightbar-tab-width` | `npm run typecheck && npm run build && npm run check` | esbuild（平台二进制）→ `lib/client.js` |
 | `dsh-sidebar-default-collapsed` | `npm run typecheck && npm run build && npm run check`；`node test-boot.mjs` | esbuild（平台二进制）→ `lib/client.js`；`test-boot.mjs` 以 Type Stripping 直载 `src/boot-collapse.ts` 校验全部判定分支，并用 `__ModuleLoader__` 桩载入产物校验包名 / `inject` / `apply` 装配（纯 Node，无需浏览器） |

@@ -1,8 +1,8 @@
 /** 工作区浮窗(⌘/Ctrl+K)的数据面:按组内最近会话更新时间取前 10、当前会话所属工作区强制保留;
  * 切换调 uiWorkspace.openWorkspace;无降级、不回退 DOM。 */
-import { sessionVisible } from './session-order.ts'
+import { sessionVisible, type ArchivedFilter } from './session-order.ts'
 import { currentSessionId } from './session-view.ts'
-import { readWorkspaceSnapshot } from './sidebar-order.ts'
+import { readArchivedFilter, readWorkspaceSnapshot } from './sidebar-order.ts'
 import type { Services, SessionSummaryLike, WorkspaceItemLike, WorkspaceRowLike } from './types.ts'
 
 /** 浮窗最多列出的工作区数(全局口径)。 */
@@ -28,13 +28,15 @@ export function workspaceRows(services: Services): WorkspaceRowLike[] {
   const current = currentSessionId(services)
   const byId: Readonly<Record<string, SessionSummaryLike>> = services.sessions?.list?.getSnapshot?.()?.byId ?? {}
   const archived = new Set<string>(snapshot?.archivedSessionIds ?? [])
+  // 归档筛选跟随侧栏(0.1.7-alpha.1);读不到按 default
+  const archivedFilter = readArchivedFilter(services)
 
   const entries: RankedWorkspace[] = []
   items.forEach((item, index) => {
     if (item === null || item === undefined) return
     const workspaceId = item.workspaceId
     if (typeof workspaceId !== 'string' || workspaceId === '') return
-    entries.push({ item, workspaceId, activity: workspaceActivity(item, byId, current, archived), index })
+    entries.push({ item, workspaceId, activity: workspaceActivity(item, byId, current, archived, archivedFilter), index })
   })
 
   // 活跃度降序;同活跃度保持宿主顺序(确定性,连续打开轴稳定)
@@ -70,13 +72,14 @@ function workspaceActivity(
   byId: Readonly<Record<string, SessionSummaryLike>>,
   current: string | undefined,
   archived: ReadonlySet<string>,
+  archivedFilter: ArchivedFilter,
 ): number {
   let latest = Number.NEGATIVE_INFINITY
   for (const id of item.sessionIds ?? []) {
     const summary = byId[id]
     if (summary === undefined) continue
-    // 子代理 / 归档 / 空白会话不算活跃(与浮窗可见性同一判据)
-    if (!sessionVisible(summary, current, archived, false)) continue
+    // 子代理 / 归档 / 空白会话不算活跃(与浮窗可见性同一判据,含归档筛选)
+    if (!sessionVisible(summary, current, archived, archivedFilter, false)) continue
     const updatedAt = summary.updatedAt
     if (typeof updatedAt !== 'number' || !Number.isFinite(updatedAt)) continue
     if (updatedAt > latest) latest = updatedAt

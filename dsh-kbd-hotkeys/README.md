@@ -68,12 +68,12 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `sidebarRight.terminal` | 终端是 `multiple: true` 页、上游每次 `openTab` 铸带 UUID 的 `contentId`、**不按 (kind, contentId) 去重**，故认页由插件读 store 完成（`record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先，再扫其余**停靠**面板，浮窗不参与）。**已有** → `sidebarRight.focus(tabId)`；`layout.expanded === false` 时补 `toggleExpanded()`；若该终端本来就是所在面板的当前标签且右栏已展开，再按 `paneId` 做元素级聚焦。**没有** → `openTab('terminal')` 新建（上游自动聚焦）。**不重排、不置顶** |
 | `composer.focus` | 当前会话（`uiSession.current`）→ `sessions.binding(id).ctx` → `conversation.input.for(actx)`（缺席回退 `InputHub.shell(id)`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。`editing` 态另有 `contains` 门闸：焦点已在 composer 内则不重复聚焦但**仍吞键** |
 | `session.new` | `uiWorkspace.startSession()`（无参）；不触碰 composer 草稿 |
-| `session.prev` / `next` | `sessions.list` 快照 + `sidebar.workspaces` 注册项的侧栏视图 store（顺序，root 作用域传 `undefined`）；锚点 = 当前会话（`uiSession.current`），跳转调 `uiWorkspace.openSession(id)`（`sessions.open` 自 0.1.6-alpha.2 起已删除）。从锚点沿方向扫**其他**会话（锚点自身不作落点），跳过非活跃、到轴尽头**回绕**（循环一圈无其他活跃会话 / 锚点不在可见轴即 no-op）；顺序读不到**不跳转**（无降级） |
-| `session.recent` | 插件自建浮窗。列表 = `sessions.list` 快照 + `workspaces.list` 快照分组 + `src/session-order.ts`；`Enter`/点击调 `uiWorkspace.openSession(sessionId)`（必须以**方法**形式调用；无回退，`sessions.open` 已删除） |
+| `session.prev` / `next` | `sessions.list` 快照 + `sidebar.workspaces` 注册项的侧栏视图 store（顺序，root 作用域传 `undefined`）；锚点 = 当前会话（`uiSession.current`），跳转调 `uiWorkspace.openSession(id)`（`sessions.open` 自 0.1.6-alpha.2 起已删除）。顺序**逐条复刻上游 0.1.7-alpha.1 渲染序**（含置顶前置、归档沉底、归档筛选、fork 紧随其源、blank 顶前）；从锚点沿方向扫**其他**会话（锚点自身不作落点），跳过非活跃、到轴尽头**回绕**（循环一圈无其他活跃会话 / 锚点不在可见轴即 no-op）；顺序读不到**不跳转**（无降级） |
+| `session.recent` | 插件自建浮窗。列表 = `sessions.list` 快照 + `workspaces.list` 快照分组 + `src/session-order.ts`；`Enter`/点击调 `uiWorkspace.openSession(sessionId)`（必须以**方法**形式调用；无回退，`sessions.open` 已删除）。**归档行是例外**：`openRecentSession` 先查归档集合，命中即 `return false`、不调 `openSession`（与上游 `guardedOpen` 同款门闸；见「已知限制」） |
 | `workspace.pick` | 插件自建浮窗。列表 = `workspaces.list` 快照 + `sessions.list` 快照派生（按组内可见会话最新的 `updatedAt` 降序取前 10，当前工作区强制保留；见 `src/workspace-switcher.ts`）；`Enter`/点击调 `uiWorkspace.openWorkspace(workspaceId)`（= 侧栏分组「＋」的连接工作区路径） |
 | `model.pick` | 插件自建浮窗。`ctx.modelDirectories.directoryFor(当前会话)`（与 `/model` 弹层、composer 模型座位**同一份** per-session 目录）→ `load()` → `store.getSnapshot().groups` 按宿主顺序展开；提交调 `directory.select(selection)`，每行选择复刻上游 `selectionOf` |
 | `model.effortNext` | 同一目录实例上循环：候选档复刻上游 `effortChoices`（`[Default（仅当模型无 defaultEffort）] + reasoning.efforts`），当前档 = `current.reasoningEffort ?? reasoning.defaultEffort`；`select` 只改强度 |
-| `session.stop` | 当前会话（`uiSession.current`）→ `sessions.binding(id).session.cancel()`（递归直系 `kind==='child'` 子代理；one-shot 跳过） |
+| `session.stop` | 当前会话（`uiSession.current`）→ `sessions.binding(id).session.cancel()`；直系子代理（**仅 `origin === 'subagent'`，fork 不算**）由 `sessions.list` 快照的**两源并集**枚举（`byId` 里 `origin === 'subagent'` 的行 ∪ `projectionsBySession[parent].values.subagentCatalog`，0.1.7-alpha.1 起取代已删除的 `subagentsByParent`）；one-shot 跳过 |
 | `help.toggle` | 插件自建纯 DOM 速查表 |
 
 浮层（`src/overlay.ts`，纯 DOM）：速查表 / 工作区 / 近期对话 / 模型同一时刻只有一个，
@@ -88,20 +88,25 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   缺席时全部落入该组）。
 - **组内顺序** = `updatedAt` 降序、id 升序决胜（即使侧栏切到手动排序）。
 - **可见性** = 复刻上游 `sessionVisible`（排除子代理、归档、非当前空白行），**再加**：
-  连**当前空白会话**也裁掉（本插件唯一的产品偏离）。
+  连**当前空白会话**也裁掉（本插件唯一的产品偏离）。归档行是否列出跟随侧栏的
+  `archivedFilter`（`default` 隐藏 / `show` 一并 / `only` 仅归档）；读不到视图 store 按 `default`。
 - **条数上限 = 最近交互的 10 个（全局口径）**：先按最近更新取前 10、再按工作区分组，故
   某个工作区可能整组不出现（不留空标题）。当前会话**强制纳入**（不在前 10 时顶掉第 10 名）。
   面板带 `dsh-kbd-panel--recent`，`max-height` 由 `64vh` 抬到 `calc(88vh - 24px)`。
 - **初始高亮** = 当前会话所在行；当前会话本身**不列出**（新建空白会话、归档等被可见性裁掉）
   时落**同工作区**的第一行（归属复刻上游 `owningGroupKey`：没有任何工作区登记即无归属组，
   也按同组处理）；该工作区整组未上榜 / 无当前会话才退回首行。
+- **打开**：归档会话**拒绝打开**（`openRecentSession` 返回 false、不调 `uiWorkspace.openSession`）。
+  上游侧栏的归档门闸在 UI 层（`guardedOpen` + 「归档会话不可打开」提示），
+  `uiWorkspace.openSession` 服务本身不设门闸，故本浮窗在跟随 `archivedFilter` 列出归档行后
+  必须补同等约束。
 
 ## 工作区浮窗的列表规则（`src/workspace-switcher.ts`）
 
 - **活跃度** = 该工作区组内可见会话里最新的 `updatedAt`；无可见会话（或 `sessions.list`
   不可读）为 `-Infinity`，沉底但仍按宿主顺序列出。
-- **可见性** = 与近期对话同判据（`sessionVisible(..., keepBlank=false)`）：排除子代理、
-  归档、空白会话；会话成员取自 `workspaces.list` 各项的 `sessionIds`。
+- **可见性** = 与近期对话同判据（`sessionVisible(..., keepBlank=false)` 且跟随侧栏 `archivedFilter`）：
+  排除子代理、归档（按筛选）、空白会话；会话成员取自 `workspaces.list` 各项的 `sessionIds`。
 - **顺序** = 活跃度降序，同活跃度保持宿主顺序（确定性）。
 - **条数上限 = 10（全局口径）**：先按活跃度取前 10，当前会话所属工作区不在榜内时
   **强制保留**（顶掉第 10 名、排在第 10 行），与近期对话强制纳入当前会话同口径；
@@ -110,7 +115,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 - 只列已登记的 `workspaces.list` 工作区，未分组桶不在其中；行上的 `N 个会话` 仍是该
   工作区登记的会话总数（含被可见性裁掉的会话）。
 
-## 上游 API 依赖（0.1.6-alpha.2）
+## 上游 API 依赖（0.1.7-alpha.1）
 
 `session.stop`（Esc）与所有「按当前会话取数」的动作共用 `src/session-view.ts`：
 
@@ -123,8 +128,32 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   `getSnapshot()`（0.1.6-alpha.2 起 `uiSession.resolve(sessionId)` 已删除；上游只校验
   `reference.binding` 与 `sessions.binding(sessionId)` 同一，缺席投影的 `key` 为 undefined）。
   这一环缺失时所有会话级 store 取数（问答草稿、右栏标签 / 终端认页）整条 no-op/退化。
+- **直系子代理枚举**（`session.stop`）= `src/actions.ts` 的 `childIdsByParent`，并集两源：
+  ① `sessions.list` 快照 `byId` 里 **`origin === 'subagent'`** 且 `parentId === 父` 的行
+  （`dsh-api-session-controller` 在投影循环与 scopes 循环里都会给子代理行补
+  `parentId` + `origin: 'subagent'`，故这条同步可读）；
+  ② `projectionsBySession[父].values.subagentCatalog`（投影已加载时的权威名册）。
+  两源并集去重；任一源不可读只按另一源走，皆不可读则退化为「只停当前会话」。
+  **`origin` 判据不可省**：fork 经 `parentSession` 共享 lineage 字段但**不写 `origin`**
+  （`dsh-session` 的 `fork()` / `dsh-api-session-controller` 的 fork 路径都只写
+  `parentSession` + `isSeeded`），它是独立会话，与上游 `runningDescendants`
+  （`dsh-subagent`，用于 `workspace/session-stop`）同一判据；只按 `parentId` 建边会把
+  运行中的 fork 当子树取消（0.1.6-alpha.2 走子代理目录、fork 不可达，故属迁移引入的行为回归）。
+- **侧栏渲染序**（`session.prev`/`next`，`src/sidebar-order.ts`）= 上游 workspace 浏览器
+  0.1.7-alpha.1 管线：成员集（workspace 分组取 `sessionIds`，无归属与 flat 取全量）→
+  `orderBy === 'manual'` 走 `reconcileManualOrder`（存档序 → 置顶前置 → 普通按最近更新 →
+  归档沉底 → 新 fork 紧随其源），否则按最近更新 → `pinCurrentBlank` →
+  可见性（`archivedFilter`）→ `sectionMembers`（blank → 置顶 → 其余）。所需的
+  `pinnedSessionIds` / `archivedSessionIds` 取自 `workspaces.list` 快照，
+  `archivedFilter` 取自视图 store（`dsh.workspace.view.v5`）。
+  **缺摘要成员（`byId[id] === undefined`）不参与定序**（存档序里已有的仍保留原位），
+  与上游 `orderByRecency` 的丢弃语义一致：否则该成员留在结果里会让 `placeFork` 的
+  `result.includes(parentId)` 误判为真，把一个可见 fork 重定位（可观察的顺序偏离）。
 - 已删除、不得再引用：快照字段 `current` / `currentAddress` / `summary.completed`，
-  服务方法 `sessions.open()` / `openSubagent()` / `clear()` / `uiSession.resolve()`。
+  **0.1.7-alpha.1 起另删** `sessions.list` 快照字段 `subagentsByParent` / `jobsBySession`
+  与服务方法 `setSubagentCatalogOpen()` / `refreshSubagents()`（改由 `projectionsBySession`
+  与 `refreshProjections()` 承载）；服务方法 `sessions.open()` / `openSubagent()` /
+  `clear()` / `uiSession.resolve()`。
 
 ## 自定义键位
 
@@ -186,6 +215,16 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   共享目录，只列已公告的模型、不显示模型描述（上游 `/model` 有本地化描述）。
   `⇧Tab` 只在候选档中**向前**循环，且 `editing` 态只在焦点位于 composer 内时接管。
 - 浮窗 `↑`/`↓` 越界 clamp、不循环；空态时 `Enter` 不消费（由浮层模态吞掉）。
+- **归档行在浮窗里可列出但不可打开**：`⌘/Ctrl+I` 跟随侧栏的 `archivedFilter` 取数，
+  故 `show` / `only` 下归档会话会作为行出现，但 `openRecentSession` 一律拒绝（与上游侧栏
+  `guardedOpen` 同款门闸，`uiWorkspace.openSession` 本身不设闸）。行上**没有**归档标记
+  （`RecentSessionRowLike` 无该字段），表现为「浮窗关闭、不发生导航」；`only` 下整榜因此
+  不可打开。**要先在侧栏对该会话「取消归档」才能打开**：上游的门闸只看归档集合、与
+  `archivedFilter` 无关，`show` 下点行 / 搜索命中同样被拒（提示「已归档对话暂时无法查看，
+  请取消归档后查看」）。
+- **工作区浮窗的活跃度口径跟随归档筛选**：`only` 下「活跃度」只由归档会话的 `updatedAt`
+  决定（`default` 不算归档、`show` 两者都算），这是 0.1.7-alpha.1 起侧栏带筛选后的新语义；
+  行内 `sessionCount` 仍是宿主全量条数、不随筛选收缩（纯展示字段，不参与排序与切换）。
 
 ## 构建与验证
 
@@ -196,11 +235,14 @@ npm run build       # esbuild → lib/client.js（入仓，禁手改）
 npm run check       # node --check 产物与宿主
 ```
 
-诊断脚本（纯 Node + 最小 DOM 桩，无需浏览器）；桩按 **0.1.6-alpha.2 契约**装配
+诊断脚本（纯 Node，无需浏览器）；桩按 **0.1.7-alpha.1 契约**装配
 （当前会话只经 `uiSession.current` 提供、快照里没有 `current`、`sessions` 没有 `open`，
 完成未读只经 `uiSession.sessionStatus`，会话作用域绑定只经
 `uiSession.bindingSource(reference)`——桩复刻上游「`reference.binding` 与
-`sessions.binding(sessionId)` 同一才物化」的校验，退化用例显式声明该面缺席）：
+`sessions.binding(sessionId)` 同一才物化」的校验，退化用例显式声明该面缺席；
+子代理名册只经 `byId` 的 `origin === 'subagent'` + `parentId` 与 `projectionsBySession`，
+快照里**没有** `subagentsByParent`；`origin` 缺席而 `parentId` 有值的行是 fork，桩必须保留
+这一区分）：
 
 - `node test-services.mjs` — 服务级动作路径：审批 / 问答 / 计划评审与 `card` 态判定（问答
   断言落在卡片草稿 store 上）；两个侧栏开关；右栏标签切换 / 关闭当前标签 / 文件浏览器定位
@@ -209,6 +251,13 @@ npm run check       # node --check 产物与宿主
   `uiWorkspace.startSession`）、聚焦输入框（J = Jump 的三态与门闸）、会话跳转（Esc 停止会话树）；
   工作区（活跃度排序 / 前 10 / 当前工作区保留）/ 近期对话 / 模型三个浮窗的列表顺序、分页上限、
   确认路径与空态；`⇧Tab` 候选档与编辑态门闸；各动作的无降级边界。
+- `node test-order.mjs` — 0.1.7 契约与顺序面（纯 Node Type Stripping 直载 `src/*.ts`，无需构建）：
+  `stopCurrentSessionTree` 的子代理枚举（`origin === 'subagent'` 行 × 投影名册并集、隔代递归、
+  one-shot 跳过、两源去重、**fork 不递归取消**、来源缺失的降级、锚点不可读 no-op）；
+  `sessionRowVisible` 的 `archivedFilter` 三分支；
+  `reconcileOrder`（存档序 / 置顶前置 / 归档沉底 / fork 紧随其源 / **缺摘要成员剔除**）；
+  `sectionMembers` 分区；
+  `sidebarOrderedSessionIds` 端到端（workspace|flat × default|show|only × updated|manual）。
 - `node test-dispatch.mjs` — 会话跳转分发：按侧栏顺序（分组 / flat / 权威来源不可用时
   no-op、`uiSession.current` 缺席时回退 `retainedBy.mainView`）、**循环回绕**（首 / 末行两端、
   跳过非活跃会话、锚点自身不作落点、除当前会话外无活跃会话即 no-op 不吞键）与两个侧栏开关的
