@@ -1,0 +1,35 @@
+{
+  "name": "dsh-rightbar-diff-split",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web UI patch: the right panel's 变更审阅 (changes-review) diff opens side-by-side exactly when the panel is fullscreen. State-following, not a hotkey: the plugin subscribes to the live layout store (layoutInfo.rightbarFullscreen), the session-scoped rightbar store (current pane's active tab) and the changes-review view store, and on three events only — a diff tab is opened, the active tab switches to a diff tab, the fullscreen flag flips — it sets that tab's `split` to the current fullscreen value via the same `toggledSplit` action the header button uses (read-then-toggle, so it is idempotent and never fights the user). No polling, no DOM fallback. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test-diff-split.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

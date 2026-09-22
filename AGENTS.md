@@ -30,7 +30,7 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 
 ## 插件清单
 
-仓库含 **10 个插件目录**。每个插件在 web Profile 中对应 **1 条 `link:` 依赖**与
+仓库含 **11 个插件目录**。每个插件在 web Profile 中对应 **1 条 `link:` 依赖**与
 **1 项 `dsh.profile.bundles`**（bundles 另含 2 个上游 bundle：`@deepseek-ai/dsh-base`、
 `@deepseek-ai/dsh-web-app`）。
 
@@ -43,6 +43,7 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 | `dsh-git-guard` | Host only（TS） | 敏感 git 操作一律 `ask`（需用户授权），不产生 `deny`；**完全权限（`danger-full-access`）下整体退出** |
 | `dsh-header-action-order` | Client only（TS；宿主占位） | 会话标题栏图标顺序：改写 `conversation.session.header.actions` 各活注册项的 `options.order`（上游渲染端每帧按它排序，slot 无 reorder API），把 schedule / job-list 挪到最后；顺序是 `src/order.ts` 顶部常量，`slots.subscribe` 上重放，未列出 id 排在其后 |
 | `dsh-kbd-hotkeys` | Client only（TS；宿主占位） | 全局快捷键，三态分发（`card` / `editing` / `browse`）；动作全部走服务面，唯一例外是终端定位的一处有界选择器查询 |
+| `dsh-rightbar-diff-split` | Client only（TS；宿主占位） | 右栏「变更审阅」diff 的左右对比跟随右栏**全屏**：只认三种事件（打开 diff 标签 / 切到 diff 标签 / 全屏翻转），触发时按当时全屏值把**当前面板当前 diff 标签**的 `split` set 一次（先读后 toggle，幂等）；订阅布局 store 的 `layoutInfo.rightbarFullscreen`、会话级右栏 store 与变更审阅视图 store，**不做持续纠正、不轮询、不回退 DOM** |
 | `dsh-rightbar-fonts` | Client only（TS；宿主占位） | 右栏文件 / 文本 / 代码 / Markdown 预览与右栏「变更审阅」diff 跟随字号轴 `--dsh-content-font-size`（默认 14px，行高 22px + 增量）：上游这两处吃**固定 11px** 代码 token `--dsw-font-markdown-code-block`，插件只在容器内重指该 token，**不覆盖**字号轴 |
 | `dsh-rightbar-tab-width` | Client only（TS；宿主占位） | 右栏 tab 胶囊定宽 100px（= 上游地板值，分栏判定与上游默认一致） |
 | `dsh-sidebar-default-collapsed` | Client only（TS；宿主占位） | 左栏默认关闭：每次页面加载读活布局 store 后一次性 `layout.toggleSidebar()`（只写宽窗分支；窄窗上游本就收起）；判定标记在 `window` 上，跨 client-hmr 重建不重复插手 |
@@ -74,7 +75,8 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 - 宿主半部依赖宿主服务时在该行声明 `inject`；当前没有插件需要（各挂载行均无 `inject`）。
 - **宿主入口必须存在且可解析**：即使插件是纯浏览器半部（`dsh-code-card-fonts`、
   `dsh-rightbar-fonts`、`dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`、
-  `dsh-sidebar-default-collapsed`、`dsh-desktop-notify`、`dsh-header-action-order`），其
+  `dsh-sidebar-default-collapsed`、`dsh-desktop-notify`、`dsh-header-action-order`、
+  `dsh-rightbar-diff-split`），其
   `exports["."]` 指向的 `index.ts` 也必须是合法加载项（当前为空宿主 `apply() {}`）
   ——`dsh-client-modules` 靠扫描这些 Loader 条目发现声明了 `dsh.client.platform: "web"` 的包。
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务由挂载行 `inject`
@@ -97,7 +99,8 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
   等类型包同理，在源码里自声明结构切片（模板：`dsh-desktop-notify/src/react.d.ts`）。
 - 两种构建流派（产物等价）：esbuild JS API（`dsh-code-card-fonts`）；
   直接执行平台二进制（`dsh-rightbar-fonts`、`dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`、
-  `dsh-sidebar-default-collapsed`、`dsh-desktop-notify`、`dsh-header-action-order`）——JS API 以 stdin/stdout 管道与子进程通信，受限
+  `dsh-sidebar-default-collapsed`、`dsh-desktop-notify`、`dsh-header-action-order`、
+  `dsh-rightbar-diff-split`）——JS API 以 stdin/stdout 管道与子进程通信，受限
   沙箱下 `spawn` 报 `EPERM`。
 
 ## 挂载与激活（Web Profile）
@@ -163,6 +166,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 | `dsh-git-guard` | `npm run typecheck`；`node test.mjs` | `test.mjs` 以 Type Stripping 运行时验证 ask / 放行各分支、完全权限放行、权限逐会话生效、服务缺席 / 抛错的失败关闭、提示词区段的动态求值 |
 | `dsh-header-action-order` | `npm run typecheck && npm run build && npm run check`；`node test-order.mjs` | esbuild（平台二进制，无 external）→ `lib/client.js`；`test-order.mjs` 纯 Node、无需浏览器：A 直载 `src/order.ts` 校验纯计划（重排 / 幂等 / 未列出项 / 无 id / 重复表项），B 以类方法形态的 slots 桩驱动 `src/client.ts` 的 `apply`（渲染序、后到注册重放、冻结写入单条放弃、`entries` 抛错不炸），C 用 `__ModuleLoader__` 桩载入产物校验装配 |
 | `dsh-kbd-hotkeys` | `npm run typecheck && npm run build && npm run check`；`node test-services.mjs`；`node test-order.mjs`；`node test-dispatch.mjs` | esbuild（平台二进制）→ `lib/client.js`；三个诊断脚本均为纯 Node、无需浏览器：`test-services` 是入口（共享桩件 / 夹具在 `test/harness.mjs`：最小 DOM 桩 + `__ModuleLoader__` 载入产物），用例按被测功能拆在 `test/*.mjs`（审批与问答、左右栏、新建会话、聚焦输入框、右栏标签 / 关闭 / 全屏 / 文件 / 终端 / diff 分栏与自动换行、三个浮窗），由入口按序载入并统一汇总，单个文件也可直跑；`test-dispatch` 同样用最小 DOM 桩 + `__ModuleLoader__` 载入产物；`test-order` 以 Type Stripping 直载 `src/*.ts` 校验 0.1.7 子代理枚举（`origin === 'subagent'` 判据，fork 不递归取消）与侧栏顺序复刻（含缺摘要成员剔除、近期对话浮窗恒不列出归档行） |
+| `dsh-rightbar-diff-split` | `npm run typecheck && npm run build && npm run check`；`node test-diff-split.mjs` | esbuild（平台二进制，无 external）→ `lib/client.js`；`test-diff-split.mjs` 纯 Node、无需浏览器：A 以 Type Stripping 直载 `src/diff-split.ts` + `src/subscriptions.ts`，用类方法形态的 store / slots 桩驱动三种事件、判定表、幂等读、推迟与解除、各环缺席或抛错、订阅建立 / 重建 / 换会话重绑 / 退订，B/C 用 `__ModuleLoader__` 桩载入产物校验包名 / `inject` / `apply` 装配与容错 |
 | `dsh-rightbar-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild（平台二进制）→ `lib/client.js`；纯样式补丁，无行为测试 |
 | `dsh-rightbar-tab-width` | `npm run typecheck && npm run build && npm run check` | esbuild（平台二进制）→ `lib/client.js` |
 | `dsh-sidebar-default-collapsed` | `npm run typecheck && npm run build && npm run check`；`node test-boot.mjs` | esbuild（平台二进制）→ `lib/client.js`；`test-boot.mjs` 以 Type Stripping 直载 `src/boot-collapse.ts` 校验全部判定分支，并用 `__ModuleLoader__` 桩载入产物校验包名 / `inject` / `apply` 装配（纯 Node，无需浏览器） |
@@ -181,7 +185,8 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
   Node 运行时、不依赖 `node_modules`。
 - 部分类型包（`dsh-client-ui-slots`、`dsh-client-ui-primitives`）不在内置 bundle 中，
   故启用 `skipLibCheck`，并在源码中自行声明结构切片类型（模板：
-  `dsh-kbd-hotkeys/src/types.ts`、`dsh-sidebar-default-collapsed/src/types.ts`，仅覆盖
+  `dsh-kbd-hotkeys/src/types.ts`、`dsh-sidebar-default-collapsed/src/types.ts`、
+  `dsh-rightbar-diff-split/src/types.ts`，仅覆盖
   实际消费的字段，以上游 `lib` 源码为准）。
 - 宿主 TypeScript 中 `import type` 在 Type Stripping 下被擦除，运行时无 cordis 依赖；
   `devDependencies` 仅供语言服务器与类型检查使用。
@@ -210,6 +215,14 @@ store 上。三步取数（本仓库已在用：问答卡片草稿 `dsh-kbd-hotk
 
 渲染端拿到的 `useStore` / `actions` 来自同一句 `resolveStore(...)`，因此外部写入与鼠标
 操作共用同一份内存态。**无降级**：任一环不可用即 no-op，不得回退到 DOM 点击。
+
+**事件驱动变体**（活实例的 `subscribe(fn) => 退订` 是 uSES invalidation 侧，默认同步
+flush）：需要「状态跟随」而非「点一次做一次」时，可以订阅活实例而不是轮询 DOM ——
+模板：`dsh-rightbar-diff-split/src/subscriptions.ts`（三份 store + `uiSession.current` +
+`slots.subscribe` 的订阅装配与重建）。注意三点：①实例每次现解析、不缓存，重建先全量退订；
+②订阅必须走 `ctx.effect(() => () => dispose())`，否则 client-hmr 换 fiber 会泄漏；
+③持续订阅 + 高频通知会退化成「持续纠正」——必须用「与上一次快照比对」筛出真正的事件
+（该插件的 `lastDiffTabId` / `lastFullscreen`），再用幂等读决定要不要真写。
 
 ## 注意事项与常见问题
 
