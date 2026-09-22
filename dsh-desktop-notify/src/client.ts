@@ -15,10 +15,20 @@ export const name = 'dsh-desktop-notify'
 export const inject = ['sessions', 'uiSession', 'slots']
 
 /** 开关行落点:设置 →「通用」的条目区(上游 ui-settings-general 声明的 settings.general.item,
- *  root 作用域的 list slot);order 靠后,排在语言 / 聊天等既有条目之后。 */
+ *  root 作用域的 list slot)。 */
 const SETTINGS_ITEM_SLOT = 'settings.general.item'
 const SETTINGS_ITEM_ID = 'desktop-notify'
-const SETTINGS_ITEM_ORDER = 100
+
+/**
+ * 开关行的排序值。上游渲染端对 list 槽每帧按活注册项的 `options.order` 现算排序
+ * (`dsh-client-ui-renderer`:entriesOfSlot → sort((a, b) => a.order - b.order)),槽本身没有
+ * reorder API,所以调位置就是调这个常量。
+ *
+ * 当前上游各注册项(0.1.7-alpha.1):permission `-20`、language `0`、appearance `10`、
+ * font-size `11`、developer-tools `15`、composer-enter `20`、current-version `100`。
+ * 30 = 排在「聊天(回车行为)」之后、「当前版本」之前。改后需 `npm run build`(client-hmr 热加载)。
+ */
+const SETTINGS_ITEM_ORDER = 30
 
 /** 双重判空后取服务(缺失时返回 undefined)。 */
 function getService(ctx: ClientContext, serviceName: string): unknown {

@@ -539,7 +539,8 @@ function loadBundle(options = {}) {
   check('挂到设置-通用条目区', bundle.calls.inject, ['settings.general.item'])
   check('注册项 id', bundle.calls.register[0]?.options.id, 'desktop-notify')
   check('注册项 name', bundle.calls.register[0]?.options.name, 'settings.general.item')
-  check('注册项 order', bundle.calls.register[0]?.options.order, 100)
+  // 30 = 聊天/回车行为(20)之后、当前版本(100)之前,见 src/client.ts 的 SETTINGS_ITEM_ORDER
+  check('注册项 order', bundle.calls.register[0]?.options.order, 30)
   checkTrue('注册项有组件', typeof bundle.calls.register[0]?.component === 'function')
   check('注册了一个 fiber disposer', bundle.calls.effects.length, 1)
   check('已在窗口上登记 focus 监听', bundle.calls.addedFocus, 1)

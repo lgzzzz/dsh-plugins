@@ -9,7 +9,8 @@ DSH Web 的**桌面通知**插件:在**设置 → 通用**里放一行「桌面�
 
 ## 功能
 
-- **开关行**:注册进设置 →「通用」的条目区 `settings.general.item`(语言、聊天等设置条目同区);
+- **开关行**:注册进设置 →「通用」的条目区 `settings.general.item`(语言、聊天等设置条目同区;
+  顺序由注册项的 `order` 决定 —— 本插件为 `30`,落在「聊天(回车行为)」之后、「当前版本」之前);
   一个 switch 同时承担授权与开关(外观与上游 `Switch` 一致:几何与令牌相同,状态由 `aria-checked` 表达):
   - 未授权:switch 关着,点击 → 浏览器授权框,授权通过后立即开启;
   - 已授权:点击即开 / 关;
@@ -36,7 +37,7 @@ DSH Web 的**桌面通知**插件:在**设置 → 通用**里放一行「桌面�
 | --- | --- |
 | `ctx.uiSession.sessionStatus`(`HostObservable<Map<SessionId, { running, pendingInteraction, completionUnread }>>`) | 全部判定输入。由 `dsh-client-ui-session` 在 client 根上下文提供,只在状态真变化时通知订阅者 |
 | `ctx.sessions.list` 快照的 `byId[id]` | `displayTitle` 作通知正文;`origin === 'subagent'` 用于过滤子代理 |
-| `ctx.slots.inject/register` | 落点 `settings.general.item`(list / root 作用域),`id: 'desktop-notify'`,`order: 100` |
+| `ctx.slots.inject/register` | 落点 `settings.general.item`(list / root 作用域),`id: 'desktop-notify'`,`order: 30`。该槽是普通 list 槽:上游渲染端每帧按活注册项的 `options.order` 排序,没有 reorder API,故**调位置 = 改 `src/client.ts` 的 `SETTINGS_ITEM_ORDER` 后重新构建**;上游现有 order:permission `-20`、language `0`、appearance `10`、font-size `11`、developer-tools `15`、composer-enter `20`、current-version `100` |
 | `window.Notification` + `localStorage` | 授权、开关、真正弹出通知 |
 
 浏览器 bundle 里的 `require('react')` 是**唯一的外部依赖**:`react` 是上游 ModuleLoader 的平台 seed 词

@@ -379,7 +379,7 @@ var name = "dsh-desktop-notify";
 var inject = ["sessions", "uiSession", "slots"];
 var SETTINGS_ITEM_SLOT = "settings.general.item";
 var SETTINGS_ITEM_ID = "desktop-notify";
-var SETTINGS_ITEM_ORDER = 100;
+var SETTINGS_ITEM_ORDER = 30;
 function getService(ctx, serviceName) {
   if (ctx.get === void 0 || ctx.get === null) return void 0;
   const value = ctx.get(serviceName);
