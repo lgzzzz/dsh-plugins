@@ -19,6 +19,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `⌘/Ctrl+/` | 快捷键速查表 | 任意 |
 | `⌘/Ctrl+B` | 开关**左**侧栏（`layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+O` | 开关**右**侧栏（`sidebarRight.toggleExpanded`） | `browse` / `editing` |
+| `⌘/Ctrl+S` | **右**侧栏切换**全屏**（覆盖窗口 ⇄ 普通 `push`；窄窗退出全屏改为收起面板，见下） | 任意 |
 | `⌘/Ctrl+Alt+←` / `→` | 右栏当前面板的标签：上一个 / 下一个（循环；单标签不吞键） | 任意 |
 | `⌘/Ctrl+,` | 右栏关闭当前面板的**当前标签**（无可关标签时只 no-op，但键位恒被吞、不留给浏览器） | 任意 |
 | `⌘/Ctrl+\` | 右栏定位文件浏览器：打开 / 聚焦该页并置顶（同时展开右栏） | 任意 |
@@ -33,7 +34,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 
 - 「任意」= 三态均允许。带修饰键的组合与卡片占用的**裸** `←`/`→`/数字键不冲突，故右栏
   与浮窗类动作在 `card` 态照常生效。
-- 分档：**单修饰键 `mod+键` 给全局动作**（`B` 左栏、`O` 右栏、`K` 工作区、`I` 近期对话、
+- 分档：**单修饰键 `mod+键` 给全局动作**（`B` 左栏、`O` 右栏、`S` 全屏、`K` 工作区、`I` 近期对话、
   `M` 模型、`N` 新建会话、`J` 焦点跳转、`\` 文件浏览器、`L` 终端、`,` 关标签、`/` 速查表）；
   **`mod+alt` 留给导航**（`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。
 - 审批与问答的 `Enter`/`Esc`/数字键/方向键是**固定分发的单键**，不参与 `bindings` 自定义。
@@ -62,6 +63,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `card` 态判定 | 当前会话是否命中 `uiSession.pendingInteractions` 快照（无 DOM 查询） |
 | `sidebar.toggle` | `layout.toggleSidebar()`（宽屏在默认宽与 0 间切换，窄屏翻转 `narrowExpanded`） |
 | `sidebarRight.toggle` | `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；右侧 seat 自行同步 AppFrame 轨道） |
+| `sidebarRight.fullscreen` | 与面板 chrome 的**全屏按钮同一入口**：会话级 store 的 `actions.setMode(sessionId, mode)`（dockkit `planSetMode` 的唯一写面，`layout.mode` 只经它写入）。判定复刻按钮的「**生效**呈现」：`fullscreen = autoFullscreen ∪ layout.mode === 'fullscreen'` → 切 `push`，否则切 `fullscreen`；**窄窗（`< 768px`）**上游 `autoFullscreen` 恒真、手动全屏不可达，故照抄按钮的 `autoFullscreen` 分支：切 `push` 前先 `setExpanded(sessionId, false)` 收起面板，否则面板仍被 autoFullscreen 留在全屏。面板收起时照常写 `mode`（呈现方式与展开态正交，下次展开生效）——注意收起态按钮虽在 DOM 中但被上游 CSS 隐藏、点不到，故此处是按钮语义的**超集**（见「已知限制」）。取数与切标签同源（`src/rightbar-layout.ts` 的 entries → 会话作用域绑定 → `resolveStore`） |
 | `sidebarRight.tabPrev` / `tabNext` | 右栏会话级 slot store：`slots.entries('rightbar.session')` → 会话作用域绑定（`src/scope-binding.ts`）→ `slots.resolveStore` → `bySession[sid].layout` 的 `activePaneId` 面板 `tabs`/`activeTabId`；切换调 `sidebarRight.focus(tabId)`。**只在当前面板内循环**，单标签 / 无面板 no-op 不吞键 |
 | `sidebarRight.closeTab` | 与切标签同源取当前面板当前标签，调 `sidebarRight.close(tabId)`；调完回读同一活实例确认标签已从 `layout.tabs` 消失，仍在（上游拒关 / 服务面在别的会话）即只 no-op——**吞键与动作结果无关**（见下） |
 | `sidebarRight.files` | `sidebarRight.openTab('files')`（按目标面板去重：已有则聚焦、没有则创建；`openContent` 恒先展开右栏）；再经同一 store 的 `actions.placeTab(sessionId, tabId, paneId, 0)` 置顶（与标签拖拽同一入口，**不用** `replaceTab`）；已在首位不调用 |
@@ -180,8 +182,9 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 ## 已知限制
 
 - **浏览器保留键**：`⌘/Ctrl+O`（打开文件）、`⌘/Ctrl+K`（地址栏搜索）、Win/Linux `Ctrl+J`
-  （下载页）、`⌘/Ctrl+L`（地址栏）、`⌘/Ctrl+M`（部分系统）由插件在捕获阶段
-  `preventDefault` 后接管；**焦点不在本页面时**浏览器仍按默认处理。`⌘/Ctrl+N`
+  （下载页）、`⌘/Ctrl+L`（地址栏）、`⌘/Ctrl+M`（部分系统）、`⌘/Ctrl+S`（保存页面）由插件在捕获阶段
+  `preventDefault` 后接管；**焦点不在本页面时**浏览器仍按默认处理，**动作返回 no-op 时也不接管**
+  （`⌘/Ctrl+S` 于是会触发浏览器「保存页面」，见下）。`⌘/Ctrl+N`
   （新建窗口）最硬：多数浏览器**不把该键派发给页面**，Win/Linux 可能始终打开新窗口
   （macOS `⌃N` 通常可用）。不生效时用 `localStorage` 改绑。
 - **`⌘/Ctrl+Alt+↑`/`↓` 可能被系统级快捷键抢占**：部分 Windows 机器上 `Ctrl+Alt+方向键` 是
@@ -208,6 +211,27 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   `bySession[sessionId]` 任一缺失即 no-op 不吞键（可先按 `⌘/Ctrl+O` 展开一次）。
   标签切换只覆盖**当前面板**，单标签不吞键；**关闭标签（`⌘/Ctrl+,`）是唯一例外**：上述
   任一环缺失、独占停靠的引导页被上游拒关、面板内没有当前标签，都照样吞键。
+- **全屏切换（`⌘/Ctrl+S`）的窄窗判据取自窗口宽度**：上游 `autoFullscreen` 用的是框架
+  `layoutInfo.viewportWidth`——初值 `window.innerWidth`，随后由 AppFrame 的 ResizeObserver
+  用**框架元素** `getBoundingClientRect().width` 覆盖（rAF 节流）；本插件只消费
+  `sidebarRight` 服务与右栏 store、拿不到该框架 store，故以 `window.innerWidth < 768`
+  作等价判据。二者只在**框架宽度 ≠ 窗口宽度**时分歧：出现文档纵向滚动条（经典滚动条约
+  15–17px，仅断点附近一个窄带）、跨 768px 改窗后的 ≤1 帧测量滞后、或框架被外层容器收窄。
+  分歧会导致**结果**不同而不只是「多收一次」——`mode === 'push'` 时插件可能写 `push`
+  （= no-op）而上游按钮会写 `fullscreen`，反向亦然；`mode === 'fullscreen'` 时两边都写
+  `push`，差别只在是否补 `setExpanded(false)`。断点 `768` 与两个 mode 字面量都为上游值，
+  无插件自造语义。
+- **`⌘/Ctrl+S` 在右栏收起时无可见反馈**：面板已挂载但收起（`data-sidebar-right-open` 缺席）
+  时 `dock` 面被上游 CSS 置为 `visibility:hidden` 并平移出可视区，面板 chrome 里的全屏按钮
+  **在 DOM 中但点不到**；本动作照常写 `mode` 并吞键（呈现方式与展开态正交，下次展开生效），
+  故它比上游按钮可达的范围更大——收起态按 `⌘/Ctrl+S` 只会静默记下新呈现方式。
+- **`⌘/Ctrl+S` 会在右栏终端与所有输入框里被抢走**（与 `⌘/Ctrl+L`、`⌘/Ctrl+J` 同款）：
+  监听在 `document` 捕获阶段并 `stopPropagation`，xterm 收不到 `Ctrl+S`（XOFF 流控），
+  设置 / 表单等文本输入里也照常切换全屏。需要终端流控或页面保存时用 `localStorage` 改绑 /
+  取消绑定（`{"bindings":{"sidebarRight.fullscreen":""}}`）。
+- **`⌘/Ctrl+S` 的接管有前提**：与别的动作一样遵循「no-op 不吞键」——右栏 store 链路不可用
+  （服务缺席 / 该会话尚无 `bySession[sessionId]` / 活实例缺 `setMode`）时不 `preventDefault`，
+  浏览器会执行默认的「保存页面」。先按 `⌘/Ctrl+O` 让右栏挂载一次即可稳定接管。
 - **文件浏览器置顶只作用于它所在的停靠面板**（优先当前面板）；上游「页唯一性按面板」，
   跨面板可能各有一份；极窄窗口下右栏会被上游再折叠回去。
 - **终端定位不重排、不置顶**；多个终端时优先当前激活的那个，没有当前激活的落第一个（面板内
@@ -253,7 +277,11 @@ npm run check       # node --check 产物与宿主
 - `node test-services.mjs` — 服务级动作路径：审批 / 问答 / 计划评审与 `card` 态判定（问答
   断言落在卡片草稿 store 上）；两个侧栏开关；右栏标签切换 / 关闭当前标签 / 文件浏览器定位
   与置顶 / 终端定位（含认页不重复 `openTab`、多个终端时聚焦当前激活的那个、没有当前激活即
-  落第一个、折叠补 `toggleExpanded`、元素级聚焦注入假面板）；新建会话（必须调
+  落第一个、折叠补 `toggleExpanded`、元素级聚焦注入假面板）/ **全屏切换**（宽窗 `push ⇄
+  fullscreen` 往返、窄窗「先收起再写 push」、`767/768px` 断点两侧、面板收起时仍写 `mode`、
+  该会话尚无面板与 `setMode` 面缺席的 no-op 不吞键、`getSnapshot` / `setMode` 抛错、
+  窄窗缺 `setExpanded` 仍写 `mode`、三态放行、裸 `s` 与 `mod+alt+s` 不误伤、
+  `localStorage` 改绑、速查表展示行）；新建会话（必须调
   `uiWorkspace.startSession`）、聚焦输入框（J = Jump 的三态与门闸）、会话跳转（Esc 停止会话树）；
   工作区（活跃度排序 / 前 10 / 当前工作区保留）/ 近期对话 / 模型三个浮窗的列表顺序、分页上限、
   确认路径与空态；`⇧Tab` 候选档与编辑态门闸；各动作的无降级边界。

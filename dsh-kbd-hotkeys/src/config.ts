@@ -23,6 +23,8 @@ export const ACTIONS: readonly ActionDef[] = [
   // 左 B(肌肉记忆) / 右 O(Open panel);带修饰键不干扰编辑,故放行 editing
   { id: 'sidebar.toggle', label: '开关左侧栏', group: '会话', states: ['browse', 'editing'] },
   { id: 'sidebarRight.toggle', label: '开关右侧栏', group: '会话', states: ['browse', 'editing'] },
+  // 全屏切换 = 面板 chrome 的全屏按钮同一入口(store actions.setMode);窄窗按上游语义改走收起
+  { id: 'sidebarRight.fullscreen', label: '右侧栏:切换全屏(覆盖窗口;窄窗改为收起)', group: '会话', states: ['card', 'editing', 'browse'] },
   // mod+alt+←/→:方向键轴归导航;card 裸键归卡片,不冲突
   { id: 'sidebarRight.tabPrev', label: '右侧栏:上一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
   { id: 'sidebarRight.tabNext', label: '右侧栏:下一个标签', group: '会话', states: ['card', 'editing', 'browse'] },
@@ -67,6 +69,8 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   // 左 = B(跨应用肌肉记忆),右 = O(Open panel)
   'sidebar.toggle': 'mod+b',
   'sidebarRight.toggle': 'mod+o',
+  // 浏览器保留键(保存页面);S = Screen,键位插件的捕获阶段 preventDefault 后接管
+  'sidebarRight.fullscreen': 'mod+s',
   // 右栏标签轴;边缘循环,单标签不吞键
   'sidebarRight.tabPrev': 'mod+alt+arrowleft',
   'sidebarRight.tabNext': 'mod+alt+arrowright',

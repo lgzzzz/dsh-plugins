@@ -7,13 +7,9 @@ import type {
   SidebarRightLike,
   SidebarRightStoreLike,
   SidebarRightTabsStateLike,
-  SlotsLike,
 } from './types.ts'
+import { currentRightbarLayout, resolveRightbarStore } from './rightbar-layout.ts'
 import { currentSessionId } from './session-view.ts'
-import { sessionScopeBinding } from './scope-binding.ts'
-
-/** sidebar-right seat 注册的会话级 slot 名（store handle 挂在该注册项上）。 */
-const RIGHTBAR_SLOT = 'rightbar.session'
 
 /** 文件浏览器页类型 kind。 */
 const FILES_KIND = 'files'
@@ -62,7 +58,7 @@ export function closeRightSidebarTab(services: Services): boolean {
   const sidebarRight = services.sidebarRight
   if (sidebarRight === null || sidebarRight === undefined) return false
   if (typeof sidebarRight.close !== 'function') return false
-  const resolved = rightbarStore(services)
+  const resolved = resolveRightbarStore(services)
   if (resolved === undefined) return false
   const sessionId = currentSessionId(services)
   if (sessionId === undefined) return false
@@ -126,7 +122,7 @@ export function revealRightSidebarFiles(services: Services): boolean {
 
 /** 把当前会话的文件浏览器 tab 置为其所在停靠面板的首位；任一环缺失即静默跳过。 */
 function promoteFilesTab(services: Services): void {
-  const resolved = rightbarStore(services)
+  const resolved = resolveRightbarStore(services)
   if (resolved === undefined) return
   const sessionId = currentSessionId(services)
   if (sessionId === undefined) return
@@ -318,71 +314,7 @@ function currentPaneTabs(services: Services): TabAxis | undefined {
 }
 
 function currentLayout(services: Services): SidebarRightLayoutLike | undefined {
-  const resolved = rightbarStore(services)
-  if (resolved === undefined) return undefined
-  const sessionId = currentSessionId(services)
-  if (sessionId === undefined) return undefined
-  return resolved.snapshot.bySession?.[sessionId]?.layout
-}
-
-interface RightbarStore {
-  readonly instance: SidebarRightStoreLike
-  readonly snapshot: SidebarRightTabsStateLike
-}
-
-/** 解析 rightbar.session 注册项 store handle 的活实例（三步取数，任一步不可用即 undefined）。 */
-function rightbarStore(services: Services): RightbarStore | undefined {
-  const slots = services.slots
-  if (slots === null || slots === undefined) return undefined
-  if (typeof slots.entries !== 'function' || typeof slots.resolveStore !== 'function') return undefined
-  const sessionId = currentSessionId(services)
-  if (sessionId === undefined) return undefined
-  const binding = sessionScopeBinding(services, sessionId)
-  if (binding === undefined) return undefined
-
-  for (const entry of entriesOf(slots)) {
-    const handle = entry?.store
-    if (handle === undefined || handle === null) continue
-    let instance: unknown
-    try {
-      instance = slots.resolveStore(handle, binding)
-    } catch {
-      continue
-    }
-    const resolved = asRightbarStore(instance)
-    if (resolved !== undefined) return resolved
-  }
-  return undefined
-}
-
-/** slots 注册项列表（服务异常 / 形状不符即空）。 */
-function entriesOf(slots: SlotsLike): readonly { store?: unknown }[] {
-  try {
-    const entries = slots.entries?.(RIGHTBAR_SLOT)
-    return Array.isArray(entries) ? entries : []
-  } catch {
-    return []
-  }
-}
-
-/** 活实例形状校验：必须能 getSnapshot() 出 { bySession }；actions 为可选面。 */
-function asRightbarStore(instance: unknown): RightbarStore | undefined {
-  if (typeof instance !== 'object' || instance === null) return undefined
-  const getSnapshot = (instance as { getSnapshot?: unknown }).getSnapshot
-  if (typeof getSnapshot !== 'function') return undefined
-  let snapshot: unknown
-  try {
-    snapshot = (getSnapshot as () => unknown).call(instance)
-  } catch {
-    return undefined
-  }
-  if (typeof snapshot !== 'object' || snapshot === null) return undefined
-  const bySession = (snapshot as { bySession?: unknown }).bySession
-  if (typeof bySession !== 'object' || bySession === null || Array.isArray(bySession)) return undefined
-  return {
-    instance: instance as SidebarRightStoreLike,
-    snapshot: snapshot as SidebarRightTabsStateLike,
-  }
+  return currentRightbarLayout(services)
 }
 
 /** 按 id 取布局里的面板（节点缺失 / 非 pane 即 undefined）。 */

@@ -15,6 +15,7 @@ import {
   toggleSidebar,
 } from './actions.ts'
 import { ACTION_BY_ID, comboActionMap, comboOf, loadConfig, type HotkeyConfig } from './config.ts'
+import { toggleRightSidebarFullscreen } from './fullscreen.ts'
 import { cycleEffort, modelPickerView, selectModel } from './model-picker.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
 import { openRecentSession, recentSessionsView } from './recent-sessions.ts'
@@ -46,6 +47,9 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return toggleSidebar(services)
       case 'sidebarRight.toggle':
         return toggleRightSidebar(services)
+      case 'sidebarRight.fullscreen':
+        // 右栏全屏开关(生效全屏 ⇄ push);与面板 chrome 的全屏按钮同一入口
+        return toggleRightSidebarFullscreen(services)
       case 'sidebarRight.tabPrev':
         return cycleRightSidebarTab(services, -1)
       case 'sidebarRight.tabNext':

@@ -326,12 +326,17 @@ export interface SidebarRightLayoutNodeLike {
   activeTabId?: string
 }
 
+/** 呈现方式(dockkit `DockMode`):`push` 占轨道、`fullscreen` 覆盖窗口。 */
+export type SidebarRightDockMode = 'push' | 'fullscreen'
+
 export interface SidebarRightLayoutLike {
   nodes?: Readonly<Record<string, SidebarRightLayoutNodeLike | undefined>>
   tabs?: Readonly<Record<string, SidebarRightTabRecordLike | undefined>>
   activePaneId?: string
   rootId?: string
   expanded?: boolean
+  /** 手动呈现方式(dockkit 初始状态恒为 'push',只经 `setMode` 写入)。 */
+  mode?: SidebarRightDockMode
 }
 
 export interface SidebarRightSurfaceLike {
@@ -343,11 +348,14 @@ export interface SidebarRightTabsStateLike {
   bySession?: Readonly<Record<string, SidebarRightSurfaceLike | undefined>>
 }
 
-/* ---- 右栏会话级 store 的写面(⌘/Ctrl+\ 把文件浏览器置于首位) ---- */
+/* ---- 右栏会话级 store 的写面(⌘/Ctrl+\ 置顶文件浏览器、⌘/Ctrl+S 切全屏) ---- */
 
-/** store 动作面:placeTab 是标签拖拽同一入口(会话级 store 需作用域绑定)。 */
+/** store 动作面:placeTab 是标签拖拽同一入口、setMode 是面板全屏按钮同一入口
+ * (均需会话作用域绑定;仅窄窗退出全屏时会连带 setExpanded(false))。 */
 export interface SidebarRightSurfaceActionsLike {
   placeTab?(sessionId: string, tabId: string, paneId: string, index: number): void
+  setMode?(sessionId: string, mode: SidebarRightDockMode): void
+  setExpanded?(sessionId: string, expanded: boolean): void
 }
 
 /** resolveStore 返回的活实例:除快照外还要 actions 才能写。 */

@@ -787,6 +787,8 @@ var ACTIONS = [
   // 左 B(肌肉记忆) / 右 O(Open panel);带修饰键不干扰编辑,故放行 editing
   { id: "sidebar.toggle", label: "\u5F00\u5173\u5DE6\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
   { id: "sidebarRight.toggle", label: "\u5F00\u5173\u53F3\u4FA7\u680F", group: "\u4F1A\u8BDD", states: ["browse", "editing"] },
+  // 全屏切换 = 面板 chrome 的全屏按钮同一入口(store actions.setMode);窄窗按上游语义改走收起
+  { id: "sidebarRight.fullscreen", label: "\u53F3\u4FA7\u680F:\u5207\u6362\u5168\u5C4F(\u8986\u76D6\u7A97\u53E3;\u7A84\u7A97\u6539\u4E3A\u6536\u8D77)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // mod+alt+←/→:方向键轴归导航;card 裸键归卡片,不冲突
   { id: "sidebarRight.tabPrev", label: "\u53F3\u4FA7\u680F:\u4E0A\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   { id: "sidebarRight.tabNext", label: "\u53F3\u4FA7\u680F:\u4E0B\u4E00\u4E2A\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
@@ -826,6 +828,8 @@ var DEFAULT_BINDINGS = {
   // 左 = B(跨应用肌肉记忆),右 = O(Open panel)
   "sidebar.toggle": "mod+b",
   "sidebarRight.toggle": "mod+o",
+  // 浏览器保留键(保存页面);S = Screen,键位插件的捕获阶段 preventDefault 后接管
+  "sidebarRight.fullscreen": "mod+s",
   // 右栏标签轴;边缘循环,单标签不吞键
   "sidebarRight.tabPrev": "mod+alt+arrowleft",
   "sidebarRight.tabNext": "mod+alt+arrowright",
@@ -967,6 +971,106 @@ function prettyCombo(combo) {
     };
     return (_a = special[token]) != null ? _a : token.length === 1 ? token.toUpperCase() : token;
   }).join(mac ? "" : "+");
+}
+
+// src/rightbar-layout.ts
+var RIGHTBAR_SLOT = "rightbar.session";
+function currentRightbarLayout(services) {
+  var _a, _b;
+  const resolved = resolveRightbarStore(services);
+  if (resolved === void 0) return void 0;
+  const sessionId = currentSessionId(services);
+  if (sessionId === void 0) return void 0;
+  return (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
+}
+function resolveRightbarStore(services, sessionId) {
+  const slots = services.slots;
+  if (slots === null || slots === void 0) return void 0;
+  if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
+  const scoped = sessionId != null ? sessionId : currentSessionId(services);
+  if (scoped === void 0) return void 0;
+  const binding = sessionScopeBinding(services, scoped);
+  if (binding === void 0) return void 0;
+  for (const entry of entriesOf3(slots)) {
+    const handle = entry == null ? void 0 : entry.store;
+    if (handle === void 0 || handle === null) continue;
+    let instance;
+    try {
+      instance = slots.resolveStore(handle, binding);
+    } catch {
+      continue;
+    }
+    const resolved = asRightbarStore(instance);
+    if (resolved !== void 0) return resolved;
+  }
+  return void 0;
+}
+function entriesOf3(slots) {
+  var _a;
+  try {
+    const entries = (_a = slots.entries) == null ? void 0 : _a.call(slots, RIGHTBAR_SLOT);
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+function asRightbarStore(instance) {
+  if (typeof instance !== "object" || instance === null) return void 0;
+  const getSnapshot = instance.getSnapshot;
+  if (typeof getSnapshot !== "function") return void 0;
+  let snapshot;
+  try {
+    snapshot = getSnapshot.call(instance);
+  } catch {
+    return void 0;
+  }
+  if (typeof snapshot !== "object" || snapshot === null) return void 0;
+  const bySession = snapshot.bySession;
+  if (typeof bySession !== "object" || bySession === null || Array.isArray(bySession)) return void 0;
+  return {
+    instance,
+    snapshot
+  };
+}
+
+// src/fullscreen.ts
+var AUTO_FULLSCREEN_WIDTH = 768;
+function isNarrowViewport() {
+  const view = globalThis.window;
+  const width = view == null ? void 0 : view.innerWidth;
+  return typeof width === "number" && width > 0 && width < AUTO_FULLSCREEN_WIDTH;
+}
+function isEffectivelyFullscreen(layout, narrow) {
+  return narrow || layout.mode === "fullscreen";
+}
+function nextRightbarMode(effectiveFullscreen) {
+  return effectiveFullscreen ? "push" : "fullscreen";
+}
+function toggleRightSidebarFullscreen(services) {
+  var _a, _b;
+  const sidebarRight = services.sidebarRight;
+  if (sidebarRight === null || sidebarRight === void 0) return false;
+  const sessionId = currentSessionId(services);
+  if (sessionId === void 0) return false;
+  const resolved = resolveRightbarStore(services, sessionId);
+  if (resolved === void 0) return false;
+  const layout = (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
+  if (layout === void 0) return false;
+  const actions = resolved.instance.actions;
+  const setMode = actions == null ? void 0 : actions.setMode;
+  if (actions === void 0 || typeof setMode !== "function") return false;
+  const narrow = isNarrowViewport();
+  const fullscreen = isEffectivelyFullscreen(layout, narrow);
+  try {
+    if (fullscreen && narrow) {
+      const setExpanded = actions.setExpanded;
+      if (typeof setExpanded === "function") setExpanded.call(actions, sessionId, false);
+    }
+    setMode.call(actions, sessionId, nextRightbarMode(fullscreen));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // src/model-picker.ts
@@ -1847,7 +1951,6 @@ function pendingSessionIds(services) {
 }
 
 // src/sidebar-tabs.ts
-var RIGHTBAR_SLOT = "rightbar.session";
 var FILES_KIND = "files";
 var FILES_PAGE_ADDRESS = "sidebar://files";
 var TERMINAL_KIND = "terminal";
@@ -1874,7 +1977,7 @@ function closeRightSidebarTab(services) {
   const sidebarRight = services.sidebarRight;
   if (sidebarRight === null || sidebarRight === void 0) return false;
   if (typeof sidebarRight.close !== "function") return false;
-  const resolved = rightbarStore(services);
+  const resolved = resolveRightbarStore(services);
   if (resolved === void 0) return false;
   const sessionId = currentSessionId(services);
   if (sessionId === void 0) return false;
@@ -1925,7 +2028,7 @@ function revealRightSidebarFiles(services) {
 }
 function promoteFilesTab(services) {
   var _a, _b;
-  const resolved = rightbarStore(services);
+  const resolved = resolveRightbarStore(services);
   if (resolved === void 0) return;
   const sessionId = currentSessionId(services);
   if (sessionId === void 0) return;
@@ -2090,61 +2193,7 @@ function currentPaneTabs(services) {
   };
 }
 function currentLayout(services) {
-  var _a, _b;
-  const resolved = rightbarStore(services);
-  if (resolved === void 0) return void 0;
-  const sessionId = currentSessionId(services);
-  if (sessionId === void 0) return void 0;
-  return (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
-}
-function rightbarStore(services) {
-  const slots = services.slots;
-  if (slots === null || slots === void 0) return void 0;
-  if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
-  const sessionId = currentSessionId(services);
-  if (sessionId === void 0) return void 0;
-  const binding = sessionScopeBinding(services, sessionId);
-  if (binding === void 0) return void 0;
-  for (const entry of entriesOf3(slots)) {
-    const handle = entry == null ? void 0 : entry.store;
-    if (handle === void 0 || handle === null) continue;
-    let instance;
-    try {
-      instance = slots.resolveStore(handle, binding);
-    } catch {
-      continue;
-    }
-    const resolved = asRightbarStore(instance);
-    if (resolved !== void 0) return resolved;
-  }
-  return void 0;
-}
-function entriesOf3(slots) {
-  var _a;
-  try {
-    const entries = (_a = slots.entries) == null ? void 0 : _a.call(slots, RIGHTBAR_SLOT);
-    return Array.isArray(entries) ? entries : [];
-  } catch {
-    return [];
-  }
-}
-function asRightbarStore(instance) {
-  if (typeof instance !== "object" || instance === null) return void 0;
-  const getSnapshot = instance.getSnapshot;
-  if (typeof getSnapshot !== "function") return void 0;
-  let snapshot;
-  try {
-    snapshot = getSnapshot.call(instance);
-  } catch {
-    return void 0;
-  }
-  if (typeof snapshot !== "object" || snapshot === null) return void 0;
-  const bySession = snapshot.bySession;
-  if (typeof bySession !== "object" || bySession === null || Array.isArray(bySession)) return void 0;
-  return {
-    instance,
-    snapshot
-  };
+  return currentRightbarLayout(services);
 }
 function paneOf(layout, paneId) {
   var _a;
@@ -2175,6 +2224,8 @@ function runAction(id, services, overlays) {
         return toggleSidebar(services);
       case "sidebarRight.toggle":
         return toggleRightSidebar(services);
+      case "sidebarRight.fullscreen":
+        return toggleRightSidebarFullscreen(services);
       case "sidebarRight.tabPrev":
         return cycleRightSidebarTab(services, -1);
       case "sidebarRight.tabNext":
