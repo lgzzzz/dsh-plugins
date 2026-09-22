@@ -2966,6 +2966,17 @@ console.log('\n--- ⌘/Ctrl+I → 近期对话浮窗(按工作区分组 + ↑↓
       baseRule?.[1] === '64vh' && recentRule?.[1] === 'calc(88vh - 24px)',
       `${String(baseRule?.[1])} / ${String(recentRule?.[1])}`,
     )
+    // 面板不透明:`--dsw-specific-menu` 本体带 alpha(约 50–58%,官方配 backdrop-filter 磨砂),
+    // 直接铺会透出背后的遮罩;必须铺在不透明底 token 上(background-color + 同色 gradient 叠加)。
+    const panelRule = /\.dsh-kbd-panel\{([^}]*)\}/.exec(sheetText())
+    const panelCss = panelRule?.[1] ?? ''
+    check(
+      '面板底色不透明:菜单 token 叠加在不透明底上,而非直接铺半透明色',
+      /background-color:var\(--dsw-alias-bg-base/.test(panelCss) &&
+        /background-image:linear-gradient\(var\(--dsw-specific-menu/.test(panelCss) &&
+        !/(?:^|;)background:var\(--dsw-specific-menu/.test(panelCss),
+      panelCss.slice(0, 200),
+    )
     check('全局上限:13 个可见会话只渲染 10 行', sessionRows().length === 10, String(sessionRows().length))
     check(
       '上限 = 全局最近更新前 10(c01–c03 被裁掉),组序 / 组内序不变',

@@ -79,6 +79,13 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 浮层（`src/overlay.ts`，纯 DOM）：速查表 / 工作区 / 近期对话 / 模型同一时刻只有一个，
 互切直接换面板；打开时按键进入**模态分发**（浮层未处理的按键一律吞掉）。
 
+- **面板恒不透明**：官方 `--dsw-specific-menu` 本体带 alpha（`#f8f9fa94` / `#30313680`，
+  约 50–58%），且官方一律配 `backdrop-filter: var(--dsw-menu-backdrop-filter)`（40px 磨砂）
+  使用；本插件不引磨砂，直接铺会透出背后的遮罩。故面板底色写成
+  `background-color: var(--dsw-alias-bg-base)` + `background-image: linear-gradient(<菜单 token> ×2)`
+  的叠加：合成结果不透明，色值与「今天所见的磨砂面」基本相同（浅色 ≈ `#fbfcfc`、
+  深色 ≈ `#222327`）。回归断言在 `test-services.mjs`（「面板底色不透明」）。
+
 服务注入：`['sessions', 'uiSession', 'layout', 'sidebarRight', 'workspaces', 'slots',
 'conversation', 'uiWorkspace', 'modelDirectories']`（全部判空后才消费）。
 

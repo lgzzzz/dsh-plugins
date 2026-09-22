@@ -40,7 +40,10 @@ const STYLE_ID = 'dsh-kbd-hotkeys/style'
 
 const STYLE = [
   '.dsh-kbd-backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;font-family:var(--dsw-font-family,system-ui,-apple-system,sans-serif)}',
-  '.dsh-kbd-panel{width:min(560px,calc(100vw - 48px));max-height:64vh;background:var(--dsw-specific-menu,#fff);color:var(--dsw-alias-label-primary,#111);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.25));border-radius:14px;display:flex;flex-direction:column;overflow:hidden}',
+  // 面板必须不透明：官方 `--dsw-specific-menu` 本体带 alpha（#f8f9fa94 / #30313680，约 50–58%，
+  // 官方一律配 40px backdrop-filter 做磨砂），本插件不引磨砂，直接铺会透出背后的遮罩。
+  // 故把它作 background-image 叠在不透明的 `--dsw-alias-bg-base` 上：合成即纯色，色值≈今天所见。
+  '.dsh-kbd-panel{width:min(560px,calc(100vw - 48px));max-height:64vh;background-color:var(--dsw-alias-bg-base,#fff);background-image:linear-gradient(var(--dsw-specific-menu,#fff),var(--dsw-specific-menu,#fff));color:var(--dsw-alias-label-primary,#111);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.25));border-radius:14px;display:flex;flex-direction:column;overflow:hidden}',
   // 近期对话浮窗最多 10 行，抬高上限让整屏可见（须排在 .dsh-kbd-panel 之后）。
   '.dsh-kbd-panel--recent{max-height:calc(88vh - 24px)}',
   '.dsh-kbd-help{padding:14px 18px;overflow-y:auto}',
