@@ -19,7 +19,7 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `⌘/Ctrl+/` | 快捷键速查表 | 任意 |
 | `⌘/Ctrl+B` | 开关**左**侧栏（`layout.toggleSidebar`） | `browse` / `editing` |
 | `⌘/Ctrl+O` | 开关**右**侧栏（`sidebarRight.toggleExpanded`） | `browse` / `editing` |
-| `⌘/Ctrl+S` | **右**侧栏切换**全屏**（覆盖窗口 ⇄ 普通 `push`；窄窗退出全屏改为收起面板，见下）；**触发时**顺带把当前标签的 diff 分栏设成与结果一致（全屏 → 左右对比、退出全屏 → 单栏），见下 | 任意 |
+| `⌘/Ctrl+S` | **右**侧栏切换**全屏**（覆盖窗口 ⇄ 普通 `push`；窄窗退出全屏改为收起面板，见下）；**只切全屏**、不碰 diff 分栏 | 任意 |
 | `⌘/Ctrl+Alt+←` / `→` | 右栏当前面板的标签：上一个 / 下一个（循环；单标签不吞键） | 任意 |
 | `⌘/Ctrl+,` | 右栏关闭当前面板的**当前标签**（无可关标签时只 no-op，但键位恒被吞、不留给浏览器） | 任意 |
 | `⌘/Ctrl+D` | 右栏**自动换行**：当前标签是变更审阅 diff 或**文件预览**（文件浏览器里点开的文本 / 代码预览页，页头有换行按钮的那些渲染器）时切换；两者都不是即 no-op，但**键位恒吞**（键位完全归插件，不让浏览器弹「添加书签」） | 任意 |
@@ -39,8 +39,8 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   `M` 模型、`N` 新建会话、`J` 焦点跳转、`\` 文件浏览器、`L` 终端、`,` 关标签、`D` 换行、
   `/` 速查表）；
   **`mod+alt` 留给导航**（`←`/`→` 右栏标签、`↑`/`↓` 活跃会话）。**diff 分栏默认没有键位**：
-  它由 `⌘/Ctrl+S` 在切换全屏时自动设置，需要手动切换时用 `localStorage` 绑
-  （`{"bindings":{"sidebarRight.diffSplit":"mod+alt+d"}}`）。
+  要手动切换就用 `localStorage` 绑（`{"bindings":{"sidebarRight.diffSplit":"mod+alt+d"}}`）；
+  `⌘/Ctrl+S` 全屏切换**不再**代它动手（见下）。
 - 审批与问答的 `Enter`/`Esc`/数字键/方向键是**固定分发的单键**，不参与 `bindings` 自定义。
 - 活跃会话 = 正在运行（`running`）∪ 有待处理交互 ∪ 刚完成未查看（`uiSession.sessionStatus` 的 `completionUnread`）。
 - `⌘/Ctrl+Alt+↑`/`↓` 在**活跃会话之间**沿侧栏顺序循环：跳过非活跃会话，走到可见轴尽头
@@ -59,12 +59,10 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 - **`⌘/Ctrl+W` 不绑定任何动作**：插件不接管该键，浏览器 / 系统照常按「关闭标签页」处理
   （换行在 `⌘/Ctrl+D`）；想用这个键位就在 `localStorage` 里绑定
   （如 `{"bindings":{"sidebarRight.wrap":"mod+alt+w"}}`）。
-- **diff 分栏只在 `⌘/Ctrl+S` 触发时设置**（不订阅全屏变化、不随标签切换跟随）：切换后
-  用户**实际看到**的全屏 → 分栏开，否则 → 分栏关（宽窗按刚写入的 `mode`；窄窗
-  `autoFullscreen` 恒真，只有面板被收起才算退出全屏）。分栏动作本身是 **toggle** 语义，
-  故插件先读视图快照里的 `byTab[tabId].split`，**只在不是期望值时才写**（已是期望值零提交）；
-  当前标签不是变更审阅 diff、状态桶还没建（`split` 不可知）或取数链路任一环不可用都只跳过分栏，
-  **不影响** `mode` 写入与吞键。
+- **diff 分栏不随 `⌘/Ctrl+S` 走**：`⌘/Ctrl+S` 只切全屏，一概不读、也不写分栏状态。分栏只归
+  页头「左右对比」按钮与改绑后的 `sidebarRight.diffSplit` 键位（默认未绑定）；「分栏持续跟随
+  全屏」由独立插件 `dsh-rightbar-diff-split` 负责。本插件的分栏动作是 **toggle** 语义，
+  改绑后是否吞键只由它是否生效决定（与全屏动作互不影响）。
 
 ## 动作触发路径（服务 / DOM）
 
@@ -83,11 +81,10 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 | `card` 态判定 | 当前会话是否命中 `uiSession.pendingInteractions` 快照（无 DOM 查询） |
 | `sidebar.toggle` | `layout.toggleSidebar()`（宽屏在默认宽与 0 间切换，窄屏翻转 `narrowExpanded`） |
 | `sidebarRight.toggle` | `sidebarRight.toggleExpanded()`（与右栏头部折叠按钮同一入口；右侧 seat 自行同步 AppFrame 轨道） |
-| `sidebarRight.fullscreen` | 与面板 chrome 的**全屏按钮同一入口**：会话级 store 的 `actions.setMode(sessionId, mode)`（dockkit `planSetMode` 的唯一写面，`layout.mode` 只经它写入）。判定复刻按钮的「**生效**呈现」：`fullscreen = autoFullscreen ∪ layout.mode === 'fullscreen'` → 切 `push`，否则切 `fullscreen`；**窄窗（`< 768px`）**上游 `autoFullscreen` 恒真、手动全屏不可达，故照抄按钮的 `autoFullscreen` 分支：切 `push` 前先 `setExpanded(sessionId, false)` 收起面板，否则面板仍被 autoFullscreen 留在全屏。面板收起时照常写 `mode`（呈现方式与展开态正交，下次展开生效）——注意收起态按钮虽在 DOM 中但被上游 CSS 隐藏、点不到，故此处是按钮语义的**超集**（见「已知限制」）。取数与切标签同源（`src/rightbar-layout.ts` 的 entries → 会话作用域绑定 → `resolveStore`）。**写成功后**返回切换后的生效全屏状态，分发器据此在**这次触发时**同步 diff 分栏（`setRightSidebarDiffSplit`，见下一条） |
+| `sidebarRight.fullscreen` | 与面板 chrome 的**全屏按钮同一入口**：会话级 store 的 `actions.setMode(sessionId, mode)`（dockkit `planSetMode` 的唯一写面，`layout.mode` 只经它写入）。判定复刻按钮的「**生效**呈现」：`fullscreen = autoFullscreen ∪ layout.mode === 'fullscreen'` → 切 `push`，否则切 `fullscreen`；**窄窗（`< 768px`）**上游 `autoFullscreen` 恒真、手动全屏不可达，故照抄按钮的 `autoFullscreen` 分支：切 `push` 前先 `setExpanded(sessionId, false)` 收起面板，否则面板仍被 autoFullscreen 留在全屏。面板收起时照常写 `mode`（呈现方式与展开态正交，下次展开生效）——注意收起态按钮虽在 DOM 中但被上游 CSS 隐藏、点不到，故此处是按钮语义的**超集**（见「已知限制」）。取数与切标签同源（`src/rightbar-layout.ts` 的 entries → 会话作用域绑定 → `resolveStore`）。**只切全屏**：不读也不写 diff 分栏（本动作不参与分栏）；返回是否已发出 `setMode`，分发器据此决定吞键 |
 | `sidebarRight.tabPrev` / `tabNext` | 右栏会话级 slot store：`slots.entries('rightbar.session')` → 会话作用域绑定（`src/scope-binding.ts`）→ `slots.resolveStore` → `bySession[sid].layout` 的 `activePaneId` 面板 `tabs`/`activeTabId`；切换调 `sidebarRight.focus(tabId)`。**只在当前面板内循环**，单标签 / 无面板 no-op 不吞键 |
 | `sidebarRight.closeTab` | 与切标签同源取当前面板当前标签，调 `sidebarRight.close(tabId)`；调完回读同一活实例确认标签已从 `layout.tabs` 消失，仍在（上游拒关 / 服务面在别的会话）即只 no-op——**吞键与动作结果无关**（见下） |
-| `sidebarRight.wrap` / `sidebarRight.diffSplit` | 目标 = **当前面板的当前标签**（布局取自 `rightbar.session` store，与标签切换 / 关闭同源；面板 = 上游 `layout.activePaneId`，浮窗被聚焦时即该浮窗）。按标签记录的 `kind` 认承载其视图状态的注册项：`changes-review` → `sidebar.right.pane.tab` 上 key 为 `@deepseek-ai/dsh-client-ui-deliverables` 的注册项，`text`（文件 / 文本 / 代码 / Markdown 预览）→ key 为 `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` 的注册项；再经会话作用域绑定 `slots.resolveStore` 取活实例，调该 store 的 `actions.toggledWrap(tabId)`（`⌘/Ctrl+D`，换行）/ `actions.toggledSplit(tabId)`（分栏）——**与页头那两个按钮同一入口、同一份内存态**（slots 按 priority 升序返回，首个匹配即渲染胜出项）。分栏只有变更审阅页有，换行两页都有；无状态桶（变更审阅 store 的 `bucket()` 抛错）由内层 catch 静默成 no-op。吞键：`⌘/Ctrl+D` 恒吞，`⌘/Ctrl+S` 的分栏同步与吞键无关（吞键只由 `setMode` 是否发出决定） |
-| `setRightSidebarDiffSplit`（`⌘/Ctrl+S` 内的分栏同步） | 与上面同一取数链路，但目标是 `changes-review` 页（当前标签不是 diff 即整条 no-op）：先读活实例快照的 `byTab[tabId].split`，**只在它 ≠ 期望值（= 切换后的生效全屏）时**才调 `actions.toggledSplit(tabId)`——分栏动作是 toggle，盲调会把状态翻反。`split` 不是布尔（状态桶还没由上游 `navigated` 建好）即不猜、不写 |
+| `sidebarRight.wrap` / `sidebarRight.diffSplit` | 目标 = **当前面板的当前标签**（布局取自 `rightbar.session` store，与标签切换 / 关闭同源；面板 = 上游 `layout.activePaneId`，浮窗被聚焦时即该浮窗）。按标签记录的 `kind` 认承载其视图状态的注册项：`changes-review` → `sidebar.right.pane.tab` 上 key 为 `@deepseek-ai/dsh-client-ui-deliverables` 的注册项，`text`（文件 / 文本 / 代码 / Markdown 预览）→ key 为 `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` 的注册项；再经会话作用域绑定 `slots.resolveStore` 取活实例，调该 store 的 `actions.toggledWrap(tabId)`（`⌘/Ctrl+D`，换行）/ `actions.toggledSplit(tabId)`（分栏，默认未绑定）——**与页头那两个按钮同一入口、同一份内存态**（slots 按 priority 升序返回，首个匹配即渲染胜出项）。分栏只有变更审阅页有，换行两页都有；无状态桶（变更审阅 store 的 `bucket()` 抛错）由内层 catch 静默成 no-op。吞键：`⌘/Ctrl+D` 恒吞，分栏动作生效才吞（`⌘/Ctrl+S` 不经由此路，见上） |
 | `sidebarRight.files` | `sidebarRight.openTab('files')`（按目标面板去重：已有则聚焦、没有则创建；`openContent` 恒先展开右栏）；再经同一 store 的 `actions.placeTab(sessionId, tabId, paneId, 0)` 置顶（与标签拖拽同一入口，**不用** `replaceTab`）；已在首位不调用 |
 | `sidebarRight.terminal` | 终端是 `multiple: true` 页、上游每次 `openTab` 铸带 UUID 的 `contentId`、**不按 (kind, contentId) 去重**，故认页由插件读 store 完成（`record.kind === 'terminal'` 或 `sidebar://terminal[/…]` 地址；当前面板优先，再扫其余**停靠**面板，浮窗不参与）。**已有** → `sidebarRight.focus(tabId)`；`layout.expanded === false` 时补 `toggleExpanded()`；若该终端本来就是所在面板的当前标签且右栏已展开，再按 `paneId` 做元素级聚焦。**没有** → `openTab('terminal')` 新建（上游自动聚焦）。**不重排、不置顶** |
 | `composer.focus` | 当前会话（`uiSession.current`）→ `sessions.binding(id).ctx` → `conversation.input.for(actx)`（缺席回退 `InputHub.shell(id)`）→ `shell.editor.getRootElement()` → `focus({preventScroll:true})`。`editing` 态另有 `contains` 门闸：焦点已在 composer 内则不重复聚焦但**仍吞键** |
@@ -201,8 +198,8 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
   自定义，`loadConfig` 会剔除同名键位。
 - 组合键写法：`mod` + `alt` + `shift` + 键名（字母 / 数字 / `enter` / `escape` / `tab` /
   `arrow*` / `pageup` / `pagedown` / `;` 等），如 `"Cmd+M"`。配置其他字段一律忽略。
-- 默认下**没有键位**的动作只有 `sidebarRight.diffSplit`（diff 分栏）——它由 `⌘/Ctrl+S` 在
-  切换全屏时自动设置；需要手动切换时在此绑定（如 `{"bindings":{"sidebarRight.diffSplit":"mod+alt+d"}}`）。
+- 默认下**没有键位**的动作只有 `sidebarRight.diffSplit`（diff 分栏）：`⌘/Ctrl+S` 全屏切换
+  不再代它动手，需要手动切换就在此绑定（如 `{"bindings":{"sidebarRight.diffSplit":"mod+alt+d"}}`）。
 
 ## 已知限制
 
@@ -242,11 +239,10 @@ DSH Web 全局快捷键插件（client-only，无宿主逻辑、无 react 依赖
 - **`⌘/Ctrl+D` 在可编辑元素里也会被抢走**（与 `⌘/Ctrl+L` / `⌘/Ctrl+J` / `⌘/Ctrl+S`
   同款）：焦点在 composer（macOS 的 `⌃D` 删后一个字符）或右栏终端里时，该键**凡收到事件就吞**，
   故 `⌃D` 删除在插件生效期间不可用——需要这个编辑键时改绑或取消绑定。
-- **`⌘/Ctrl+S` 同步的分栏可能与「当前标签」错位**：分栏同步只作用于**触发那一刻**当前面板的
-  当前标签，且只在该标签是变更审阅 diff 时生效；之后切到别的 diff 标签、或在别的标签上进出全屏，
-  都不会补设（这是有意为之——分栏状态不订阅、不自动跟随）。分栏目标页还是渲染态：上游
-  `navigated` 尚未给该标签建状态桶时 `split` 不可知，插件不猜、不写（该页首次渲染后自然按上游
-  默认的左右对比呈现）。
+- **`⌘/Ctrl+S` 不负责 diff 分栏**：它只切全屏，不进 `sidebar.right.pane.tab` 取数链路，也不读
+  `byTab[tabId].split`。分栏要手动切换只能改绑 `sidebarRight.diffSplit`；「分栏跟全屏走」由独立
+  插件 `dsh-rightbar-diff-split` 承担（两者同时启用时，本插件的分栏键位写进去会被那次同步回正，
+  表现为点了没反应——见该插件 README）。
 - **`mod` 同时吸收 ctrlKey 与 metaKey**：macOS 上 `⌃X` 与 `⌘X` 等价（所有 `mod+` 动作）。
 - **审批卡片抢占输入框**：当前会话有审批卡片时，焦点在输入框里 `Enter` 也是「允许一次」、
   `Esc` 也是「拒绝」。
@@ -335,7 +331,7 @@ npm run check       # node --check 产物与宿主
   | `test/composer.mjs` | ⌘/Ctrl+J 聚焦输入框（J = Jump 的三态与元素级门闸、`shell(id)` 回退、旧键位 ⌘/Ctrl+I 回归） |
   | `test/rightbar-tabs.mjs` | ⌘/Ctrl+Alt+← / → 右栏标签切换（首末循环、`activeTabId` 失配落首个、单 / 无标签与取数面不可用的 no-op） |
   | `test/rightbar-close-tab.mjs` | ⌘/Ctrl+, 关闭当前标签（只关当前面板的当前标签、关后回读布局、独占停靠 guide 的 no-op） |
-  | `test/rightbar-fullscreen.mjs` | ⌘/Ctrl+S 切换全屏（宽窗 `push ⇄ fullscreen` 往返、窄窗「先收起再写 push」、`767/768px` 断点、面板收起时仍写 `mode`、缺 `setExpanded` / 抛错分支、速查表展示行）＋**触发时的 diff 分栏同步**（全屏 → 分栏开、退出 → 分栏关、窄窗收起也关、已是期望值时零提交、当前标签不是 diff / 状态桶缺席 / 注册项与快照缺失或抛错只跳过分栏而不影响 mode 与吞键、`setMode` 先于分栏） |
+  | `test/rightbar-fullscreen.mjs` | ⌘/Ctrl+S 切换全屏（宽窗 `push ⇄ fullscreen` 往返、窄窗「先收起再写 push」、`767/768px` 断点、面板收起时仍写 `mode`、缺 `setExpanded` / 抛错分支、速查表展示行）＋**只切全屏**（当前标签是变更审阅 diff、分栏 store 就在链路上时也零调用 `toggledSplit`，进出全屏各一遍） |
   | `test/rightbar-files.mjs` | ⌘/Ctrl+\ 打开文件浏览器并 `placeTab(…, 0)` 置顶（已在首位零提交、跨面板 / 浮窗归属） |
   | `test/rightbar-terminal.mjs` | ⌘/Ctrl+L 终端定位（认页不重复 `openTab`、多终端时聚焦当前激活的那个、折叠补 `toggleExpanded`、focus 抛错不退化成再开一个、元素级聚焦注入假面板） |
   | `test/rightbar-view.mjs` | ⌘/Ctrl+D 自动换行（当前标签是 diff → 变更审阅 store 的 `toggledWrap`，是文件预览 → 预览 store 的 `toggledWrap`（含无桶时懒建桶），其余页与**非当前面板**都不误伤、**浮窗被聚焦时作用于浮窗里的标签**；动作以方法形式调用、`preventDefault` + `stopPropagation` 双断言、**D 恒吞键**、**⌘/Ctrl+W 无绑定（不调、不吞）**、card / editing 态、裸键、`bindings` 覆盖（diff 分栏默认未绑定 → 改绑后生效且吞键、换行改绑后原键位交回浏览器）、速查表展示行（换行 = Ctrl+D、分栏 = 未绑定、不再出现 Ctrl+W）、取数链路逐环缺失的 no-op（每条都断言真的走到了目标分支，含上游「无状态桶即抛」由内层 catch 静默消化） |

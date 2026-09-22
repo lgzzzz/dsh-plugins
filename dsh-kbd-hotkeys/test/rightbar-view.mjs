@@ -1,6 +1,6 @@
 /**
  * 诊断脚本(非插件产物):右栏视图开关 —— ⌘/Ctrl+D 自动换行;diff 分栏默认**不绑键位**
- * (只在 ⌘/Ctrl+S 切换全屏时由插件同步,见 test/rightbar-fullscreen.mjs),手动切换靠 localStorage 改绑。
+ * (⌘/Ctrl+S 只切全屏、不参与分栏,见 test/rightbar-fullscreen.mjs),手动切换靠 localStorage 改绑。
  *
  * 目标 = **当前面板的当前标签**(布局取自 rightbar.session store 的 `bySession[id].layout`;
  * `activePaneId` 在上游由 dockkit `focusPane` 写入,**浮窗被聚焦时就是那个浮窗**);

@@ -1059,24 +1059,19 @@ function isEffectivelyFullscreen(layout, narrow) {
 function nextRightbarMode(effectiveFullscreen) {
   return effectiveFullscreen ? "push" : "fullscreen";
 }
-function visibleFullscreenAfter(narrow, nextMode, collapsed, expandedBefore) {
-  if (!narrow) return nextMode === "fullscreen";
-  return collapsed ? false : expandedBefore !== false;
-}
-var NOT_HANDLED = { handled: false, fullscreen: false };
 function toggleRightSidebarFullscreen(services) {
   var _a, _b;
   const sidebarRight = services.sidebarRight;
-  if (sidebarRight === null || sidebarRight === void 0) return NOT_HANDLED;
+  if (sidebarRight === null || sidebarRight === void 0) return false;
   const sessionId = currentSessionId(services);
-  if (sessionId === void 0) return NOT_HANDLED;
+  if (sessionId === void 0) return false;
   const resolved = resolveRightbarStore(services, sessionId);
-  if (resolved === void 0) return NOT_HANDLED;
+  if (resolved === void 0) return false;
   const layout = (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
-  if (layout === void 0) return NOT_HANDLED;
+  if (layout === void 0) return false;
   const actions = resolved.instance.actions;
   const setMode = actions == null ? void 0 : actions.setMode;
-  if (actions === void 0 || typeof setMode !== "function") return NOT_HANDLED;
+  if (actions === void 0 || typeof setMode !== "function") return false;
   const narrow = isNarrowViewport();
   const fullscreen = isEffectivelyFullscreen(layout, narrow);
   const nextMode = nextRightbarMode(fullscreen);
@@ -1085,9 +1080,9 @@ function toggleRightSidebarFullscreen(services) {
   try {
     if (collapses) setExpanded.call(actions, sessionId, false);
     setMode.call(actions, sessionId, nextMode);
-    return { handled: true, fullscreen: visibleFullscreenAfter(narrow, nextMode, collapses, layout.expanded) };
+    return true;
   } catch {
-    return NOT_HANDLED;
+    return false;
   }
 }
 
@@ -1983,42 +1978,18 @@ function toggleRightSidebarDiffSplit(services) {
 function toggleRightSidebarWrap(services) {
   return toggleActiveTabView(services, "toggledWrap");
 }
-function setRightSidebarDiffSplit(services, split) {
-  const active = activeRightbarTab(services);
-  if (active === void 0 || active.kind !== "changes-review") return false;
-  const resolved = resolveViewStore(services, REVIEW_ENTRY_KEY);
-  if (resolved === void 0) return false;
-  const toggle = resolved.actions.toggledSplit;
-  if (typeof toggle !== "function") return false;
-  const current = splitOf(resolved.state, active.tabId);
-  if (current === void 0 || current === split) return false;
-  try {
-    ;
-    toggle.call(resolved.actions, active.tabId);
-    return true;
-  } catch {
-    return false;
-  }
-}
-function splitOf(state, tabId) {
-  var _a;
-  const bucket = (_a = state.byTab) == null ? void 0 : _a[tabId];
-  if (typeof bucket !== "object" || bucket === null) return void 0;
-  const split = bucket.split;
-  return typeof split === "boolean" ? split : void 0;
-}
 function toggleActiveTabView(services, action) {
   const active = activeRightbarTab(services);
   if (active === void 0) return false;
   const entryKey = active.kind === void 0 ? void 0 : VIEW_ENTRY_BY_KIND[active.kind];
   if (entryKey === void 0) return false;
-  const resolved = resolveViewStore(services, entryKey);
-  if (resolved === void 0) return false;
-  const toggle = resolved.actions[action];
+  const actions = resolveViewActions(services, entryKey);
+  if (actions === void 0) return false;
+  const toggle = actions[action];
   if (typeof toggle !== "function") return false;
   try {
     ;
-    toggle.call(resolved.actions, active.tabId);
+    toggle.call(actions, active.tabId);
     return true;
   } catch {
     return false;
@@ -2044,7 +2015,7 @@ function activePane(layout) {
   if (node === void 0 || node === null || node.kind !== "pane") return void 0;
   return node;
 }
-function resolveViewStore(services, entryKey) {
+function resolveViewActions(services, entryKey) {
   var _a;
   const slots = services.slots;
   if (slots === null || slots === void 0) return void 0;
@@ -2064,8 +2035,8 @@ function resolveViewStore(services, entryKey) {
     } catch {
       continue;
     }
-    const resolved = asViewStore(instance);
-    if (resolved !== void 0) return resolved;
+    const actions = asViewActions(instance);
+    if (actions !== void 0) return actions;
   }
   return void 0;
 }
@@ -2078,7 +2049,7 @@ function entriesOf4(slots) {
     return [];
   }
 }
-function asViewStore(instance) {
+function asViewActions(instance) {
   if (typeof instance !== "object" || instance === null) return void 0;
   const getSnapshot = instance.getSnapshot;
   if (typeof getSnapshot !== "function") return void 0;
@@ -2093,7 +2064,7 @@ function asViewStore(instance) {
   if (typeof byTab !== "object" || byTab === null || Array.isArray(byTab)) return void 0;
   const actions = instance.actions;
   if (typeof actions !== "object" || actions === null) return void 0;
-  return { actions, state: snapshot };
+  return actions;
 }
 
 // src/sidebar-tabs.ts
@@ -2370,11 +2341,8 @@ function runAction(id, services, overlays) {
         return toggleSidebar(services);
       case "sidebarRight.toggle":
         return toggleRightSidebar(services);
-      case "sidebarRight.fullscreen": {
-        const outcome = toggleRightSidebarFullscreen(services);
-        if (outcome.handled) setRightSidebarDiffSplit(services, outcome.fullscreen);
-        return outcome.handled;
-      }
+      case "sidebarRight.fullscreen":
+        return toggleRightSidebarFullscreen(services);
       case "sidebarRight.tabPrev":
         return cycleRightSidebarTab(services, -1);
       case "sidebarRight.tabNext":

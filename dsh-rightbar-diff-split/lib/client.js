@@ -267,6 +267,33 @@ function createDiffSplitSync(services, options = {}) {
   };
 }
 
+// src/hover-preview.ts
+var PREVIEW_ATTRIBUTE = "[data-changes-hover-preview]";
+var CSS = `/* dsh-rightbar-diff-split: suppress the changed-files card's hover diff popup */
+${PREVIEW_ATTRIBUTE} {
+  display: none;
+}
+`;
+function installHoverPreviewStyles(host, pluginId) {
+  const documentLike = asStyleHost(host);
+  if (documentLike === void 0) return void 0;
+  const tag = documentLike.createElement("style");
+  tag.dataset.plugin = pluginId;
+  tag.textContent = CSS;
+  documentLike.head.appendChild(tag);
+  return () => {
+    tag.remove();
+  };
+}
+function asStyleHost(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const candidate = value;
+  if (typeof candidate.createElement !== "function") return void 0;
+  if (typeof candidate.head !== "object" || candidate.head === null) return void 0;
+  if (typeof candidate.head.appendChild !== "function") return void 0;
+  return candidate;
+}
+
 // src/subscriptions.ts
 function createSubscriptionHub(deps) {
   let disposers = [];
@@ -335,6 +362,7 @@ function getService(ctx, serviceName) {
   return value === null || value === void 0 ? void 0 : value;
 }
 function apply(ctx) {
+  const uninstallStyles = typeof document === "undefined" ? void 0 : installHoverPreviewStyles(document, name);
   const services = {
     slots: getService(ctx, "slots"),
     sessions: getService(ctx, "sessions"),
@@ -359,6 +387,7 @@ function apply(ctx) {
   if (typeof ctx.effect === "function") {
     ctx.effect(() => () => {
       hub == null ? void 0 : hub.dispose();
+      uninstallStyles == null ? void 0 : uninstallStyles();
     });
   }
 }

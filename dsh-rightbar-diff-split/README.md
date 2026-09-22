@@ -1,12 +1,16 @@
 # dsh-rightbar-diff-split
 
-让右栏「**变更审阅**」diff 的左右对比（分栏）与右栏**全屏状态**恒等的本地持久化插件：
-**分栏 = 全屏**，任何时刻都相等。
+本插件承担两件**互不依赖**的事：
 
-纯浏览器半部（宿主半部为空占位），注入 `slots` + `sessions` + `uiSession` 三个服务。
-它是**状态跟随**、不是快捷键：不接管任何键位、不改 DOM、不加样式、不点击按钮、不轮询、
-**不引入任何延迟调度器**（无 `requestAnimationFrame` / `setTimeout` / `queueMicrotask` /
-`Promise.then` / 防抖）。
+1. **分栏回正**：让右栏「**变更审阅**」diff 的左右对比（分栏）与右栏**全屏状态**恒等 ——
+   **分栏 = 全屏**，任何时刻都相等；
+2. **悬停浮窗抑制**：一条样式规则摘掉聊天区「改动卡片」文件行的**悬停 diff 浮窗**（见下）。
+
+纯浏览器半部（宿主半部为空占位），注入 `slots` + `sessions` + `uiSession` 三个服务（样式补丁
+不依赖任何服务，`ctx.get` 全返回 `undefined` 也照装）。它是**状态跟随**、不是快捷键：不接管任何
+键位、不改 DOM 结构、不点击按钮、不轮询、**不引入任何延迟调度器**（无 `requestAnimationFrame` /
+`setTimeout` / `queueMicrotask` / `Promise.then` / 防抖）；唯一的 DOM 写入是向 `document.head`
+追加一个 `<style data-plugin="dsh-rightbar-diff-split">`（fiber 退场时摘除）。
 
 > 实现依据：`docs/plan-rightbar-fullscreen-diff-split.md`（方案分析）。本插件采用其推荐形态
 > （新建独立插件），并已从早期「只认三种事件」演进为**持续回正**：只作用当前会话当前面板的
@@ -19,12 +23,44 @@
 视觉上就是「点了没反应」（连一帧中间态都没有）。按钮因此降级为**只读状态指示器** ——
 `aria-pressed`、图标旋转、tooltip 文案仍然准确反映当前状态。
 
-本插件**不动 DOM、不加任何 CSS、不接管键位**。同理：
+本插件**不接管键位、不动按钮的 DOM**（唯一的样式写入是「浮窗抑制」那条规则，与分栏无关）。同理：
 
-- `dsh-kbd-hotkeys` 的 `sidebarRight.diffSplit`（默认未绑定）与 ⌘/Ctrl+S 的
-  `setRightSidebarDiffSplit` 也失去作用（它们写同一份 store，会被同一次同步通知回正）；
-  **本插件不改那个插件**；
+- `dsh-kbd-hotkeys` 的 `sidebarRight.diffSplit`（默认未绑定）写的是同一份 store，会被同一次同步
+  通知回正 ⇒ 绑定后表现为**点了没反应**；该插件的 ⌘/Ctrl+S 现在**只切全屏**、不再同步分栏
+  （因此与本插件无交叉）。**本插件不改那个插件**；
 - 想真正切换分栏，只能改全屏状态（面板全屏 / 退出全屏）。
+
+## 浮窗抑制：改动卡片的文件行不再弹悬停 diff
+
+聊天区回合末尾「改动卡片」里的每个文件行都挂在 `dsh-client-ui-deliverables` 的 `HoverCard`
+上（`variant: "preview"`、`openDelayMs: 500`），悬停 500ms 弹出「路径头 + 整段 diff」浮窗。
+本插件用**一条样式规则**把该浮窗整棵子树从布局与命中测试里摘掉：
+
+```css
+/* dsh-rightbar-diff-split: suppress the changed-files card's hover diff popup */
+[data-changes-hover-preview] {
+  display: none;
+}
+```
+
+| 事实（判定依据，以源码为准） | 依据 |
+| --- | --- |
+| 浮窗根元素带稳定标记 `data-changes-hover-preview`（路径头另有 `data-changes-preview-path`），**整个 `@deepseek-ai` scope 内只有这一处** | `dsh-client-ui-deliverables/lib/client.js` L1190–1199（`ChangedFilePreview`） |
+| 浮窗是挂在**文件行**上的 `HoverCard`：`variant: "preview"`、`openDelayMs: 500`、`widthAnchorRef` = 卡片元素 | 同上 L1126–1138 |
+| `HoverCard` 上游自带 `disabled` 抑制开关，但 `ChangedFiles` **没有传** ⇒ 触发路径无法从外部关闭 | 同上（props 无 `disabled`） |
+| 浮窗内容只在浮窗打开期间挂载（`"Mounted only while its hover card is open"`），内部 `FileDiff` 固定 `split: false, wrap: false` | 同上 L1178–1210 |
+| 命中与定位全在 `HoverCard` 内部实现（`position: fixed` + 内联 left/top/width/maxHeight），类名是 CSS-module 哈希 ⇒ **不能**当锚点 | 同上 |
+| 反复悬停**不会**反复发请求：读取走 `HostReadStore.loadUrl`，已有非重试状态即 `return` | 同上 L180–193 |
+
+**口径与代价（有意为之）**：这不是「阻止触发」，而是「呈现抑制」—— 上游 500ms 后依旧进入 open、
+依旧 portal 挂载、依旧有 Escape 监听与淡出；被摘掉的只是它的**可见性与命中面**。用 `display: none`
+而不是 `opacity` / `visibility`：后两者仍占着 `position: fixed` 的命中区，会挡住底下的文件行与
+页头按钮。
+
+样式只在 `document.head` 追加一个 `<style>`，清理函数与订阅一起挂在 `ctx.effect`：client-hmr
+换 fiber 即摘除（`ctx.effect` 缺席时仍装，只是没有生命周期钩子来摘）。取不到 `document` /
+`document.head` / `createElement` 即整条 no-op，**不抛**。上游若不再打该属性，本补丁**静默失效**
+（浮窗重新出现），不会误伤其它 UI。
 
 ## 上游事实（判定依据，以源码为准）
 
@@ -143,6 +179,15 @@ desired     = 布局 store 的 layoutInfo.rightbarFullscreen
 `ctx.effect(() => () => hub.dispose())`：client-hmr 的 fiber 替换即退订，模块闭包里的诊断快照
 随新 fiber 重置，**不写 `window` 标记**。
 
+### 4. 呈现补丁（`src/hover-preview.ts`、`src/client.ts`）
+
+`installHoverPreviewStyles(document, name)` 追加 `<style data-plugin="dsh-rightbar-diff-split">`
+（唯一规则见「浮窗抑制」），返回摘除函数；`apply` 在装配回正**之前**调用它，摘除函数与
+`hub.dispose()` 挂在同一个 `ctx.effect` 清理里。它与服务解析、订阅、回正**零耦合**：
+`ctx` 全缺时样式照装，`document` 不可用时整条 no-op、回正路径不受影响。
+`host` 入参按结构校验（`createElement` 是函数、`head` 是带 `appendChild` 的对象），不匹配即返回
+`undefined` —— 便于诊断脚本用桩驱动、也避免形状漂移时误写。
+
 ## 已知边界
 
 1. **收起面板 = 非全屏**：从全屏收起时上游 `closeRightbar()` 置 `rightbarFullscreen = false`，
@@ -160,12 +205,16 @@ desired     = 布局 store 的 layoutInfo.rightbarFullscreen
    `slots.resolveStore`（上游类型里是 private 方法）、deliverables 的 `toggledSplit` 与注册项 key
    都属实现细节。上游改写时本插件**静默失效**（no-op）而非误写：形状校验放第一位。
 7. **按钮 / 热键不再能改变状态（设计如此）**：`dsh-kbd-hotkeys` 的 `sidebarRight.diffSplit`
-   （默认未绑定）与 ⌘/Ctrl+S 的 `setRightSidebarDiffSplit` 都写同一份 store，会被同一次同步通知
-   回正，因而变成**无效 / 冗余**；本插件不改那个插件。
+   （默认未绑定）写的是同一份 store，会被同一次同步通知回正，因而变成**无效**（点击 / 按键后的
+   终态仍等于全屏值）；该插件的 ⌘/Ctrl+S 已改为只切全屏、不碰分栏，故与本插件无交叉。
+   本插件不改那个插件。
 8. **新开 diff 标签时上游先播种 `split: true`**：非全屏下紧接着被我们回正为 `false`，这中间会有
    **一次渲染后的一帧**（上游自己的播种渲染，与本次改动无关；插件无法在播种发生前阻止它）。
-9. **`ctx.effect` 缺席时不退订**：与旧版一致，没有 `ctx.effect` 就没有 fiber 生命周期钩子
-   （HMR 重建会各自留一份订阅）；正常 Web 组合下 `ctx.effect` 恒在。
+9. **`ctx.effect` 缺席时不退订、也不摘样式**：与旧版一致，没有 `ctx.effect` 就没有 fiber 生命周期
+   钩子（HMR 重建会各自留一份订阅与一份 `<style>`）；正常 Web 组合下 `ctx.effect` 恒在。
+10. **浮窗抑制是上游私有标记上的呈现补丁**：`data-changes-hover-preview` 属 deliverables 的实现
+    细节，上游改写或换锚点时本补丁**静默失效**（浮窗重新出现），不会误伤其它 UI；它也无法恢复
+    上游「悬停即触发」的行为 —— 要彻底关掉触发只能由上游给 `HoverCard` 传 `disabled`。
 
 ## 构建与验证
 
@@ -185,11 +234,15 @@ node test-diff-split.mjs
     `apply` 装配（五路订阅、`ctx.effect` 登记 1 个 disposer、**加载即对齐**）与产物级端到端
     （全屏翻转、换标签、新开标签播种、**模拟点击页头按钮 → 同步回正**、退订后不再介入）；
   - **C** 同上产物下的「ctx 全缺 / `ctx.get` 抛错 / 无 effect / 二次 apply（HMR 重建）」容错。
+- **样式补丁 `src/hover-preview.ts` 无自动化覆盖**：`test-diff-split.mjs` 是纯 Node 环境（无
+  `document`），只覆盖回正路径；样式补丁按下面人工验证清单第 0 条核对。
 - `build`：`scripts/build-client.mjs` **直接执行 esbuild 平台二进制**（而非 JS API，后者用 stdio
   管道通信，受限沙箱下 `spawn` 报 `EPERM`）→ `lib/client.js`（入仓，禁止手改）。
 - 人工验证清单（`npm run build` 后 client-hmr 会在 500ms 内热推送，无需刷新）：
+  0. **聊天区「改动卡片」的文件行悬停 500ms 不再弹 diff 浮窗**：DevTools 里该浮窗节点仍在
+     （`[data-changes-hover-preview]`）但 `display: none`、不占命中区（底下的行与页头按钮照常可点）；
   1. **点页头「左右对比」按钮无反应**（`aria-pressed` / 图标 / tooltip 仍随状态变化）；
-  2. **`dsh-kbd-hotkeys` 的分栏热键（若绑过）与 ⌘/Ctrl+S 无效**；
+  2. **`dsh-kbd-hotkeys` 的分栏热键（若绑过）无效**；其 ⌘/Ctrl+S 只切全屏、不动分栏；
   3. 拖分隔条 / 缩放窗口 / 展开收束面板 / 移动浮窗不打断稳态（split 恒等于全屏值）；
   4. 进入全屏 → 立即分栏；退出全屏（含收起）→ 立即不分栏；
   5. 全屏下打开新的 diff 标签：先看到上游播种的一帧分栏（见边界 8），随后与全屏值一致；

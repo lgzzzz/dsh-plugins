@@ -19,7 +19,7 @@ npm 包，经 web Profile 的 `link:` 依赖挂载进正在运行的应用。仓
 | `dsh-git-guard` | 敏感 git 操作一律需用户授权（不直接拒绝）；完全权限（`danger-full-access`）下整体退出 |
 | `dsh-header-action-order` | 会话标题栏图标顺序：定时任务与后台作业挪到最后；顺序常量在 `src/order.ts` |
 | `dsh-kbd-hotkeys` | 全局快捷键：审批 / 问答键盘化、左右栏与右栏标签、文件浏览器 / 终端定位、新建与跳转会话、工作区 / 近期对话 / 模型浮窗、思考强度、⌘/ 速查表 |
-| `dsh-rightbar-diff-split` | 右栏「变更审阅」diff 的左右对比跟随右栏全屏：只看三种事件（打开 diff 标签 / 切到 diff 标签 / 全屏翻转）设一次，不做持续纠正 |
+| `dsh-rightbar-diff-split` | 右栏「变更审阅」diff 的左右对比与右栏全屏**恒等**（持续回正，页头「左右对比」按钮退化为只读指示器）；另一职责：摘掉聊天区改动卡片文件行的悬停 diff 浮窗（一条 `display: none` 样式，不改触发行为） |
 | `dsh-rightbar-fonts` | 右栏预览与「变更审阅」diff 跟随字号轴（默认 14px）；上游这两处吃固定 11px token，内置「字号大小」对其无效 |
 | `dsh-rightbar-tab-width` | 右栏 tab 胶囊定宽 100px（= 上游地板值，分栏判定与上游默认一致） |
 | `dsh-sidebar-default-collapsed` | 左栏默认关闭：每次加载页面读活布局 store 后收起一次（宽窗才写）；不覆盖用户手动开关 |

@@ -365,7 +365,7 @@ export interface SidebarRightStoreLike extends StoreInstanceLike {
   actions?: SidebarRightSurfaceActionsLike
 }
 
-/* ---- 右栏「变更审阅」diff / 文档预览的视图开关(⌘/Ctrl+D 换行;diff 分栏由 ⌘/Ctrl+S 触发同步) ---- */
+/* ---- 右栏「变更审阅」diff / 文档预览的视图开关(⌘/Ctrl+D 换行;diff 分栏默认不绑键位) ---- */
 
 /** 视图 store 的写面(tabId = 右栏标签 id;两侧的按钮走同一入口)。 */
 export interface RightbarViewActionsLike {

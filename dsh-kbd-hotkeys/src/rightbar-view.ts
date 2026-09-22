@@ -1,4 +1,4 @@
-/** 右栏「变更审阅」diff 与文档预览的视图开关(⌘/Ctrl+D 自动换行;diff 分栏由 ⌘/Ctrl+S 全屏触发时同步)。
+/** 右栏「变更审阅」diff 与文档预览的视图开关(⌘/Ctrl+D 自动换行;⌘/Ctrl+Alt+D 等改绑后的 diff 分栏)。
  *
  * 目标 = **当前面板的当前标签**(布局取自 `rightbar.session` store 的 `bySession[id].layout`;
  * `activePaneId` 由上游 dockkit `focusPane` 写入,**浮窗被聚焦时就是那个浮窗**);
@@ -8,9 +8,8 @@
  *
  * 无降级:链路任一环缺失、动作不是函数或调用抛错即 no-op(分发器据此不吞键),不回退 DOM 点击。
  * 目前只有变更审阅有分栏(`toggledSplit`),变更审阅与文档预览都有换行(`toggledWrap`)。
- * 分栏有两个入口:`toggleRightSidebarDiffSplit`(默认不绑键位,靠 localStorage 改绑)与
- * `setRightSidebarDiffSplit`(⌘/Ctrl+S 触发时按生效全屏**设成**期望值;分栏是 toggle 语义,
- * 故先读快照里的 `split` 再决定写不写)。
+ * 分栏**没有默认键位**:⌘/Ctrl+S 只切全屏、不再顺带设置分栏,分栏只在键位改绑后由
+ * `toggleRightSidebarDiffSplit` 手动切换(「分栏持续跟随全屏」由 dsh-rightbar-diff-split 负责)。
  * **吞键由分发器决定**:⌘/Ctrl+D(换行)恒吞(浏览器默认是「添加书签」,见 client.ts)。
  */
 import type { RightbarViewActionsLike, RightbarViewStateLike, RightbarViewStoreLike, Services, SidebarRightLayoutLike, SlotEntryLike, SlotsLike } from './types.ts'
@@ -38,12 +37,6 @@ interface ActiveTab {
   readonly kind: string | undefined
 }
 
-/** 解析到的视图 store:活实例的动作面 + 快照(byTab[tabId] 即该标签的视图状态桶)。 */
-interface ResolvedViewStore {
-  readonly actions: RightbarViewActionsLike
-  readonly state: RightbarViewStateLike
-}
-
 /** 变更审阅 diff 分栏的 toggle 入口(默认不绑键位,只在 localStorage 改绑后可用)。 */
 export function toggleRightSidebarDiffSplit(services: Services): boolean {
   return toggleActiveTabView(services, 'toggledSplit')
@@ -52,41 +45,6 @@ export function toggleRightSidebarDiffSplit(services: Services): boolean {
 /** ⌘/Ctrl+D:当前标签(变更审阅 diff / 文件预览)切换自动换行。 */
 export function toggleRightSidebarWrap(services: Services): boolean {
   return toggleActiveTabView(services, 'toggledWrap')
-}
-
-/**
- * 把当前标签的 diff 分栏**设成**期望状态(⌘/Ctrl+S 切换全屏时由分发器调用:全屏 → true、
- * 退出全屏 → false)。与页头「左右对比」按钮同一 store 动作,故这里按快照里的 `split` 判定:
- * 已经是期望值即不写(分栏是 toggle 语义,不能盲调);只有变更审阅页有分栏,当前标签不是该页、
- * 状态桶缺席(split 不是布尔)或链路任一环不可用都只 no-op。
- * @param services - 插件解析后的服务集合。
- * @param split - 期望的左右对比状态。
- * @returns 是否真的写了 store(调用方不据此决定吞键,纯诊断用)。
- */
-export function setRightSidebarDiffSplit(services: Services, split: boolean): boolean {
-  const active = activeRightbarTab(services)
-  if (active === undefined || active.kind !== 'changes-review') return false
-  const resolved = resolveViewStore(services, REVIEW_ENTRY_KEY)
-  if (resolved === undefined) return false
-  const toggle = resolved.actions.toggledSplit
-  if (typeof toggle !== 'function') return false
-  const current = splitOf(resolved.state, active.tabId)
-  if (current === undefined || current === split) return false
-  try {
-    ;(toggle as (tabId: string) => void).call(resolved.actions, active.tabId)
-    return true
-  } catch {
-    // 上游对该标签还没有视图状态桶时会抛;保持 no-op(不崩分发器、不影响吞键)
-    return false
-  }
-}
-
-/** 某标签当前是否左右对比;桶缺席 / 字段不是布尔即 undefined(状态未知,不猜)。 */
-function splitOf(state: RightbarViewStateLike, tabId: string): boolean | undefined {
-  const bucket = state.byTab?.[tabId]
-  if (typeof bucket !== 'object' || bucket === null) return undefined
-  const split = (bucket as { split?: unknown }).split
-  return typeof split === 'boolean' ? split : undefined
 }
 
 /**
@@ -100,12 +58,12 @@ function toggleActiveTabView(services: Services, action: 'toggledSplit' | 'toggl
   if (active === undefined) return false
   const entryKey = active.kind === undefined ? undefined : VIEW_ENTRY_BY_KIND[active.kind]
   if (entryKey === undefined) return false
-  const resolved = resolveViewStore(services, entryKey)
-  if (resolved === undefined) return false
-  const toggle = resolved.actions[action]
+  const actions = resolveViewActions(services, entryKey)
+  if (actions === undefined) return false
+  const toggle = actions[action]
   if (typeof toggle !== 'function') return false
   try {
-    ;(toggle as (tabId: string) => void).call(resolved.actions, active.tabId)
+    ;(toggle as (tabId: string) => void).call(actions, active.tabId)
     return true
   } catch {
     // 上游对该标签还没有视图状态桶(页 body 未挂载)时会抛;保持 no-op
@@ -135,8 +93,8 @@ function activePane(layout: SidebarRightLayoutLike): { activeTabId?: string } | 
   return node
 }
 
-/** 取指定注册项的视图 store(动作面 + 快照):按 cell key 认注册项,再经会话作用域绑定 resolveStore 到活实例。 */
-function resolveViewStore(services: Services, entryKey: string): ResolvedViewStore | undefined {
+/** 取指定注册项的视图 store 动作面:按 cell key 认注册项,再经会话作用域绑定 resolveStore 到活实例。 */
+function resolveViewActions(services: Services, entryKey: string): RightbarViewActionsLike | undefined {
   const slots = services.slots
   if (slots === null || slots === undefined) return undefined
   if (typeof slots.entries !== 'function' || typeof slots.resolveStore !== 'function') return undefined
@@ -157,8 +115,8 @@ function resolveViewStore(services: Services, entryKey: string): ResolvedViewSto
     } catch {
       continue
     }
-    const resolved = asViewStore(instance)
-    if (resolved !== undefined) return resolved
+    const actions = asViewActions(instance)
+    if (actions !== undefined) return actions
   }
   return undefined
 }
@@ -174,7 +132,7 @@ function entriesOf(slots: SlotsLike): readonly SlotEntryLike[] {
 }
 
 /** 活实例形状校验:快照必须是 { byTab } 对象且实例带 actions(否则视为没取到 store)。 */
-function asViewStore(instance: unknown): ResolvedViewStore | undefined {
+function asViewActions(instance: unknown): RightbarViewActionsLike | undefined {
   if (typeof instance !== 'object' || instance === null) return undefined
   const getSnapshot = (instance as { getSnapshot?: unknown }).getSnapshot
   if (typeof getSnapshot !== 'function') return undefined
@@ -189,5 +147,5 @@ function asViewStore(instance: unknown): ResolvedViewStore | undefined {
   if (typeof byTab !== 'object' || byTab === null || Array.isArray(byTab)) return undefined
   const actions = (instance as RightbarViewStoreLike).actions
   if (typeof actions !== 'object' || actions === null) return undefined
-  return { actions, state: snapshot as RightbarViewStateLike }
+  return actions
 }

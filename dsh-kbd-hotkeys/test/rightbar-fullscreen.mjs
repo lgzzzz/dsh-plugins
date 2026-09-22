@@ -4,10 +4,8 @@
  * 窄窗(< 768px)退出全屏时先 `setExpanded(false)`;含 767/768 断点、面板收起时仍写 mode、
  * `getSnapshot` / `setMode` 抛错与缺 `setExpanded` 的分支、速查表展示行与 `bindings` 覆盖。
  *
- * 另覆盖本动作独有的**分栏同步**:触发时按切换后的生效全屏让当前 diff 标签的左右对比
- * = 全屏(见 `rightbar-view.ts` 的 `setRightSidebarDiffSplit`)——分栏是 toggle 语义,
- * 故先读快照的 split 再决定写不写(已是期望值不盲调);当前标签不是 diff、链路不可用、
- * 状态桶缺席即只跳过分栏,不影响 mode 写入与吞键。
+ * 本动作**只切全屏**:一概不碰 diff 分栏(`sidebarRight.diffSplit` 键位与页头「左右对比」按钮
+ * 走同一份 store,但各自动手;持续跟随全屏由 `dsh-rightbar-diff-split` 负责)。
  *
  * 共享桩件与夹具见 test/harness.mjs。单独运行:`node test/rightbar-fullscreen.mjs`;
  * 被 test-services.mjs import 时只跑用例,汇总由入口负责。
@@ -63,70 +61,33 @@ console.log('\n--- ⌘/Ctrl+S → 右侧栏切换全屏 ---')
     tabs: { t2: { id: 't2', kind: 'text' } },
     ...over,
   })
-  /** 右栏布局:当前标签是**变更审阅 diff**(分栏同步的目标页)。 */
-  const diffLayout = (over = {}) => layoutMode({
-    nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t-diff'], activeTabId: 't-diff' } },
-    tabs: { 't-diff': { id: 't-diff', kind: 'changes-review' } },
-    ...over,
-  })
-  /**
-   * 假「变更审阅」视图 store:只声明分栏动作 `toggledSplit`(与页头「左右对比」按钮同一入口),
-   * 快照 { byTab: { 't-diff': { split } } };`bucket: 'none'` 模拟「该标签还没有状态桶」。
-   * `split` 复刻上游语义:无桶即抛。
-   */
-  function makeSplitStore({ split = true, bucket } = {}) {
-    const handle = { spec: {} }
-    const calls = []
-    const state = { byTab: bucket === 'none' ? {} : { 't-diff': { split } } }
-    const instance = {
-      getSnapshot: () => state,
-      actions: {
-        toggledSplit(tabId) {
-          const tab = state.byTab[tabId]
-          if (tab === undefined) throw new Error(`ui-deliverables: no review state for tab "${tabId}"`)
-          calls.push(['toggledSplit', tabId])
-          tab.split = !tab.split
-        },
-      },
-    }
-    return { handle, calls, instance, split: () => state.byTab['t-diff']?.split }
-  }
-  /** rightbar.session 假 slots:无 store 的干扰项 + 承载 handle 的注册项(另一 slot 给变更审阅视图 store)。 */
-  function modeSlots(store, review) {
+  /** rightbar.session 假 slots:无 store 的干扰项 + 承载 handle 的注册项。 */
+  function modeSlots(store) {
     return {
-      entries: (key) => {
-        if (key === 'rightbar.session') return [{ select: () => ({}) }, { store: store.handle }]
-        if (key === 'sidebar.right.pane.tab') {
-          return [{ options: { key: '@deepseek-ai/dsh-client-ui-deliverables' }, store: review.handle }]
-        }
-        return []
-      },
+      entries: (key) => (key === 'rightbar.session' ? [{ select: () => ({}) }, { store: store.handle }] : []),
       resolveStore: (handle, binding) => {
         if (binding?.key !== 'sess-b') throw new Error(`bad scope binding: ${JSON.stringify(binding)}`)
         if (handle === store.handle) return store.instance
-        if (handle === review.handle) return review.instance
         throw new Error('store handle is not registered')
       },
     }
   }
   /**
    * 装一个「右栏完整可用」的环境;视口宽度可调(默认宽窗)。
-   * @param over - `width` 调视口;`split` / `bucket` 控制变更审阅 store 的初始分栏状态;
-   *   其余字段覆盖服务桩(显式传 `slots` 即整条替换,用于退化用例)。
+   * @param over - `width` 调视口;其余字段覆盖服务桩(显式传 `slots` 即整条替换,用于退化用例)。
    */
   function env(store, over = {}) {
-    const { width = 1280, split, bucket, ...rest } = over
+    const { width = 1280, ...rest } = over
     globalThis.window.innerWidth = width
-    const review = makeSplitStore({ split, bucket })
     const pressKey = loadPlugin({
       sessions,
       uiSession: { pendingInteractions: { getSnapshot: () => new Map() } },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
-      slots: modeSlots(store, review),
+      slots: modeSlots(store),
       sidebarRight: { toggleExpanded() {} },
       ...rest,
     })
-    return { press: pressKey, layout: () => store.read(), calls: () => store.calls, review }
+    return { press: pressKey, layout: () => store.read(), calls: () => store.calls }
   }
   /** ⌘/Ctrl+S(按 code 判定,与其它键位一致)。 */
   const save = { key: 's', code: 'KeyS', ctrlKey: true }
@@ -227,8 +188,6 @@ console.log('\n--- ⌘/Ctrl+S → 右侧栏切换全屏 ---')
     const caseEnv = env(makeModeStore(), extra)
     const pressed = caseEnv.press(save)
     check(`${label} → 不吞键(no-op)`, pressed.propagationStopped !== true)
-    // 全屏没切成时**不得**顺手改分栏(分栏只随成功的 ⌘/Ctrl+S 同步)
-    check(`${label} → 不同步分栏`, same(caseEnv.review.calls, []), JSON.stringify(caseEnv.review.calls))
   }
 
   // ⑧′ 抛错面:活实例的 getSnapshot / setMode 抛错都被吞掉,只当 no-op(不吞键、不带崩分发器)
@@ -241,16 +200,13 @@ console.log('\n--- ⌘/Ctrl+S → 右侧栏切换全屏 ---')
   event = throwingSnapshot.press(save)
   check('getSnapshot 抛错 → 不吞键(no-op)', event.propagationStopped !== true)
 
-  // 当前标签是 diff 时也一并不动分栏:setMode 抛错 → outcome 为「没做成」,分栏同步整条跳过
+  // setMode 抛错 → 「没做成」:不吞键、不崩分发器
   const throwingMode = makeModeStore()
-  throwingMode.seed(diffLayout())
+  throwingMode.seed(layoutMode())
   const throwingModeInstance = throwingMode.instance
   throwingModeInstance.actions.setMode = () => { throw new Error('sidebarRight: no session surface is mounted') }
-  const throwingModeEnv = env(throwingMode, { split: false })
-  event = throwingModeEnv.press(save)
+  event = env(throwingMode).press(save)
   check('setMode 抛错 → 不吞键(no-op)', event.propagationStopped !== true)
-  check('setMode 抛错 → 也不动分栏(分栏只随成功的全屏切换)', same(throwingModeEnv.review.calls, []),
-    JSON.stringify(throwingModeEnv.review.calls))
 
   // ⑧″ 窄窗而活实例没有 setExpanded(旧 store 面):跳过收起、仍写 push(不因缺一面整条 no-op)
   const narrowNoExpand = makeModeStore()
@@ -271,108 +227,36 @@ console.log('\n--- ⌘/Ctrl+S → 右侧栏切换全屏 ---')
   check('窄窗缺 setExpanded → 不记录收起调用', narrowNoExpand.calls.every((call) => call.action === 'setMode') === true,
     JSON.stringify(narrowNoExpand.calls))
 
-  // ⑧‴ diff 分栏同步:⌘/Ctrl+S 触发时按切换后的**生效全屏**设置当前 diff 标签的左右对比
-  // (分栏是 toggle 语义 → 先读快照里的 split,已是期望值就不写;当前标签不是 diff / 链路不可用
-  //  只跳过分栏,不影响 mode 写入与吞键)
-  const splitOff = makeModeStore()
-  splitOff.seed(diffLayout())
-  const splitOffEnv = env(splitOff, { split: false })
-  event = splitOffEnv.press(save)
-  check('宽窗进全屏 → 当前 diff split false → true',
-    splitOffEnv.review.split() === true && same(splitOffEnv.review.calls, [['toggledSplit', 't-diff']]),
-    JSON.stringify(splitOffEnv.review.calls))
-  check('分栏同步发生在 setMode 之后(先写呈现、再设分栏)',
-    same(splitOffEnv.calls(), [{ action: 'setMode', sessionId: 'sess-b', mode: 'fullscreen' }]), JSON.stringify(splitOffEnv.calls()))
-  check('宽窗进全屏(带分栏同步)被吞', event.propagationStopped === true)
-
-  // 再按一次退出全屏 → 分栏关(上一步已打开,故再写一次 toggle)
-  event = splitOffEnv.press(save)
-  check('宽窗退回 push → 当前 diff split true → false',
-    splitOffEnv.review.split() === false && splitOffEnv.review.calls.length === 2 && splitOffEnv.layout()?.mode === 'push',
-    JSON.stringify(splitOffEnv.review.calls))
-  check('宽窗退回 push 仍被吞', event.propagationStopped === true)
-
-  // 幂等:进全屏时 split 已经是 true → 不盲调
-  const alreadySplit = makeModeStore()
-  alreadySplit.seed(diffLayout())
-  const alreadySplitEnv = env(alreadySplit, { split: true })
-  event = alreadySplitEnv.press(save)
-  check('进全屏时 split 已是 true → 不调 toggledSplit(不盲调)', same(alreadySplitEnv.review.calls, []),
-    JSON.stringify(alreadySplitEnv.review.calls))
-  check('进全屏时 split 已是 true → 仍写 mode 并吞键',
-    alreadySplitEnv.layout()?.mode === 'fullscreen' && event.propagationStopped === true)
-
-  // 幂等:退出全屏时 split 已经是 false → 不盲调
-  const alreadyUnified = makeModeStore()
-  alreadyUnified.seed(diffLayout({ mode: 'fullscreen' }))
-  const alreadyUnifiedEnv = env(alreadyUnified, { split: false })
-  event = alreadyUnifiedEnv.press(save)
-  check('退出全屏时 split 已是 false → 不调 toggledSplit(不盲调)', same(alreadyUnifiedEnv.review.calls, []),
-    JSON.stringify(alreadyUnifiedEnv.review.calls))
-  check('退出全屏时 split 已是 false → 仍写 push 并吞键',
-    alreadyUnifiedEnv.layout()?.mode === 'push' && event.propagationStopped === true)
-
-  // 窄窗:⌘/Ctrl+S = 收起面板(用户看不到全屏)→ 分栏也要关
-  const narrowSplit = makeModeStore()
-  narrowSplit.seed(diffLayout())
-  const narrowSplitEnv = env(narrowSplit, { width: 640, split: true })
-  event = narrowSplitEnv.press(save)
-  check('窄窗(收起面板)退出全屏 → 当前 diff split true → false',
-    narrowSplitEnv.review.split() === false && same(narrowSplitEnv.review.calls, [['toggledSplit', 't-diff']]),
-    JSON.stringify(narrowSplitEnv.review.calls))
-  check('窄窗仍按上游按钮语义「先收起再写 push」并吞键',
-    same(narrowSplitEnv.calls(), [
-      { action: 'setExpanded', sessionId: 'sess-b', expanded: false },
-      { action: 'setMode', sessionId: 'sess-b', mode: 'push' },
-    ]) && event.propagationStopped === true, JSON.stringify(narrowSplitEnv.calls()))
-
-  // 当前标签不是 diff(文件预览 / 终端 / 引导页等)→ 分栏无此页,只写 mode、不动分栏、仍吞键
-  const textTab = makeModeStore()
-  textTab.seed(layoutMode())
-  const textTabEnv = env(textTab, { split: false })
-  event = textTabEnv.press(save)
-  check('当前标签不是 diff → 不碰分栏', same(textTabEnv.review.calls, []), JSON.stringify(textTabEnv.review.calls))
-  check('当前标签不是 diff → 仍写 mode 并吞键',
-    textTabEnv.layout()?.mode === 'fullscreen' && event.propagationStopped === true)
-
-  // 分栏取数链路退化:注册项缺席 / 状态桶缺席 / 快照抛错 → 只跳过分栏,不影响 mode 与吞键
-  const noReviewEntry = makeModeStore()
-  noReviewEntry.seed(diffLayout())
-  const noReviewEnv = env(noReviewEntry, {
-    split: false,
-    slots: {
-      entries: (key) => (key !== 'rightbar.session' ? [] : [{ store: noReviewEntry.handle }]),
-      resolveStore: (handle) => noReviewEntry.instance,
+  // ⑧‴ 只切全屏:即便当前标签是变更审阅 diff、分栏 store 就在链路上,⌘/Ctrl+S 一概不碰分栏
+  // (分栏只归页头「左右对比」按钮与改绑后的 sidebarRight.diffSplit 键位;持续跟随全屏见 dsh-rightbar-diff-split)
+  const reviewCalls = []
+  const reviewStore = {
+    handle: { spec: {} },
+    instance: {
+      getSnapshot: () => ({ byTab: { 't-diff': { split: false } } }),
+      actions: { toggledSplit(tabId) { reviewCalls.push(['toggledSplit', tabId]) } },
     },
-  })
-  event = noReviewEnv.press(save)
-  check('变更审阅注册项缺席 → 仅写 mode、仍吞键、不崩',
-    noReviewEnv.layout()?.mode === 'fullscreen' && event.propagationStopped === true)
-
-  const noBucket = makeModeStore()
-  noBucket.seed(diffLayout())
-  const noBucketEnv = env(noBucket, { split: false, bucket: 'none' })
-  event = noBucketEnv.press(save)
-  check('该 diff 标签还没有状态桶(split 不可知)→ 不猜、不写、不崩',
-    same(noBucketEnv.review.calls, []) && noBucketEnv.layout()?.mode === 'fullscreen' && event.propagationStopped === true,
-    JSON.stringify(noBucketEnv.review.calls))
-
-  const throwingView = makeModeStore()
-  throwingView.seed(diffLayout())
-  const throwingViewEnv = env(throwingView, {
-    split: false,
+  }
+  const diffMode = makeModeStore()
+  diffMode.seed(layoutMode({
+    nodes: { 'pane-1': { kind: 'pane', host: 'dock', id: 'pane-1', tabs: ['t-diff'], activeTabId: 't-diff' } },
+    tabs: { 't-diff': { id: 't-diff', kind: 'changes-review' } },
+  }))
+  const diffModeEnv = env(diffMode, {
     slots: {
       entries: (key) => (key === 'rightbar.session'
-        ? [{ store: throwingView.handle }]
-        : [{ options: { key: '@deepseek-ai/dsh-client-ui-deliverables' }, store: { spec: {} } }]),
-      resolveStore: (handle) => (handle === throwingView.handle
-        ? throwingView.instance
-        : { getSnapshot: () => { throw new Error('store instance disposed') } }),
+        ? [{ store: diffMode.handle }]
+        : [{ options: { key: '@deepseek-ai/dsh-client-ui-deliverables' }, store: reviewStore.handle }]),
+      resolveStore: (handle) => (handle === diffMode.handle ? diffMode.instance : reviewStore.instance),
     },
   })
-  event = throwingViewEnv.press(save)
-  check('变更审阅 store 快照抛错 → 分栏 no-op,仍写 mode 并吞键',
-    throwingViewEnv.layout()?.mode === 'fullscreen' && event.propagationStopped === true)
+  event = diffModeEnv.press(save)
+  check('⌘/Ctrl+S 只切全屏:当前标签是 diff 也不碰分栏(不调 toggledSplit)',
+    reviewCalls.length === 0 && diffModeEnv.layout()?.mode === 'fullscreen' && event.propagationStopped === true,
+    JSON.stringify(reviewCalls))
+  event = diffModeEnv.press(save)
+  check('再按一次(退出全屏)同样不碰分栏',
+    reviewCalls.length === 0 && diffModeEnv.layout()?.mode === 'push', JSON.stringify(reviewCalls))
 
   // ⑨ 三态均可用:⌘/Ctrl+S 是带修饰键的组合,与卡片裸键 / 文本编辑都不冲突
   const editingStore = makeModeStore()
