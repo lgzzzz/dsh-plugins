@@ -798,6 +798,12 @@ var ACTIONS = [
   { id: "sidebarRight.terminal", label: "\u53F3\u4FA7\u680F:\u5B9A\u4F4D\u7EC8\u7AEF\u5E76\u805A\u7126(\u4E0D\u5B58\u5728\u5219\u65B0\u5EFA)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 关当前标签;上游拒关「独占停靠的 guide」时只 no-op——该键位恒吞,不留给浏览器
   { id: "sidebarRight.closeTab", label: "\u53F3\u4FA7\u680F:\u5173\u95ED\u5F53\u524D\u6807\u7B7E", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 变更审阅 diff 页头「左右对比」按钮同一入口;**默认不绑键位**(全屏开关 ⌘/Ctrl+S 触发时
+  // 按生效全屏自动设置它);手动切换只用 localStorage 绑定;当前标签不是该页即 no-op 不吞键
+  { id: "sidebarRight.diffSplit", label: "\u53F3\u4FA7\u680F:diff \u6807\u7B7E\u9875\u5207\u6362\u5DE6\u53F3 / \u5355\u680F\u5BF9\u6BD4(\u9ED8\u8BA4\u672A\u7ED1\u5B9A)", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
+  // 变更审阅与文档预览的「自动换行」按钮同一入口(按当前标签分派);两者都不是即 no-op,
+  // 但该键位**恒吞**(键位完全归插件,不让浏览器弹「添加书签」——见 README 已知限制)
+  { id: "sidebarRight.wrap", label: "\u53F3\u4FA7\u680F:diff / \u6587\u4EF6\u9884\u89C8\u5207\u6362\u81EA\u52A8\u6362\u884C", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // 等同侧栏「新建会话」按钮(uiWorkspace.startSession)
   { id: "session.new", label: "\u65B0\u5EFA\u4F1A\u8BDD\u5E76\u8DF3\u8F6C", group: "\u4F1A\u8BDD", states: ["card", "editing", "browse"] },
   // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
@@ -839,6 +845,12 @@ var DEFAULT_BINDINGS = {
   "sidebarRight.terminal": "mod+l",
   // 逗号 = 关闭标签;按 code 判定(Comma),不受布局影响;无可关标签也吞键(键位不留给浏览器)
   "sidebarRight.closeTab": "mod+,",
+  // D = 换行(与 diff 的 D 同一肌肉记忆);不占 W —— ⌘/Ctrl+W 是浏览器「关闭标签页」,
+  // 多数浏览器不把它派发给页面。该键位恒吞(不让浏览器弹「添加书签」),见 client.ts 与 README
+  "sidebarRight.wrap": "mod+d",
+  // diff 分栏默认**不绑键位**:⌘/Ctrl+S 切换全屏时按生效全屏自动设置;要手动切换用 localStorage
+  // 覆盖(如 {"bindings":{"sidebarRight.diffSplit":"mod+alt+d"}}),空串即「未绑定」(速查表照此展示)
+  "sidebarRight.diffSplit": "",
   // 浏览器保留键(新建窗口)
   "session.new": "mod+n",
   // J = Jump;终端里 ⌃J(LF)不再送给 PTY
@@ -875,7 +887,8 @@ function loadConfig() {
         const obj = parsed;
         if (typeof obj.bindings === "object" && obj.bindings !== null) {
           for (const [id, combo] of Object.entries(obj.bindings)) {
-            if (typeof combo === "string" && combo !== "") bindings[id] = normalizeComboString(combo);
+            if (typeof combo !== "string") continue;
+            bindings[id] = combo === "" ? "" : normalizeComboString(combo);
           }
         }
       }
@@ -1046,30 +1059,35 @@ function isEffectivelyFullscreen(layout, narrow) {
 function nextRightbarMode(effectiveFullscreen) {
   return effectiveFullscreen ? "push" : "fullscreen";
 }
+function visibleFullscreenAfter(narrow, nextMode, collapsed, expandedBefore) {
+  if (!narrow) return nextMode === "fullscreen";
+  return collapsed ? false : expandedBefore !== false;
+}
+var NOT_HANDLED = { handled: false, fullscreen: false };
 function toggleRightSidebarFullscreen(services) {
   var _a, _b;
   const sidebarRight = services.sidebarRight;
-  if (sidebarRight === null || sidebarRight === void 0) return false;
+  if (sidebarRight === null || sidebarRight === void 0) return NOT_HANDLED;
   const sessionId = currentSessionId(services);
-  if (sessionId === void 0) return false;
+  if (sessionId === void 0) return NOT_HANDLED;
   const resolved = resolveRightbarStore(services, sessionId);
-  if (resolved === void 0) return false;
+  if (resolved === void 0) return NOT_HANDLED;
   const layout = (_b = (_a = resolved.snapshot.bySession) == null ? void 0 : _a[sessionId]) == null ? void 0 : _b.layout;
-  if (layout === void 0) return false;
+  if (layout === void 0) return NOT_HANDLED;
   const actions = resolved.instance.actions;
   const setMode = actions == null ? void 0 : actions.setMode;
-  if (actions === void 0 || typeof setMode !== "function") return false;
+  if (actions === void 0 || typeof setMode !== "function") return NOT_HANDLED;
   const narrow = isNarrowViewport();
   const fullscreen = isEffectivelyFullscreen(layout, narrow);
+  const nextMode = nextRightbarMode(fullscreen);
+  const setExpanded = actions.setExpanded;
+  const collapses = fullscreen && narrow && typeof setExpanded === "function";
   try {
-    if (fullscreen && narrow) {
-      const setExpanded = actions.setExpanded;
-      if (typeof setExpanded === "function") setExpanded.call(actions, sessionId, false);
-    }
-    setMode.call(actions, sessionId, nextRightbarMode(fullscreen));
-    return true;
+    if (collapses) setExpanded.call(actions, sessionId, false);
+    setMode.call(actions, sessionId, nextMode);
+    return { handled: true, fullscreen: visibleFullscreenAfter(narrow, nextMode, collapses, layout.expanded) };
   } catch {
-    return false;
+    return NOT_HANDLED;
   }
 }
 
@@ -1354,7 +1372,7 @@ function createOverlays(deps) {
       const key = document.createElement("kbd");
       const fixed = FIXED_KEYS[action.id];
       const combo = config.bindings[action.id];
-      key.textContent = fixed != null ? fixed : combo === void 0 ? "\u672A\u7ED1\u5B9A" : prettyCombo(combo);
+      key.textContent = fixed != null ? fixed : combo === void 0 || combo === "" ? "\u672A\u7ED1\u5B9A" : prettyCombo(combo);
       row.appendChild(label);
       row.appendChild(key);
       container.appendChild(row);
@@ -1950,6 +1968,134 @@ function pendingSessionIds(services) {
   return ids;
 }
 
+// src/rightbar-view.ts
+var PANE_TAB_SLOT = "sidebar.right.pane.tab";
+var REVIEW_ENTRY_KEY = "@deepseek-ai/dsh-client-ui-deliverables";
+var VIEW_ENTRY_BY_KIND = {
+  // ui-deliverables:变更审阅(左右 / 单栏对比 + 换行)
+  "changes-review": REVIEW_ENTRY_KEY,
+  // ui-sidebar-documentpreview:文件 / 文本 / 代码 / Markdown 预览(换行)
+  text: "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"
+};
+function toggleRightSidebarDiffSplit(services) {
+  return toggleActiveTabView(services, "toggledSplit");
+}
+function toggleRightSidebarWrap(services) {
+  return toggleActiveTabView(services, "toggledWrap");
+}
+function setRightSidebarDiffSplit(services, split) {
+  const active = activeRightbarTab(services);
+  if (active === void 0 || active.kind !== "changes-review") return false;
+  const resolved = resolveViewStore(services, REVIEW_ENTRY_KEY);
+  if (resolved === void 0) return false;
+  const toggle = resolved.actions.toggledSplit;
+  if (typeof toggle !== "function") return false;
+  const current = splitOf(resolved.state, active.tabId);
+  if (current === void 0 || current === split) return false;
+  try {
+    ;
+    toggle.call(resolved.actions, active.tabId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function splitOf(state, tabId) {
+  var _a;
+  const bucket = (_a = state.byTab) == null ? void 0 : _a[tabId];
+  if (typeof bucket !== "object" || bucket === null) return void 0;
+  const split = bucket.split;
+  return typeof split === "boolean" ? split : void 0;
+}
+function toggleActiveTabView(services, action) {
+  const active = activeRightbarTab(services);
+  if (active === void 0) return false;
+  const entryKey = active.kind === void 0 ? void 0 : VIEW_ENTRY_BY_KIND[active.kind];
+  if (entryKey === void 0) return false;
+  const resolved = resolveViewStore(services, entryKey);
+  if (resolved === void 0) return false;
+  const toggle = resolved.actions[action];
+  if (typeof toggle !== "function") return false;
+  try {
+    ;
+    toggle.call(resolved.actions, active.tabId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function activeRightbarTab(services) {
+  var _a;
+  const layout = currentRightbarLayout(services);
+  if (layout === void 0) return void 0;
+  const pane = activePane(layout);
+  if (pane === void 0) return void 0;
+  const tabId = pane.activeTabId;
+  if (typeof tabId !== "string" || tabId === "") return void 0;
+  const record = (_a = layout.tabs) == null ? void 0 : _a[tabId];
+  if (record === void 0 || record === null) return void 0;
+  return { tabId, kind: typeof record.kind === "string" ? record.kind : void 0 };
+}
+function activePane(layout) {
+  var _a;
+  const paneId = layout.activePaneId;
+  if (typeof paneId !== "string" || paneId === "") return void 0;
+  const node = (_a = layout.nodes) == null ? void 0 : _a[paneId];
+  if (node === void 0 || node === null || node.kind !== "pane") return void 0;
+  return node;
+}
+function resolveViewStore(services, entryKey) {
+  var _a;
+  const slots = services.slots;
+  if (slots === null || slots === void 0) return void 0;
+  if (typeof slots.entries !== "function" || typeof slots.resolveStore !== "function") return void 0;
+  const sessionId = currentSessionId(services);
+  if (sessionId === void 0) return void 0;
+  const binding = sessionScopeBinding(services, sessionId);
+  if (binding === void 0) return void 0;
+  for (const entry of entriesOf4(slots)) {
+    if (entry === void 0 || entry === null) continue;
+    if (((_a = entry.options) == null ? void 0 : _a.key) !== entryKey) continue;
+    const handle = entry.store;
+    if (handle === void 0 || handle === null) continue;
+    let instance;
+    try {
+      instance = slots.resolveStore(handle, binding);
+    } catch {
+      continue;
+    }
+    const resolved = asViewStore(instance);
+    if (resolved !== void 0) return resolved;
+  }
+  return void 0;
+}
+function entriesOf4(slots) {
+  var _a;
+  try {
+    const entries = (_a = slots.entries) == null ? void 0 : _a.call(slots, PANE_TAB_SLOT);
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+function asViewStore(instance) {
+  if (typeof instance !== "object" || instance === null) return void 0;
+  const getSnapshot = instance.getSnapshot;
+  if (typeof getSnapshot !== "function") return void 0;
+  let snapshot;
+  try {
+    snapshot = getSnapshot.call(instance);
+  } catch {
+    return void 0;
+  }
+  if (typeof snapshot !== "object" || snapshot === null) return void 0;
+  const byTab = snapshot.byTab;
+  if (typeof byTab !== "object" || byTab === null || Array.isArray(byTab)) return void 0;
+  const actions = instance.actions;
+  if (typeof actions !== "object" || actions === null) return void 0;
+  return { actions, state: snapshot };
+}
+
 // src/sidebar-tabs.ts
 var FILES_KIND = "files";
 var FILES_PAGE_ADDRESS = "sidebar://files";
@@ -2224,8 +2370,11 @@ function runAction(id, services, overlays) {
         return toggleSidebar(services);
       case "sidebarRight.toggle":
         return toggleRightSidebar(services);
-      case "sidebarRight.fullscreen":
-        return toggleRightSidebarFullscreen(services);
+      case "sidebarRight.fullscreen": {
+        const outcome = toggleRightSidebarFullscreen(services);
+        if (outcome.handled) setRightSidebarDiffSplit(services, outcome.fullscreen);
+        return outcome.handled;
+      }
       case "sidebarRight.tabPrev":
         return cycleRightSidebarTab(services, -1);
       case "sidebarRight.tabNext":
@@ -2236,6 +2385,10 @@ function runAction(id, services, overlays) {
         return revealRightSidebarTerminal(services);
       case "sidebarRight.closeTab":
         return closeRightSidebarTab(services);
+      case "sidebarRight.diffSplit":
+        return toggleRightSidebarDiffSplit(services);
+      case "sidebarRight.wrap":
+        return toggleRightSidebarWrap(services);
       case "composer.focus":
         return focusComposer(services);
       case "session.new":
@@ -2362,6 +2515,11 @@ function apply(ctx) {
     if (def === void 0) return;
     if (!def.states.includes(state)) return;
     if (actionId === "sidebarRight.closeTab") {
+      runAction(actionId, services, overlays);
+      swallow(event);
+      return;
+    }
+    if (actionId === "sidebarRight.wrap") {
       runAction(actionId, services, overlays);
       swallow(event);
       return;

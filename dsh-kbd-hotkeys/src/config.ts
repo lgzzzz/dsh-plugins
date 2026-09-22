@@ -34,6 +34,12 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'sidebarRight.terminal', label: '右侧栏:定位终端并聚焦(不存在则新建)', group: '会话', states: ['card', 'editing', 'browse'] },
   // 关当前标签;上游拒关「独占停靠的 guide」时只 no-op——该键位恒吞,不留给浏览器
   { id: 'sidebarRight.closeTab', label: '右侧栏:关闭当前标签', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 变更审阅 diff 页头「左右对比」按钮同一入口;**默认不绑键位**(全屏开关 ⌘/Ctrl+S 触发时
+  // 按生效全屏自动设置它);手动切换只用 localStorage 绑定;当前标签不是该页即 no-op 不吞键
+  { id: 'sidebarRight.diffSplit', label: '右侧栏:diff 标签页切换左右 / 单栏对比(默认未绑定)', group: '会话', states: ['card', 'editing', 'browse'] },
+  // 变更审阅与文档预览的「自动换行」按钮同一入口(按当前标签分派);两者都不是即 no-op,
+  // 但该键位**恒吞**(键位完全归插件,不让浏览器弹「添加书签」——见 README 已知限制)
+  { id: 'sidebarRight.wrap', label: '右侧栏:diff / 文件预览切换自动换行', group: '会话', states: ['card', 'editing', 'browse'] },
   // 等同侧栏「新建会话」按钮(uiWorkspace.startSession)
   { id: 'session.new', label: '新建会话并跳转', group: '会话', states: ['card', 'editing', 'browse'] },
   // mod+J 焦点跳回输入框;editing 仅在焦点不在 composer 内时执行
@@ -80,6 +86,12 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, string>> = {
   'sidebarRight.terminal': 'mod+l',
   // 逗号 = 关闭标签;按 code 判定(Comma),不受布局影响;无可关标签也吞键(键位不留给浏览器)
   'sidebarRight.closeTab': 'mod+,',
+  // D = 换行(与 diff 的 D 同一肌肉记忆);不占 W —— ⌘/Ctrl+W 是浏览器「关闭标签页」,
+  // 多数浏览器不把它派发给页面。该键位恒吞(不让浏览器弹「添加书签」),见 client.ts 与 README
+  'sidebarRight.wrap': 'mod+d',
+  // diff 分栏默认**不绑键位**:⌘/Ctrl+S 切换全屏时按生效全屏自动设置;要手动切换用 localStorage
+  // 覆盖(如 {"bindings":{"sidebarRight.diffSplit":"mod+alt+d"}}),空串即「未绑定」(速查表照此展示)
+  'sidebarRight.diffSplit': '',
   // 浏览器保留键(新建窗口)
   'session.new': 'mod+n',
   // J = Jump;终端里 ⌃J(LF)不再送给 PTY
@@ -126,7 +138,9 @@ export function loadConfig(): HotkeyConfig {
         const obj = parsed as Record<string, unknown>
         if (typeof obj.bindings === 'object' && obj.bindings !== null) {
           for (const [id, combo] of Object.entries(obj.bindings as Record<string, unknown>)) {
-            if (typeof combo === 'string' && combo !== '') bindings[id] = normalizeComboString(combo)
+            if (typeof combo !== 'string') continue
+            // 空串 = 取消绑定(与 DEFAULT_BINDINGS 里的 '' 同义);非空串归一化成组合键
+            bindings[id] = combo === '' ? '' : normalizeComboString(combo)
           }
         }
       }

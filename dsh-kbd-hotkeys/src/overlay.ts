@@ -162,7 +162,8 @@ export function createOverlays(deps: OverlayDeps): OverlayHost {
       const key = document.createElement('kbd')
       const fixed = FIXED_KEYS[action.id]
       const combo = config.bindings[action.id]
-      key.textContent = fixed ?? (combo === undefined ? '未绑定' : prettyCombo(combo))
+      // 空串 = 默认不绑键位(如 diff 分栏,只在 ⌘/Ctrl+S 触发时同步);未进 config 的动作同理
+      key.textContent = fixed ?? (combo === undefined || combo === '' ? '未绑定' : prettyCombo(combo))
       row.appendChild(label)
       row.appendChild(key)
       container.appendChild(row)

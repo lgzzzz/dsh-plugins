@@ -200,6 +200,8 @@ export interface StoreHandleLike {
 
 /** slots 注册项(store handle 挂在这里)。 */
 export interface SlotEntryLike {
+  /** 注册选项(keyed slot 的 cell key 在这里;用于按实现包身份认注册项)。 */
+  options?: { key?: string; id?: string; order?: number; priority?: number }
   store?: StoreHandleLike
   /** chain slot 路由选择器(注册项自带)。 */
   select?(owner: unknown): unknown
@@ -361,6 +363,26 @@ export interface SidebarRightSurfaceActionsLike {
 /** resolveStore 返回的活实例:除快照外还要 actions 才能写。 */
 export interface SidebarRightStoreLike extends StoreInstanceLike {
   actions?: SidebarRightSurfaceActionsLike
+}
+
+/* ---- 右栏「变更审阅」diff / 文档预览的视图开关(⌘/Ctrl+D 换行;diff 分栏由 ⌘/Ctrl+S 触发同步) ---- */
+
+/** 视图 store 的写面(tabId = 右栏标签 id;两侧的按钮走同一入口)。 */
+export interface RightbarViewActionsLike {
+  /** 变更审阅:左右对比 ⇄ 单栏对比。 */
+  toggledSplit?(tabId: string): void
+  /** 变更审阅 / 文档预览:自动换行开关。 */
+  toggledWrap?(tabId: string): void
+}
+
+/** 一个页 body 的会话级 store 快照:byTab[tabId] 为该标签的视图状态桶。 */
+export interface RightbarViewStateLike {
+  byTab?: Readonly<Record<string, unknown>>
+}
+
+/** resolveStore 返回的视图 store 活实例。 */
+export interface RightbarViewStoreLike extends StoreInstanceLike {
+  actions?: RightbarViewActionsLike
 }
 
 /* ---- 输入框聚焦(⌘/Ctrl+J):conversation → composer editor ---- */

@@ -11,10 +11,23 @@
  * 面板已收起时仍照常写 mode:presentation 会丢弃失焦的 push 轨道
  * (`track = shown && !autoFullscreen`),下次展开即按新 mode 呈现。这是上游按钮语义的**超集**:
  * 收起态按钮虽在 DOM 中,却被上游 CSS(`visibility:hidden` + 平移出可视区)藏起来、点不到。
+ *
+ * 本动作比上游按钮多一步**分栏同步**:返回切换后的生效全屏状态,由分发器在**这次触发时**
+ * 让当前 diff 标签的左右对比 = 生效全屏(全屏 → 开、退出 → 关;见 `rightbar-view.ts` 的
+ * `setRightSidebarDiffSplit`)。分栏**不订阅**全屏变化、也不按标签切换自动跟随,
+ * 只在 ⌘/Ctrl+S 触发时设置一次。
  */
 import type { Services, SidebarRightDockMode, SidebarRightLayoutLike } from './types.ts'
 import { resolveRightbarStore } from './rightbar-layout.ts'
 import { currentSessionId } from './session-view.ts'
+
+/** ⌘/Ctrl+S 的结果:是否已切换、以及切换后的生效全屏状态。 */
+export interface FullscreenToggleOutcome {
+  /** `setMode` 是否已发出(分发器据此决定吞键)。 */
+  handled: boolean
+  /** 切换后用户实际看到的全屏状态(`handled` 为 false 时无意义,恒 false)。 */
+  fullscreen: boolean
+}
 
 /** 上游 sidebar-right 的自动全屏断点(未导出常量,值取自其 `RightbarSeat` 的 `viewportWidth < 768`)。
  * 上游该值是框架测量的**框架元素**宽度(`window.innerWidth` 起量后被 AppFrame 的 ResizeObserver
@@ -41,36 +54,50 @@ function nextRightbarMode(effectiveFullscreen: boolean): SidebarRightDockMode {
 }
 
 /**
+ * 切换后用户**实际看到**的全屏状态(供 diff 分栏同步取用)。
+ * 宽窗只看刚写入的手动 mode;窄窗上游 `autoFullscreen` 恒真,只有面板被收起才算退出全屏
+ * (收起分支不可用时面板仍留在全屏)。
+ */
+function visibleFullscreenAfter(narrow: boolean, nextMode: SidebarRightDockMode, collapsed: boolean, expandedBefore: boolean | undefined): boolean {
+  if (!narrow) return nextMode === 'fullscreen'
+  return collapsed ? false : expandedBefore !== false
+}
+
+/** 动作没做成(链路任一环不可用):不吞键、不设置分栏。 */
+const NOT_HANDLED: FullscreenToggleOutcome = { handled: false, fullscreen: false }
+
+/**
  * ⌘/Ctrl+S:切换右栏的 fullscreen(生效全屏 ⇄ 手动 push)。任一环不可用即 no-op 不吞键:
  * 无 `sidebarRight` 服务、该会话尚无 `rightbar.session` store 活实例或布局、活实例缺 `setMode`。
  * @param services - 插件解析后的服务集合。
- * @returns 是否已发出 `setMode`/`setExpanded`(吞键由分发器据此决定)。
+ * @returns 是否已发出 `setMode`/`setExpanded`(吞键由分发器据此决定)与切换后的生效全屏状态
+ *   (分发器在触发时据此同步 diff 分栏;**不订阅**全屏变化,分栏只在这次触发时设置)。
  */
-export function toggleRightSidebarFullscreen(services: Services): boolean {
+export function toggleRightSidebarFullscreen(services: Services): FullscreenToggleOutcome {
   const sidebarRight = services.sidebarRight
-  if (sidebarRight === null || sidebarRight === undefined) return false
+  if (sidebarRight === null || sidebarRight === undefined) return NOT_HANDLED
   const sessionId = currentSessionId(services)
-  if (sessionId === undefined) return false
+  if (sessionId === undefined) return NOT_HANDLED
   // 会话 id 显式下传:布局与活实例共用同一次解析目标(上游无「按会话取 store」的服务面)
   const resolved = resolveRightbarStore(services, sessionId)
-  if (resolved === undefined) return false
+  if (resolved === undefined) return NOT_HANDLED
   const layout = resolved.snapshot.bySession?.[sessionId]?.layout
-  if (layout === undefined) return false
+  if (layout === undefined) return NOT_HANDLED
   const actions = resolved.instance.actions
   const setMode = actions?.setMode
-  if (actions === undefined || typeof setMode !== 'function') return false
+  if (actions === undefined || typeof setMode !== 'function') return NOT_HANDLED
 
   const narrow = isNarrowViewport()
   const fullscreen = isEffectivelyFullscreen(layout, narrow)
+  const nextMode = nextRightbarMode(fullscreen)
+  // 窄窗退出全屏 = 收起面板(上游按钮的 autoFullscreen 分支),否则面板不真正退出全屏
+  const setExpanded = actions.setExpanded
+  const collapses = fullscreen && narrow && typeof setExpanded === 'function'
   try {
-    // 窄窗退出全屏 = 收起面板(上游按钮的 autoFullscreen 分支),否则面板不真正退出全屏
-    if (fullscreen && narrow) {
-      const setExpanded = actions.setExpanded
-      if (typeof setExpanded === 'function') setExpanded.call(actions, sessionId, false)
-    }
-    setMode.call(actions, sessionId, nextRightbarMode(fullscreen))
-    return true
+    if (collapses) (setExpanded as (sessionId: string, expanded: boolean) => void).call(actions, sessionId, false)
+    setMode.call(actions, sessionId, nextMode)
+    return { handled: true, fullscreen: visibleFullscreenAfter(narrow, nextMode, collapses, layout.expanded) }
   } catch {
-    return false
+    return NOT_HANDLED
   }
 }

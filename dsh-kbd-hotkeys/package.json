@@ -2,7 +2,7 @@
   "name": "dsh-kbd-hotkeys",
   "version": "1.0.0",
   "private": true,
-  "description": "Local persistent Web plugin: global keyboard hotkeys with three-state dispatch (card / editing / browse) — approval and question keyboarding, sidebar toggles, right-sidebar tab switch/close/files/terminal, session navigation and new session, workspace / recent-session / model pickers, thinking-effort cycle, composer focus, cheatsheet. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "description": "Local persistent Web plugin: global keyboard hotkeys with three-state dispatch (card / editing / browse) — approval and question keyboarding, sidebar toggles, right-sidebar tab switch/close/files/terminal, changes-review diff split and diff/file-preview line wrap, session navigation and new session, workspace / recent-session / model pickers, thinking-effort cycle, composer focus, cheatsheet. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
   "type": "module",
   "exports": {
     ".": {

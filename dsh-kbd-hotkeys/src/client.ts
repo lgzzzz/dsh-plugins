@@ -19,6 +19,7 @@ import { toggleRightSidebarFullscreen } from './fullscreen.ts'
 import { cycleEffort, modelPickerView, selectModel } from './model-picker.ts'
 import { createOverlays, type OverlayHost } from './overlay.ts'
 import { openRecentSession, recentSessionsView } from './recent-sessions.ts'
+import { setRightSidebarDiffSplit, toggleRightSidebarDiffSplit, toggleRightSidebarWrap } from './rightbar-view.ts'
 import { closeRightSidebarTab, cycleRightSidebarTab, revealRightSidebarFiles, revealRightSidebarTerminal } from './sidebar-tabs.ts'
 import { switchWorkspace, workspaceRows } from './workspace-switcher.ts'
 import type { ClientContext, ConversationLike, LayoutLike, ModelDirectoryResolverLike, Services, SessionsLike, SidebarRightLike, SlotsLike, UiSessionLike, UiWorkspaceLike, WorkspacesLike } from './types.ts'
@@ -47,9 +48,14 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
         return toggleSidebar(services)
       case 'sidebarRight.toggle':
         return toggleRightSidebar(services)
-      case 'sidebarRight.fullscreen':
+      case 'sidebarRight.fullscreen': {
         // 右栏全屏开关(生效全屏 ⇄ push);与面板 chrome 的全屏按钮同一入口
-        return toggleRightSidebarFullscreen(services)
+        const outcome = toggleRightSidebarFullscreen(services)
+        // diff 分栏只在**这次 ⌘/Ctrl+S 触发时**设置:切换后是全屏 → 开分栏,否则 → 关分栏。
+        // 不订阅全屏变化、不随标签切换跟随;分栏同步失败不影响吞键(吞键只由 setMode 是否发出决定)
+        if (outcome.handled) setRightSidebarDiffSplit(services, outcome.fullscreen)
+        return outcome.handled
+      }
       case 'sidebarRight.tabPrev':
         return cycleRightSidebarTab(services, -1)
       case 'sidebarRight.tabNext':
@@ -63,6 +69,12 @@ function runAction(id: string, services: Services, overlays: OverlayHost): boole
       case 'sidebarRight.closeTab':
         // 关当前标签:上游自带拒绝(独占 guide)时读回布局判定;返回值被分发器忽略(该键位恒吞)
         return closeRightSidebarTab(services)
+      case 'sidebarRight.diffSplit':
+        // 变更审阅 diff:左右对比 ⇄ 单栏对比(默认不绑键位;⌘/Ctrl+S 全屏触发时另有同步)
+        return toggleRightSidebarDiffSplit(services)
+      case 'sidebarRight.wrap':
+        // 自动换行(⌘/Ctrl+D):当前标签是 diff 或文件预览时切换;两者都不是即 no-op(该键位恒吞)
+        return toggleRightSidebarWrap(services)
       case 'composer.focus':
         return focusComposer(services)
       case 'session.new':
@@ -212,6 +224,13 @@ export function apply(ctx: ClientContext): void {
     if (!def.states.includes(state)) return
     // ⌘/Ctrl+,:该键位恒归插件——没有可关的标签也吞键(macOS 的 ⌘, 是浏览器「设置」)
     if (actionId === 'sidebarRight.closeTab') {
+      runAction(actionId, services, overlays)
+      swallow(event)
+      return
+    }
+    // ⌘/Ctrl+D(换行):该键位恒归插件——当前标签不是 diff / 文件预览也吞键(键位完全归插件,
+    // 不让浏览器弹「添加书签」)。想交回浏览器就改绑 / 取消绑定。
+    if (actionId === 'sidebarRight.wrap') {
       runAction(actionId, services, overlays)
       swallow(event)
       return
