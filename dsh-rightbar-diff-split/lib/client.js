@@ -211,13 +211,9 @@ function isPlainObject(value) {
 
 // src/diff-split.ts
 function createDiffSplitSync(services, options = {}) {
-  let lastDiffTabId;
-  let lastFullscreen;
-  let pendingTabId;
-  let pendingSessionId;
-  let retryArmed = false;
+  let fullscreen;
   let writes = 0;
-  let lastOutcome = "idle";
+  let lastOutcome = "unavailable";
   function record(outcome) {
     lastOutcome = outcome;
     return outcome;
@@ -235,126 +231,38 @@ function createDiffSplitSync(services, options = {}) {
     if (layout === void 0) return void 0;
     return activeTabOf(layout);
   }
-  function armPending(sessionId, tabId) {
-    pendingSessionId = sessionId;
-    pendingTabId = tabId;
-    const requestRetry = options.requestRetry;
-    if (retryArmed || typeof requestRetry !== "function") return;
-    retryArmed = true;
-    requestRetry(() => {
-      retryArmed = false;
-      flushPending();
-    });
-  }
-  function clearPending() {
-    pendingTabId = void 0;
-    pendingSessionId = void 0;
-  }
-  function apply2() {
-    var _a, _b, _c;
+  function drive() {
+    var _a, _b;
     const sessionId = currentSessionId(services);
     if (sessionId === void 0) return record("unavailable");
-    const fullscreen = readFullscreen();
-    if (fullscreen === void 0) return record("unavailable");
+    const desired = readFullscreen();
+    if (desired === void 0) return record("unavailable");
+    fullscreen = desired;
     const active = currentActiveTab(sessionId);
     if (active === void 0 || active.kind !== CHANGES_REVIEW_KIND) return record("no-target");
     const review = resolveReviewStore(services, sessionId);
     if (review === void 0) return record("unavailable");
     const toggle = review.actions.toggledSplit;
     if (typeof toggle !== "function") return record("unavailable");
-    if (bucketOf(review.snapshot, active.id) === void 0) {
-      armPending(sessionId, active.id);
-      (_a = options.log) == null ? void 0 : _a.call(options, "deferred", { tabId: active.id });
-      return record("deferred");
-    }
+    if (bucketOf(review.snapshot, active.id) === void 0) return record("no-bucket");
     const current = splitOf(review.snapshot, active.id);
-    if (current === void 0) {
-      clearPending();
-      return record("unknown");
-    }
-    if (current === fullscreen) {
-      clearPending();
-      return record("aligned");
-    }
+    if (current === void 0) return record("unknown");
+    if (current === desired) return record("aligned");
     try {
       ;
       toggle.call(review.actions, active.id);
     } catch (error) {
-      armPending(sessionId, active.id);
-      (_b = options.log) == null ? void 0 : _b.call(options, "write-failed", { tabId: active.id, error: String(error) });
-      return record("deferred");
+      (_a = options.log) == null ? void 0 : _a.call(options, "write-failed", { tabId: active.id, error: String(error) });
+      return record("write-failed");
     }
     writes += 1;
-    clearPending();
-    (_c = options.log) == null ? void 0 : _c.call(options, "write", { tabId: active.id, split: fullscreen });
+    (_b = options.log) == null ? void 0 : _b.call(options, "write", { tabId: active.id, split: desired });
     return record("written");
   }
-  function checkTabEvent() {
-    var _a;
-    const sessionId = currentSessionId(services);
-    if (sessionId === void 0) return record("unchanged");
-    const active = currentActiveTab(sessionId);
-    if (active === void 0) return record("unchanged");
-    if (active.kind !== CHANGES_REVIEW_KIND) {
-      lastDiffTabId = void 0;
-      return record("no-target");
-    }
-    if (active.id === lastDiffTabId) return record("unchanged");
-    const opened = lastDiffTabId === void 0;
-    lastDiffTabId = active.id;
-    (_a = options.log) == null ? void 0 : _a.call(options, opened ? "open" : "switch", { tabId: active.id });
-    return apply2();
-  }
-  function flushPending() {
-    const tabId = pendingTabId;
-    if (tabId === void 0) return record("idle");
-    const sessionId = currentSessionId(services);
-    if (sessionId === void 0 || sessionId !== pendingSessionId) {
-      clearPending();
-      return record("idle");
-    }
-    const active = currentActiveTab(sessionId);
-    if (active !== void 0 && (active.kind !== CHANGES_REVIEW_KIND || active.id !== tabId)) {
-      clearPending();
-      return record("idle");
-    }
-    return apply2();
-  }
   return {
-    apply: apply2,
-    notifyLayout() {
-      var _a;
-      const fullscreen = readFullscreen();
-      if (fullscreen !== void 0) {
-        const flipped = lastFullscreen !== void 0 && fullscreen !== lastFullscreen;
-        if (flipped) {
-          (_a = options.log) == null ? void 0 : _a.call(options, "fullscreen", { fullscreen });
-          apply2();
-        }
-        lastFullscreen = fullscreen;
-      }
-      checkTabEvent();
-    },
-    notifyRightbar() {
-      checkTabEvent();
-    },
-    notifyReview() {
-      flushPending();
-    },
-    notifyEntries() {
-      flushPending();
-    },
-    notifySession() {
-      lastDiffTabId = void 0;
-      clearPending();
-      checkTabEvent();
-    },
-    flushPending,
-    hasPending() {
-      return pendingTabId !== void 0;
-    },
+    drive,
     state() {
-      return { lastDiffTabId, lastFullscreen, pendingTabId, pendingSessionId, writes, lastOutcome };
+      return { fullscreen, writes, lastOutcome };
     }
   };
 }
@@ -388,19 +296,19 @@ function createSubscriptionHub(deps) {
       var _a, _b, _c, _d;
       disposeAll();
       const services = deps.services;
-      attach((_a = resolveLayoutStore(services)) == null ? void 0 : _a.instance, deps.onLayout);
+      attach((_a = resolveLayoutStore(services)) == null ? void 0 : _a.instance, deps.onNotify);
       const sessionId = currentSessionId(services);
       if (sessionId !== void 0) {
-        attach((_b = resolveRightbarStore(services, sessionId)) == null ? void 0 : _b.instance, deps.onRightbar);
-        attach((_c = resolveReviewStore(services, sessionId)) == null ? void 0 : _c.instance, deps.onReview);
+        attach((_b = resolveRightbarStore(services, sessionId)) == null ? void 0 : _b.instance, deps.onNotify);
+        attach((_c = resolveReviewStore(services, sessionId)) == null ? void 0 : _c.instance, deps.onNotify);
       }
-      attach((_d = services.uiSession) == null ? void 0 : _d.current, deps.onSession);
+      attach((_d = services.uiSession) == null ? void 0 : _d.current, deps.onRebuild);
       const slots = services.slots;
       const subscribeSlots = slots == null ? void 0 : slots.subscribe;
       if (slots !== void 0 && slots !== null && typeof subscribeSlots === "function") {
         for (const key of [ROOT_SLOT, RIGHTBAR_SLOT, PANE_TAB_SLOT]) {
           try {
-            const dispose = subscribeSlots.call(slots, key, deps.onEntries);
+            const dispose = subscribeSlots.call(slots, key, deps.onRebuild);
             if (typeof dispose === "function") disposers.push(dispose);
           } catch {
           }
@@ -426,49 +334,28 @@ function getService(ctx, serviceName) {
   }
   return value === null || value === void 0 ? void 0 : value;
 }
-function scheduleRetry(flush) {
-  const raf = globalThis.requestAnimationFrame;
-  if (typeof raf === "function") {
-    raf(() => {
-      flush();
-    });
-    return;
-  }
-  setTimeout(() => {
-    flush();
-  }, 0);
-}
 function apply(ctx) {
   const services = {
     slots: getService(ctx, "slots"),
     sessions: getService(ctx, "sessions"),
     uiSession: getService(ctx, "uiSession")
   };
-  const core = createDiffSplitSync(services, { requestRetry: scheduleRetry });
+  const core = createDiffSplitSync(services);
   let hub;
   hub = createSubscriptionHub({
     services,
-    onLayout: () => {
-      core.notifyLayout();
+    // A/B/E:三份 store 的任意一次提交 → 就地回正(同一次同步通知内完成)
+    onNotify: () => {
+      core.drive();
     },
-    onRightbar: () => {
-      core.notifyRightbar();
-    },
-    onReview: () => {
-      core.notifyReview();
-    },
-    // 座位晚到 / 重注册:先重建订阅(拿新实例),再尝试解除待完成
-    onEntries: () => {
+    // C/D:订阅拓扑变了 → 先重建订阅(拿新实例、先全量退订),再回正
+    onRebuild: () => {
       hub == null ? void 0 : hub.rebuild();
-      core.notifyEntries();
-    },
-    // 换会话:会话级快照先作废并重新判定,再重建会话级订阅
-    onSession: () => {
-      core.notifySession();
-      hub == null ? void 0 : hub.rebuild();
+      core.drive();
     }
   });
   hub.rebuild();
+  core.drive();
   if (typeof ctx.effect === "function") {
     ctx.effect(() => () => {
       hub == null ? void 0 : hub.dispose();
