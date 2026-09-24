@@ -1,0 +1,20 @@
+{
+  "name": "normal-plugin",
+  "version": "1.0.0",
+  "description": "示例插件",
+  "type": "module",
+  "main": "index.ts",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}
