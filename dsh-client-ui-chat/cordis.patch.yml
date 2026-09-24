@@ -1,0 +1,3 @@
+- insert:
+    - id: ui-chat
+      name: dsh-client-ui-chat

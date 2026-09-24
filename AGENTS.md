@@ -30,12 +30,15 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 
 ## 插件清单
 
-仓库含 **11 个插件目录**。每个插件在 web Profile 中对应 **1 条 `link:` 依赖**与
-**1 项 `dsh.profile.bundles`**（bundles 另含 2 个上游 bundle：`@deepseek-ai/dsh-base`、
+仓库含 **12 个插件目录**。其中 `dsh-client-ui-chat` 是上游内置包的**同名本地副本**：它在
+Profile 里的 `link:` 用上游包名 `@deepseek-ai/dsh-client-ui-chat` 顶掉官方实现，不与官方
+行并存。其余插件在 web Profile 中各对应 **1 条 `link:` 依赖**与 **1 项
+`dsh.profile.bundles`**（bundles 另含 2 个上游 bundle：`@deepseek-ai/dsh-base`、
 `@deepseek-ai/dsh-web-app`）。
 
 | 目录 | 形态 | 说明 |
 | --- | --- | --- |
+| `dsh-client-ui-chat` | Fork（TS；浏览器半部逐字复制上游；**唯一顶替上游行**） | 内置 Chat 会话目标（`@deepseek-ai/dsh-client-ui-chat`）的本地副本：`link:` 用**同一个包名**换实现，`cordis.patch.yml` 以**同一个 entry id** `insert` 一行，由 Loader 按 id 收敛只挂一次（既非 `disabled` 也非第二个 id）；`src/` 逐字等于上游 `packages/client/ui-chat/src/`，唯一差异是宿主入口 `index.ts` 移到包根（4 处 `./chat-settings.ts` → `./src/chat-settings.ts`），可用 `diff -rq` 复核；`scripts/build-client.mjs` 把 18 份 CSS Modules 内联进单文件产物，并以 require 闸门等价替代上游跨插件取值检查 |
 | `dsh-code-card-fonts` | Client only（TS；宿主占位） | 卡片标题 / 摘要行 / 展开内容 / 代码块 / 内联代码 / Markdown 表格单元格统一 14px，卡片间距 7px；**不覆盖**内容字号轴 `--dsh-content-font-size`，设置里的「字号大小」仍可调 |
 | `dsh-desktop-notify` | Client only（TS；宿主占位；**唯一声明 external**） | 桌面通知：设置 →「通用」的开关行（`settings.general.item`）做授权 + 开关；订阅 `ctx.uiSession.sessionStatus`，页面不在前台时对顶层会话的「回合结束」（`running` true→false）与「等你处理」（`pendingInteraction` 出现 / 换 key）发系统通知；`react` 作 external（平台 seed 词），自声明 `src/react.d.ts` 切片 |
 | `dsh-directory-picker-browse` | Patch only（无代码） | `disabled` 停用上游 `directory-picker`，`insert` 挂载 browse 变体；**不触碰** `ui-deliverables`（上游 turn-tail 产物面） |
@@ -77,7 +80,8 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
   `dsh-rightbar-fonts`、`dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`、
   `dsh-sidebar-default-collapsed`、`dsh-desktop-notify`、`dsh-header-action-order`、
   `dsh-rightbar-diff-split`），其
-  `exports["."]` 指向的 `index.ts` 也必须是合法加载项（当前为空宿主 `apply() {}`）
+  `exports["."]` 指向的 `index.ts` 也必须是合法加载项（当前为空宿主 `apply() {}`；
+  例外是 `dsh-client-ui-chat`，它的宿主非空——向 user-settings 注册 Chat 设置段）
   ——`dsh-client-modules` 靠扫描这些 Loader 条目发现声明了 `dsh.client.platform: "web"` 的包。
 - 依赖注入：TS 宿主半部不在代码中静态 `export inject`，宿主服务由挂载行 `inject`
   声明；浏览器半部按需 `export const inject = [...]`（由模块加载器读取）。
@@ -95,9 +99,14 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
   `staticModules` 含 `react` / `react/jsx-runtime`，故 `require('react')` 由工厂的
   `require` 命中宿主同一份实例，无需 Profile 侧声明 `dsh.client.external`）；
   `@deepseek-ai/*` 的客户端 import 均为 type-only，运行时服务一律经 `ctx.get(name)` 取用。
+  例外：`dsh-client-ui-chat` 不在 `package.json` 声明 `dsh.client.external`，它的 external
+  由 `scripts/build-client.mjs` 的**平台模块表基线**（`PLATFORM_MODULES`：react /
+  react-dom / cordis / client-store / ui-slots / ui-primitives / ui-dockkit，与内置
+  ui-chat 产物实际 `require` 的名字一致）在 esbuild 层固定，其余第三方实现全部内联；
+  实现依赖（如 `@tanstack/react-virtual`）因此必须能被 esbuild 解析到。
 - `@types/react` 不在 dsh 内置 bundle 里：需要 react 的插件与 `dsh-client-ui-slots`
   等类型包同理，在源码里自声明结构切片（模板：`dsh-desktop-notify/src/react.d.ts`）。
-- 两种构建流派（产物等价）：esbuild JS API（`dsh-code-card-fonts`）；
+- 两种构建流派（产物等价）：esbuild JS API（`dsh-code-card-fonts`、`dsh-client-ui-chat`）；
   直接执行平台二进制（`dsh-rightbar-fonts`、`dsh-rightbar-tab-width`、`dsh-kbd-hotkeys`、
   `dsh-sidebar-default-collapsed`、`dsh-desktop-notify`、`dsh-header-action-order`、
   `dsh-rightbar-diff-split`）——JS API 以 stdin/stdout 管道与子进程通信，受限
@@ -107,7 +116,11 @@ Cordis 定义只存在于进程内存、重启即失效，需要长期保留的�
 
 `~/.dsh/profiles/web/package.json`：
 
-- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件，与插件目录一一对应；
+- `dependencies` 以 `link:<仓库根>/<name>` 指向仓库内各插件，与插件目录一一对应
+  （唯一例外是 `dsh-client-ui-chat`：`link:` 目标仍是仓库目录，但**依赖名 = 上游包名**
+  `@deepseek-ai/dsh-client-ui-chat`，靠 Profile 作用域的符号链接先于 runtime resolution
+  拦截层命中；它同时以**上游同一个 entry id** `insert` 一行，由 Loader 按 id 收敛顶掉
+  官方行，既不用 `disabled` 也不会挂两次——详见该插件 `README.md`）；
 - `dsh.profile.bundles` = 2 个上游 bundle + 每个本地插件一项；
 - `dsh.profile.patchReload: live`：仅热重载 Profile 自身的 `cordis.patch.yml`；bundle
   层为常驻挂载，不支持热重载。
@@ -159,6 +172,7 @@ curl -s -N --max-time 3 http://127.0.0.1:3080/plugins/events | head -c 2000   # 
 
 | 插件 | 命令 | 说明 |
 | --- | --- | --- |
+| `dsh-client-ui-chat` | `npm run typecheck && npm run build && npm run check`；`node test-boot.mjs` | esbuild（JS API）→ `lib/client.js`；`typecheck` 分两面：浏览器面 `tsconfig.json`（**不开** `erasableSyntaxOnly`，上游源码用了构造函数参数属性）与宿主面 `tsconfig.host.json`（开）；`build-client.mjs` 把 18 份 CSS Modules 编译成一条 `style[data-plugin][data-plugin-css]`，并闸门校验产物 `require` ⊆ 平台模块表基线、无动态 `import()`；`test-boot.mjs` 纯 Node，用 `__ModuleLoader__` 桩载入产物校验注册契约 / 导出面 / 样式注入与重复执行幂等 |
 | `dsh-code-card-fonts` | `npm run typecheck && npm run build && npm run check` | esbuild（JS API）→ `lib/client.js`；`check` 对产物与宿主执行 `node --check` |
 | `dsh-desktop-notify` | `npm run typecheck && npm run build && npm run check`；`node test-notify.mjs` | esbuild（平台二进制，`--external:react`）→ `lib/client.js`；诊断脚本纯 Node：判定器 / 开关 store / 订阅运行时与发送侧分支，并用 `__ModuleLoader__` 桩载入产物校验装配与「后台回合结束 → 发通知」 |
 | `dsh-directory-picker-browse` | 无 | 纯补丁插件，无源码与产物 |
