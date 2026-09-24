@@ -7,7 +7,6 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-
 export default class MetricsService extends Service {
   static inject = ['llm']  // A service may depend on other services.
 
@@ -17,5 +16,6 @@ export default class MetricsService extends Service {
 
   // Public service method.
   record(event: string, value: number) {
+
   }
 }
