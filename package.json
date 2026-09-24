@@ -1,0 +1,5 @@
+{
+  "name": "dsh-plugins-workspace",
+  "private": true,
+  "description": "dsh-plugins 仓库的开发期 workspace 根：只为把各插件 devDependencies（typescript / esbuild / @deepseek-ai/*）提升到根 node_modules，不是可安装的集合包。"
+}

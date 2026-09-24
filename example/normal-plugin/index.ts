@@ -25,4 +25,10 @@ export function apply(ctx: Context) {
   // 可选依赖
   const metrics = ctx.get('metrics')
   metrics?.record('plugin_loaded', 1)
+
+  // 监听事件: 事件名必须是 Events 映射的键. 常用事件由依赖包声明合并提供
+  // ('tools/result' 就来自 @deepseek-ai/dsh-tools); 自定义事件需自行 declare module 合并.
+  ctx.on('tools/result', (exec, result) => {
+    // Handle the event.
+  })
 }

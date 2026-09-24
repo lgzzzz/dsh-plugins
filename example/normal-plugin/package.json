@@ -13,7 +13,13 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-tools": "^0.1.7-rc.1"
+  },
   "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-tools": "^0.1.7-rc.1",
     "@types/node": "^24.0.0",
     "typescript": "^5.8.0"
   }
