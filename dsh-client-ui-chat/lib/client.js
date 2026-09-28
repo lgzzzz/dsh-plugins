@@ -10752,7 +10752,7 @@ var POLICIES = {
   },
   verbose: {
     mode: "verbose",
-    foldCompletedTurns: false,
+    foldCompletedTurns: true,
     stepGrouping: "none",
     liveProcessDetail: false,
     settledReasoningPreview: true

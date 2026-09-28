@@ -45,7 +45,9 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   },
   verbose: {
     mode: 'verbose',
-    foldCompletedTurns: false,
+    // Completed Turns fold like every other mode; the ungrouped rows stay the
+    // mode's difference, so expanding still reveals the full process.
+    foldCompletedTurns: true,
     stepGrouping: 'none',
     liveProcessDetail: false,
     settledReasoningPreview: true,

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-client-ui-chat",
+  "name": "@deepseek-ai/dsh-client-ui-chat",
   "version": "0.1.7-rc.2",
   "private": true,
   "description": "Local fork of the built-in Chat conversation target: the browser half is copied verbatim from packages/client/ui-chat/src of the DSH checkout and bundled by esbuild into lib/client.js. Mounted through cordis.patch.yml, which inserts a row with the upstream entry id so this copy replaces the official implementation under the same package name.",
