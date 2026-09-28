@@ -28,6 +28,10 @@
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.7-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.7-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.7-rc.2",
     "esbuild": "^0.28.2",
     "typescript": "^5.9.3"
   }

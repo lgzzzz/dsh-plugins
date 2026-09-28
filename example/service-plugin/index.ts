@@ -1,6 +1,5 @@
 import {Service, type Context} from '@deepseek-ai/cordis'
 
-// Typescript声明合并
 declare module '@deepseek-ai/cordis' {
   interface Context {
     metrics: MetricsService
@@ -8,13 +7,12 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export default class MetricsService extends Service {
-  static inject = ['llm']  // A service may depend on other services.
+  static inject = ['llm']
 
   constructor(ctx: Context) {
-    super(ctx, 'metrics')  // 'metrics' is the service name.
+    super(ctx, 'metrics')
   }
 
-  // Public service method.
   record(event: string, value: number) {
 
   }

@@ -29,7 +29,7 @@ module.exports = __toCommonJS(client_exports);
 
 // src/css.ts
 var CAPSULE_WIDTH_PX = 100;
-var CSS = `/* dsh-rightbar-tab-width: fix every docked right-sidebar tab capsule to ${CAPSULE_WIDTH_PX}px */
+var CSS = `
 [data-dockkit-tab][role="tab"] {
   box-sizing: border-box;
   min-width: ${CAPSULE_WIDTH_PX}px;

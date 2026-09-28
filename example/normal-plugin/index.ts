@@ -3,7 +3,6 @@ import {defineTool} from '@deepseek-ai/dsh-tools'
 
 export const name = 'greet-tool'
 
-// 必须依赖, 依赖未就绪, 插件不会加载; 依赖消失, 插件会被卸载; 依赖重新出现, 插件会被加载.
 export const inject = ['tools']
 
 export function apply(ctx: Context) {
@@ -22,7 +21,6 @@ export function apply(ctx: Context) {
     },
   }))
 
-  // 可选依赖
   const metrics = ctx.get('metrics')
   metrics?.record('plugin_loaded', 1)
 }
