@@ -1,0 +1,42 @@
+{
+  // 声明文件产线:只把 src/ 编译成 .d.ts(不产出 JS),落在 lib/types/。
+  //
+  // 为什么与 tsdown 分开:客户端产物是 CJS 工厂(banner/footer 包了
+  // window.__ModuleLoader__.load),tsdown 的 dts 通道对它只能产出
+  // `export {}` 这样的空声明,反而会把 ./client 声明成"无导出"。上游
+  // deepseek-harness(packages/client/tsdown.client.ts)出于同样原因让客户端
+  // 的 dts 保持关闭,类型一律由 tsc 产出——这里沿用该分工。
+  //
+  // 目录映射保持上游布局:src/index.ts → lib/types/index.d.ts,
+  // src/client/index.ts → lib/types/client/index.d.ts。
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+
+    // 相对 import 带显式 .ts/.tsx 扩展名(与 Node Type Stripping 和 tsdown 一致)
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+
+    // 不自动注入 @types/*:提升到仓库根的 @types/node 会把 DOM 的
+    // setTimeout(返回 number)按 Node 的 Timeout 判定,导致 TS2322。
+    // React 类型仍可经 import 'react' 正常解析,不受此项影响。
+    "types": [],
+
+    "strict": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "lib"]
+}
