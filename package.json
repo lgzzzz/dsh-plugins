@@ -1,5 +1,22 @@
 {
-  "name": "dsh-plugins-workspace",
+  "name": "dsh-plugins-bundle",
+  "version": "1.0.0",
   "private": true,
-  "description": "dsh-plugins 仓库的开发期 workspace 根：只为把各插件 devDependencies（typescript / esbuild / @deepseek-ai/*）提升到根 node_modules，不是可安装的集合包。"
+  "type": "module",
+  "description": "dsh 插件整合包:九个本机插件的单一安装入口。根 package.json 声明 dsh.bundle.patch,把 dsh-*/ 各插件列为 dependencies;DSH 选中本 bundle 后,各插件通过 profile 包图解析,由 cordis.patch.yml 统一挂载,无需再逐行 insert。",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "dsh-code-card-fonts": "workspace:*",
+    "dsh-desktop-notify": "workspace:*",
+    "dsh-directory-picker-browse": "workspace:*",
+    "dsh-fullwidth-chat": "workspace:*",
+    "dsh-git-guard": "workspace:*",
+    "dsh-header-action-order": "workspace:*",
+    "dsh-rightbar-fonts": "workspace:*",
+    "dsh-rightbar-tab-width": "workspace:*"
+  }
 }

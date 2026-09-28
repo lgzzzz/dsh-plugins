@@ -1,0 +1,59 @@
+# dsh 插件整合包的挂载清单:本文件是仓库根 bundle(dsh-plugins-bundle)的 dsh.bundle.patch。
+#
+# 它按顺序并入九个插件各自的 cordis.patch.yml 内容,一次挂载全部插件;
+# 各插件的 mount 行保持原样,语义与逐目录挂载完全一致。
+#
+# 解析链:bundle 被选中后,其所在包目录进入 profile layers,DSH 沿本包
+# dependencies 闭包解析出 dsh-*/ 各插件(见 @deepseek-ai/dsh-app-boot 的
+# collectProfileScopePackages),故这里的 name 直接写包名即可。
+
+# --- dsh-code-card-fonts ---
+# web bundle 挂载行:随 dsh.profile.bundles 自动挂载。
+# 宿主半部按 <name>/package.json 解析;客户端半部由 dsh.client.platform=web + immediately 注册进浏览器 roster。
+- insert:
+    - id: dsh-code-card-fonts
+      name: dsh-code-card-fonts
+
+# --- dsh-desktop-notify ---
+- insert:
+    - id: dsh-desktop-notify
+      name: dsh-desktop-notify
+
+# --- dsh-directory-picker-browse ---
+# 关默认 auto 目录选择器,挂 browse 变体(两个 in-box 包,由安装锚点解析)。
+# 勿停用 ui-deliverables:它承载整个 turn-tail 产物面。
+- id: directory-picker
+  disabled: true
+
+- insert:
+    - id: directory-picker-browse
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
+
+    - id: directory-picker-browse-ui
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+
+# --- dsh-fullwidth-chat ---
+- insert:
+    - id: dsh-fullwidth-chat
+      name: dsh-fullwidth-chat
+
+# --- dsh-git-guard ---
+# 宿主半部(index.ts,Node Type Stripping 直载)挂钩 tools/pre-execute。
+- insert:
+    - id: dsh-git-guard
+      name: dsh-git-guard
+
+# --- dsh-header-action-order ---
+- insert:
+    - id: dsh-header-action-order
+      name: dsh-header-action-order
+
+# --- dsh-rightbar-fonts ---
+- insert:
+    - id: dsh-rightbar-fonts
+      name: dsh-rightbar-fonts
+
+# --- dsh-rightbar-tab-width ---
+- insert:
+    - id: dsh-rightbar-tab-width
+      name: dsh-rightbar-tab-width
