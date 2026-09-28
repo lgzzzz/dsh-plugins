@@ -2,7 +2,7 @@
   "name": "dsh-code-card-fonts",
   "version": "1.4.0",
   "private": true,
-  "description": "Local persistent Web UI patch: 14px conversation-card titles, summaries, content, code and markdown table cells, plus message-card spacing of calc(14px * 0.5) = 7px. The content font-size axis (the ui-theme font-size setting) is no longer overridden, so body text and line heights stay user-adjustable. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "description": "Local persistent Web UI patch: 14px conversation-card titles, summaries, content, code and markdown table cells, plus message-card spacing of calc(14px * 0.5) = 7px. The content font-size axis (the ui-theme font-size setting) is no longer overridden, so body text and line heights stay user-adjustable. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (tsdown).",
   "type": "module",
   "exports": {
     ".": {
@@ -23,12 +23,12 @@
     }
   },
   "scripts": {
-    "build": "node scripts/build-client.mjs",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2",
+    "tsdown": "^0.22.2",
     "typescript": "^5.9.3"
   }
 }

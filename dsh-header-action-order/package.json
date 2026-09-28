@@ -2,7 +2,7 @@
   "name": "dsh-header-action-order",
   "version": "1.0.0",
   "private": true,
-  "description": "Local persistent Web UI patch: reorder the session-header action icons (conversation.session.header.actions, a list slot) by rewriting each live entry's options.order in place and replaying on every slot registration change. Upstream sorts the rendered rows by that value, and the slot API has no reorder surface, so the plugin edits the live entry objects instead of shadowing/re-registering foreign components. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (esbuild).",
+  "description": "Local persistent Web UI patch: reorder the session-header action icons (conversation.session.header.actions, a list slot) by rewriting each live entry's options.order in place and replaying on every slot registration change. Upstream sorts the rendered rows by that value, and the slot API has no reorder surface, so the plugin edits the live entry objects instead of shadowing/re-registering foreign components. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (tsdown).",
   "type": "module",
   "exports": {
     ".": {
@@ -23,16 +23,16 @@
     }
   },
   "scripts": {
-    "build": "node scripts/build-client.mjs",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.7-rc.2",
-    "esbuild": "^0.28.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.0-rc.1",
+    "tsdown": "^0.22.2",
     "typescript": "^5.9.3"
   }
 }

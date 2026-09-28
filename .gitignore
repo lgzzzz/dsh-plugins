@@ -7,7 +7,21 @@
 .npm-cache/
 node_modules/
 
+# 本仓库统一使用 pnpm:忽略 npm 锁文件,误用 npm 安装时不落库
+package-lock.json
+
 # TypeScript 增量编译缓存
 *.tsbuildinfo
 
-# 构建产物:lib/*.js 均入仓以便离线加载,暂无忽略项
+# 构建产物一律不入仓:以下 lib/ 全部由 `pnpm -r build`(tsdown)生成,可按需重建,
+# clone 后须先构建才能被 DSH 加载(profile 以 link: 指向本目录,读取 lib/client.js)。
+# 例外:dsh-fullwidth-chat/lib 是该包的手写源码(无 src/、无构建脚本),照常入仓。
+dsh-client-ui-chat/lib/
+dsh-code-card-fonts/lib/
+dsh-desktop-notify/lib/
+dsh-header-action-order/lib/
+dsh-rightbar-fonts/lib/
+dsh-rightbar-tab-width/lib/
+
+# 本地排查痕迹(探针脚本产出、快照、备份)
+.scratch/

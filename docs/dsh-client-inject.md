@@ -60,7 +60,7 @@
 
 ### 同步 `require` 的真实边界
 
-- 每个 web 客户端 bundle 都是 CJS 工厂，esbuild/tsdown 把 ESM `import` 编译成工厂顶部的同步 `require("...")`。
+- 每个 web 客户端 bundle 都是 CJS 工厂，tsdown 把 ESM `import` 编译成工厂顶部的同步 `require("...")`。
 - 但这些 `require` 被**构建期纯度门**锁死在平台基线 `PLATFORM_MODULES` 内（`react`、`react-dom`、`react/jsx-runtime`、`@deepseek-ai/cordis`、`dsh-client-store`、`dsh-client-ui-*` 静态库等）；产物里出现基线之外的 `require("...")` 会直接构建失败。
 - 因此跨插件的运行时取值走 cordis 服务（`ctx.get(...)` / 服务 `inject` + `import type`），不走模块 `require`。`missed the module table` 是"构建期纯度门"的运行时镜像，正确构建的插件不会触发。
 
