@@ -6,7 +6,32 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      dsh-code-card-fonts:
+        specifier: workspace:*
+        version: link:dsh-code-card-fonts
+      dsh-desktop-notify:
+        specifier: workspace:*
+        version: link:dsh-desktop-notify
+      dsh-directory-picker-browse:
+        specifier: workspace:*
+        version: link:dsh-directory-picker-browse
+      dsh-fullwidth-chat:
+        specifier: workspace:*
+        version: link:dsh-fullwidth-chat
+      dsh-git-guard:
+        specifier: workspace:*
+        version: link:dsh-git-guard
+      dsh-header-action-order:
+        specifier: workspace:*
+        version: link:dsh-header-action-order
+      dsh-rightbar-fonts:
+        specifier: workspace:*
+        version: link:dsh-rightbar-fonts
+      dsh-rightbar-tab-width:
+        specifier: workspace:*
+        version: link:dsh-rightbar-tab-width
 
   dsh-code-card-fonts:
     devDependencies:
