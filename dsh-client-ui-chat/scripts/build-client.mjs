@@ -1,21 +1,3 @@
-/** 构建浏览器半部（产物 lib/client.js）。
- *
- * esbuild 把 src/client/index.ts 连同 src/ 下全部模块与 18 份 CSS Modules 打成一个 CJS 文件，
- * 再包进 `window.__ModuleLoader__.load({ id, factory })`（与上游 tsdown 产物同形：工厂返回
- * module.exports，宿主的模块表按 id 解析 `require`）。
- *
- * 两点与上游 tsdown 预置对齐：
- * 1. **外部依赖**：只有模块表基线（PLATFORM_MODULES：react / react-dom / cordis /
- *    client-store / ui-slots / ui-primitives / ui-dockkit）保持 `require`，其余全部内联。
- *    上游 `packages/client/tsdown.client.ts` 的 externals 与它一致（内置 ui-chat 的
- *    lib/client.js 里也只 require 这 5 个名字）。构建末尾的闸门会复核这一点。
- * 2. **样式**：上游用 lightningcss 编译 CSS Modules 并在工厂执行时插入
- *    `style[data-plugin][data-plugin-css]`；这里用 esbuild 的 local-css 等价实现，
- *    标签属性保持一致，`dsh-client-modules` 的 removeOwnedStyles 才能按 data-plugin 回收。
- *
- * lib/client.js 是产物，禁止手改；入仓以便离线加载（与仓库内其它插件一致）。
- * 需要浏览器里可读的 sourcemap 时：`DSH_CHAT_SOURCEMAP=1 npm run build`（额外产出 lib/client.js.map）。
- */
 import { build } from 'esbuild'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -26,7 +8,7 @@ const outDir = join(root, 'lib')
 const outFile = join(outDir, 'client.js')
 
 /** 插件包名：同时是 __ModuleLoader__ 的注册 id 与浏览器图行 id。 */
-const loaderId = '@deepseek-ai/dsh-client-ui-chat'
+const loaderId = 'dsh-client-ui-chat-lgzzzz'
 
 /** 模块表基线，镜像 packages/client/web/src/platform.ts 的 PLATFORM_MODULES。 */
 const PLATFORM_MODULES = [
