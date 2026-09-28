@@ -1,13 +1,3 @@
-/**
- * 诊断脚本(非插件产物):纯 Node,无浏览器。四部分:
- *   A. src/notify-policy.ts —— 相邻两帧差异 → 通知计划的全部判定分支;
- *   B. src/notify-store.ts —— 授权 / 开关 / 拒绝 / 重读权限的环境缝分支;
- *   C. src/notify-runtime.ts + src/notify-delivery.ts —— 订阅驱动、前台抑制、开关未开时基线仍推进、dispose;
- *   D. 构建产物 lib/client.js —— 以 window.__ModuleLoader__ 桩载入,校验包名 / inject / 外部依赖只有 react、
- *      槽位注册参数、设置开关行三态渲染,以及「后台回合结束 → 真发一条系统通知」的端到端装配。
- * 直接以 Node Type Stripping 载入 src/*.ts(不加载 notify-settings.ts:它 require('react'))。
- * 用法:node test-notify.mjs(需先 npm run build)
- */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -20,7 +10,6 @@ import { createBrowserDelivery } from './src/notify-delivery.ts'
 const here = dirname(fileURLToPath(import.meta.url))
 
 let failures = 0
-/** 断言并按仓库脚本惯例记账。 */
 function check(label, actual, expected) {
   const a = JSON.stringify(actual)
   const e = JSON.stringify(expected)
@@ -29,14 +18,12 @@ function check(label, actual, expected) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 ${e},实得 ${a}`}`)
 }
 
-/** 断言布尔条件(用于含对象引用的判定)。 */
 function checkTrue(label, actual) {
   const ok = actual === true
   if (!ok) failures += 1
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 true,实得 ${JSON.stringify(actual)}`}`)
 }
 
-/** 造一帧输入:statuses 用 [[id, status]] 数组,rows 用对象。 */
 function frame(entries, rows) {
   return { statuses: new Map(entries), rows: rows ?? {} }
 }
@@ -50,7 +37,6 @@ console.log('--- A. 判定器(notify-policy)---')
 
 {
   const policy = createNotifyPolicy()
-  // 首帧:已经跑着的回合 + 已经等着的卡片都不补发
   const first = policy.observe(frame([['s-1', { running: true, pendingInteraction: { key: 'q0', kind: 'question' } }]], ROWS))
   check('首帧只建基线', first, [])
 
@@ -151,7 +137,6 @@ console.log('--- A. 判定器(notify-policy)---')
 
 console.log('--- B. 开关 store(notify-store)---')
 
-/** 造一个可断言的假环境。 */
 function fakeEnv(options = {}) {
   const state = {
     supported: options.supported ?? true,
@@ -259,7 +244,6 @@ function fakeEnv(options = {}) {
 
 console.log('--- C. 运行时与发送(notify-runtime / notify-delivery)---')
 
-/** 造一个可驱动的假状态源 + services。 */
 function fakeRuntime(options = {}) {
   const listeners = new Set()
   let statuses = new Map()
@@ -336,7 +320,6 @@ function fakeRuntime(options = {}) {
 }
 
 {
-  // 开关未开时基线仍要推进:开启后不该补发历史状态
   const runtime = fakeRuntime({ active: false })
   runtime.push([['s-1', { running: true }]])
   runtime.push([['s-1', { running: false }]])
@@ -393,7 +376,6 @@ function fakeRuntime(options = {}) {
   check('点击通知聚焦窗口', focused, 1)
   checkTrue('点击后关闭通知', built[0].closed === true)
 
-  // 构造抛错:不冒泡
   const throwing = createBrowserDelivery({ Notification: class { constructor() { throw new Error('denied') } }, focus: () => {} }, doc)
   throwing.deliver({ sessionId: 's-1', reason: 'question', title: 't', body: 'b', tag: 'tag-2' })
   console.log('ok   构造抛错时静默(已记账到 console.warn)')
@@ -405,14 +387,12 @@ function fakeRuntime(options = {}) {
 
 console.log('--- D. 构建产物装配(lib/client.js + ModuleLoader 桩)---')
 
-/** 最小 react 桩:只覆盖 createElement / useState / useEffect(与 src/react.d.ts 同面)。 */
 const fakeReact = {
   createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
   useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
   useEffect: () => {},
 }
 
-/** 造一套 window / document / ctx 桩,并以 ModuleLoader 桩载入构建产物。 */
 function loadBundle(options = {}) {
   const calls = { inject: [], register: [], effects: [], removedFocus: 0, addedFocus: 0 }
   const notifications = []
@@ -498,7 +478,6 @@ function loadBundle(options = {}) {
 
   const source = readFileSync(join(here, 'lib', 'client.js'), 'utf8')
   const required = []
-  // 产物顶层直接调用 window.__ModuleLoader__.load,故以参数遮蔽全局 window / document
   const run = new Function('window', 'document', 'console', source)
   run(win, doc, console)
   const module = loaded.factory((id) => {
@@ -516,7 +495,6 @@ function loadBundle(options = {}) {
     module,
     loaded,
     storage,
-    /** 驱动一帧状态表变化。 */
     push(entries) {
       statuses = new Map(entries)
       if (listener !== null) listener()
@@ -539,7 +517,6 @@ function loadBundle(options = {}) {
   check('挂到设置-通用条目区', bundle.calls.inject, ['settings.general.item'])
   check('注册项 id', bundle.calls.register[0]?.options.id, 'desktop-notify')
   check('注册项 name', bundle.calls.register[0]?.options.name, 'settings.general.item')
-  // 30 = 聊天/回车行为(20)之后、当前版本(100)之前,见 src/client.ts 的 SETTINGS_ITEM_ORDER
   check('注册项 order', bundle.calls.register[0]?.options.order, 30)
   checkTrue('注册项有组件', typeof bundle.calls.register[0]?.component === 'function')
   check('注册了一个 fiber disposer', bundle.calls.effects.length, 1)
@@ -557,7 +534,6 @@ function loadBundle(options = {}) {
   checkTrue('switch 已挂 onclick', typeof control.props.onClick === 'function')
   checkTrue('带圆形滑块', control.children[0]?.props?.className === 'dsh-desktop-notify-switch-thumb')
 
-  // 页面在后台:回合完成 → 真发一条系统通知
   bundle.push([['s-1', { running: true }]])
   bundle.push([['s-1', { running: false }]])
   check('后台时发出系统通知', bundle.notifications.length, 1)
@@ -565,16 +541,13 @@ function loadBundle(options = {}) {
   check('通知正文', bundle.notifications[0].options.body, '修复登录 bug')
   checkTrue('通知 onclick 已挂', typeof bundle.notifications[0].onclick === 'function')
 
-  // 待答卡片
   bundle.push([['s-1', { running: false, pendingInteraction: { key: 'q1', kind: 'question', questions: [{ question: '选哪个?' }] } }]])
   check('待答也发系统通知', bundle.notifications.length, 2)
   check('待答通知标题', bundle.notifications[1].title, 'DSH · 需要你回答')
 
-  // 状态表变 undefined:不抛
   bundle.pushUndefined()
   check('状态表变 undefined 不抛', bundle.notifications.length, 2)
 
-  // 语义化 disposer:退订 + 撤 focus 监听
   check('订阅已登记', bundle.listenerCount(), 1)
   bundle.calls.effects[0]()
   check('disposer 退订', bundle.listenerCount(), 0)
@@ -582,7 +555,6 @@ function loadBundle(options = {}) {
 }
 
 {
-  // 未授权:switch 关着 + 提示先授权,且不发通知
   const bundle = loadBundle({ permission: 'default' })
   const element = bundle.calls.register[0].component()
   const control = element.children[1]
@@ -597,7 +569,6 @@ function loadBundle(options = {}) {
 }
 
 {
-  // 已拒绝:switch 禁用 + 指向 Chrome 设置的提示
   const bundle = loadBundle({ permission: 'denied' })
   const element = bundle.calls.register[0].component()
   const control = element.children[1]
@@ -608,7 +579,6 @@ function loadBundle(options = {}) {
 }
 
 {
-  // 已授权但用户关过开关:不发通知
   const bundle = loadBundle({ permission: 'granted', stored: false })
   const element = bundle.calls.register[0].component()
   check('开关关着 → aria-checked false', element.children[1].props['aria-checked'], false)
@@ -618,7 +588,6 @@ function loadBundle(options = {}) {
 }
 
 {
-  // 环境没有 Notification API:apply 仍装配成功,开关行渲染为空
   const bundle = loadBundle({ supported: false })
   checkTrue('无 Notification API 时开关行渲染空', bundle.calls.register[0].component() === null)
   bundle.push([['s-1', { running: true }]])
@@ -627,7 +596,6 @@ function loadBundle(options = {}) {
 }
 
 {
-  // 子代理会话:后台结束也不打扰
   const bundle = loadBundle({ permission: 'granted' })
   bundle.push([['s-2', { running: true }]])
   bundle.push([['s-2', { running: false }]])

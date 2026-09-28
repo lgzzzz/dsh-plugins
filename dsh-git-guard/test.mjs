@@ -1,6 +1,3 @@
-/** dsh-git-guard 行为冒烟测试: 用支持 Type Stripping 的 Node(22.18+)直载 index.ts, 跑 `node test.mjs`。
- * 全部敏感 git 操作(commit / push, 含 force push 与 rebase / merge / cherry-pick / reset --hard 等)断言为 `ask`, 并回归断言不再产生 `deny`。
- * 桩覆盖钩子注册、系统提示词区段与沙箱权限服务(含失败关闭三态)。 */
 import assert from 'node:assert/strict'
 import guard, { name, apply } from './index.ts'
 
@@ -9,19 +6,14 @@ assert.equal(typeof apply, 'function')
 assert.equal(guard.name, name)
 assert.equal(guard.apply, apply)
 
-// --- 宿主桩: 钩子注册、系统提示词区段、沙箱权限服务 ---
 const listeners = new Map()
 const sections = []
 
-/** 部署默认文件沙箱模式(无会话覆盖时生效). */
 let defaultMode = 'workspace-write'
-/** 会话覆盖: session 对象 → 模式(模拟 sandbox/mode 折叠出的会话级结果). */
 const sessionModes = new Map()
-/** 失败关闭三态: 服务未挂载 / 无 resolve / resolve 抛错. */
 let policyMounted = true
 let policyHasResolve = true
 let policyFails = false
-/** 观测: 问过哪些服务 / resolve 调用次数 / 最后收到的会话身份. */
 const requestedServices = []
 let resolveCalls = 0
 let lastResolvedSession
@@ -40,7 +32,6 @@ const ctx = {
           return () => true
         },
         getSectionOrder(slotName) {
-          // 仅解析仓库预留槽位 TEAM_POLICY(=600), 其余返回 0。
           return slotName === 'TEAM_POLICY' ? 600 : 0
         },
       },
@@ -68,14 +59,12 @@ guard.apply(ctx)
 const hook = listeners.get('tools/pre-execute')
 assert.ok(hook, 'tools/pre-execute hook registered')
 
-// --- 系统提示词: 提交推送策略区段(按会话权限动态求值) ---
 assert.equal(sections.length, 1, '恰注册一个系统提示词区段')
 const [policySection] = sections
 assert.equal(policySection.name, 'git-guard:push-policy')
 assert.equal(policySection.order, 600, '区段位于 TEAM_POLICY 槽位')
 assert.equal(typeof policySection.text, 'function', '区段文本按组装上下文求值')
 
-/** 以某会话(或缺席)求值一次区段文本. */
 function sectionText(session) {
   return policySection.text({ agent: session === undefined ? undefined : { session } })
 }
@@ -95,8 +84,6 @@ for (const [label, text] of [
 }
 assert.equal(sectionText(fullAccessSession), '', '完全权限会话：区段文本为空，不向模型提出授权要求')
 
-// 模拟流水线: next() 落到链尾默认 allow; passthrough 标记区分「本插件未介入」与「决定恰好为 allow」。
-// 门禁与工具名解耦: 命令经由任何 shell 工具(bash / pwsh / cmd …)都应被审查。
 function decide(command, options = {}) {
   const { toolName = 'pwsh', session } = options
   const exec = { name: toolName, arguments: { command } }
@@ -104,12 +91,10 @@ function decide(command, options = {}) {
   return hook(exec, async () => ({ kind: 'allow', passthrough: true }))
 }
 
-// --- ask: git commit / git push(非 force) ---
 for (const command of [
   'git commit -m x',
   'git add . && git commit',
   'git add .; git commit -m "msg"',
-  // 回归用例: 分号连接、消息内嵌中文的 commit(经 pwsh 工具)。
   'git add dsh-git-guard; git commit -m "refactor(dsh-git-guard): git push 由 deny 改为 ask"',
 ]) {
   const decision = await decide(command)
@@ -140,7 +125,6 @@ for (const command of [
   assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知推送需用户许可')
 }
 
-// --- ask: 破坏性 / 历史改写操作(一律请求用户授权) ---
 for (const command of [
   'git push --force',
   'git push -f',
@@ -167,7 +151,6 @@ for (const command of [
   assert.match(decision?.reason ?? '', /批准或拒绝/, 'ask reason 交给用户裁决')
 }
 
-// 回归: 本插件不再产生 deny。
 for (const command of [
   'git commit -m x',
   'git push',
@@ -183,7 +166,6 @@ for (const command of [
   assert.notEqual(decision?.kind, 'deny', `不再产生 deny: ${command}`)
 }
 
-// 命令行内多处命中: 破坏性措辞优先, 且只产生一个决定。
 {
   const decision = await decide('git commit -m x && git push --force')
   assert.equal(decision?.kind, 'ask', '混合命令仍是 ask')
@@ -191,7 +173,6 @@ for (const command of [
   assert.deepEqual(Object.keys(decision).sort(), ['kind', 'reason'], '交出的决定只含 kind / reason（内部标记已剥掉）')
 }
 
-// 逐段 / 逐层审查: 后续语句段与 shell 负载内的破坏性操作仍优先挑出。
 {
   const decision = await decide('git add .; git commit -m x; git reset --hard HEAD~1')
   assert.equal(decision?.kind, 'ask')
@@ -203,22 +184,20 @@ for (const command of [
   assert.match(decision?.reason ?? '', /--force/, 'shell 负载内的破坏性操作同样优先提示')
 }
 
-// --- 放行: 安全 git 子命令与非 git 命令(不介入, 交给链尾) ---
 for (const command of [
   'git status',
   'git log && echo done',
   'git add .',
-  'git reset HEAD~1', // 非破坏性 reset 放行
+  'git reset HEAD~1',
   'ls -la',
   'Get-ChildItem',
-  'echo git commit', // git 不在命令位, 不误拦截
+  'echo git commit',
 ]) {
   const decision = await decide(command)
   assert.equal(decision?.kind, 'allow', `allow: ${command}`)
   assert.equal(decision?.passthrough, true, `allow 由 next() 放行: ${command}`)
 }
 
-// --- 完全权限(danger-full-access): 不拦截、不索取授权 ---
 for (const command of [
   'git commit -m x',
   'git add . && git commit -m "msg"',
@@ -237,11 +216,9 @@ for (const command of [
   assert.equal(decision?.passthrough, true, `完全权限下本插件不产生决定: ${command}`)
 }
 
-// 会话身份透传给沙箱策略服务, 由它按「会话覆盖 > 部署默认」裁决。
 await decide('git commit -m x', { session: fullAccessSession })
 assert.equal(lastResolvedSession, fullAccessSession, 'resolve 收到本次调用所属会话')
 
-// 只有本来会介入的命令才解析权限, 其余命令零开销。
 const callsBefore = resolveCalls
 await decide('git status', { session: fullAccessSession })
 await decide('ls -la', { session: fullAccessSession })
@@ -249,30 +226,25 @@ assert.equal(resolveCalls, callsBefore, '不产生决定的命令不解析权限
 await decide('git commit -m x', { session: fullAccessSession })
 assert.equal(resolveCalls, callsBefore + 1, '将要介入的命令解析一次权限')
 
-// 部署默认完全权限且调用无 agent(无会话可查)时同样放行。
 defaultMode = 'danger-full-access'
 assert.equal((await decide('git commit -m x'))?.passthrough, true, '部署默认完全权限时放行')
 defaultMode = 'workspace-write'
 
-// 权限按会话独立: 别的会话不因某会话完全权限而失去护栏。
 assert.equal((await decide('git commit -m x', { session: workspaceSession }))?.kind, 'ask')
 assert.equal((await decide('git push --force', { session: workspaceSession }))?.kind, 'ask')
 
-// 只有 danger-full-access 是完全权限: read-only 照旧拦截并告知模型。
 const readOnlySession = { id: 'session-read-only' }
 sessionModes.set(readOnlySession, 'read-only')
 assert.equal((await decide('git commit -m x', { session: readOnlySession }))?.kind, 'ask', 'read-only 仍 ask')
 assert.match(sectionText(readOnlySession), /用户许可/, 'read-only 仍收到约束区段')
 sessionModes.delete(readOnlySession)
 
-// 只问沙箱模式不问 approval: 子代理的 approval 恒为 never, 否则会绕过全部护栏。
 assert.deepEqual(
   [...new Set(requestedServices)],
   ['sandboxPolicy'],
   '权限判定只取用 sandboxPolicy 服务',
 )
 
-// --- 失败关闭: 权限未知按非完全权限处理, 照常索取授权 ---
 policyMounted = false
 assert.equal((await decide('git commit -m x', { session: fullAccessSession }))?.kind, 'ask', '服务缺席仍 ask')
 assert.equal((await decide('git push --force', { session: fullAccessSession }))?.kind, 'ask', '服务缺席仍 ask(force push)')
@@ -288,7 +260,6 @@ assert.equal((await decide('git rebase', { session: fullAccessSession }))?.kind,
 assert.notEqual(sectionText(fullAccessSession), '', 'resolve 抛错时区段仍保留（不误判为完全权限）')
 policyFails = false
 
-// --- 非 shell 工具(无 command 字段)不拦截 ---
 assert.equal((await hook({ name: 'read', arguments: { file: 'x' } }, async () => ({ kind: 'allow', passthrough: true })))?.passthrough, true)
 
 console.log('all behavioral checks passed')

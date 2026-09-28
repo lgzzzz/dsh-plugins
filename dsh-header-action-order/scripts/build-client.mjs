@@ -1,7 +1,3 @@
-/** 构建浏览器半部(产物 lib/client.js):esbuild 平台二进制把 src/client.ts 打包为单文件 CJS,
- * 包进 window.__ModuleLoader__.load({ id, factory }) 写回(全部内联,不消费 external —— 本插件不用 react)。
- * 用平台二进制而非 esbuild JS API:JS API 经 stdin/stdout 管道 spawn,受限沙箱下 EPERM。
- * ModuleLoader 不支持相对 require ⇒ 多文件源码须合并单文件;lib/client.js 为产物禁止手改,入仓供离线加载。 */
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { writeFileSync, readFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
@@ -14,7 +10,6 @@ const libDir = join(root, 'lib')
 const outFile = join(libDir, 'client.js')
 const tmpFile = join(libDir, '.client.cjs')
 
-// esbuild 平台二进制 = 可选依赖 @esbuild/<platform>-<arch>。
 function resolveEsbuildBin() {
   const require = createRequire(import.meta.url)
   const pkg = `@esbuild/${process.platform}-${process.arch}`
@@ -39,7 +34,6 @@ const run = spawnSync(
     '--platform=browser',
     '--format=cjs',
     '--target=es2019',
-    // esbuild 默认把「Done in Xms」写到 stderr,会污染 PowerShell 观感
     '--log-level=warning',
     `--outfile=${tmpFile}`,
   ],

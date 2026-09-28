@@ -1,13 +1,3 @@
-/**
- * 诊断脚本(非插件产物):纯 Node,无浏览器。三部分:
- *   A. src/order.ts —— planOrderWrites 的纯计划分支(重排 / 幂等 / 未列出项 / 无 id / 重复表项);
- *   B. src/order.ts + src/client.ts —— 以类方法形态的 slots 桩驱动 apply,校验渲染序、后到注册重放、
- *      冻结写入单条放弃、entries 抛错不炸;
- *   C. 构建产物 lib/client.js —— 以 window.__ModuleLoader__ 桩载入,校验包名 / inject 声明 / 无外部依赖,
- *      并走一遍「槽声明 → 装配 → 后到图标 → 顺序仍正确」。
- * 桩里的 slots 方法都读 this(仓库约定):插件若把方法摘下来调用会抛错,本脚本能测出来。
- * 用法:node test-order.mjs(需先 npm run build)
- */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -24,7 +14,6 @@ import { apply as applyPlugin } from './src/client.ts'
 const here = dirname(fileURLToPath(import.meta.url))
 
 let failures = 0
-/** 断言并按仓库脚本惯例记账。 */
 function check(label, actual, expected) {
   const a = JSON.stringify(actual)
   const e = JSON.stringify(expected)
@@ -33,19 +22,16 @@ function check(label, actual, expected) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 ${e},实得 ${a}`}`)
 }
 
-/** 断言布尔条件(用于含对象引用的判定)。 */
 function checkTrue(label, actual) {
   const ok = actual === true
   if (!ok) failures += 1
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 true,实得 ${JSON.stringify(actual)}`}`)
 }
 
-/** 一条注册项(与上游 ledger 同形:可写 options)。 */
 function entry(id, order) {
   return { options: { id, order } }
 }
 
-/** 上游 0.1.7-alpha.1 的实际注册项(order 值以源码为准)。 */
 function upstreamEntries() {
   return [
     entry('agent-preset', -10),
@@ -56,22 +42,14 @@ function upstreamEntries() {
   ]
 }
 
-/** 目标序(与 HEADER_ACTION_ORDER 一致):schedule / job-list 挪到最后。 */
 const EXPECTED = ['agent-preset', 'agent-team', 'subagent-catalog', 'schedule-catalog', 'job-list']
 
-/** 上游渲染端语义:每帧按活注册项的 options.order 升序(稳定排序)取 id。 */
 function renderedOrder(entries) {
   return [...entries]
     .sort((a, b) => (a.options?.order ?? 0) - (b.options?.order ?? 0))
     .map((e) => e.options?.id)
 }
 
-/**
- * slots 服务的类方法桩:
- * - entries / inject / subscribe 都读 this(摘引用调用会抛错);
- * - register 模拟上游注册 + 微任务批通知(这里同步通知,顺序等价);
- * - renderedOrder() 复刻渲染端排序。
- */
 class FakeSlots {
   constructor(entries) {
     this.list = entries
@@ -107,8 +85,6 @@ class FakeSlots {
     return this.listeners.size
   }
 }
-
-// ---- A. 纯计划 -------------------------------------------------------------
 
 console.log('--- A① 上游序 → 目标序:schedule / job-list 挪到最后 ---')
 {
@@ -178,8 +154,6 @@ console.log('--- A④ 无 id / 已正确 / 重复表项 ---')
   ])
 }
 
-// ---- B. 服务面装配(直载 src,不经产物) ------------------------------------
-
 console.log('--- B① slots.inject 后立刻重排,渲染序为目标序 ---')
 {
   const slots = new FakeSlots(upstreamEntries())
@@ -196,7 +170,6 @@ console.log('--- B② 后到的注册(独立 bundle 的图标)被重放带进正
   slots.register(entry('desktop-notify', 120))
   check('后到图标排最后', slots.renderedOrder(), [...EXPECTED, 'desktop-notify'])
   slots.register(entry('agent-team-late', 20))
-  // 未列出项之间按各自原始 order 排名(20 < 120),所以后到的这个排在 desktop-notify 之前
   check('后到图标按原 order 落在未列出段', slots.renderedOrder(), [
     ...EXPECTED,
     'agent-team-late',
@@ -244,8 +217,6 @@ console.log('--- B④ 服务缺席 / entries 抛错:no-op,不抛 ---')
   check('entries 抛错记了 warn', warnings.length, 1)
   check('注册变化订阅仍已登记', throwing.listenerCount(), 1)
 }
-
-// ---- C. 构建产物装配 -------------------------------------------------------
 
 console.log('--- C① lib/client.js 注册与声明 ---')
 {

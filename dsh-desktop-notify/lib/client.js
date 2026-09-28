@@ -122,7 +122,6 @@ function createBrowserDelivery(win, doc) {
         const notification = new ctor(plan.title, {
           body: plan.body,
           tag: plan.tag,
-          // 同一个 tag 的后续通知仍要重新提醒,否则第二条会被静默替换掉
           renotify: true,
           silent: false
         });
@@ -153,7 +152,6 @@ function createNotifyStore(env) {
   const readPermission = () => env.supported ? normalize(env.permission()) : "unsupported";
   let snapshot = {
     permission: readPermission(),
-    // 默认开启:用户点按钮授权后立即生效;主动关掉才写 0
     enabled: env.readEnabled() !== false
   };
   const publish = (next) => {
