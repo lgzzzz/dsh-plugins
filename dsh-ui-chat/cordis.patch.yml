@@ -2,5 +2,5 @@
   disabled: true
 - insert:
     - id: ui-chat-lgz
-      name: dsh-client-ui-chat-lgz
+      name: ui-chat-lgz
 

@@ -15,7 +15,7 @@ importers:
         specifier: ^0.22.2
         version: 0.22.14(typescript@5.9.3)
 
-  dsh-client-ui-chat:
+  dsh-ui-chat:
     dependencies:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.4

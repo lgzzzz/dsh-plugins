@@ -1,5 +1,5 @@
 {
-    "name": "dsh-client-ui-chat-lgz",
+    "name": "ui-chat-lgz",
     "description": "This is a fork of ui-chat code in deepseek harness. Chat Conversation target, node definitions, renderers, and details surface",
     "version": "0.2.0-rc.1",
     "publishConfig": {
