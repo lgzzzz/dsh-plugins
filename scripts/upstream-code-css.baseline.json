@@ -1,0 +1,41 @@
+{
+  "capturedFrom": "C:\\Users\\LGZ\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-web-frontend\\dist\\assets\\index-BPHePDI_.css",
+  "capturedAt": "2026-09-29T17:08:05.348Z",
+  "rules": {
+    "inline-code": {
+      "label": "行内代码芯片（本插件用 font-size 覆盖的就是这条）",
+      "tokens": [
+        "font-size:.875em!important"
+      ],
+      "digest": "1354498e5d4ce426"
+    },
+    "heading-code": {
+      "label": "标题内代码（走 font:inherit，不受本插件影响）",
+      "tokens": [
+        "font:inherit"
+      ],
+      "digest": "171b0994bbdaccb0"
+    },
+    "compact-code": {
+      "label": "紧凑视图行内代码（1em）",
+      "tokens": [
+        "font-size:1em!important"
+      ],
+      "digest": "90e4845127faefe5"
+    },
+    "markdown-root": {
+      "label": "markdown 根部（本插件 [class*=\"markdown\"] 断言的依据）",
+      "tokens": [
+        "font:var(--dsw-font-markdown-base)"
+      ],
+      "digest": "d5ae1fbab5f619d4"
+    },
+    "code-block-token": {
+      "label": "围栏块令牌消费点",
+      "tokens": [
+        "--dsw-font-markdown-code-block"
+      ],
+      "digest": "af61c2ba3a4e37fc"
+    }
+  }
+}
