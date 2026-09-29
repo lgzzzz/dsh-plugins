@@ -9,8 +9,7 @@ $Plugins = @(
   'dsh-git-guard'
   'dsh-header-action-order'
   'dsh-ui-chat'
-  'dsh-ui-conversation'
-  'dsh-ui-theme'
+  'dsh-ui-css-patches'
 )
 
 $failed = @()

@@ -1,0 +1,35 @@
+{
+  "name": "dsh-ui-css-patches",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local persistent Web UI CSS patches, merged from dsh-code-card-fonts / dsh-rightbar-fonts / dsh-rightbar-tab-width / dsh-fullwidth-chat into one stylesheet and one lifecycle: full-width conversation column, fixed-width dockkit tabs, right-bar preview/changes-review font scale, and 14px conversation-card titles/summaries/content/code/tables plus calc(14px * 0.5) message-card spacing. Anchors are stable data-* attributes and CSS variables only (no positional :nth-child / :has() guessing); scripts/check-css.mjs verifies those upstream tokens after every build.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown && node ../scripts/check-css.mjs",
+    "check:css": "node ../scripts/check-css.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}
