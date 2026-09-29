@@ -4,8 +4,8 @@
  * mode enum, so adding a mode changes only the table below.
  */
 
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { TranscriptViewMode } from '../chat-settings.ts'
+import type {ObservableSnapshot} from '@deepseek-ai/dsh-client-store'
+import type {TranscriptViewMode} from '../chat-settings.ts'
 
 /** Presentation capabilities that one work-details mode enables. */
 export interface ChatPresentationPolicy {
@@ -45,7 +45,7 @@ const POLICIES: Readonly<Record<TranscriptViewMode, ChatPresentationPolicy>> = {
   },
   verbose: {
     mode: 'verbose',
-    foldCompletedTurns: false,
+    foldCompletedTurns: true,
     stepGrouping: 'none',
     liveProcessDetail: false,
     settledReasoningPreview: true,
