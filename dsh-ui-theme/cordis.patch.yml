@@ -1,7 +1,0 @@
-# ui-theme-lgz 的 web bundle 挂载行：禁用上游 ui-theme 行（否则两份插件会重复
-# 注入 boot palette，并对同一个 settings 命名空间重复 configure），插入本 fork。
-- id: ui-theme
-  disabled: true
-- insert:
-    - id: ui-theme-lgz
-      name: ui-theme-lgz
