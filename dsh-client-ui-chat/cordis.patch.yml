@@ -1,6 +1,6 @@
 - id: ui-chat
   disabled: true
 - insert:
-    - id: ui-chat-lgzzzz
-      name: dsh-client-ui-chat-lgzzzz
+    - id: ui-chat-lgz
+      name: dsh-client-ui-chat-lgz
 
