@@ -12,6 +12,7 @@ PLUGINS=(
   dsh-directory-picker-browse
   dsh-git-guard
   dsh-header-action-order
+  dsh-ui-css-patches
 )
 
 failed=()

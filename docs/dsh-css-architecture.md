@@ -72,7 +72,9 @@ body[data-ds-dark-theme] { --dsw-static-…: …; /* 暗色覆盖 */ }
 | | 选择器 | 作用域 | 目的 |
 |---|---|---|---|
 | **DSH 上游** | 哈希类 + CSS 变量 + `data-*` 状态开关 | 组件局部 + 令牌全局 | 组件自身样式、主题、状态 |
-| **插件 dsh-rightbar-tab-width** | `[data-dockkit-tab][role="tab"]` 复合属性选择器 | 全局属性选择器（受属性限定） | 跨构建稳定锚定 dockkit tab 并覆盖上游 |
+| **插件 dsh-ui-css-patches** | `[data-dockkit-tab][role="tab"]` 复合属性选择器 | 全局属性选择器（受属性限定） | 跨构建稳定锚定 dockkit tab 并覆盖上游 |
+
+`dsh-ui-css-patches` 是统一后的 CSS 补丁插件：它合并了原 `dsh-code-card-fonts` / `dsh-rightbar-fonts` / `dsh-rightbar-tab-width` / `dsh-fullwidth-chat` 四组规则，只注入一个 `<style data-plugin="dsh-ui-css-patches">`，规则覆盖顺序由表内源码顺序唯一确定。它依赖的上游 token（`data-*` 属性 + CSS 变量）由 `scripts/check-css.mjs` + `css-contract.json` 在每次构建后逐条静态校验，改动上游版本后重跑 `pnpm -r build` 即可发现静默失效。
 
 插件用复合属性选择器，是因为上游类名带构建哈希、每版必变，无法可靠命中；`data-dockkit-tab` + `role="tab"` 是稳定的语义锚点，且特异性 `(0,2,0)` > 上游 `.tab` `(0,1,0)`，无需 `!important` 即可覆盖。
 
