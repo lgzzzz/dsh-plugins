@@ -1,0 +1,7 @@
+# ui-conversation-lgz 的 web bundle 挂载行：禁用上游 ui-conversation 行（否则
+# 两份插件会注册同一批 cordis conversation 服务，产生重复注册错误），插入本 fork。
+- id: ui-conversation
+  disabled: true
+- insert:
+    - id: ui-conversation-lgz
+      name: ui-conversation-lgz

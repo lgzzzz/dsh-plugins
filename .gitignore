@@ -15,13 +15,11 @@ package-lock.json
 
 # 构建产物一律不入仓:以下 lib/ 全部由 `pnpm -r build`(tsdown)生成,可按需重建,
 # clone 后须先构建才能被 DSH 加载(profile 以 link: 指向本目录,读取 lib/client.js)。
-# 例外:dsh-fullwidth-chat/lib 是该包的手写源码(无 src/、无构建脚本),照常入仓。
 dsh-ui-chat/lib/
-dsh-code-card-fonts/lib/
+dsh-ui-conversation/lib/
+dsh-ui-theme/lib/
 dsh-desktop-notify/lib/
 dsh-header-action-order/lib/
-dsh-rightbar-fonts/lib/
-dsh-rightbar-tab-width/lib/
 
 # 本地排查痕迹(探针脚本产出、快照、备份)
 .scratch/

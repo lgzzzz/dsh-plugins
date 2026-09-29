@@ -15,7 +15,9 @@
  *     module-table row nor an inline-safe wire layer / vendored library /
  *     generated /remote contribution fails the build (upstream purity gate);
  *   - `*.module.css` compiles through lightningcss into a hashed class map +
- *     a runtime `<style>` injector, and global `*.css` is injected too;
+ *     a runtime `<style>` injector, global `*.css` is injected too, and
+ *     `*.css?inline` exports the compiled text for a plugin-owned lifecycle
+ *     effect (the ui-theme fork mounts its global sheets that way);
  *   - the node (host) half is a plain ESM library bundle that keeps production
  *     dependencies external.
  *
@@ -31,7 +33,11 @@ import { transform } from 'lightningcss'
 /** Virtual-id suffix keeps module CSS away from tsdown's own css pipeline. */
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const GLOBAL_CSS_VIRTUAL_PREFIX = '\0dsh-global-css:'
+const INLINE_CSS_VIRTUAL_PREFIX = '\0dsh-inline-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
+
+/** Query suffix marking a stylesheet a plugin imports as text, not as a side effect. */
+const INLINE_CSS_QUERY = '?inline'
 
 /**
  * Module-table seeds the DSH web shell shares. Mirrors deepseek-harness
@@ -157,6 +163,35 @@ function cssGlobalInlinePlugin(id) {
 }
 
 /**
+ * Export a `x.css?inline` stylesheet as compiled text.
+ *
+ * The importing plugin owns the lifecycle (it creates and removes the `<style>`
+ * tag inside its own effect), which is why the sheet must not self-inject the
+ * way `x.css` and `x.module.css` do. Resolution runs before the global handler:
+ * a `?inline` source still names a stylesheet, and the first plugin to claim a
+ * specifier wins.
+ */
+function cssTextInlinePlugin() {
+  return {
+    name: 'dsh-css-text-inline',
+    resolveId(source, importer) {
+      if (!source.endsWith(`.css${INLINE_CSS_QUERY}`)) return null
+      const stylesheet = source.slice(0, -INLINE_CSS_QUERY.length)
+      const abs = importer !== undefined ? resolve(dirname(importer), stylesheet) : stylesheet
+      return INLINE_CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
+    },
+    async load(virtualId) {
+      if (!virtualId.startsWith(INLINE_CSS_VIRTUAL_PREFIX)) return null
+      const fileId = virtualId.slice(INLINE_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
+      this.addWatchFile(fileId)
+      const source = await readFile(fileId)
+      const { code } = transform({ filename: fileId, code: source, minify: true })
+      return `export default ${JSON.stringify(code.toString())};`
+    },
+  }
+}
+
+/**
  * Build-time mirror of the module-edge rules: an inlined `@deepseek-ai` value
  * import must be identity-free (a wire layer, vendored library, or generated
  * /remote contribution); anything else must be a requested module-table row
@@ -215,7 +250,18 @@ export function clientBundle(id, options = {}) {
       alwaysBundle: specifier => !isBuiltin(specifier) && !isRequested(specifier),
     },
     inputOptions: {
-      resolve: { conditionNames: ['browser', 'import', 'module', 'default'] },
+      // Dual-mode libraries (lexical's `exports` carry development/production/
+      // node conditions; the node file picks its flavor with a top-level await
+      // a CJS bundle cannot carry) must resolve their static flavor. Naming the
+      // env condition first is what selects it: condition order is the
+      // resolver's own priority list, and `node` would otherwise win by being
+      // in the default condition set for a `platform: 'browser'` build.
+      resolve: {
+        conditionNames: [
+          nodeEnv === 'development' ? 'development' : 'production',
+          'browser', 'import', 'module', 'default',
+        ],
+      },
     },
     define: {
       ...clientBuildEnvironmentDefines(process.env),
@@ -223,7 +269,12 @@ export function clientBundle(id, options = {}) {
       'import.meta.env.MODE': JSON.stringify(nodeEnv),
       'import.meta.env': JSON.stringify({ MODE: nodeEnv }),
     },
-    plugins: [purityGatePlugin(id, isRequested), cssModulesInlinePlugin(id), cssGlobalInlinePlugin(id)],
+    plugins: [
+      purityGatePlugin(id, isRequested),
+      cssModulesInlinePlugin(id),
+      cssTextInlinePlugin(),
+      cssGlobalInlinePlugin(id),
+    ],
     outputOptions: {
       entryFileNames: 'client.js',
       banner: chunk =>
