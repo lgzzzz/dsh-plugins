@@ -1,0 +1,36 @@
+{
+  "description": "四个 CSS 补丁插件依赖的 DSH 前端稳定契约（data-* 属性 + CSS 变量）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中。",
+  "checks": [
+    { "id": "flow-kind-attr", "plugin": "dsh-code-card-fonts", "token": "data-chat-flow-kind", "paths": ["dsh-client-ui-chat/lib"], "hint": "上游移除/改名 data-chat-flow-kind 会让 code-card-fonts 几乎所有选择器失效" },
+    { "id": "disclosure-row-attr", "plugin": "dsh-code-card-fonts", "token": "data-disclosure-row", "paths": ["dsh-client-ui-primitives/lib"], "hint": "披露行锚点消失" },
+    { "id": "step-process-body-attr", "plugin": "dsh-code-card-fonts", "token": "data-step-process-body", "paths": ["dsh-client-ui-chat/lib"], "hint": "步骤处理体锚点消失" },
+    { "id": "sample-attr", "plugin": "dsh-code-card-fonts", "token": "data-sample", "paths": ["dsh-client-ui-tool/lib"], "hint": "样例卡(bash)锚点消失" },
+    { "id": "tool-attr", "plugin": "dsh-code-card-fonts", "token": "data-tool", "paths": ["dsh-client-ui-tool/lib"], "hint": "工具卡锚点消失" },
+    { "id": "turn-trigger-attr", "plugin": "dsh-code-card-fonts", "token": "data-turn-trigger", "paths": ["dsh-client-ui-chat/lib"], "hint": "轮次触发卡锚点消失" },
+    { "id": "markdown-variant-attr", "plugin": "dsh-code-card-fonts", "token": "data-markdown-variant", "paths": ["dsh-client-ui-primitives/lib"], "hint": "compact markdown 锚点消失" },
+    { "id": "turn-process-attr", "plugin": "dsh-code-card-fonts", "token": "data-turn-process", "paths": ["dsh-client-ui-chat/lib"], "hint": "turn-process 锚点消失" },
+    { "id": "manual-compaction-kind", "plugin": "dsh-code-card-fonts", "token": "manual-compaction", "paths": ["dsh-client-ui-chat/lib"], "hint": "data-chat-flow-kind 的 compaction/manual-compaction 取值消失" },
+    { "id": "flow-gap-var", "plugin": "dsh-code-card-fonts", "token": "--dsh-chat-flow-gap", "paths": [], "hint": "上游不再消费 --dsh-chat-flow-gap，间距覆盖失效" },
+    { "id": "secondary-size-var", "plugin": "dsh-code-card-fonts", "token": "--dsh-content-font-size-secondary", "paths": [], "hint": "标题/摘要不再读取 secondary 字号变量，变量覆盖修复会失效" },
+    { "id": "code-block-small-var", "plugin": "dsh-code-card-fonts", "token": "--dsw-font-markdown-code-block-small", "paths": [], "hint": "小号代码字体变量被上游删除/改名" },
+    { "id": "code-block-var", "plugin": "dsh-code-card-fonts", "token": "--dsw-font-markdown-code-block", "paths": [], "hint": "代码字体变量被上游删除/改名" },
+    { "id": "code-family-var", "plugin": "dsh-code-card-fonts", "token": "--ds-font-family-code", "paths": [], "hint": "等宽字体族变量消失" },
+
+    { "id": "textpreview-body-attr", "plugin": "dsh-rightbar-fonts", "token": "data-textpreview-body", "paths": ["dsh-client-ui-sidebar-documentpreview/lib"], "hint": "文本预览体锚点消失" },
+    { "id": "changes-review-attr", "plugin": "dsh-rightbar-fonts", "token": "data-changes-review", "paths": ["dsh-client-ui-deliverables/lib"], "hint": "变更审查锚点消失" },
+    { "id": "diff-line-attr", "plugin": "dsh-rightbar-fonts", "token": "data-diff-line", "paths": ["dsh-client-ui-deliverables/lib"], "hint": "diff 行锚点消失" },
+    { "id": "document-markdown-attr", "plugin": "dsh-rightbar-fonts", "token": "data-document-markdown", "paths": ["dsh-client-ui-sidebar-documentpreview/lib"], "hint": "Markdown 文档锚点消失" },
+    { "id": "table-head-var", "plugin": "dsh-rightbar-fonts", "token": "--dsw-font-markdown-table-head", "paths": [], "hint": "表头字体变量被上游删除/改名" },
+    { "id": "table-var", "plugin": "dsh-rightbar-fonts", "token": "--dsw-font-markdown-table", "paths": [], "hint": "表格字体变量被上游删除/改名" },
+    { "id": "content-size-var", "plugin": "dsh-rightbar-fonts", "pattern": "--dsh-content-font-size(?!-)", "paths": [], "hint": "正文字号变量(--dsh-content-font-size)消失" },
+    { "id": "content-delta-var", "plugin": "dsh-rightbar-fonts", "pattern": "--dsh-content-font-delta(?!-)", "paths": [], "hint": "字号增量变量(--dsh-content-font-delta)消失" },
+    { "id": "family-var", "plugin": "dsh-rightbar-fonts", "token": "--dsw-font-family", "paths": [], "hint": "正文 font-family 变量消失" },
+
+    { "id": "dockkit-tab-role", "plugin": "dsh-rightbar-tab-width", "pattern": "role:\"tab\"[\\s\\S]{0,300}?\"data-dockkit-tab\"", "paths": ["dsh-web-frontend/dist/assets"], "hint": "dockkit 标签不再同时携带 role=tab 与 data-dockkit-tab，复合选择器失效" },
+
+    { "id": "conversation-content-attr", "plugin": "dsh-fullwidth-chat", "token": "data-conversation-content", "paths": ["dsh-client-ui-conversation/lib"], "hint": "对话正文锚点消失" },
+    { "id": "main-conversation-slot", "plugin": "dsh-fullwidth-chat", "token": "main.conversation", "paths": ["dsh-client-ui-conversation/lib"], "hint": "main.conversation slot 键消失" },
+    { "id": "chat-width-declared", "plugin": "dsh-fullwidth-chat", "pattern": "--dsh-chat-content-width\\s*:", "paths": [], "hint": "上游不再声明 --dsh-chat-content-width（改为消费但未声明时会静默失效）" },
+    { "id": "chat-width-consumed", "plugin": "dsh-fullwidth-chat", "token": "var(--dsh-chat-content-width", "paths": [], "hint": "上游不再消费 --dsh-chat-content-width，宽度覆盖无效" }
+  ]
+}
