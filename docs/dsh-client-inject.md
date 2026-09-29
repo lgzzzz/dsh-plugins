@@ -74,4 +74,4 @@
 
 ### 实际案例：禁用被 `inject` 的官方插件仍正常
 
-官方 `@deepseek-ai/dsh-client-ui-chat` 被 7 个官方插件（attachment、deliverables、goal、plan、settings-account、subagent、workflow-run）写进各自的 `dsh.client.inject`。本地 fork 用 `cordis.patch.yml` 禁用官方 `ui-chat`、插入 `ui-chat-lgzzzz`（不同包名），并逐字拷贝官方 `apply.ts` 注册同一批 cordis 服务。结果：那些 `inject` 里的官方包名落空 → 静默跳过、不报错；fork 在服务层顶替 → 功能照常。二者叠加，就是"正常启动且一切正常"。
+官方 `@deepseek-ai/dsh-client-ui-chat` 被 7 个官方插件（attachment、deliverables、goal、plan、settings-account、subagent、workflow-run）写进各自的 `dsh.client.inject`。本地 fork 用 `cordis.patch.yml` 禁用官方 `ui-chat`、插入 `ui-chat-lgz`（包名同为 `ui-chat-lgz`，与官方不同名），并逐字拷贝官方 `apply.ts` 注册同一批 cordis 服务。结果：那些 `inject` 里的官方包名落空 → 静默跳过、不报错；fork 在服务层顶替 → 功能照常。二者叠加，就是"正常启动且一切正常"。
