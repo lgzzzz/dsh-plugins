@@ -1,0 +1,40 @@
+{
+  "name": "dsh-focus-free-shortcuts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local runtime patch: make the right-Sidebar pane commands (fullscreen primary+alt+Enter, split primary+Backslash) and the double-Escape turn stop fire without first clicking into the pane or the composer. Both bundled commands resolve their owner from the keydown event target, and a keydown is dispatched to the focused element (or <body> when nothing is focused), so both silently decline until the user focuses the exact region: `pane.fullscreen.toggle` / `pane.split` call SidebarRight.focusedTarget(element) and return command.noFocus, while the fixed `response.stop` sequence requires its target inside [data-conversation-session] / [data-conversation-region]. This plugin opens its own fixed-input observer — the channel that runs for every keydown before configurable dispatch and can consume the press — and resolves the same owner without DOM focus: SidebarRight.commandTarget()'s active-dock-pane fallback for the pane commands, and the main-view Session for the stop (`sessions.list.byId[id].retainedBy.mainView > 0`, the same fact UiSession uses). It consumes a press only when it actually acts, and stands down whenever the bundled command owns that press, so exactly one owner remains per press. Nothing is registered in the shortcut catalog: no default bindings, no conflicts, no settings edits — and because the bridge follows the effective catalog row, a rebound, disabled, or absent bundled command is left alone. Pane keys are Web-runtime only: Desktop dispatches configurable bindings from its native bridge, where a DOM-side consume cannot suppress the bundled press.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "node test-focus-free.mjs",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-shortcuts": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "^0.2.0-rc.2",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}
