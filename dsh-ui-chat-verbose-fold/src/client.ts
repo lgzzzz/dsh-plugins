@@ -9,16 +9,17 @@
 import {
   CHAT_VIEW_ID, CHAT_VIEW_SLOT, createFoldPatchState, patchChatView,
 } from './policy-fold.ts'
-import type { ClientContext, SlotsLike } from './types.ts'
+import type { Context } from '@deepseek-ai/cordis'
+import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 
 export const name = 'dsh-ui-chat-verbose-fold'
 
 export const inject = ['slots']
 
 /** Read the slots registry, tolerating an absent service. */
-function getSlots(ctx: ClientContext): SlotsLike | undefined {
+function getSlots(ctx: Context): SlotRegistry | undefined {
   if (typeof ctx.get !== 'function') return undefined
-  const value = ctx.get('slots') as SlotsLike | undefined
+  const value = ctx.get('slots') as SlotRegistry | undefined
   return value === null || value === undefined ? undefined : value
 }
 
@@ -29,7 +30,7 @@ function warn(message: string, detail?: unknown): void {
 }
 
 /** Install the fold patch on one client context. */
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: Context): void {
   const slots = getSlots(ctx)
   if (slots === undefined) return
 

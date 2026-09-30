@@ -11,9 +11,10 @@
  * the two live objects (the entry's `inject` and the source's `getSnapshot`),
  * which keeps the decisions testable against plain fakes.
  */
-import type {
-  PresentationPolicyLike, PresentationSourceLike, SlotEntryLike, SlotsLike,
-} from './types.ts'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { ChatPresentationPolicy } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 
 /** Slot that renders the conversation target's body. */
 export const CHAT_VIEW_SLOT = 'conversation.view'
@@ -59,7 +60,7 @@ export function createFoldPatchState(): FoldPatchState {
  * @param policy - the current policy read from the presentation source.
  * @returns the same policy, or a folded copy when Verbose still had it open.
  */
-export function foldCompletedForVerbose(policy: PresentationPolicyLike): PresentationPolicyLike {
+export function foldCompletedForVerbose(policy: ChatPresentationPolicy): ChatPresentationPolicy {
   if (policy.mode !== VERBOSE_MODE || policy.foldCompletedTurns === true) return policy
   return { ...policy, foldCompletedTurns: true }
 }
@@ -71,7 +72,7 @@ export function foldCompletedForVerbose(policy: PresentationPolicyLike): Present
  * @param face - whatever the wrapped inject factory returned.
  * @returns the source, or undefined when the face does not carry one.
  */
-export function presentationOf(face: unknown): PresentationSourceLike | undefined {
+export function presentationOf(face: unknown): ObservableSnapshot<ChatPresentationPolicy> | undefined {
   if (face === null || typeof face !== 'object') return undefined
   const hooks = (face as { hooks?: unknown }).hooks
   if (hooks === null || typeof hooks !== 'object') return undefined
@@ -79,7 +80,7 @@ export function presentationOf(face: unknown): PresentationSourceLike | undefine
   if (source === null || typeof source !== 'object') return undefined
   const candidate = source as { getSnapshot?: unknown; subscribe?: unknown }
   if (typeof candidate.getSnapshot !== 'function' || typeof candidate.subscribe !== 'function') return undefined
-  return source as PresentationSourceLike
+  return source as ObservableSnapshot<ChatPresentationPolicy>
 }
 
 /**
@@ -87,7 +88,7 @@ export function presentationOf(face: unknown): PresentationSourceLike | undefine
  * @param slots - the slots registry.
  * @returns the entry, or undefined while it is absent or the ledger is unreadable.
  */
-export function findChatViewEntry(slots: SlotsLike): SlotEntryLike | undefined {
+export function findChatViewEntry(slots: SlotRegistry): StoredEntry | undefined {
   if (typeof slots.entries !== 'function') return undefined
   const entries = slots.entries(CHAT_VIEW_SLOT)
   if (entries === undefined || entries === null) return undefined
@@ -102,7 +103,7 @@ export function findChatViewEntry(slots: SlotsLike): SlotEntryLike | undefined {
  * @param state - bookkeeping that keeps the wrap single-shot.
  * @returns whether this call performed the wrap.
  */
-export function wrapPresentationSource(source: PresentationSourceLike, state: FoldPatchState): boolean {
+export function wrapPresentationSource(source: ObservableSnapshot<ChatPresentationPolicy>, state: FoldPatchState): boolean {
   if (state.patchedSources.has(source)) return false
   state.patchedSources.add(source)
   const original = source.getSnapshot.bind(source)
@@ -129,14 +130,14 @@ export type PatchOutcome =
  * @param warn - optional diagnostic sink for a shape change.
  * @returns what this scan did.
  */
-export function patchChatView(slots: SlotsLike, state: FoldPatchState, warn?: FoldWarn): PatchOutcome {
+export function patchChatView(slots: SlotRegistry, state: FoldPatchState, warn?: FoldWarn): PatchOutcome {
   const entry = findChatViewEntry(slots)
   if (entry === undefined || entry.inject === undefined) return 'pending'
   if (state.wrappedEntries.has(entry)) return 'already'
   state.wrappedEntries.add(entry)
   state.wrappedCount += 1
   const original = entry.inject
-  entry.inject = (...args: unknown[]): unknown => {
+  entry.inject = (...args: never[]): Record<string, unknown> => {
     const face = original(...args)
     const source = presentationOf(face)
     if (source === undefined) {
