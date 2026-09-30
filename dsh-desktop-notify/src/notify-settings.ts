@@ -1,4 +1,5 @@
 import { createElement, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { NotifyStore, NotifyStoreState } from './notify-store.ts'
 
 const STYLE_TAG_ID = 'dsh-desktop-notify/settings.css'
@@ -45,8 +46,8 @@ export function descriptionOf(state: NotifyStoreState): string {
     : '已关闭:不再发送系统通知'
 }
 
-export function createNotifySettingsRow(store: NotifyStore): () => unknown {
-  return function NotifySettingsRow(): unknown {
+export function createNotifySettingsRow(store: NotifyStore): () => ReactNode {
+  return function NotifySettingsRow(): ReactNode {
     const [state, setState] = useState<NotifyStoreState>(() => store.getSnapshot())
     useEffect(
       () =>

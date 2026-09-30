@@ -1,4 +1,10 @@
-import type { SlotEntryLike, SlotEntryOptionsLike, SlotsLike } from './types.ts'
+import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+// 空导入(不引入任何名字):只为让 TS 加载 ui-conversation/client 的类型 —— 该包用
+// `declare module '@deepseek-ai/dsh-client-ui-slots'` 给 SlotMap 追加了
+// 'conversation.session.header.actions' 这个 key。TS 只处理被 import 过的文件,
+// 少了这一行 SlotMap 就只剩 'root',下面 slots.entries(HEADER_ACTION_SLOT) 会报类型错。
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 export const HEADER_ACTION_SLOT = 'conversation.session.header.actions'
 
@@ -13,13 +19,13 @@ export const HEADER_ACTION_ORDER: readonly string[] = [
 export const UNLISTED_ORDER_BASE = 1000
 
 export interface OrderWrite {
-  target: SlotEntryOptionsLike
+  target: StoredEntry['options']
   order: number
   id: string
 }
 
 export function planOrderWrites(
-  entries: readonly SlotEntryLike[],
+  entries: readonly StoredEntry[],
   preferred: readonly string[] = HEADER_ACTION_ORDER,
 ): OrderWrite[] {
   const rank = new Map<string, number>()
@@ -32,7 +38,7 @@ export function planOrderWrites(
     const id = entry.options?.id
     return id === undefined || !rank.has(id)
   })
-  const unlistedRank = new Map<SlotEntryLike, number>()
+  const unlistedRank = new Map<StoredEntry, number>()
   for (const [index, entry] of [...unlisted].sort(byCurrentOrder).entries()) unlistedRank.set(entry, index)
 
   const writes: OrderWrite[] = []
@@ -47,12 +53,12 @@ export function planOrderWrites(
   return writes
 }
 
-function byCurrentOrder(left: SlotEntryLike, right: SlotEntryLike): number {
+function byCurrentOrder(left: StoredEntry, right: StoredEntry): number {
   return (left.options?.order ?? 0) - (right.options?.order ?? 0)
 }
 
 export function applyHeaderActionOrder(
-  slots: SlotsLike,
+  slots: SlotRegistry,
   preferred: readonly string[] = HEADER_ACTION_ORDER,
 ): number {
   if (typeof slots.entries !== 'function') return 0

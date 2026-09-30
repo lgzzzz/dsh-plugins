@@ -1,17 +1,18 @@
 import { HEADER_ACTION_ORDER, HEADER_ACTION_SLOT, applyHeaderActionOrder } from './order.ts'
-import type { ClientContext, SlotsLike } from './types.ts'
+import type { Context } from '@deepseek-ai/cordis'
+import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 
 export const name = 'dsh-header-action-order'
 
 export const inject = ['slots']
 
-function getSlots(ctx: ClientContext): SlotsLike | undefined {
+function getSlots(ctx: Context): SlotRegistry | undefined {
   if (ctx.get === undefined || ctx.get === null) return undefined
-  const value = ctx.get('slots') as SlotsLike | undefined
+  const value = ctx.get('slots') as SlotRegistry | undefined
   return value === null || value === undefined ? undefined : value
 }
 
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: Context): void {
   const slots = getSlots(ctx)
   if (slots === undefined) return
 
