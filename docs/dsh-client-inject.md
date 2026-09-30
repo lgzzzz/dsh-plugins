@@ -72,6 +72,8 @@
 | `dsh.client.external`（硬模块依赖） | Host `orderByModuleGraph()` 构图 `throw`（缺供应商/环/自依赖） | 客户端无法启动 / 该 entry 失败 |
 | cordis 服务 `inject`（`ctx.get` / `inject` 数组） | 服务未提供 | `apply()` 等待或失败 |
 
-### 实际案例：禁用被 `inject` 的官方插件仍正常
+### 历史案例：禁用被 `inject` 的官方插件仍正常
+
+> 该 fork（`dsh-ui-chat`）已于 2026-09-30 从仓库移除；此处保留案例本身，因为"软 `inject` 落空不报错"的行为仍然成立。
 
 官方 `@deepseek-ai/dsh-client-ui-chat` 被 7 个官方插件（attachment、deliverables、goal、plan、settings-account、subagent、workflow-run）写进各自的 `dsh.client.inject`。本地 fork 用 `cordis.patch.yml` 禁用官方 `ui-chat`、插入 `ui-chat-lgz`（包名同为 `ui-chat-lgz`，与官方不同名），并逐字拷贝官方 `apply.ts` 注册同一批 cordis 服务。结果：那些 `inject` 里的官方包名落空 → 静默跳过、不报错；fork 在服务层顶替 → 功能照常。二者叠加，就是"正常启动且一切正常"。

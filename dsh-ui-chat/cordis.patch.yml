@@ -1,6 +1,0 @@
-- id: ui-chat
-  disabled: true
-- insert:
-    - id: ui-chat-lgz
-      name: ui-chat-lgz
-

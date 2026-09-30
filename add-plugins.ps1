@@ -8,8 +8,10 @@ $Plugins = @(
   'dsh-directory-picker-browse'
   'dsh-git-guard'
   'dsh-header-action-order'
-  'dsh-ui-chat'
   'dsh-ui-css-patches'
+  # verbose 折叠由 dsh-ui-chat-verbose-fold 在运行时给官方 ui-chat 的
+  # conversation.view#chat 注入面打补丁完成。
+  'dsh-ui-chat-verbose-fold'
 )
 
 $failed = @()
