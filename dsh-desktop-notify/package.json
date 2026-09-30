@@ -26,7 +26,7 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check": "node --check lib/client.js && node --check index.ts",
-    "test": "node test-notify.mjs"
+    "test": "node test/run-all.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
