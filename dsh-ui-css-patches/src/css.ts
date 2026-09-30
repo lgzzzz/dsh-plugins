@@ -106,4 +106,8 @@ export const CSS = `
 [data-turn-trigger] > div {
   --dsw-font-xxs-12: 14px/21px var(--dsw-font-family);
 }
+
+[data-slot="conversation.session.header.actions"] * {
+  font-size: var(--dsh-content-font-size, 14px) !important;
+}
 `

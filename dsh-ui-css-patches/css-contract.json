@@ -27,6 +27,9 @@
     {"id":"dockkit-tab-role","pattern":"role:\"tab\"[\\s\\S]{0,300}?\"data-dockkit-tab\"","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 标签页复合锚点消失，标签宽度从 100px 变为自适应"},
     {"id":"conversation-content-attr","token":"data-conversation-content","paths":["dsh-client-ui-conversation/lib"],"hint":"data-conversation-content 属性消失，正文宽度从 100% 变为 920px"},
     {"id":"main-conversation-slot","token":"main.conversation","paths":["dsh-client-ui-conversation/lib"],"hint":"main.conversation slot 键消失，正文宽度从 100% 变为 920px"},
+    {"id":"header-actions-slot","token":"conversation.session.header.actions","paths":["dsh-client-ui-conversation/lib"],"hint":"conversation.session.header.actions slot 键消失，会话头部操作区字号从 14px 变为上游默认的 10–13px"},
+    {"id":"header-actions-render","pattern":"renderSlot\\(\\s*\"conversation\\.session\\.header\\.actions\"","paths":["dsh-client-ui-conversation/lib"],"hint":"会话头部不再渲染 header.actions slot outlet，[data-slot=\"conversation.session.header.actions\"] * 选择器落空，操作区字号从 14px 变为上游默认的 10–13px"},
+    {"id":"slot-outlet-attr","pattern":"\"data-slot\":\\s*slotKey","paths":["dsh-client-ui-renderer/lib"],"hint":"SlotOutlet 不再输出 data-slot=slotKey，所有 [data-slot=…] 锚点（含 header.actions 字号统一、main.conversation 正文宽度）一并落空"},
     {"id":"chat-width-declared","pattern":"--dsh-chat-content-width\\s*:","paths":[],"hint":"--dsh-chat-content-width 声明消失，正文宽度无变化（插件仍覆盖为 100%）"},
     {"id":"chat-width-consumed","token":"var(--dsh-chat-content-width","paths":[],"hint":"var(--dsh-chat-content-width) 消费消失，正文宽度从 100% 变为 920px"}
   ]
