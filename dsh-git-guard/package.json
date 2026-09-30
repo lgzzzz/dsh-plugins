@@ -11,7 +11,8 @@
   },
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node test/run-all.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",

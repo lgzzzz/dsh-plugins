@@ -25,7 +25,7 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "test": "node test-focus-free.mjs",
+    "test": "node test/run-all.mjs",
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "devDependencies": {
