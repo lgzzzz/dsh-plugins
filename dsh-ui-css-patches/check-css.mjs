@@ -3,8 +3,9 @@
 // 验证统一 CSS 补丁插件 dsh-ui-css-patches 所依赖的 data-* 属性与 CSS 变量，
 // 是否仍存在于 DSH Web 前端构建产物中。无需运行时、无需浏览器。
 //
-// 用法:
-//   node scripts/check-css.mjs [--dsh-root <path>] [--manifest <json>]
+// 用法(本脚本与 css-contract.json 同目录,即 dsh-ui-css-patches/):
+//   node dsh-ui-css-patches/check-css.mjs [--dsh-root <path>] [--manifest <json>]
+//   在插件目录内: node check-css.mjs
 // DSH 根目录解析顺序: --dsh-root > $DSH_ROOT > `npm root -g` > 常见全局安装路径
 // (受限沙箱下 `npm root -g` 会因 EPERM 失败,故必须保留无需 spawn 的路径回退)
 //
@@ -15,8 +16,8 @@ import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 
+// 契约清单默认与脚本同目录(随插件一起移动/复制,不依赖仓库根布局)。
 const here = dirname(fileURLToPath(import.meta.url))
-const repoRoot = resolve(here, '..')
 
 function parseArgs(argv) {
   const out = {}
@@ -81,14 +82,14 @@ function firstMatch(needle, files) {
 }
 
 const HELP = `check-css: 构建后 CSS 契约校验器
-  node scripts/check-css.mjs [--dsh-root <path>] [--manifest <json>]
+  node dsh-ui-css-patches/check-css.mjs [--dsh-root <path>] [--manifest <json>]
 `
 
 function main() {
   const a = parseArgs(process.argv.slice(2))
   if (a.help) { console.log(HELP); process.exit(0) }
 
-  const manifestPath = resolve(a.manifest ?? join(repoRoot, 'css-contract.json'))
+  const manifestPath = resolve(a.manifest ?? join(here, 'css-contract.json'))
   if (!existsSync(manifestPath)) { console.error(`[check-css] manifest 不存在: ${manifestPath}`); process.exit(2) }
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 
