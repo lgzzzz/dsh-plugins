@@ -1,0 +1,33 @@
+{
+  "description": "统一 CSS 补丁插件 dsh-ui-css-patches 依赖的 DSH 前端稳定契约（data-* 属性 + CSS 变量）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中。",
+  "checks": [
+    {"id":"flow-kind-attr","token":"data-chat-flow-kind","paths":["dsh-client-ui-chat/lib"],"hint":"data-chat-flow-kind 属性消失，卡片内代码块字体从 14px 变为 11px/19px"},
+    {"id":"disclosure-row-attr","token":"data-disclosure-row","paths":["dsh-client-ui-primitives/lib"],"hint":"data-disclosure-row 属性消失，披露行标题/摘要字体从 14px 变为 13px"},
+    {"id":"sample-attr","token":"data-sample","paths":["dsh-client-ui-tool/lib"],"hint":"data-sample 属性消失，样例卡内代码字体从 14px 变为 11px/19px"},
+    {"id":"tool-attr","token":"data-tool","paths":["dsh-client-ui-tool/lib"],"hint":"data-tool 属性消失，工具卡内代码字体从 14px 变为 11px/19px"},
+    {"id":"turn-trigger-attr","token":"data-turn-trigger","paths":["dsh-client-ui-chat/lib"],"hint":"data-turn-trigger 属性消失，触发条按钮字体从 14px 变为 12px"},
+    {"id":"markdown-variant-attr","token":"data-markdown-variant","paths":["dsh-client-ui-primitives/lib"],"hint":"data-markdown-variant 属性消失，compact 正文字体从 14px 变为 12px"},
+    {"id":"turn-process-attr","token":"data-turn-process","paths":["dsh-client-ui-chat/lib"],"hint":"data-turn-process 属性消失，turn-process 展开体字体从 14px 变为 12px"},
+    {"id":"open-attr","token":"data-open","paths":["dsh-client-ui-chat/lib"],"hint":"data-open 属性消失，展开内容正文从 14px 变为 12px、compact 正文从 14px 变为 13px"},
+    {"id":"manual-compaction-kind","token":"manual-compaction","paths":["dsh-client-ui-chat/lib"],"hint":"manual-compaction 取值消失，压缩卡标题/摘要字体从 14px 变为 13px"},
+    {"id":"secondary-size-var","token":"--dsh-content-font-size-secondary","paths":[],"hint":"--dsh-content-font-size-secondary 变量消失，标题/摘要字体从 14px 变为 13px"},
+    {"id":"code-block-small-var","token":"--dsw-font-markdown-code-block-small","paths":[],"hint":"--dsw-font-markdown-code-block-small 变量消失，小号代码字体从 14px 变为 11px"},
+    {"id":"code-block-var","token":"--dsw-font-markdown-code-block","paths":[],"hint":"--dsw-font-markdown-code-block 变量消失，代码块字体从 14px 变为 11px"},
+    {"id":"xxs-font-var","token":"--dsw-font-xxs-12","paths":[],"hint":"--dsw-font-xxs-12 变量消失，触发条展开体字体从 14px 变为 12px"},
+    {"id":"code-family-var","token":"--ds-font-family-code","paths":[],"hint":"--ds-font-family-code 变量消失，代码字体族从等宽变为系统默认"},
+    {"id":"textpreview-body-attr","token":"data-textpreview-body","paths":["dsh-client-ui-sidebar-documentpreview/lib"],"hint":"data-textpreview-body 属性消失，右栏预览代码字体从 14px 变为 11px"},
+    {"id":"changes-review-attr","token":"data-changes-review","paths":["dsh-client-ui-deliverables/lib"],"hint":"data-changes-review 属性消失，审查面板代码字体从 14px 变为 11px"},
+    {"id":"diff-line-attr","token":"data-diff-line","paths":["dsh-client-ui-deliverables/lib"],"hint":"data-diff-line 属性消失，diff 行高从 22px 变为 18px"},
+    {"id":"document-markdown-attr","token":"data-document-markdown","paths":["dsh-client-ui-sidebar-documentpreview/lib"],"hint":"data-document-markdown 属性消失，文档表格字体从 14px 变为 13px"},
+    {"id":"table-head-var","token":"--dsw-font-markdown-table-head","paths":[],"hint":"--dsw-font-markdown-table-head 变量消失，表头字体从 14px 变为 13px"},
+    {"id":"table-var","token":"--dsw-font-markdown-table","paths":[],"hint":"--dsw-font-markdown-table 变量消失，表格字体从 14px 变为 13px"},
+    {"id":"content-size-var","pattern":"--dsh-content-font-size(?!-)","paths":[],"hint":"--dsh-content-font-size 变量消失，右栏正文从跟随应用字号变为固定 14px"},
+    {"id":"content-delta-var","pattern":"--dsh-content-font-delta(?!-)","paths":[],"hint":"--dsh-content-font-delta 变量消失，右栏行高从 22px+增量变为固定 22px"},
+    {"id":"family-var","token":"--dsw-font-family","paths":[],"hint":"--dsw-font-family 变量消失，文档表格字体族从应用字体变为浏览器默认"},
+    {"id":"dockkit-tab-role","pattern":"role:\"tab\"[\\s\\S]{0,300}?\"data-dockkit-tab\"","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 标签页复合锚点消失，标签宽度从 100px 变为自适应"},
+    {"id":"conversation-content-attr","token":"data-conversation-content","paths":["dsh-client-ui-conversation/lib"],"hint":"data-conversation-content 属性消失，正文宽度从 100% 变为 920px"},
+    {"id":"main-conversation-slot","token":"main.conversation","paths":["dsh-client-ui-conversation/lib"],"hint":"main.conversation slot 键消失，正文宽度从 100% 变为 920px"},
+    {"id":"chat-width-declared","pattern":"--dsh-chat-content-width\\s*:","paths":[],"hint":"--dsh-chat-content-width 声明消失，正文宽度无变化（插件仍覆盖为 100%）"},
+    {"id":"chat-width-consumed","token":"var(--dsh-chat-content-width","paths":[],"hint":"var(--dsh-chat-content-width) 消费消失，正文宽度从 100% 变为 920px"}
+  ]
+}

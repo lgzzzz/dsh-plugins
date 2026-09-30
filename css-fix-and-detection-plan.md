@@ -12,7 +12,7 @@
 3. **失效根因**：上游把「披露行/样例卡」的标题+摘要从直接 `span` 兄弟，包进了 `TextShimmer` 包装层，且标题/摘要改读 `--dsh-content-font-size-secondary` 变量。原来的 `:nth-child` / `:nth-last-child` / `:has()` 位置选择器因此打偏或打空。
 4. **修复方向**：把位置选择器替换为「稳定属性锚点 + 覆盖 CSS 变量」。
 5. **统一重构**：四个插件合并为一个 `dsh-ui-css-patches` 插件——单一 `<style>` 注入点、单一生命周期、单一构建与校验。
-6. **静默失败检测**：一个**构建后静态契约校验器**（`scripts/check-css.mjs` + `css-contract.json`），对上游产物做 token/正则 grep，验证依赖的 `data-*` 属性与 CSS 变量仍存在；无需运行时、无需浏览器。
+6. **静默失败检测**：一个**构建后静态契约校验器**（插件目录内的 `check-css.mjs` + `css-contract.json`），对上游产物做 token/正则 grep，验证依赖的 `data-*` 属性与 CSS 变量仍存在；无需运行时、无需浏览器。
 
 ---
 
@@ -114,6 +114,8 @@ dsh-ui-css-patches/
   src/
     client.ts            # 浏览器半部：注入一个 <style>
     css.ts               # 四组 CSS 合并（已应用 §2 修复）
+  check-css.mjs          # 构建后静态契约校验器（§4）
+  css-contract.json      # 契约清单：data-* / CSS 变量断言（§4）
 lib/client.js            # tsdown 产物（构建生成）
 ```
 
@@ -311,8 +313,8 @@ body [data-step-process-body] {
     "bundle": { "patch": "./cordis.patch.yml" }
   },
   "scripts": {
-    "build": "tsdown && node ../scripts/check-css.mjs",
-    "check:css": "node ../scripts/check-css.mjs",
+    "build": "tsdown && node check-css.mjs",
+    "check:css": "node check-css.mjs",
     "typecheck": "tsc --noEmit",
     "check": "node --check lib/client.js && node --check index.ts"
   },
@@ -341,6 +343,31 @@ export default clientBundle('dsh-ui-css-patches', { entry: 'src/client.ts' })
 
 **`tsconfig.json`**：与现有三个 TS 插件一致（`include: ["index.ts", "src/**/*.ts"]`，`erasableSyntaxOnly` / `verbatimModuleSyntax` 等）。
 
+### 3.5 追加加固：清掉残留的位置选择器（已落盘）
+
+§2 只修了失效规则，但样式表里仍留着两类**能命中、却依赖 DOM 顺序**的选择器。它们日后会像 §1.2 那样静默打偏，因此一并改写成「稳定属性锚点 + 变量覆盖」：
+
+| 原选择器 | 问题 | 现写法 |
+|---|---|---|
+| `[data-turn-trigger] > button > span:nth-child(2)` | 第 2 个 span 只是「恰好」是标题；前面一旦加插图标/徽标即打偏 | `[data-turn-trigger] > button { --dsh-content-font-size: 14px }` |
+| `[data-chat-flow-kind="compaction"] button > span:nth-last-child(3)` / `> span:last-child` | 依赖按钮内 span 数量与末尾位置（当前 4 个 span，含 2 个 `aria-hidden`） | `[data-chat-flow-kind="compaction"], [data-chat-flow-kind="manual-compaction"] { --dsh-content-font-size-secondary: 14px }` |
+| `[data-chat-flow-kind="compaction"] button[aria-expanded="true"] + div` | 相邻兄弟 + 状态属性，双重位置假设 | 同上一条（展开体 `.compactionBody` 也读 `--dsh-content-font-size-secondary`，被同一个变量覆盖） |
+| `[data-turn-trigger] > div > p` / `> div > div` | 硬编码展开体内部层级 | `[data-turn-trigger] > div { --dsw-font-xxs-12: 14px/21px var(--dsw-font-family) }` |
+
+**为什么标题不再逐元素设 `font-size`**：上游 `TurnTriggerNodeView.module.css` 里 `.title` 已经是
+`font-size: var(--dsh-content-font-size, 14px)`，`.explanation` / `.content` 是 `font: var(--dsw-font-xxs-12)`，
+`.compactionTitle` / `.compactionSummary` / `.compactionBody` 是 `font-size: var(--dsh-content-font-size-secondary, 13px)`。
+标题 span 本身**没有任何自有属性**（唯一标识是构建期 CSS module 类名 `._title_xxxx`，随构建变），
+所以不针对该 span 写选择器，而在它的**属性锚点祖先**上重定义它消费的变量——这同时免掉了 `!important`，
+且上游新增/挪动内部元素也依然生效。
+
+代价：语义从「只改标题」放宽为「改该卡片内读同一变量的文字」。对 turn-trigger 按钮，`--dsh-content-font-size`
+只被 title 消费；对 compaction 卡片，只有标题/摘要/展开体读次级变量；对展开体，`--dsw-font-xxs-12`
+当前只有 `.oz9t_a_time` / `.oz9t_a_explanation` / `.oz9t_a_content` 三处消费者（均已在上游核对）。
+
+`--dsw-font-xxs-12` 已加入 `css-contract.json`（`xxs-font-var`），上游若改用它 token，
+校验会在构建时就报 `✗`，而不是等样式静默失效。
+
 ### 3.4 迁移步骤
 
 1. 新建 `dsh-ui-css-patches/`，写入 §3.3 的全部文件。
@@ -367,23 +394,25 @@ CSS 规则的失败是**静默**的：没有 JS 异常、没有 console 报错�
 
 | 文件 | 作用 |
 |---|---|
-| [`scripts/check-css.mjs`](C:\Users\LGZ\dsh-plugins\scripts\check-css.mjs) | 校验器：读契约清单，对 DSH 产物递归 grep，输出通过/失败，退出码 0/1 |
-| [`css-contract.json`](C:\Users\LGZ\dsh-plugins\css-contract.json) | 契约清单：28 条 token/正则断言（含 hint 说明每条失效的后果） |
+| [`dsh-ui-css-patches/check-css.mjs`](dsh-ui-css-patches/check-css.mjs) | 校验器：读契约清单，对 DSH 产物递归 grep，输出通过/失败，退出码 0/1 |
+| [`dsh-ui-css-patches/css-contract.json`](dsh-ui-css-patches/css-contract.json) | 契约清单：29 条 token/正则断言（含 hint 说明每条失效的后果） |
 
-已验证：对当前 DSH 前端跑出 `28/28 通过`；负向测试（伪造 token）正确输出 `✗` 并退出码 `1`。
+已验证：对当前 DSH 前端跑出 `29/29 通过`；负向测试（伪造 token）正确输出 `✗` 并退出码 `1`。
 
 ### 4.3 校验器工作方式与用法
 
 - **DSH 根目录解析**：`--dsh-root` 参数 → `$DSH_ROOT` 环境变量 → `npm root -g` 下的 `@deepseek-ai/dsh`。定位不到时仅告警不阻断。
+- **契约清单定位**：默认取**与脚本同目录**的 `css-contract.json`，可用 `--manifest <json>` 覆盖；脚本与清单随插件目录一起移动/复制，不依赖仓库根布局。
 - **匹配方式**：清单里 `token` 用子串匹配，`pattern` 用正则（`s` 标志）；递归遍历指定目录，跳过嵌套 `node_modules`，只读 `.js/.mjs/.cjs/.ts/.tsx/.css/.json`。
 - **退出码**：`0` 全通过；`1` 存在契约缺失（可作 CI/构建门禁）；`2` 配置错误。
 
 ```bash
-node scripts/check-css.mjs                                   # 自动解析 DSH 根目录
-node scripts/check-css.mjs --dsh-root <path-to-dsh-checkout> # 显式指定
+cd dsh-ui-css-patches
+node check-css.mjs                                   # 自动解析 DSH 根目录（构建脚本用的就是这条）
+node check-css.mjs --dsh-root <path-to-dsh-checkout> # 显式指定
 ```
 
-### 4.4 契约清单要点（28 条，节选）
+### 4.4 契约清单要点（29 条，节选）
 
 | 契约 token | 失效后果（hint） |
 |---|---|
@@ -407,11 +436,11 @@ node scripts/check-css.mjs --dsh-root <path-to-dsh-checkout> # 显式指定
 
 ## 5. 落地清单（Checklist）
 
-- [ ] 新建 `dsh-ui-css-patches/`，写入 §3.3 的 `index.ts` / `src/client.ts` / `src/css.ts` / `package.json` / `tsdown.config.mjs` / `cordis.patch.yml` / `tsconfig.json`。
+- [ ] 新建 `dsh-ui-css-patches/`，写入 §3.3 的 `index.ts` / `src/client.ts` / `src/css.ts` / `package.json` / `tsdown.config.mjs` / `cordis.patch.yml` / `tsconfig.json`，以及检测套件 `check-css.mjs` / `css-contract.json`（两者与插件同目录，`package.json` 内直接 `node check-css.mjs`）。
 - [ ] `css-contract.json` 的 `plugin` 字段统一改为 `dsh-ui-css-patches`（保留 `id`/`hint` 溯源）。
 - [ ] DSH 配置用 `dsh-ui-css-patches` 替换原四个 bundle 条目。
 - [ ] 运行 `npm run build`（tsdown 产出 `lib/client.js` + 自动触发 `check-css`）。
-- [ ] 运行 `node scripts/check-css.mjs`，确认 `28/28 通过`、无 `✗`。
+- [ ] 运行 `node check-css.mjs`（插件目录内），确认 `29/29 通过`、无 `✗`。
 - [ ] 删除/归档四个旧目录。
 - [ ] 刷新 Web GUI 目视回归：工具调用/bash 样例/代码块/表格/压缩标记/变更审查/右栏 tab 宽度/对话全宽。
 - [ ] 升级 DSH 版本后重跑 `npm run build`（自动触发 `check-css`），作为「静默失败」回归门禁。
