@@ -10,6 +10,7 @@ fi
 PLUGINS=(
   dsh-desktop-notify
   dsh-directory-picker-browse
+  dsh-focus-free-shortcuts
   dsh-git-guard
   dsh-header-action-order
   dsh-ui-chat-verbose-fold

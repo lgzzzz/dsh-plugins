@@ -97,3 +97,4 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-client-ui-user-questions@0.2.0-rc.2'
   - '@deepseek-ai/dsh-host-directory-picker@0.2.0-rc.2'
   - '@deepseek-ai/dsh-client-ui-chat@0.2.0-rc.2'
+  - '@deepseek-ai/dsh-client-shortcuts@0.2.0-rc.2'
