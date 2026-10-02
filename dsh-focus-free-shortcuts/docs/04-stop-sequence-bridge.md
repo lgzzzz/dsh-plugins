@@ -150,7 +150,7 @@ const turn = currentTurn()                                 // 每一按都**现�
 
 #### 5.4.2.5 插件这边差在哪（为什么必须让位）
 
-插件自己的序列身份只有两个字段（`src/decide.ts` 的 `StopToken` 与 `sameStopToken`）：
+插件自己的序列身份只有两个字段（`src/stop-sequence.ts` 的 `StopToken` 与 `sameStopToken`）：
 
 ```ts
 interface StopToken {
@@ -171,7 +171,7 @@ function sameStopToken(left, right) {
 | `generation`（binding 引用） | 比 | 比（`binding === binding`） |
 | `region`（焦点区域元素） | **比** | **不靠焦点、不比** |
 
-所以插件**无法区分**「两下都在轮次 A」和「一下 A、一下 B」——只要 `sessionId` 相同、`binding` 还是同一个对象，它就会在 500ms 内凑成一次停止，哪怕中间已经换了轮次（这正是 [第 7 节](05-comparison-boundaries-contracts.md) 边界表里「两按之间轮次恰好结束并立刻开启新轮次 → 插件仍会停到新轮次 B，内置会因 `turn` 变化而复位」的由来）。
+所以插件**无法区分**「两下都在轮次 A」和「一下 A、一下 B」——只要 `sessionId` 相同、`binding` 还是同一个对象，它就会在 500ms 内凑成一次停止，哪怕中间已经换了轮次（这正是 [第 7 节](06-comparison-boundaries-contracts.md) 边界表里「两按之间轮次恰好结束并立刻开启新轮次 → 插件仍会停到新轮次 B，内置会因 `turn` 变化而复位」的由来）。
 
 这也正是本节「② 归属让位」存在的意义：在「内置会掌权」的场景（target 落在会话区域内），内置手里的 `turn` / `region` 证据**严格优于**插件能读到的任何事实, 这个时候让内置处理器进行处理最准确.；所以插件选择**只在内置不掌权的场景（target 不在会话区内、内置会因为 `context.target` 不满足归属而 `reset`）出手**——此时内置绝不会动作。
 
@@ -265,3 +265,5 @@ function cancelSession(sessions, sessionId) {
   - **(b) 共享 `consumed` 标志**：即便顺序反了，谁先 `consume()`，另一个 listener 都会在下一轮看到 `gesture.defaultPrevented === true` 而退出（① 资格检查里就有 `!defaultPrevented`）。
 
   两重机制叠加，无论注册顺序如何，最终都只有一家消费并动作。
+
+> **审批键与停止序列的交叉点**：有待答审批时，`Esc` 不再是"第一下停止"，而是"一下拒绝"——内置 `currentTurn()` 与插件 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛拒绝停止，所以停止侧本来就不会消费这一按。审批桥的实现与它自己的让位策略见 [第 5 册](05-approval-key-bridge.md)（第 5.6 节）。

@@ -1,5 +1,5 @@
 /**
- * 一次性跑完 test/ 下所有 `*.test.mjs`,按 A–G 的主题顺序执行并汇总结果。
+ * 一次性跑完 test/ 下所有 `*.test.mjs`,按 A–I 的主题顺序执行并汇总结果。
  *
  *   node test/run-all.mjs                 # 全部
  *   node test/run-all.mjs stop            # 只跑文件名/主题匹配 "stop" 的
@@ -13,14 +13,16 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// A–G 的主题顺序(与 README 第 9 节对应);其余文件按名字补在后面。
+// A–I 的主题顺序(与 README 第 9 节对应);其余文件按名字补在后面。
 const ORDER = [
   'decide-binding.test.mjs',
   'decide-escape.test.mjs',
   'decide-ownership.test.mjs',
   'decide-stop-sequence.test.mjs',
+  'decide-approval.test.mjs',
   'bridge-pane-keys.test.mjs',
   'bridge-stop-sequence.test.mjs',
+  'bridge-approval-keys.test.mjs',
   'artifact-client.test.mjs',
 ]
 

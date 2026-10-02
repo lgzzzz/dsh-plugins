@@ -1,5 +1,6 @@
 /**
- * E 桥接:面板键 —— 在假 Cordis 上下文里走线 `src/client.ts` 的面板命令桥。
+ * E 桥接:面板键 —— 在假 Cordis 上下文里走线 `src/pane-keys.ts` 的面板命令桥
+ * (由入口 `src/client.ts` 装上)。
  * 覆盖聚焦让位、回退到活动 dock pane、折叠 / 无 pane / 模态 / repeat / 过期
  * 目标,跟随生效绑定(改绑 / 解绑 / 冲突),以及 desktop 让位与服务缺席。
  *
@@ -114,9 +115,10 @@ console.log('--- E⑤ 跟随生效绑定:改绑 / 解绑 / 冲突都不接管 --
 }
 console.log('--- E⑥ 失败模式:desktop 让位、服务缺席即 no-op ---')
 {
-  // Desktop 只关掉面板桥接(配置键由原生通道派发);停止序列照常安装。
+  // Desktop 只关掉面板桥接(配置键由原生通道派发);停止序列与审批键照常安装
+  // ——后两者都是固定动作,DOM 固定通道在两端都跑。
   const desktop = harness({ runtime: 'desktop' })
-  check('desktop 只注册停止序列', desktop.shortcuts.listenerCount(), 1)
+  check('desktop 不装面板桥(停止 + 审批)', desktop.shortcuts.listenerCount(), 2)
   checkTrue('desktop 记一条 warn', desktop.warnings.some((line) => line.includes('native keyboard bridge')))
   desktop.sidebar.command = { paneId: 'p1' }
   const press = keydown(FULLSCREEN_PRESS, shortcutContext({ target: domComposer }))
@@ -125,7 +127,7 @@ console.log('--- E⑥ 失败模式:desktop 让位、服务缺席即 no-op ---')
   check('desktop 面板键不消费', press.consumed.count, 0)
 
   const noSidebar = harness({ withSidebar: false })
-  check('无 sidebarRight 只注册停止序列', noSidebar.shortcuts.listenerCount(), 1)
+  check('无 sidebarRight 不装面板桥(停止 + 审批)', noSidebar.shortcuts.listenerCount(), 2)
   check('无 sidebarRight 不抛', noSidebar.warnings.length, 0)
   const orphan = keydown(FULLSCREEN_PRESS, shortcutContext({ target: domComposer }))
   noSidebar.shortcuts.emit(orphan.input)

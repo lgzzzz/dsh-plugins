@@ -1,5 +1,5 @@
 /**
- * F 桥接:停止序列 —— 走线 `src/client.ts` 的 Esc Esc 停止桥。覆盖焦点不在
+ * F 桥接:停止序列 —— 走线 `src/stop-sequence.ts` 的 Esc Esc 停止桥。覆盖焦点不在
  * 输入框时的两按停止、内置序列掌权时让位、reset、各类否决(不在运行 /
  * 有待答交互 / 会话歧义 / 带修饰键 / 超窗)、失败模式与卸载复位。
  *
@@ -116,7 +116,7 @@ console.log('--- F⑤ 失败模式:conversation 缺席 / cancel 拒绝 ---')
 console.log('--- F⑥ 卸载:效果被释放,固定监听移除 ---')
 {
   const { shortcuts, ctx } = harness()
-  check('注册了固定监听', shortcuts.listenerCount(), 2)
+  check('注册了固定监听(面板 + 停止 + 审批)', shortcuts.listenerCount(), 3)
   for (const effect of ctx.effects) {
     if (typeof effect.dispose === 'function') effect.dispose()
   }

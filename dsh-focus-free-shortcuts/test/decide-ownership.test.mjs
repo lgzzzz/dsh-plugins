@@ -1,10 +1,12 @@
 /**
- * C 目标归属:`src/decide.ts` 的纯归属判定 —— 内置 stop 是否按 target 掌权,
- * 以及靠 `retainedBy.mainView` 找出唯一的主视图会话(歧义就不动手)。
+ * C 目标归属:`src/stop-sequence.ts` 的 `conversationOwnsTarget` —— 内置 stop 是否按
+ * target 掌权;以及 `src/runtime.ts` 的 `mainViewSessionId` 靠 `retainedBy.mainView`
+ * 找出唯一的主视图会话(歧义就不动手)。
  *
  * 运行:`node test/decide-ownership.test.mjs`(或 pnpm test 跑全部)。
  */
-import { conversationOwnsTarget, mainViewSessionId } from '../src/decide.ts'
+import { conversationOwnsTarget } from '../src/stop-sequence.ts'
+import { mainViewSessionId } from '../src/runtime.ts'
 import { check, checkTrue, domApproval, domBody, domComposer, domFrame, domInert, domLooseRegion, finish, session } from './helpers.mjs'
 
 console.log('--- C① 内置 stop 是否按 target 掌权 ---')
