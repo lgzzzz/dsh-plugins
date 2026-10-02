@@ -70,6 +70,7 @@
 | 终端里按 `Ctrl+Alt+←/→` | 照常切页并消费 | xterm 对“方向键 + 修饰”产出 `\x1b[1;7D` / `\x1b[1;7C` 转义序列并 `preventDefault()+stopPropagation()`——事件到不了 window 冒泡上的固定通道，观察者收不到、也就没法动作。所以本桥在 window **捕获阶段**另挂一个 keydown 监听（早于一切目标 / 冒泡处理器），**只**对会落进 `.xterm` 的按键拦下：判定与通道共用 `pageCycleTarget`，命中即 `preventDefault()+stopPropagation` 吞掉、顺带不让转义序列进 shell，未命中就放行。文本控件不吞箭头键，仍走通道；两条路共用同一判定、互斥不双触发。 |
 | 其它也会 `stopPropagation` 的本地控件（若有） | 该按到不了通道 | 捕获钩子目前只认 `.xterm`（迄今唯一会为这些键停掉事件的本地控件）；若将来出现别的这类控件，需在同一钩子里补上它的范围，否则那一处焦点下无法切页。 |
 | 切页后的自动聚焦 | 只补位、不抢键盘 | `sidebar.focus()` 提交的是 store 变更，React 异步渲染，所以桥在**下一帧**才定位新显示的 pane（`[data-sidebar-right-session]` 根 + 带 `-active` 标记的可见 pane）。若新页面自己聚焦了（终端 body 在 `visible` 变化时聚焦 xterm），`document.activeElement` 已落在 pane 内，桥不碰键盘。 |
+| 快捷键**展开**右栏（`sidebar.right.toggle`） | 面板确认展开后把键盘交到活动页自己的输入面（终端的 xterm） | 内置 toggle 走 `openWithPaneFocus`：`flushSync` 提交展开后**同步**聚焦活动 **pane 容器**——这一步发生在终端"`visible` 变化时自聚焦"之后，把刚落到 xterm 的焦点顶掉，此后 `visible` / `writable` 不再变化，终端不会二次自聚焦。所以展开路径不能沿用"页面自聚焦就让位"的假设：补位**不假定展开与按键同步**，以 50ms 间隔有界轮询（≤800ms）`sidebar.isExpanded()`，面板一确认展开就在下一帧调用 `focusShownPage`；当焦点停在 pane 容器本身、而该页有输入面（`.xterm-helper-textarea`，`readOnly` 视为页面自己拒绝）时补位聚焦它；页面内部控件已持键盘则仍不碰。这一按**不消费**，owner 仍是内置 toggle；窗口内面板始终没展开则放弃（如按键被别的消费）。 |
 
 告警前缀统一为 `[dsh-focus-free-shortcuts]`，方便在控制台过滤。
 
@@ -90,6 +91,6 @@
 7. 固定键 id `dsh-focus-free-shortcuts.focus-composer` 与它预约的物理组合 `control+alt+KeyJ`（本插件自己在 `shortcuts.registerFixed` 处声明；约定是"存在即预约、跟随挂载行"，同 `approval.allow` / `approval.reject` 的语义）；
 8. `conversation.input`（`SessionInputResolver.for(scope)`）与它返回的 `SessionInput.focus()` 语义——与应用在遮罩结束后把键盘还给 composer 用的是同一个操作，光标还原；若上游改了这个入口，聚焦键退化为 no-op 并告警；
 9. 固定键 id `dsh-focus-free-shortcuts.page-cycle` 与它预约的两个物理组合 `control+alt+ArrowLeft` / `control+alt+ArrowRight`（本插件自己在 `shortcuts.registerFixed` 处声明；同一行两个绑定 = 上一页 / 下一页两个方向，约定同第 7 条）；
-10. DOM 标记 `[data-sidebar-right-session]` / `[data-dockkit-pane]` / `[data-dockkit-float]`（含 `-active` 后缀与 `data-sidebar-right-open`）——自动聚焦步的 pane 选择与官方 `visibleSidebarPane` 同源；该函数不在包 `/client` 的公开导出里，所以按同一份标记重写"活动标记优先、否则第一块可见 pane"的三选逻辑。若上游改了标记，聚焦退化为只切页不聚焦（no-op），不误动作。
+10. DOM 标记 `[data-sidebar-right-session]` / `[data-dockkit-pane]` / `[data-dockkit-float]`（含 `-active` 后缀与 `data-sidebar-right-open`）——自动聚焦步的 pane 选择与官方 `visibleSidebarPane` 同源；该函数不在包 `/client` 的公开导出里，所以按同一份标记重写"活动标记优先、否则第一块可见 pane"的三选逻辑。`[data-sidebar-right-session]` 同时出现在**会话包装 div 与内层面板 div** 上（同 id、嵌套）：会话根按"取带 `data-sidebar-right-open` 者、否则取最深者"复刻 `closest()` 的"最内层 owner"语义（内层面板才带 `data-sidebar-right-open` 并持有 panes）。若上游改了标记，聚焦退化为只切页不聚焦（no-op），不误动作。
 11. 终端的 `.xterm` 类——与官方键盘适配器判定 `terminal` 区域用的是同一个类（同为 `dsh-client-ui-sidebar-terminal` 的 xterm 根）。捕获阶段拦截**只**认 `closest('.xterm')` 命中的按键，因为这是迄今唯一"通道必收不到"的本地控件；其余按键一律放行给固定通道，两路共用 `pageCycleTarget`，互斥不双触发。若上游改了终端根类名，终端内切页会退化（该按到不了通道、捕获钩子也不再认它），但不会误动作。
 12. 模态选择器 `[role="dialog"][aria-modal="true"], [role="menu"]`——与 `@deepseek-ai/dsh-client-ui-primitives` 的 `modalSelector` 同源。捕获阶段跑在键盘适配器算出 `context.modal` **之前**，桥自行按这份选择器复推"当前是否有模态层"，再交给共享判定，使两路的模态否决一致。若上游改了选择器，最坏情形是捕获路径在模态层打开时仍切页（与通道路径的否决不一致），不误动作。

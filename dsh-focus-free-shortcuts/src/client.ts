@@ -21,7 +21,11 @@
  *     (a terminal takes it itself; the bridge only fills the gap). A focused
  *     terminal stops the keydown before it reaches the fixed-input channel, so
  *     this bridge additionally withholds terminal-bound presses at the capture
- *     phase (see `page-cycle.ts`).
+ *     phase (see `page-cycle.ts`). The same module carries the expand hand-over:
+ *     when the bundled `sidebar.right.toggle` key expands the column, the
+ *     toggle focuses the active *pane container* after the terminal's own
+ *     self-focus ran, so the bridge descends one frame later into the page's
+ *     own input (the terminal's xterm) — never consuming the toggle's press.
  *
  * Each group file carries its own pure decision and the observer that runs it, and
  * imports the upstream faces it uses (`Shortcuts`, `ISessions`, `UiSession`, …)

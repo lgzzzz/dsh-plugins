@@ -4,24 +4,38 @@
  * 已被消费)仍切页、折叠 / 单页 / 无活动页 / 无会话让位、缺服务即不装、与卸载复位;
  * 以及终端内的捕获阶段拦截(M⑦–M⑩):`.xterm` 内的事件在冒泡到固定输入通道之前
  * 就被终端自己停掉,所以该桥在 window 捕获阶段先于 xterm 拦下,两路共用同一判定。
+ * M⑪–M⑲ 是同一观察者上的第二个(非消费)任务——展开补位:按内置
+ * `sidebar.right.toggle`(折叠态)时,有界轮询"面板是否已展开",一旦展开就把
+ * 键盘交到活动页自己的输入面(终端的 xterm textarea);面板稍后才打开时轮询
+ * 兜住(M⑰),始终没打开则有界放弃(M⑱),同 id 双层根(会话包装 + 内层面板)
+ * 时取内层面板(M⑲);页面已自聚焦 / 只读 / 非终端 / 已展开 / 卸载后都让位,
+ * 且绝不消费这一按。
  *
  * 运行:`node test/bridge-page-cycle.test.mjs`(或 pnpm test 跑全部)。
  */
-import { applyPlugin, captureWarnings, check, checkTrue, fakeDocument, FakeElement, fakeKeyEvent, fakePageSidebar, fakeShortcuts, fakeWindow, FakeCtx, finish, gesture, harness, keydown, shortcutContext, PAGE_CYCLE_ID, PAGE_NEXT_PRESS, PAGE_PREVIOUS_PRESS } from './helpers.mjs'
+import { applyPlugin, captureWarnings, check, checkTrue, fakeDocument, FakeElement, fakeKeyEvent, fakePageSidebar, fakeShortcuts, fakeWindow, FakeCtx, finish, gesture, harness, keydown, row, shortcutContext, PAGE_CYCLE_ID, PAGE_NEXT_PRESS, PAGE_PREVIOUS_PRESS, SIDEBAR_TOGGLE_BINDING, SIDEBAR_TOGGLE_PRESS } from './helpers.mjs'
 
 /**
- * 置入假 document / 假 window(捕获监听就装在上面)/ 可选的 rAF 队列,用完即还原。
- * rAF 队列用手动泵出,正好模拟"store commit 之后再聚焦"的时序。捕获路径的用例
- * 必须先把 window 放上全局(harness 里 applyPlugin 才会装上监听),再调用 harness。
+ * 置入假 document / 假 window(捕获监听就装在上面)/ 可选的 rAF 队列与定时器队列,
+ * 用完即还原。rAF 与定时器都用手动泵出:rAF 模拟"store commit 之后再聚焦"的
+ * 时序;定时器用于展开补位对"面板何时算打开"的有界轮询。捕获路径的用例必须先
+ * 把 window 放上全局(harness 里 applyPlugin 才会装上监听),再调用 harness。
+ * `pump()` 先泵定时器、再泵 rAF(展开补位的探针在定时器里,交棒在 rAF 里)。
  */
 function withPageDom({ app, activeElement = null, raf = false, window = fakeWindow() } = {}) {
   const document = fakeDocument({ root: app, activeElement })
   const queue = []
+  const timers = []
   const previousDocument = globalThis.document
   const previousWindow = globalThis.window
   const previousRaf = globalThis.requestAnimationFrame
   globalThis.document = document
   globalThis.window = window
+  window.setTimeout = (fn) => {
+    timers.push(fn)
+    return timers.length
+  }
+  window.clearTimeout = () => {}
   if (raf) globalThis.requestAnimationFrame = (fn) => {
     queue.push(fn)
     return queue.length
@@ -29,7 +43,13 @@ function withPageDom({ app, activeElement = null, raf = false, window = fakeWind
   return {
     window,
     queue,
-    pump() {
+    timers,
+    pump(maxTimers = Infinity) {
+      let drained = 0
+      while (timers.length > 0 && drained < maxTimers) {
+        timers.shift()()
+        drained += 1
+      }
       while (queue.length > 0) queue.shift()()
     },
     restore() {
@@ -277,6 +297,205 @@ console.log('--- M⑩ 卸载:捕获监听连同固定行 / 观察者一起释放
     dom.window.emit(after)
     check('卸载后不再切页', sidebar.focusCalls, ['t2'])
     check('卸载后不吞事件', [after.prevented, after.stopped], [0, 0])
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑪ 展开补位:折叠态按展开键,下一帧把键盘交到终端的 xterm ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const { app, root, pane } = column({ open: false })
+  const terminal = pane.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  const dom = withPageDom({ app, activeElement: pane, raf: true })
+  try {
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    check('不消费这一按(主人是内置 toggle)', press.consumed.count, 0)
+    // 模拟内置 toggle 的提交:展开 + 聚焦活动 pane(openWithPaneFocus)。
+    sidebar.expanded = true
+    root.setAttribute('data-sidebar-right-open', '')
+    pane.focus({ preventScroll: true })
+    check('pane 已被内置聚焦', pane.focusCount, 1)
+    check('此刻还没轮到桥', textarea.focusCount, 0)
+    dom.pump()
+    check('焦点落到终端输入', textarea.focusCount, 1)
+    check('preventScroll', textarea.lastFocusOptions, { preventScroll: true })
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑫ 展开补位让位:已展开时按同一键(折叠按)不动作 ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: true })
+  const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const { app, pane } = column()
+  const terminal = pane.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  const dom = withPageDom({ app, activeElement: pane, raf: true })
+  try {
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    dom.pump()
+    check('折叠按不聚焦终端', textarea.focusCount, 0)
+    check('不消费', press.consumed.count, 0)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑬ 展开补位让位:显示页不是终端时只保留 pane 聚焦 ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const { app, root, pane } = column({ open: false })
+  const dom = withPageDom({ app, activeElement: pane, raf: true })
+  try {
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    sidebar.expanded = true
+    root.setAttribute('data-sidebar-right-open', '')
+    dom.pump()
+    check('非终端页:桥不再碰焦点', pane.focusCount, 0)
+    check('不消费', press.consumed.count, 0)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑭ 展开补位让位:只读终端不交棒 ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const { app, root, pane } = column({ open: false })
+  const terminal = pane.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  textarea.readOnly = true
+  const dom = withPageDom({ app, activeElement: pane, raf: true })
+  try {
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    sidebar.expanded = true
+    root.setAttribute('data-sidebar-right-open', '')
+    dom.pump()
+    check('只读终端不聚焦', textarea.focusCount, 0)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑮ 展开补位让位:页面自己已持键盘(xterm 自聚焦)不抢 ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const { app, root, pane } = column({ open: false })
+  const terminal = pane.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  const dom = withPageDom({ app, activeElement: textarea, raf: true })
+  try {
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    sidebar.expanded = true
+    root.setAttribute('data-sidebar-right-open', '')
+    dom.pump()
+    check('键盘已被页面拿走,不抢', textarea.focusCount, 0)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑯ 卸载:展开补位随观察者一起释放 ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { ctx, shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const { app, root, pane } = column({ open: false })
+  const terminal = pane.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  const dom = withPageDom({ app, activeElement: pane, raf: true })
+  try {
+    for (const effect of ctx.effects) {
+      if (typeof effect.dispose === 'function') effect.dispose()
+    }
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    sidebar.expanded = true
+    root.setAttribute('data-sidebar-right-open', '')
+    dom.pump()
+    check('卸载后展开补位不再动作', textarea.focusCount, 0)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑰ 展开补位:面板稍后才打开,轮询在打开后才交棒 ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const { app, root, pane } = column({ open: false })
+  const terminal = pane.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  const dom = withPageDom({ app, activeElement: pane, raf: true })
+  try {
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    dom.pump(1) // 第一次探针:还没打开,继续等(只泵一个定时器)
+    check('面板未开时先不交棒', textarea.focusCount, 0)
+    sidebar.expanded = true
+    root.setAttribute('data-sidebar-right-open', '')
+    pane.focus({ preventScroll: true })
+    dom.pump(1) // 第二次探针:已打开,把交棒排进 rAF
+    dom.pump() // 下一帧:交棒到终端
+    check('面板打开后交棒到终端', textarea.focusCount, 1)
+    check('不消费', press.consumed.count, 0)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑱ 展开补位让位:面板始终没打开,有界轮询后放弃 ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const { app, pane } = column({ open: false })
+  const terminal = pane.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  const dom = withPageDom({ app, activeElement: pane, raf: true })
+  try {
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    dom.pump()
+    check('始终未开:不交棒', textarea.focusCount, 0)
+    check('不消费', press.consumed.count, 0)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M⑲ 展开补位选根:会话包装与面板两层同 id,取内层面板(带 open / 最深) ---')
+{
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
+  const app = new FakeElement('div', { 'data-app': '' })
+  // 外层:SessionView 包装(同 id,不带 data-sidebar-right-open)。
+  const outer = app.append(new FakeElement('div', { 'data-sidebar-right-session': 's1' }))
+  // 内层:SidebarPanel(同 id,展开时带 data-sidebar-right-open,panes 都在这里)。
+  const inner = outer.append(new FakeElement('div', { 'data-sidebar-right-session': 's1' }))
+  const paneEl = inner.append(new FakeElement('section', { 'data-dockkit-pane': 'p1', 'data-dockkit-pane-active': '' }))
+  const terminal = paneEl.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  const dom = withPageDom({ app, activeElement: paneEl, raf: true })
+  try {
+    const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    sidebar.expanded = true
+    inner.setAttribute('data-sidebar-right-open', '')
+    paneEl.focus({ preventScroll: true })
+    dom.pump()
+    check('双根时取内层面板,交棒到终端', textarea.focusCount, 1)
+    check('不消费', press.consumed.count, 0)
   } finally {
     dom.restore()
   }

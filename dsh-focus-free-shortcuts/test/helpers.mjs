@@ -134,6 +134,12 @@ export const PAGE_CYCLE_FIXED_ROWS = [
 export const PAGE_PREVIOUS_PRESS = gesture('ArrowLeft', { control: true, alt: true })
 export const PAGE_NEXT_PRESS = gesture('ArrowRight', { control: true, alt: true })
 
+/** 内置"展开/折叠右侧栏"命令 id(展开补位跟随的 effective 行)。 */
+export const SIDEBAR_TOGGLE_ID = 'sidebar.right.toggle'
+/** Web 上的默认绑定:primary+shift+B(Windows/Linux 的 primary 是 control)。 */
+export const SIDEBAR_TOGGLE_BINDING = { code: 'KeyB', modifiers: ['control', 'shift'] }
+export const SIDEBAR_TOGGLE_PRESS = gesture('KeyB', { control: true, shift: true })
+
 // ---------------------------------------------------------------- 假 DOM
 
 export class FakeNode {
@@ -232,6 +238,9 @@ export class FakeElement extends FakeNode {
     }
     walk(this)
     return found
+  }
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] ?? null
   }
   focus(options) {
     this.focusCount += 1
@@ -386,14 +395,17 @@ export function fakeSidebar() {
 /**
  * 页面循环桥用的侧栏假面:`mounted` / `tabsIn` / `active` / `isExpanded` /
  * `focus`。`list` 给出按记录顺序的页面 id,`active` 给出当前页;`null` 表示
- * "没有当前页 / 没有会话"(避免与缺省默认值混同)。
+ * "没有当前页 / 没有会话"(避免与缺省默认值混同)。`isExpanded()` 读可变字段
+ * `expanded`,展开补位用例可以在"按下 → pump 下一帧"之间把折叠翻成展开,
+ * 模拟内置 toggle 的提交。
  */
 export function fakePageSidebar({ list = ['t1', 't2', 't3'], active = 't1', expanded = true, mounted = 's1' } = {}) {
   const mountedId = mounted === null ? undefined : mounted
   const activeId = active === null ? undefined : active
   const sidebar = {
     mounted: { getSnapshot: () => mountedId },
-    isExpanded: () => expanded,
+    expanded,
+    isExpanded: () => sidebar.expanded,
     tabsIn: (sessionId) => (sessionId !== mountedId ? [] : list.map((id) => ({ id }))),
     active: () => (activeId === undefined ? undefined : { id: activeId }),
     focusCalls: [],
