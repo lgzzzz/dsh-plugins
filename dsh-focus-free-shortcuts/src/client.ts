@@ -10,19 +10,25 @@
  *
  *   - pane commands (`⌘⌥Enter` / `⌘\`) → `pane-keys.ts`;
  *   - stop (`Esc` `Esc`) → `stop-sequence.ts`;
- *   - approval (`Enter` / `Esc`) → `approval-keys.ts`.
+ *   - approval (`Enter` / `Esc`) → `approval-keys.ts`;
+ *   - focus composer (`Ctrl+Alt+J`) → `focus-composer.ts` — this one is a new
+ *     key with no bundled owner, so it registers its own fixed row and then
+ *     follows that row like the approval bridge follows its mounted rows.
  *
  * Each group file carries its own pure decision and the observer that runs it, and
  * imports the upstream faces it uses (`Shortcuts`, `ISessions`, `UiSession`, …)
  * directly from the package that declares them — no upstream shape is restated
  * here. `binding.ts` holds the gesture/binding model both shortcut catalogs match
  * against, and `runtime.ts` the plugin name, the fixed-input narrowing, and the
- * main-view Session. Nothing is registered in the shortcut catalog: no default
- * bindings, no conflicts, no settings edits — each bridge follows the effective
- * catalog row or the mounted fixed row, so a rebound, unbound, or absent bundled
- * command is left alone.
+ * main-view Session. For the bundled commands nothing is registered in the
+ * shortcut catalog: no default bindings, no conflicts, no settings edits — each
+ * bridge follows the effective catalog row or the mounted fixed row, so a
+ * rebound, unbound, or absent bundled command is left alone. The one exception
+ * is the focus-composer key, which mounts its own fixed row because no bundled
+ * feature reserves it.
  */
 import { installApprovalBridge } from './approval-keys.ts'
+import { installFocusComposerBridge } from './focus-composer.ts'
 import { installPaneBridge } from './pane-keys.ts'
 import { installStopBridge } from './stop-sequence.ts'
 import { name } from './runtime.ts'
@@ -41,4 +47,5 @@ export function apply(ctx: Context): void {
   installPaneBridge(ctx)
   installStopBridge(ctx)
   installApprovalBridge(ctx)
+  installFocusComposerBridge(ctx)
 }

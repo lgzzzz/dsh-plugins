@@ -122,9 +122,9 @@ console.log('--- I⑤ 失败模式:固定行缺失 / 服务缺失即不装 ---')
   check('审批插件未装载(无固定行)时不代答', unmounted.answers, [])
   check('审批插件未装载时不消费', press.consumed.count, 0)
 
-  // 没有 uiSession 就没有待答事实可读:审批桥不安装(只剩面板桥与停止桥)。
+  // 没有 uiSession 就没有待答事实可读:审批桥不安装(只剩面板桥、停止桥与聚焦桥)。
   const noUi = harness({ withUiSession: false })
-  check('缺 uiSession 只装面板桥与停止桥', noUi.shortcuts.listenerCount(), 2)
+  check('缺 uiSession 只装面板桥、停止桥与聚焦桥', noUi.shortcuts.listenerCount(), 3)
   check('缺 uiSession 不告警', noUi.warnings.length, 0)
   const orphan = keydown(gesture('Enter'), shortcutContext({ target: domBody }))
   noUi.shortcuts.emit(orphan.input)
@@ -167,7 +167,7 @@ console.log('--- I⑥ answer 被拒绝:捕获并告警,按键仍已归属 ---')
 console.log('--- I⑦ 卸载:固定监听全部释放 ---')
 {
   const { ctx, shortcuts } = harness()
-  check('注册了三个固定监听', shortcuts.listenerCount(), 3)
+  check('注册了四个固定监听', shortcuts.listenerCount(), 4)
   for (const effect of ctx.effects) {
     if (typeof effect.dispose === 'function') effect.dispose()
   }
