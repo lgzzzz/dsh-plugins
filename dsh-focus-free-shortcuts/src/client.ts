@@ -13,7 +13,15 @@
  *   - approval (`Enter` / `Esc`) → `approval-keys.ts`;
  *   - focus composer (`Ctrl+Alt+J`) → `focus-composer.ts` — this one is a new
  *     key with no bundled owner, so it registers its own fixed row and then
- *     follows that row like the approval bridge follows its mounted rows.
+ *     follows that row like the approval bridge follows its mounted rows;
+ *   - page cycle (`Ctrl+Alt+←` / `Ctrl+Alt+→`) → `page-cycle.ts` — the other
+ *     new key pair, also with no bundled owner: it registers one fixed row
+ *     carrying both arrows, steps the Right Sidebar's shown page through the
+ *     public Sidebar face, and hands the keyboard to the page it lands on
+ *     (a terminal takes it itself; the bridge only fills the gap). A focused
+ *     terminal stops the keydown before it reaches the fixed-input channel, so
+ *     this bridge additionally withholds terminal-bound presses at the capture
+ *     phase (see `page-cycle.ts`).
  *
  * Each group file carries its own pure decision and the observer that runs it, and
  * imports the upstream faces it uses (`Shortcuts`, `ISessions`, `UiSession`, …)
@@ -29,6 +37,7 @@
  */
 import { installApprovalBridge } from './approval-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
+import { installPageCycleBridge } from './page-cycle.ts'
 import { installPaneBridge } from './pane-keys.ts'
 import { installStopBridge } from './stop-sequence.ts'
 import { name } from './runtime.ts'
@@ -48,4 +57,5 @@ export function apply(ctx: Context): void {
   installStopBridge(ctx)
   installApprovalBridge(ctx)
   installFocusComposerBridge(ctx)
+  installPageCycleBridge(ctx)
 }
