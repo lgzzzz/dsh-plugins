@@ -47,13 +47,28 @@
  * other press keeps flowing to the observer, so the two paths never act on the
  * same event; both paths run the same decision (`pageCycleTarget`).
  *
+ * The same hand-over also covers the **expand key**. The bundled
+ * `sidebar.right.toggle` command expands the column and focuses the *active
+ * pane container* — and it does so *after* the terminal's own self-focus ran
+ * inside the same commit, so the pane focus wins and the xterm is left
+ * unfocused until clicked. The module therefore watches the toggle's effective
+ * row as a second, non-consuming job of the same observer: a press that is the
+ * toggle's own, while the column is collapsed, probes the column's expansion
+ * on a bounded schedule and, once expanded, hands the keyboard to the shown
+ * page via the same `focusShownPage`. `focusShownPage` itself descends into
+ * the page's own input surface (the terminal's `xterm-helper-textarea`) when
+ * the pane container — and nothing inside it — holds focus, which is exactly
+ * the state the toggle's pane focus leaves behind. A page that took the
+ * keyboard itself is still never touched.
+ *
  * Fixed actions on every runtime (nothing configurable is dispatched by the
  * native keyboard bridge for these keys), so the bridge installs on Web and
  * Desktop alike.
  */
-import { bindingMatches, fixedRowOwns } from './binding.ts'
+import { bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
 import type {
+  ShortcutCatalogEntry,
   ShortcutContext,
   ShortcutFixedCatalogEntry,
   ShortcutFixedCommand,
@@ -96,6 +111,13 @@ export const PAGE_CYCLE_COMMAND: ShortcutFixedCommand = {
   bindings: [PAGE_PREVIOUS_BINDING, PAGE_NEXT_BINDING],
   group: 'application',
 }
+
+/**
+ * Registered id of the bundled column-toggle command this bridge follows for
+ * the expand hand-over. The toggle is configurable — unlike the page-cycle row
+ * — so it is matched through the effective catalog, never hardcoded.
+ */
+export const SIDEBAR_TOGGLE_ID = 'sidebar.right.toggle'
 
 /**
  * Which direction the mounted row's own reservation names for this press.
@@ -168,12 +190,16 @@ export function steppedPageId<T extends string>(
  * Hand the keyboard to the page the column is showing now, unless the page
  * already took it.
  *
- * Runs after the switch committed: locate the on-screen Session's root, pick
+ * Runs after the relevant commit: locate the on-screen Session's root, pick
  * its visible pane (active marker first, else the first visible one — the same
  * three-step rule `visibleSidebarPane` applies), and focus that pane. A page
  * that focused itself (the terminal focuses its xterm when it becomes visible)
  * keeps the keyboard: focus is only filled in when nothing inside the pane
- * holds it.
+ * holds it. One case is filled in all the way: when the pane element itself
+ * holds focus — the exact state the column's toggle command leaves behind
+ * after expanding — and the page has an input surface of its own (the
+ * terminal's xterm), the keyboard is handed to that surface, because a pane
+ * container is not where the terminal page accepts typing.
  * @param sessionId - the Session whose column should own the keyboard.
  * @returns whether a visible pane was found and holds the keyboard.
  */
@@ -183,9 +209,43 @@ export function focusShownPage(sessionId: string): boolean {
   const pane = activePane(root)
   if (pane === undefined) return false
   const focused = typeof document === 'undefined' ? null : document.activeElement
-  if (focused !== null && pane.contains(focused)) return true
+  if (focused !== null && pane.contains(focused)) {
+    // A page that took the keyboard itself (its own control, such as the
+    // terminal's xterm input) keeps it. Only the pane element itself owning
+    // focus is the gap the expand path leaves behind — the toggle command
+    // focused the pane after the terminal's own focus ran — and that is where
+    // the page's own input surface is filled in.
+    if (focused !== pane) return true
+    const input = pageInput(pane)
+    if (input === undefined) return true
+    focusElement(input, { preventScroll: true })
+    return true
+  }
   focusPane(pane)
+  const input = pageInput(pane)
+  if (input !== undefined) focusElement(input, { preventScroll: true })
   return true
+}
+
+/**
+ * The page's own input surface, if it has one and accepts the keyboard.
+ *
+ * Only the terminal defines "focused" as its interior: xterm's helper textarea
+ * is the sole focus target (`xterm.focus()` focuses exactly it), and the
+ * `.xterm` class is the same marker the keyboard adapter and this module's
+ * capture hook already trust for the terminal region. Focus is declined when
+ * the input is read-only — `textarea.readOnly` is the DOM expression of
+ * xterm's `disableStdin`, which the terminal body sets from `state.writable`,
+ * the very gate the terminal's own self-focus checks — so a read-only terminal
+ * is treated as a page that has no input of its own.
+ * @param pane - the elected visible pane.
+ * @returns the page's input element, or undefined when the page has none or refuses focus.
+ */
+function pageInput(pane: Element): Element | undefined {
+  const screen = pane.querySelector('.xterm')
+  const input = screen?.querySelector('.xterm-helper-textarea')
+  if (input === null || input === undefined) return undefined
+  return (input as { readOnly?: boolean }).readOnly === true ? undefined : input
 }
 
 /**
@@ -196,8 +256,15 @@ export function focusShownPage(sessionId: string): boolean {
  */
 function sidebarRoot(sessionId: string): Element | undefined {
   if (typeof document === 'undefined') return undefined
-  return [...document.querySelectorAll('[data-sidebar-right-session]')]
-    .find((node) => node.getAttribute('data-sidebar-right-session') === sessionId)
+  const roots = [...document.querySelectorAll('[data-sidebar-right-session]')]
+    .filter((node) => node.getAttribute('data-sidebar-right-session') === sessionId)
+  // The SessionView wrapper and the panel div inside it both carry the marker;
+  // the panel (deeper in document order, and the one holding
+  // `data-sidebar-right-open` while open) is where the panes live. Prefer an
+  // open root, then the deepest one — the same "innermost owner" rule
+  // `closest()` gives the upstream `visibleSidebarPane`.
+  return roots.find((node) => node.hasAttribute('data-sidebar-right-open'))
+    ?? roots[roots.length - 1]
 }
 
 /**
@@ -223,6 +290,12 @@ export function activePane(root: Element): Element | undefined {
 function focusPane(pane: Element): void {
   const focusable = pane as unknown as { focus?: (options?: FocusOptions) => void }
   focusable.focus?.({ preventScroll: true })
+}
+
+/** Focus any duck-typed focusable element; test elements share the same shape. */
+function focusElement(element: Element | undefined, options?: FocusOptions): void {
+  const focusable = element as unknown as { focus?: (options?: FocusOptions) => void }
+  focusable.focus?.(options)
 }
 
 /** Run once the page switch has reached the DOM, before the next paint. */
@@ -256,7 +329,10 @@ export function pageCycleTarget(
   const step: PageStep | undefined = pageStepFor(shortcuts.fixedCatalog.getSnapshot(), PAGE_CYCLE_ID, gesture)
   if (step === undefined) return undefined
   // A collapsed column shows no page: there is nothing to step and no visible
-  // pane to focus. The expand key already focuses the active pane.
+  // pane to focus stepping. Expanding is the expand key's own job — the
+  // bundled `sidebar.right.toggle` commits the expansion and focuses the active
+  // pane, and the expand hand-over (`handOverOnExpand`) then lands the keyboard
+  // on the page that pane shows.
   if (!sidebar.isExpanded()) return undefined
   const sessionId = sidebar.mounted.getSnapshot()
   if (sessionId === undefined) return undefined
@@ -293,6 +369,14 @@ export interface PageStepTarget {
  * same switch, so a press is acted on exactly once: a capture hook that steps
  * swallows the event (the observer never sees it), and a hook that does not
  * step leaves it flowing (the observer then decides, identically).
+ *
+ * The observer carries a third, **non-consuming** job: the expand hand-over.
+ * A press that is the bundled `sidebar.right.toggle`'s effective binding, while
+ * the column is collapsed, is left to its owner (the toggle expands and focuses
+ * the active pane); the hand-over then probes for the expansion on a bounded
+ * schedule and, once the column reports expanded, lands the keyboard on the
+ * page that pane shows, since the toggle's pane focus shadows the terminal's
+ * own self-focus. It never consumes, so exactly one owner remains per press.
  * @param ctx - client root context.
  */
 export function installPageCycleBridge(ctx: Context): void {
@@ -309,6 +393,10 @@ export function installPageCycleBridge(ctx: Context): void {
     scope.effect(() => shortcuts.observeFixedInput((input) => {
       if (!isKeydown(input)) return
       handlePageCycleInput(shortcuts, sidebar, input)
+      // The expand job follows the same press: the two keys never coincide (a
+      // page-cycle press matches a mounted fixed row, the toggle a configurable
+      // one), so at most one of the two acts.
+      handOverOnExpand(shortcuts, sidebar, input)
     }), `${name}: page cycle keys`)
     // The terminal half: a keydown inside `.xterm` never reaches the window
     // listener above (the terminal stops it on its textarea handler), so this
@@ -377,6 +465,111 @@ function switchPage(sidebar: Sidebar, target: PageStepTarget): void {
   whenShown(() => {
     focusShownPage(target.sessionId)
   })
+}
+
+/**
+ * Whether one press is the column toggle's own keys, as the effective catalog
+ * currently binds it.
+ *
+ * The toggle command is bundled and configurable — no fixed row, no fixed input
+ * path of its own — so following `enabledBinding` keeps a rebound, unbound or
+ * conflicted command authoritative, exactly as the pane bridge follows its two
+ * commands. Unlike the pane bridge this check never consumes: the toggle keeps
+ * its owner; the expand hand-over only fills in the focus the toggle leaves
+ * behind.
+ * @param rows - the effective catalog snapshot.
+ * @param gesture - the physical press being routed.
+ * @param context - modal and region ownership for this press.
+ * @returns whether this press is the column toggle's binding.
+ */
+export function expansionPress(
+  rows: readonly ShortcutCatalogEntry[],
+  gesture: ShortcutGesture,
+  context: ShortcutContext,
+): boolean {
+  if (gesture.repeat || gesture.composing || context.modal !== null) return false
+  const binding = enabledBinding(rows, SIDEBAR_TOGGLE_ID)
+  return binding !== undefined && bindingMatches(binding, gesture)
+}
+
+/**
+ * One keydown's expand hand-over: poll for the expansion, then hand the
+ * keyboard to the shown page.
+ *
+ * The observer runs before configurable dispatch, so `isExpanded()` here reads
+ * the pre-toggle truth: `false` means this press is the expand itself (a
+ * `true` means the press collapses, which needs no hand-over). Nothing is
+ * consumed — the bundled `sidebar.right.toggle` keeps its owner. The expansion
+ * itself is not assumed to be synchronous with the keydown (the store commit
+ * and render can land a few frames later), so `expandHandOver` probes until
+ * the column reports expanded (bounded), and only then hands the keyboard to
+ * the shown page.
+ * @param shortcuts - keyboard service.
+ * @param sidebar - Right-Sidebar face.
+ * @param input - one fixed keydown.
+ */
+function handOverOnExpand(shortcuts: Shortcuts, sidebar: Sidebar, input: KeydownInput): void {
+  if (!expansionPress(shortcuts.catalog.getSnapshot(), input.gesture, input.context)) return
+  if (sidebar.isExpanded()) return
+  const sessionId = sidebar.mounted.getSnapshot()
+  if (sessionId === undefined) return
+  expandHandOver(sidebar, sessionId)
+}
+
+/** How long the expand hand-over waits for the column to report expanded. */
+const EXPAND_WINDOW_MS = 800
+
+/** How often the expand hand-over probes the column's expansion. */
+const EXPAND_PROBE_MS = 50
+
+/** One expand hand-over at a time per window (later presses coalesce). */
+let expandHandOverActive = false
+
+/**
+ * The expand hand-over: probe the column's expansion on a bounded schedule,
+ * and as soon as the column reports expanded, hand the keyboard to the shown
+ * page.
+ *
+ * The bundled toggle commits the expansion and focuses the active pane — the
+ * commit is not assumed to be visible one frame after the keydown, so the
+ * hand-over polls `sidebar.isExpanded()` (the same live fact the toggle's own
+ * open-with-focus reads) at a fixed interval. The earliest probe runs on a
+ * timer right after the keydown; later probes cover a commit that takes longer.
+ * Once expanded, the hand-over runs on the next frame (after the pane focus
+ * the toggle left behind) and fills in the page's own input (the terminal's
+ * xterm) when the pane container — and nothing inside it — holds focus.
+ * A page that took the keyboard itself is left alone. If the column never
+ * reports expanded within the window (the toggle was blocked or the press was
+ * a pass), the hand-over gives up and does nothing.
+ */
+function expandHandOver(sidebar: Sidebar, sessionId: string): void {
+  if (expandHandOverActive) return
+  expandHandOverActive = true
+  let remaining = Math.ceil(EXPAND_WINDOW_MS / EXPAND_PROBE_MS)
+  const step = (): void => {
+    if (sidebar.isExpanded()) {
+      expandHandOverActive = false
+      whenShown(() => {
+        if (!sidebar.isExpanded()) return
+        focusShownPage(sessionId)
+      })
+      return
+    }
+    if (remaining === 0) {
+      expandHandOverActive = false
+      return
+    }
+    remaining -= 1
+    whenLater(EXPAND_PROBE_MS, step)
+  }
+  whenLater(0, step)
+}
+
+/** One delayed probe for the expand hand-over; no-op where timers are absent. */
+function whenLater(ms: number, run: () => void): void {
+  if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+    window.setTimeout(run, ms)
+  }
 }
 
 /**

@@ -116,7 +116,7 @@ function handlePaneInput(shortcuts, sidebar, input) {
 - **② 模态弹窗打开 → 让开。** 面板命令的 `modals` 是空数组，意味着"有弹窗时它们不生效"；此时内置 `dispatch` 会消费并 `blocked`，插件不掺和，让内置统一处理弹窗下的按键。
 - **③ 这一按不是两个面板命令的生效绑定 → 不关我事。** `paneActionFor` 会查 `enabledBinding`（第 5.2 节），只有这一按**恰好**命中 `pane.fullscreen.toggle` 或 `pane.split` 当前生效的键位时才继续。
 - **④ 焦点已经在面板内 → 让内置独占。** 这是内置命令自己的场景：`focusedTarget` 能解析出来，内置 `dispatch` 会在同一轮里正常执行全屏/分屏。插件若再动一次就会全屏两次（来回抵消），所以**不动作、也不消费**，把这一按完整留给内置。
-- **⑤ 面板折叠 → 无面板可全屏/分屏。** 折叠时右侧栏根本没有展开的面板，任何目标都无从谈起。此时正确的做法是先用 `sidebar.right.toggle`（展开键）展开——展开动作会顺手聚焦活动 pane，之后内置命令就能用了。
+- **⑤ 面板折叠 → 无面板可全屏/分屏。** 折叠时右侧栏根本没有展开的面板，任何目标都无从谈起。此时正确的做法是先用 `sidebar.right.toggle`（展开键）展开——展开动作会聚焦活动 pane（更精确地说：聚焦的是 **pane 容器**，终端页需要再靠第 5 组里的"展开补位"把键盘交到 xterm 输入面，见下文 `page-cycle.ts`），之后内置命令就能用了。
 - **⑥ 免聚焦解析目标。** 走到这里，说明焦点不在面板内，内置命令会 `noFocus` 放弃，插件接手。`sidebar.commandTarget(element)` 是官方公开方法，逻辑是：
   1. 先 `focusedTarget(element)`——但前面 ④ 已经确认它是 `undefined`；
   2. 若 `element.closest("[data-sidebar-right-session]")` 命中（target 在侧栏容器内，但不在 pane 内）→ **刻意返回 `undefined`，不回退**（官方注释："stale sidebar markup never falls back to another pane"，防止对陈旧的侧栏标记误回退到另一个面板）；
