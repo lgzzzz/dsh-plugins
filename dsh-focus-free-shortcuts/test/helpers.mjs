@@ -124,6 +124,16 @@ export const FOCUS_COMPOSER_FIXED_ROWS = [
 ]
 export const FOCUS_COMPOSER_PRESS = gesture('KeyJ', { control: true, alt: true })
 
+export const PAGE_CYCLE_ID = 'dsh-focus-free-shortcuts.page-cycle'
+export const PAGE_PREVIOUS_BINDING = { code: 'ArrowLeft', modifiers: ['control', 'alt'] }
+export const PAGE_NEXT_BINDING = { code: 'ArrowRight', modifiers: ['control', 'alt'] }
+/** 本插件自己挂载的固定行:一行同时预约 `Ctrl+Alt+←` 与 `Ctrl+Alt+→`。 */
+export const PAGE_CYCLE_FIXED_ROWS = [
+  fixedRow(PAGE_CYCLE_ID, [PAGE_PREVIOUS_BINDING, PAGE_NEXT_BINDING], { group: 'application' }),
+]
+export const PAGE_PREVIOUS_PRESS = gesture('ArrowLeft', { control: true, alt: true })
+export const PAGE_NEXT_PRESS = gesture('ArrowRight', { control: true, alt: true })
+
 // ---------------------------------------------------------------- 假 DOM
 
 export class FakeNode {
@@ -153,10 +163,26 @@ export class FakeNode {
     return false
   }
 }
-/** 只支持 `[attr]` / `[attr="value"]` / 裸标签名,够本插件用到的那几个选择器。 */
+/**
+ * 只支持 `[attr]` / `[attr="value"]`(可多个连续谓词,如模态选择器
+ * `[role="dialog"][aria-modal="true"]`) / `.class` / 裸标签名,够本插件用到的那
+ * 几个选择器。`.class` 按 `getAttribute('class')` 的空白分词匹配;`FakeNode` 没有
+ * 该读数,故 `.class` 与带值谓词对它恒假。
+ */
 function matchesSelector(node, selector) {
-  const attribute = /^\[([a-zA-Z-]+)(?:="([^"]*)")?\]$/.exec(selector)
-  if (attribute !== null) return node.attrs.has(attribute[1])
+  if (selector.startsWith('.')) {
+    const className = node.getAttribute?.('class') ?? ''
+    return className.split(/\s+/).includes(selector.slice(1))
+  }
+  const groups = [...selector.matchAll(/\[([a-zA-Z-]+)(?:="([^"]*)")?\]/g)]
+  if (groups.length > 0) {
+    // 连续多个 [attr] 谓词须全部匹配;一旦出现括号外内容(如标签前缀),回落为标签名比较。
+    if (groups.map((group) => group[0]).join('') !== selector.replace(/\s/g, '')) return node.tag === selector
+    return groups.every(([, name, value]) => {
+      if (value === undefined) return node.attrs.has(name) || node.values?.has(name) === true
+      return node.getAttribute?.(name) === value
+    })
+  }
   return node.tag === selector
 }
 
@@ -168,6 +194,128 @@ export const domApproval = domRegion.append(new FakeNode('div', ['data-approval-
 export const domFrame = domRegion.append(new FakeNode('iframe'))
 export const domInert = domRegion.append(new FakeNode('div', ['inert']))
 export const domLooseRegion = domBody.append(new FakeNode('div', ['data-conversation-region']))
+
+/**
+ * 值感知的假元素:属性带值(`FakeNode` 的 `attrs` 集合仍兼任"存在性"匹配,
+ * `closest` 因此照常用)。本插件页面循环的 DOM 步只读存在性选择器 + 一个
+ * 值比较(`data-sidebar-right-session`),与真实 HTML 元素足够同形。
+ */
+export class FakeElement extends FakeNode {
+  constructor(tag = 'div', attributes = {}) {
+    super(tag)
+    this.values = new Map()
+    for (const [name, value] of Object.entries(attributes)) {
+      this.attrs.add(name)
+      this.values.set(name, value)
+    }
+    this.focusCount = 0
+    this.lastFocusOptions = undefined
+  }
+  getAttribute(name) {
+    return this.values.has(name) ? this.values.get(name) : null
+  }
+  hasAttribute(name) {
+    return this.values.has(name)
+  }
+  setAttribute(name, value) {
+    this.attrs.add(name)
+    this.values.set(name, value)
+  }
+  querySelectorAll(selector) {
+    const found = []
+    const parts = selector.split(',').map((part) => part.trim())
+    const walk = (node) => {
+      for (const child of node.children) {
+        if (parts.some((part) => matchesSelector(child, part))) found.push(child)
+        walk(child)
+      }
+    }
+    walk(this)
+    return found
+  }
+  focus(options) {
+    this.focusCount += 1
+    this.lastFocusOptions = options
+  }
+}
+
+/** 假 document:只实现本插件用到的三个读数(根级选择查询 + 当前焦点)。 */
+export function fakeDocument({ root, activeElement = null } = {}) {
+  return {
+    activeElement,
+    querySelectorAll(selector) {
+      return root === undefined ? [] : root.querySelectorAll(selector)
+    },
+    querySelector(selector) {
+      const found = root === undefined ? [] : root.querySelectorAll(selector)
+      return found[0] ?? null
+    },
+  }
+}
+
+/**
+ * 假 window:只登记捕获/冒泡阶段的 keydown 监听,`emit` 按注册顺序调用与
+ * `phase` 相符的那批。页面循环桥的捕获钩子是这里唯一的常驻监听,足够仿真。
+ */
+export function fakeWindow() {
+  const listeners = new Set()
+  const capture = (options) => options === true || (typeof options === 'object' && options !== null && options.capture === true)
+  return {
+    listeners,
+    addEventListener(type, listener, options) {
+      if (type !== 'keydown') return
+      listeners.add({ listener, atCapture: capture(options) })
+    },
+    removeEventListener(type, listener) {
+      if (type !== 'keydown') return
+      for (const entry of [...listeners]) {
+        if (entry.listener === listener) listeners.delete(entry)
+      }
+    },
+    emit(event, phase = 'capture') {
+      for (const entry of [...listeners]) {
+        if (entry.atCapture === (phase === 'capture')) entry.listener(event)
+      }
+    },
+  }
+}
+
+/**
+ * 假键盘事件:原生 KeyboardEvent 的一个最小同形,记录 preventDefault /
+ * stopPropagation 的调用次数,`composedPath` 返回测试给的元素链。
+ */
+export function fakeKeyEvent({
+  path = [],
+  type = 'keydown',
+  code = '',
+  ctrlKey = false,
+  altKey = false,
+  shiftKey = false,
+  metaKey = false,
+  repeat = false,
+  isComposing = false,
+} = {}) {
+  const event = {
+    type,
+    code,
+    ctrlKey,
+    altKey,
+    shiftKey,
+    metaKey,
+    repeat,
+    isComposing,
+    prevented: 0,
+    stopped: 0,
+    composedPath: () => path,
+    preventDefault() {
+      event.prevented += 1
+    },
+    stopPropagation() {
+      event.stopped += 1
+    },
+  }
+  return event
+}
 
 // ---------------------------------------------------------------- 假服务
 
@@ -230,6 +378,27 @@ export function fakeSidebar() {
     split: (paneId) => {
       sidebar.calls.push(['split', paneId])
       return 'new-pane'
+    },
+  }
+  return sidebar
+}
+
+/**
+ * 页面循环桥用的侧栏假面:`mounted` / `tabsIn` / `active` / `isExpanded` /
+ * `focus`。`list` 给出按记录顺序的页面 id,`active` 给出当前页;`null` 表示
+ * "没有当前页 / 没有会话"(避免与缺省默认值混同)。
+ */
+export function fakePageSidebar({ list = ['t1', 't2', 't3'], active = 't1', expanded = true, mounted = 's1' } = {}) {
+  const mountedId = mounted === null ? undefined : mounted
+  const activeId = active === null ? undefined : active
+  const sidebar = {
+    mounted: { getSnapshot: () => mountedId },
+    isExpanded: () => expanded,
+    tabsIn: (sessionId) => (sessionId !== mountedId ? [] : list.map((id) => ({ id }))),
+    active: () => (activeId === undefined ? undefined : { id: activeId }),
+    focusCalls: [],
+    focus(tabId) {
+      sidebar.focusCalls.push(tabId)
     },
   }
   return sidebar
