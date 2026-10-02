@@ -12,11 +12,12 @@
 
 1. **不注册任何命令**：不往 shortcut catalog 里加东西，因此没有默认键位、没有冲突、不需要改设置。
 2. **挂在固定输入通道上，先于内置命令观察每一次按键**，并能在合适的时候 `consume()`（= 接管这一按）。
-3. **用两个不读焦点的来源做归属判定**：
+3. **用不读焦点的来源做归属判定**：
    - 面板键 → 用 `sidebarRight.commandTarget()` 的"活动 dock pane"回退（这正是 `sidebar.right.toggle` 那个"在哪儿按都能展开侧栏"的键用的同一机制）；
-   - 停止 → 用 `sessions.list` 里"主视图正在持有的会话"来定位要停的会话，再调该会话上的 `conversation.cancel()`。
+   - 停止 → 用 `sessions.list` 里"主视图正在持有的会话"来定位要停的会话，再调该会话上的 `conversation.cancel()`；
+   - 审批键 → 用同一条"主视图持有的会话"取出它当前发布的 `pendingInteraction`（`{ kind: 'approval', answerable, answer() }`），再调面板按钮用的同一个 `answer()`。
 
-下面 [第 5 节](03-solution-overview-and-pane-keys.md) 把这些机制一条一条展开。
+下面从 [第 5 节](03-solution-overview-and-pane-keys.md) 起把这些机制一条一条展开（面板键 → [第 4 册](04-stop-sequence-bridge.md) 停止序列 → [第 5 册](05-approval-key-bridge.md) 审批键）。
 
 ---
 

@@ -3,7 +3,7 @@
  *
  * 这里只放与"测什么"无关的东西:断言与失败计数、假输入 / 假 DOM / 假服务,
  * 以及把 `src/client.ts` 装进假 Cordis 上下文的 harness。各测试文件按主题
- * 分组(A–G),各自 import 本模块并独立运行:
+ * 分组(A–I),各自 import 本模块并独立运行:
  *
  *   node test/decide-binding.test.mjs
  *
@@ -96,12 +96,25 @@ export function keydown(gestureValue, contextValue) {
 export function row(id, binding, extra = {}) {
   return { id, binding, issue: null, conflicts: [], ...extra }
 }
+/** 一条已挂载的固定行(只读快捷键):它存在本身就是它的键位预约。 */
+export function fixedRow(id, bindings, extra = {}) {
+  return { id, keys: [], bindings, group: 'approval', ...extra }
+}
 
 export const FULLSCREEN_BINDING = { code: 'Enter', modifiers: ['alt', 'meta'] }
 export const SPLIT_BINDING = { code: 'Backslash', modifiers: ['meta'] }
 export const PANE_IDS = { fullscreen: 'pane.fullscreen.toggle', split: 'pane.split' }
 export const FULLSCREEN_PRESS = gesture('Enter', { alt: true, meta: true })
 export const SPLIT_PRESS = gesture('Backslash', { meta: true })
+
+export const APPROVAL_IDS = { allow: 'approval.allow', reject: 'approval.reject' }
+export const APPROVAL_ALLOW_BINDING = { code: 'Enter', modifiers: [] }
+export const APPROVAL_REJECT_BINDING = { code: 'Escape', modifiers: [] }
+/** ui-approval 挂载时真实预约的两条固定行。 */
+export const APPROVAL_FIXED_ROWS = [
+  fixedRow('approval.allow', [APPROVAL_ALLOW_BINDING]),
+  fixedRow('approval.reject', [APPROVAL_REJECT_BINDING]),
+]
 
 // ---------------------------------------------------------------- 假 DOM
 
@@ -150,14 +163,14 @@ export const domLooseRegion = domBody.append(new FakeNode('div', ['data-conversa
 
 // ---------------------------------------------------------------- 假服务
 
-export function fakeShortcuts({ runtime = 'web', platform = 'macos', rows = [], stopSequenceMs = 500 } = {}) {
+export function fakeShortcuts({ runtime = 'web', platform = 'macos', rows = [], fixedRows = [], stopSequenceMs = 500 } = {}) {
   const listeners = new Set()
   return {
     runtime,
     platform,
     stopSequenceMs,
     catalog: { getSnapshot: () => rows },
-    fixedCatalog: { getSnapshot: () => [] },
+    fixedCatalog: { getSnapshot: () => fixedRows },
     observeFixedInput(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -220,6 +233,34 @@ export function session(id, { mainView = 1, running = true } = {}) {
   return { id, running, retainedBy: mainView > 0 ? { mainView } : {} }
 }
 
+/**
+ * 一个可作答的审批(与 `PendingApproval` 同形):记录每次决定,可注入失败。
+ * 真机上 `answerable` 由发布者撤销;这个假对象保持可写,便于测"已作答不再接"。
+ */
+export function approvalPending({ key = 'approval:1', kind = 'approval', answerable = true, onAnswer } = {}) {
+  const pending = {
+    key,
+    kind,
+    answerable,
+    answers: [],
+    answer(outcome) {
+      pending.answers.push(outcome)
+      return onAnswer === undefined ? Promise.resolve() : onAnswer(outcome)
+    },
+  }
+  return pending
+}
+
+/** 待答交互发布者:状态表按引用读取,测试可随时改写。 */
+export function fakeUiSession({ status = new Map() } = {}) {
+  return { sessionStatus: { getSnapshot: () => status } }
+}
+
+/** 把一条待答交互发布给某个会话的状态表。 */
+export function statusWith(sessionId, pendingInteraction) {
+  return new Map([[sessionId, { running: true, pendingInteraction, completionUnread: false }]])
+}
+
 export class FakeCtx {
   constructor(services) {
     this.services = services
@@ -248,23 +289,25 @@ export class FakeCtx {
 export function harness({
   runtime = 'web',
   rows = [row('pane.fullscreen.toggle', FULLSCREEN_BINDING), row('pane.split', SPLIT_BINDING)],
+  fixedRows = APPROVAL_FIXED_ROWS,
   summary = { s1: session('s1') },
   bindingSnapshot = {},
   sidebar = fakeSidebar(),
   conversation = { cancel: () => Promise.resolve() },
-  uiSession,
+  uiSession = fakeUiSession(),
   withSidebar = true,
   withSessions = true,
+  withUiSession = true,
 } = {}) {
-  const shortcuts = fakeShortcuts({ runtime, rows })
+  const shortcuts = fakeShortcuts({ runtime, rows, fixedRows })
   const sessions = fakeSessions({ summary, bindingSnapshot, scope: () => ({ get: (name) => (name === 'conversation' ? conversation ?? undefined : undefined) }) })
   const services = { shortcuts }
   if (withSidebar) services.sidebarRight = sidebar
   if (withSessions) services.sessions = sessions
-  if (uiSession !== undefined) services.uiSession = uiSession
+  if (withUiSession) services.uiSession = uiSession
   const ctx = new FakeCtx(services)
   const warnings = captureWarnings(() => applyPlugin(ctx))
-  return { ctx, shortcuts, sessions, sidebar, conversation, warnings }
+  return { ctx, shortcuts, sessions, sidebar, conversation, uiSession, warnings }
 }
 
 export { applyPlugin }

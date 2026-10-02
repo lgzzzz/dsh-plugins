@@ -141,16 +141,56 @@ const sessionId = occurrence.dataset.conversationSession
 > - 面板命令是**阻塞**：`resolve` 返回 `blocked/noFocus`，`dispatch` 会 `consume()`（消费这一按），但**不执行任何动作**——用户看到的就是"没反应"。
 > - 停止序列是**静默 reset**：资格/归属检查不通过时直接 `reset()`，**不消费**——第一下 Esc 被当作从没发生过，你连按第二下的机会都没有。
 
-### 3.4 为什么"点一下"就好了
+### 3.4 审批面板的归属判定（`Enter` / `Esc`）
+
+审批面板走的又是第三种路子：它**不是**可配置命令，也**不是**固定序列，而是**组件自己监听 `keydown`**。它在渲染出的 `[data-approval-key]` 根节点上挂 React 的 `onKeyDown`：
+
+```js
+// 精简；原文见 dsh-client-ui-approval/lib/client.js 的 ApprovalFlow
+onKeyDown: (event) => {
+  const element = event.target
+  if (event.defaultPrevented
+    || !event.currentTarget.contains(document.activeElement)     // ← 焦点必须在面板内
+    || element.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]') !== null) return
+  if (event.key !== "Enter" && event.key !== "Escape") return
+  if (event.key === "Enter" && element.closest('button, a[href], [role="button"]') !== null) return
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+  event.preventDefault()
+  event.stopPropagation()
+  answer(event.key === "Enter" ? "allowed-once" : "rejected")
+}
+```
+
+它同时用 `registerFixed()` 把 `approval.allow`（`Enter`）与 `approval.reject`（`Esc`）登记进固定目录——**这两行只是声明与冲突检查**，真正处理按键的仍是上面这段组件代码。
+
+它的生效条件比前两者更"脆"：**焦点必须落在面板自己的子树里**。而审批出现的方式恰好会把焦点夺走：审批面板是 composer 的**顶替（takeover）**，它以 overlay 条目叠在默认 composer 之上，而 overlay 机制会给未被选中的 fallback 直接加 `display: none`：
+
+```js
+// dsh-client-ui-renderer/lib/client.js
+return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallback}</div>, elected]
+```
+
+于是审批一出现，**composer 输入框被移除**，"不可渲染的元素不能持有焦点"，浏览器把焦点退回 `<body>`。此时这次 `keydown` 的 target 就是 `<body>`：面板不是 `<body>` 的祖先，React 的 `onKeyDown` 收不到；面板自己的 `contains(document.activeElement)` 也过不了。**`Enter` 与 `Esc` 双双没有 owner**。
+
+| 焦点位置 | `keydown` 的 target | 面板自己的判定 | 表现 |
+|---|---|---|---|
+| 审批详情区（点过卡片） | 面板内的元素 | `currentTarget.contains(activeElement)` 成立 | `Enter` 允许一次、`Esc` 拒绝 |
+| 面板上的"拒绝"按钮 | 那个 `<button>` | `Enter` 让给按钮自身（第 4 个条件） | `Enter` 触发按钮 = 拒绝 |
+| composer 被顶替隐藏后（无焦点） | `<body>` | 面板根本收不到事件 | 两个键都没反应 |
+
+> 注意这一条的让位语义与停止序列同源：内置 stop guard 的归属检查里也写着 `target.closest("[data-approval-key], iframe, .xterm, [inert]")`——**只要目标落在审批控件里，内置序列就主动放弃**。本插件沿用同一个标记做让位（见 [第 5 册](05-approval-key-bridge.md)）。
+
+### 3.5 为什么"点一下"就好了
 
 点击（pointerdown）会**把焦点搬进那个容器**：
 
 - **点侧栏面板**：右侧栏插件里的 `observeSidebarFocus` 监听 pointerdown，当点击落在 pane 上、且点的不是 pane 里的控件（按钮/输入框等）时，直接执行 `pane.focus()`，把焦点设进那个 pane。之后 keydown 的 target 就是 pane，`focusedTarget` 就能解析出来。
 - **点 composer**：`<textarea>` 本身可聚焦，点一下焦点自然进输入框，之后 Esc Esc 的两个 `closest()` 就能命中。
+- **点审批详情区**：面板里那块说明区域带 `tabIndex={0}`，点一下焦点就进面板，React 的 `onKeyDown` 才收得到这一按。
 
 所以"先点一下"不是巧合，也不是什么隐藏机制，而是**手动把下一次按键的 target 修对了**。本插件要做的，就是在这两步之间插入一个"不需要手动点"的兜底。
 
-### 3.5 为什么改键位 / 换绑定没用
+### 3.6 为什么改键位 / 换绑定没用
 
 拒绝发生在**归属判定**这一步，而不是"按哪个键触发"这一步。
 
