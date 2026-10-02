@@ -13,16 +13,18 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// A–I 的主题顺序(与 README 第 9 节对应);其余文件按名字补在后面。
+// A–K 的主题顺序(与 README 第 9 节对应);其余文件按名字补在后面。
 const ORDER = [
   'decide-binding.test.mjs',
   'decide-escape.test.mjs',
   'decide-ownership.test.mjs',
   'decide-stop-sequence.test.mjs',
   'decide-approval.test.mjs',
+  'decide-focus-composer.test.mjs',
   'bridge-pane-keys.test.mjs',
   'bridge-stop-sequence.test.mjs',
   'bridge-approval-keys.test.mjs',
+  'bridge-focus-composer.test.mjs',
   'artifact-client.test.mjs',
 ]
 

@@ -8,16 +8,17 @@
 
 既然根因是"归属判定读焦点"，那就**换一个不依赖焦点的归属判定来源**，同时**只在确定自己该接管时才出手**，避免和内置命令打架。
 
-本插件做的三件事：
+本插件做的四件事：
 
-1. **不注册任何命令**：不往 shortcut catalog 里加东西，因此没有默认键位、没有冲突、不需要改设置。
+1. **不注册任何可配置命令**：不往 shortcut catalog 里加可配置命令，因此没有默认键位、没有冲突、不需要改设置。（例外：聚焦输入框这把键官方不存在，插件为它挂一条**固定键**——只读预约、不可改绑，见下面第 4 点。固定键与可配置命令是两套目录，不产生"改设置"负担。）
 2. **挂在固定输入通道上，先于内置命令观察每一次按键**，并能在合适的时候 `consume()`（= 接管这一按）。
 3. **用不读焦点的来源做归属判定**：
    - 面板键 → 用 `sidebarRight.commandTarget()` 的"活动 dock pane"回退（这正是 `sidebar.right.toggle` 那个"在哪儿按都能展开侧栏"的键用的同一机制）；
    - 停止 → 用 `sessions.list` 里"主视图正在持有的会话"来定位要停的会话，再调该会话上的 `conversation.cancel()`；
-   - 审批键 → 用同一条"主视图持有的会话"取出它当前发布的 `pendingInteraction`（`{ kind: 'approval', answerable, answer() }`），再调面板按钮用的同一个 `answer()`。
+   - 审批键 → 用同一条"主视图持有的会话"取出它当前发布的 `pendingInteraction`（`{ kind: 'approval', answerable, answer() }`），再调面板按钮用的同一个 `answer()`；
+   - 聚焦输入框 → 用同一条"主视图持有的会话"找到它的 scope，再经 `conversation.input.for(scope)` 取到 composer 的输入面，调它的 `focus()`（与应用自己在遮罩结束后把键盘还给输入框用的是同一个操作，光标位置也会还原）。
 
-下面从 [第 5 节](03-solution-overview-and-pane-keys.md) 起把这些机制一条一条展开（面板键 → [第 4 册](04-stop-sequence-bridge.md) 停止序列 → [第 5 册](05-approval-key-bridge.md) 审批键）。
+下面从 [第 5 节](03-solution-overview-and-pane-keys.md) 起把这些机制一条一条展开（面板键 → [第 4 册](04-stop-sequence-bridge.md) 停止序列 → [第 5 册](05-approval-key-bridge.md) 审批键），聚焦输入框的逐行说明放在 [第 6 册](06-comparison-boundaries-contracts.md) 的对照与边界里。
 
 ---
 

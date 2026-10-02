@@ -118,7 +118,7 @@ console.log('--- E⑥ 失败模式:desktop 让位、服务缺席即 no-op ---')
   // Desktop 只关掉面板桥接(配置键由原生通道派发);停止序列与审批键照常安装
   // ——后两者都是固定动作,DOM 固定通道在两端都跑。
   const desktop = harness({ runtime: 'desktop' })
-  check('desktop 不装面板桥(停止 + 审批)', desktop.shortcuts.listenerCount(), 2)
+  check('desktop 不装面板桥(停止 + 审批 + 聚焦)', desktop.shortcuts.listenerCount(), 3)
   checkTrue('desktop 记一条 warn', desktop.warnings.some((line) => line.includes('native keyboard bridge')))
   desktop.sidebar.command = { paneId: 'p1' }
   const press = keydown(FULLSCREEN_PRESS, shortcutContext({ target: domComposer }))
@@ -127,7 +127,7 @@ console.log('--- E⑥ 失败模式:desktop 让位、服务缺席即 no-op ---')
   check('desktop 面板键不消费', press.consumed.count, 0)
 
   const noSidebar = harness({ withSidebar: false })
-  check('无 sidebarRight 不装面板桥(停止 + 审批)', noSidebar.shortcuts.listenerCount(), 2)
+  check('无 sidebarRight 不装面板桥(停止 + 审批 + 聚焦)', noSidebar.shortcuts.listenerCount(), 3)
   check('无 sidebarRight 不抛', noSidebar.warnings.length, 0)
   const orphan = keydown(FULLSCREEN_PRESS, shortcutContext({ target: domComposer }))
   noSidebar.shortcuts.emit(orphan.input)

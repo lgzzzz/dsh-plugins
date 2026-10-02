@@ -116,6 +116,14 @@ export const APPROVAL_FIXED_ROWS = [
   fixedRow('approval.reject', [APPROVAL_REJECT_BINDING]),
 ]
 
+export const FOCUS_COMPOSER_ID = 'dsh-focus-free-shortcuts.focus-composer'
+export const FOCUS_COMPOSER_BINDING = { code: 'KeyJ', modifiers: ['control', 'alt'] }
+/** 本插件自己挂载的固定行:存在即预约 `Ctrl+Alt+J`。 */
+export const FOCUS_COMPOSER_FIXED_ROWS = [
+  fixedRow(FOCUS_COMPOSER_ID, [FOCUS_COMPOSER_BINDING], { group: 'input' }),
+]
+export const FOCUS_COMPOSER_PRESS = gesture('KeyJ', { control: true, alt: true })
+
 // ---------------------------------------------------------------- 假 DOM
 
 export class FakeNode {
@@ -165,15 +173,40 @@ export const domLooseRegion = domBody.append(new FakeNode('div', ['data-conversa
 
 export function fakeShortcuts({ runtime = 'web', platform = 'macos', rows = [], fixedRows = [], stopSequenceMs = 500 } = {}) {
   const listeners = new Set()
+  // 可变固定行表:registerFixed 会往里追加(每次 harness 复制一份,不污染共享常量)。
+  const fixed = [...fixedRows]
+  const registrations = new Map()
   return {
     runtime,
     platform,
     stopSequenceMs,
     catalog: { getSnapshot: () => rows },
-    fixedCatalog: { getSnapshot: () => fixedRows },
+    fixedCatalog: { getSnapshot: () => fixed },
     observeFixedInput(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+    registerFixed(command) {
+      if (registrations.has(command.id)) return () => {}
+      const entry = {
+        id: command.id,
+        label: command.label(),
+        keys: command.keys,
+        group: command.group,
+        bindings: command.bindings.map((binding) => ({
+          code: binding.code,
+          modifiers: [...binding.modifiers],
+          ...(binding.secondCode === void 0 ? {} : { secondCode: binding.secondCode }),
+        })),
+      }
+      registrations.set(command.id, entry)
+      fixed.push(entry)
+      return () => {
+        if (registrations.get(command.id) !== entry) return
+        registrations.delete(command.id)
+        const index = fixed.indexOf(entry)
+        if (index >= 0) fixed.splice(index, 1)
+      }
     },
     emit(input) {
       for (const listener of [...listeners]) listener(input)
