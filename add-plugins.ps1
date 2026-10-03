@@ -11,6 +11,7 @@ $Plugins = @(
   'dsh-header-action-order'
   'dsh-ui-chat-verbose-fold'
   'dsh-ui-css-patches'
+  'dsh-workspace-activity-sort'
   'dsh-workspace-auto-sort'
 )
 
