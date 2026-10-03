@@ -1,0 +1,33 @@
+{
+  "name": "dsh-workspace-activity-sort",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sidebar Workspace auto-sort by session activity: the sidebar's Workspace group order IS the Workspace registry's durable display order, so a Host-only plugin keeps the most recently active Workspace on top. On every user message the Host emits api-session/activity; the plugin resolves that Session's owning Workspace from the registry's own session membership and fronts it with the registry's insertBefore (DOM insertBefore semantics). A newly created Session has no Workspace membership yet at session/created time, so it is remembered and fronted once the workspace-table write accounts for it. Nothing is patched in the UI and no activity is stored: the browser follows the resulting order through the workspace controller's follow() stream. Drags, renames, and other Workspace edits are left alone until the next session activity.",
+  "type": "module",
+  "main": "index.ts",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node test/run-all.mjs",
+    "check": "node --check index.ts && node --check src/bump.ts"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-storage-domain": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-workspace": "^0.2.0-rc.2",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}

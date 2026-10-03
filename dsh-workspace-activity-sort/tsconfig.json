@@ -1,5 +1,5 @@
 {
-  // 无编译步骤：index.ts 与 src/order.ts 由 Node Type Stripping 直接加载，
+  // 无编译步骤：index.ts 与 src/bump.ts 由 Node Type Stripping 直接加载，
   // 本配置只服务 tsserver 与 pnpm typecheck。
   "compilerOptions": {
     // 与宿主运行时（Node 22+，type=module）一致的 ESM 语义
