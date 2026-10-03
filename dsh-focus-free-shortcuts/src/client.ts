@@ -11,6 +11,14 @@
  *   - pane commands (`⌘⌥Enter` / `⌘\`) → `pane-keys.ts`;
  *   - stop (`Esc` `Esc`) → `stop-sequence.ts`;
  *   - approval (`Enter` / `Esc`) → `approval-keys.ts`;
+ *   - question cancel (`Esc` on a presented `ask_user_question` card) →
+ *     `question-keys.ts` — the one group whose bundled owner is *nobody* rather
+ *     than an owner that declines without focus: the card binds no Escape in any
+ *     focus state (only its close/cancel button dismisses it), and both stop
+ *     sequences refuse while a pending interaction exists. This bridge reads the
+ *     same published `pendingInteraction` slot as the approval bridge but
+ *     narrowed to the question domain, and calls the card's own `dismiss()` (the
+ *     operation that button calls) instead of `answer()`;
  *   - focus composer (`Ctrl+Alt+J`) → `focus-composer.ts` — this one is a new
  *     key with no bundled owner, so it registers its own fixed row and then
  *     follows that row like the approval bridge follows its mounted rows;
@@ -35,14 +43,15 @@
  * main-view Session. For the bundled commands nothing is registered in the
  * shortcut catalog: no default bindings, no conflicts, no settings edits — each
  * bridge follows the effective catalog row or the mounted fixed row, so a
- * rebound, unbound, or absent bundled command is left alone. The one exception
- * is the focus-composer key, which mounts its own fixed row because no bundled
- * feature reserves it.
+ * rebound, unbound, or absent bundled command is left alone. The two exceptions
+ * are the focus-composer key and the page-cycle pair, which mount their own fixed
+ * rows because no bundled feature reserves them.
  */
 import { installApprovalBridge } from './approval-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
 import { installPageCycleBridge } from './page-cycle.ts'
 import { installPaneBridge } from './pane-keys.ts'
+import { installQuestionBridge } from './question-keys.ts'
 import { installStopBridge } from './stop-sequence.ts'
 import { name } from './runtime.ts'
 import type {Context} from '@deepseek-ai/cordis'
@@ -60,6 +69,7 @@ export function apply(ctx: Context): void {
   installPaneBridge(ctx)
   installStopBridge(ctx)
   installApprovalBridge(ctx)
+  installQuestionBridge(ctx)
   installFocusComposerBridge(ctx)
   installPageCycleBridge(ctx)
 }

@@ -116,7 +116,7 @@ console.log('--- F⑤ 失败模式:conversation 缺席 / cancel 拒绝 ---')
 console.log('--- F⑥ 卸载:效果被释放,固定监听移除 ---')
 {
   const { shortcuts, ctx } = harness()
-  check('注册了固定监听(面板 + 停止 + 审批 + 聚焦 + 页面循环)', shortcuts.listenerCount(), 5)
+  check('注册了固定监听(面板 + 停止 + 审批 + 提问 + 聚焦 + 页面循环)', shortcuts.listenerCount(), 6)
   for (const effect of ctx.effects) {
     if (typeof effect.dispose === 'function') effect.dispose()
   }

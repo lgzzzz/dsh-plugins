@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { captureWarnings, check, checkTrue, domBody, domComposer, fakeSessions, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, APPROVAL_FIXED_ROWS, approvalPending } from './helpers.mjs'
+import { captureWarnings, check, checkTrue, domBody, domComposer, fakeSessions, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, APPROVAL_FIXED_ROWS, approvalPending, questionPending } from './helpers.mjs'
 
 console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
 {
@@ -62,6 +62,13 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
   shortcuts.emit(keydown(gesture('Escape'), shortcutContext({ target: domBody })).input)
   check('产物里审批键生效', approval.answers, ['allowed-once', 'rejected'])
   check('产物里审批键不误停回合', cancelled, 1)
+
+  // 待答提问换成提问域:同一个 Esc 现在归提问桥,关掉卡片而不是停回合。
+  const question = questionPending()
+  status.set('s1', { running: true, pendingInteraction: question, completionUnread: false })
+  shortcuts.emit(keydown(gesture('Escape'), shortcutContext({ target: domBody })).input)
+  check('产物里提问键生效', question.dismissals, 1)
+  check('产物里提问键不误停回合', cancelled, 1)
 }
 
 finish()

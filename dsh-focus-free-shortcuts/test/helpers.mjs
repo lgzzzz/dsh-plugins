@@ -201,6 +201,11 @@ export const domFrame = domRegion.append(new FakeNode('iframe'))
 export const domInert = domRegion.append(new FakeNode('div', ['inert']))
 export const domLooseRegion = domBody.append(new FakeNode('div', ['data-conversation-region']))
 
+/** 提问卡片的请求键(测试里发的待答提问与卡片标记必须同名)。 */
+export const QUESTION_KEY = 'question:s1:call-1'
+/** Plan-review 卡片的请求键(与提问卡片同形,只是换一个根标记)。 */
+export const PLAN_REVIEW_KEY = 'question:s1:call-2'
+
 /**
  * 值感知的假元素:属性带值(`FakeNode` 的 `attrs` 集合仍兼任"存在性"匹配,
  * `closest` 因此照常用)。本插件页面循环的 DOM 步只读存在性选择器 + 一个
@@ -247,6 +252,18 @@ export class FakeElement extends FakeNode {
     this.lastFocusOptions = options
   }
 }
+
+/**
+ * 提问卡片根 + 它的自定义答案文本域。焦点常常自己落在文本域里(自由文本问题
+ * 会自动聚焦),所以"卡片内 `editable`"是本插件刻意准入的一格。
+ */
+export const domQuestionCard = domRegion.append(new FakeElement('div', { 'data-question-key': QUESTION_KEY }))
+export const domQuestionField = domQuestionCard.append(new FakeElement('textarea'))
+/** Plan-review 卡片根 + 它的一个动作按钮(与提问卡片同形,换根标记)。 */
+export const domPlanReviewCard = domRegion.append(new FakeElement('div', { 'data-plan-review-key': PLAN_REVIEW_KEY }))
+export const domPlanReviewButton = domPlanReviewCard.append(new FakeElement('button'))
+/** 没有 `getAttribute` 的裸卡片根:属性存在性匹配命中,值比较无从谈起。 */
+export const domBareQuestionCard = domRegion.append(new FakeNode('div', ['data-question-key']))
 
 /** 假 document:只实现本插件用到的三个读数(根级选择查询 + 当前焦点)。 */
 export function fakeDocument({ root, activeElement = null } = {}) {
@@ -460,6 +477,24 @@ export function approvalPending({ key = 'approval:1', kind = 'approval', answera
     answer(outcome) {
       pending.answers.push(outcome)
       return onAnswer === undefined ? Promise.resolve() : onAnswer(outcome)
+    },
+  }
+  return pending
+}
+
+/**
+ * 一个可关闭的待答提问(与 `PendingQuestion` 的公开面同形):记录每次关闭,可注入失败。
+ * 真机上 `kind`(`question` / `plan-review`)与关闭后的去向(`hide` / `cancel`)都由
+ * 发布者决定,这条桥只认它是不是提问域、有没有 `dismiss()`。
+ */
+export function questionPending({ key = QUESTION_KEY, kind = 'question', onDismiss } = {}) {
+  const pending = {
+    key,
+    kind,
+    dismissals: 0,
+    dismiss() {
+      pending.dismissals += 1
+      return onDismiss === undefined ? Promise.resolve() : onDismiss()
     },
   }
   return pending

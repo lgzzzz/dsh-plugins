@@ -50,7 +50,7 @@ console.log('--- L③ 准入:页 / 文本控件 / 终端 / 已被消费都准入
   check('组字中否决', pageCycleEligible(gesture('ArrowLeft', { control: true, alt: true, composing: true }), shortcutContext()), false)
 }
 
-// 准入只负责"能不能出手",具体键归固定行管 —— 与其余四组的分工一致。
+// 准入只负责"能不能出手",具体键归固定行管 —— 与其余几组的分工一致。
 {
   check('别的键同样准入(是否动作由固定行决定)', pageCycleEligible(gesture('Enter'), shortcutContext()), true)
 }

@@ -267,3 +267,5 @@ function cancelSession(sessions, sessionId) {
   两重机制叠加，无论注册顺序如何，最终都只有一家消费并动作。
 
 > **审批键与停止序列的交叉点**：有待答审批时，`Esc` 不再是"第一下停止"，而是"一下拒绝"——内置 `currentTurn()` 与插件 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛拒绝停止，所以停止侧本来就不会消费这一按。审批桥的实现与它自己的让位策略见 [第 5 册](05-approval-key-bridge.md)（第 5.6 节）。
+
+> **提问卡片与停止序列的交叉点**：有待答提问时，`Esc` 同样既不是"第一下停止"，也不是任何审批决定，而是**提问卡片自己的取消**——按卡片关闭 / 取消按钮的同一个语义调 `PendingQuestion.dismiss()`。停止侧的门槛与上一条完全相同：内置 `currentTurn()` 与插件 `resolveStopSession` 都因 `pendingInteraction !== undefined` 返回"没有可停的轮次"，既不动作也不消费，所以这一按在停止序列眼里从不存在（连"第一下"都记不下来）。提问桥也正是靠"这个槽位此刻发布的是提问域的卡片"收口（`kind` 为 `question` / `plan-review`、`key` 是字符串、带 `dismiss()`）之后才接下这一按；一个会话同一时刻只发布一个待答交互（跨域优先级由 `dsh-client-ui-session` 的 `publishPendingInteractions` 决定），所以审批桥与提问桥不可能同时认领同一按。细节见 [第 5 册](05-approval-key-bridge.md) 第 5.6.3、5.7 节与 [第 6 册](06-comparison-boundaries-contracts.md) 第 7 节。

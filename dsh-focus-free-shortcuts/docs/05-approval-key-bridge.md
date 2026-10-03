@@ -1,6 +1,6 @@
 # 审批键桥接（`Enter` / `Esc`）
 
-> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 5 册：审批面板允许一次 / 拒绝的焦点无关桥接，以及它与面板自身、与停止序列的归属不重叠论证。
+> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 5 册：审批面板允许一次 / 拒绝的焦点无关桥接，以及它与面板自身、与停止序列的归属不重叠论证；末尾把与它同源、共用同一个待答槽位的提问卡片取消桥（第 6 组）一并对照。
 
 ---
 
@@ -106,12 +106,12 @@ function handleApprovalInput(shortcuts, sessions, uiSession, input) {
   - `answer` 是函数：真身就是官方的 `PendingApproval`（类型直接 `import type` 自 `@deepseek-ai/dsh-client-ui-approval/client`）。
   
   任何一条不满足都返回 `undefined`，这一按不消费、不动作。
-- **⑧ 先消费，再作答。** 与其它两条桥同构：谁消费谁是 owner。这一按既不该再漏给浏览器（`Esc` 会停止页面加载之类），也不该被停止序列当成"第一下"记下来。
+- **⑧ 先消费，再作答。** 与其它几条桥同构：谁消费谁是 owner。这一按既不该再漏给浏览器（`Esc` 会停止页面加载之类），也不该被停止序列当成"第一下"记下来。
 - **⑨ 调用面板按钮的同一个操作。** `pending.answer('allowed-once' | 'rejected')` 正是"允许一次 / 拒绝"两个按钮 `onClick` 里调用的方法，返回给等待中的 Host waterfall。`PendingApproval.answer()` 内部自带一把锁（`waiting` / `answerable`），所以即使时序上还有第二按到达，也不会重复作答。失败被 `.catch` 捕获并告警，不冒泡成未处理的 Promise 拒绝。
 
-#### 5.6.3 归属不重叠（面板 ↔ 审批桥 ↔ 停止序列）
+#### 5.6.3 归属不重叠（面板 ↔ 审批桥 ↔ 提问桥 ↔ 停止序列）
 
-审批键与另外两条桥同处 `fixedListeners`，靠"显式让位 + 共享 `consumed` 标志"保证每按恰好一个 owner：
+审批键与另外几条桥同处 `fixedListeners`，靠"显式让位 + 共享 `consumed` 标志"保证每按恰好一个 owner：
 
 | 按下时的情形 | 谁处理 | 为什么 |
 |---|---|---|
@@ -119,19 +119,38 @@ function handleApprovalInput(shortcuts, sessions, uiSession, input) {
 | 焦点在 `<body>`、`page` 区域，有待答审批 | 审批桥 | 面板收不到这一按（目标不在它子树里），审批桥按 ④ 命中固定行后作答并消费 |
 | 焦点在 `<body>`、`page` 区域，无待答审批 | 停止序列（`Esc`）或无人（`Enter`） | 审批桥在 ⑦ 返回 `undefined`，不消费；`Esc` 照旧进入双按序列 |
 | 有待答审批时按 `Esc` | 审批桥（一下即拒绝） | 停止序列此时**必须**不响应：内置 `currentTurn()` 与插件 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛，返回"没有可停的轮次"，且不消费 |
-| 焦点在输入控件 / 终端 / 模态层之上 | 那个控件自己 | ③ 的 `region` 与 `modal` 门槛直接否决，审批桥不消费 |
+| 焦点在输入控件 / 终端 / 模态层之上（提问卡片自己的答案文本域除外，见下面两行） | 那个控件自己 | ③ 的 `region` 与 `modal` 门槛直接否决，审批桥不消费 |
+| 焦点在 `<body>`、`page` 区域，有待答提问 | 提问桥 | 提问卡片同样是 composer 顶替，出现后焦点退回 `<body>`；卡片自己完全不绑 `Esc`，这一按本来没有 owner。提问桥用与审批桥同一条"主视图会话 + `pendingInteraction`"解析出可关闭卡片后，先消费再调卡片自己的 `dismiss()` |
+| 有待答提问时按 `Esc` | 提问桥（一下即取消卡片） | 停止序列与上一行审批同理地拒绝（同一 `pendingInteraction !== undefined` 门槛），审批桥也不接手（`asAnswerableApproval` 要求 `kind === 'approval'`）；这一按恰好一个 owner |
+| 焦点在提问卡片自己的答案文本域（`editable`）里按 `Esc` | 提问桥 | 这是准入里**刻意**不收 `editable` 的例外：卡片自己的 `keydown` 只看 `Enter`，自由文本问题还会自动聚焦这个文本域，所以这里的 `Esc` 同样没有别的 owner；归属由 `questionCardOwnsTarget` 收口到"这一张卡片" |
+| 焦点在提问卡片之外的文本控件（侧栏搜索框、重命名框）里按 `Esc` | 那个控件自己 | 准入虽然放行 `editable`，但归属判定要求 target 落在属性值等于本次提问 `key` 的 `[data-question-key]` / `[data-plan-review-key]` 卡片内；不满足就不动作、不消费，别的文本控件保留自己的 `Esc` |
+| 有待答提问，且 `kind === 'plan-review'`（`exit_plan_mode` 那张 Approve / Request changes 卡片） | 提问桥（同一个 `dismiss()`） | 这是**活着的** plan-review 展示：`dismiss()` 正是卡片上「Request changes」按钮调用的那个动词，结果与提问卡片同一套——带工具调用线索时收起面板（`hide`），Host 未命名时把等待拒绝为 `ASK_CANCELLED` 并把 composer 交回给用户写反馈 |
+| 从 `ask_user_question` 工具调用行重新打开的**只读 review 卡片**（已定局的提问回看） | 提问桥（同一个 `dismiss()`） | 这不是活着的待答卡片：它没有作答通道、没有倒计时，`dismiss()` 就是 `card.remove`（移除卡片）。它承载的 `kind` 取决于原来的问题（`question` 或 `plan-review`），所以"活卡片 / 只读回看"不是靠 `kind` 分辨的——两种情形都由同一个 `dismiss()` 正确收场 |
+| 待答交互是审批域（`kind === 'approval'`）而不是提问域 | 审批桥 | 提问桥的运行时收窄要求 `kind` 为 `question` / `plan-review`，审批域不归它；反过来审批桥也只认 `kind === 'approval'`，两个域互不越界 |
 
 > 注意第 3 行的分工：**审批出现时 `Esc` 不再是"连按两下停止"**。这与内置行为一致——有待答交互时内置也拒绝停止——而单按即拒绝正是面板自身处理 `Esc` 的方式（官方 README：reject with Escape）。
 
+> 提问卡片同理：**有待答提问时 `Esc` 不是"连按两下停止"，也不是拒绝审批，而是取消这张卡片**。所以第 3 行说的"无待答审批"还要再看一眼这个槽位发布的是不是提问：是提问时 `Esc` 归提问桥，而 `Enter` 仍完全归卡片自己（`Enter` 只出现在卡片的选项 / 字段上，这条桥根本不碰它）。
+
 ---
 
-### 5.7 与另外两条桥的差异一览
+### 5.7 与其它几条桥的差异一览
 
-| 维度 | 面板键桥 | 停止桥 | 审批键桥 |
-|---|---|---|---|
-| 属主事实 | 可配置命令的**生效绑定**（`catalog`） | 固定序列的资格 + 归属守卫 | 固定行 `approval.allow` / `approval.reject`（`fixedCatalog`） |
-| 目标解析 | `sidebarRight.commandTarget()` 的活动 pane 回退 | 主视图会话 + `conversation.cancel()` | 主视图会话的 `pendingInteraction` + `answer()` |
-| 按键形状 | 单键（含修饰键，读绑定） | 裸 `Esc` **两下** | 无修饰 `Enter` / `Esc` **一下** |
-| 让位条件 | 焦点已在 pane 内 | 焦点在会话区域内（内置掌权） | 目标落在 `[data-approval-key]` 内（面板掌权） |
-| 运行时 | **仅 Web** | Web 与 Desktop | Web 与 Desktop |
-| 消费时机 | 确认要动作之后 | 接受了半序列之后 | 解析出可作答审批之后 |
+| 维度 | 面板键桥 | 停止桥 | 审批键桥 | 提问键桥 |
+|---|---|---|---|---|
+| 属主事实 | 可配置命令的**生效绑定**（`catalog`） | 固定序列的资格 + 归属守卫 | 固定行 `approval.allow` / `approval.reject`（`fixedCatalog`） | 主视图会话已发布的 `pendingInteraction` 收窄到提问域（`kind` 为 `question` / `plan-review`、`key` 是字符串、带 `dismiss()`）——**不读任何固定行** |
+| 目标解析 | `sidebarRight.commandTarget()` 的活动 pane 回退 | 主视图会话 + `conversation.cancel()` | 主视图会话的 `pendingInteraction` + `answer()` | 同一条"主视图会话 + `pendingInteraction`"，但调卡片关闭 / 取消按钮用的 `dismiss()`（**从不**调 `answer()`） |
+| 按键形状 | 单键（含修饰键，读绑定） | 裸 `Esc` **两下** | 无修饰 `Enter` / `Esc` **一下** | 裸 `Esc` **一下**（无修饰、非长按、非组字、未被消费） |
+| 让位条件 | 焦点已在 pane 内 | 焦点在会话区域内（内置掌权） | 目标落在 `[data-approval-key]` 内（面板掌权） | `editable` 区域里**卡片之外**的目标（卡片自己没绑 `Esc`，但别的文本控件保留自己的 `Esc`）：归属要求 `[data-question-key]` / `[data-plan-review-key]` 命中的卡片，其属性值恰好等于本次提问的 `key` |
+| 运行时 | **仅 Web** | Web 与 Desktop | Web 与 Desktop | Web 与 Desktop **都安装**（固定动作，不经原生键盘桥派发）；但卡片本身是 **Web 独有**的客户端特性（`@deepseek-ai/dsh-client-ui-user-questions` 声明 `dsh.client.platform: "web"`），桌面端没有任何人发布提问域的 `pendingInteraction`，所以这条桥在 Desktop 实际是 no-op |
+| 消费时机 | 确认要动作之后 | 接受了半序列之后 | 解析出可作答审批之后 | 解析出可关闭提问、且通过卡片归属收口之后（先消费，再 `dismiss()`） |
+
+#### 5.7.1 提问卡片桥（第 6 组）补充：`editable` 的放宽与 `dismiss()` 的三种落点
+
+提问桥与审批桥同走一条线：`ctx.inject(['shortcuts', 'sessions', 'uiSession'], ...)`；`shortcuts.observeFixedInput` 缺席时告警 `shortcuts service exposes no observeFixedInput; question bridge not installed` 并放弃安装；Web 与 Desktop 都安装（这里没有任何"可配置绑定"要交给原生键盘桥派发，与审批桥同理）。不过卡片本身是 **Web 独有**的客户端特性（`@deepseek-ai/dsh-client-ui-user-questions` 声明 `dsh.client.platform: "web"`）：桌面端没有人发布提问域的 `pendingInteraction`，所以这条桥在 Desktop 装上也是 no-op——不需要额外的运行时守卫，因为那里根本没有会重复派发的那一按（没有卡片，就没有可取消的提问）。处理顺序与审批桥同构：准入（`questionEscapeEligible`：裸 `Esc`、非长按、非组字、未被消费、无修饰键、`modal === null`、`region !== 'terminal'`）→ 用主视图会话取到可关闭卡片（`presentedQuestion` → `asDismissableQuestion`）→ `editable` 收口 → `input.consume()` → `question.dismiss()`，其中 `dismiss()` 失败时告警 `question <key> was not cancelled:`（消费不回退）。
+
+- **`editable` 是刻意放宽的，但被"卡片归属"围住**：审批桥要求 `context.region === 'page'`，提问桥则**允许** `editable`。原因是卡片自己的自由文本答案字段就是一个 `<textarea>`（`region` 正是 `editable`）、自由文本问题还会自动聚焦它，而该字段的 `keydown` 只处理 `Enter`——若照抄审批桥的 `region === 'page'`，用户在答案框里按 `Esc` 就又变成没有主人。安全性由归属判定兜住：`context.region === 'editable'` 时，只有 `questionCardOwnsTarget(context.target, question.key)` 成立（target 落在 `[data-question-key]` / `[data-plan-review-key]` 卡片内，且**该元素自身的属性值恰好等于本次待答提问的 `key`**）才继续。侧栏搜索框、重命名输入框这些卡片之外的文本控件因此完整保留自己的 `Esc`；已经卸载的旧卡片、或另一次调用的 review 卡片，也因为 key 对不上而匹配失败。
+- **只调 `dismiss()`，从不调 `answer()`**：`dismiss()` 就是卡片关闭 / 取消按钮调用的同一个公开动词，插件不替用户作答，`Esc` 与"点关闭 / 取消按钮"永远同义。它的实际结果由上游卡片的形状决定——`kind` 只区分卡片属于哪个域，并不区分"活卡片 / 只读回看"：
+  - **提问卡片（`kind === 'question'`）**：带工具调用线索的走 `hide`——只收起面板，请求继续等待、倒计时照跑，`ask_user_question` 的工具调用行能重新打开它；Host 未命名的阻塞式请求没有可返回的调用行，于是把整个等待拒绝为 `ASK_CANCELLED`（按钮自己的标签是「取消」/「放弃整组问题」/「Dismiss all questions」）。
+  - **活着的 plan-review 卡片（`kind === 'plan-review'`，`exit_plan_mode` 的 Approve / Request changes）**：`dismiss()` 正是「Request changes（请求修改）」按钮的动词，结果与上面同一套——带工具调用线索时收起面板（计划仍在，可从工具调用行重开），Host 未命名时以 `ASK_CANCELLED` 结束等待并把 composer 交回给用户写反馈。
+  - **只读 review 卡片（已定局的提问从它的 `ask_user_question` 工具调用行重新打开，`review !== undefined`）**：它是回看而不是待答，没有作答通道、没有倒计时，`dismiss()` 就是 `card.remove`（移除卡片）。它可以承载 `question` 或 `plan-review` 两种 `kind`，所以两种情形走的是同一个 `dismiss()`、却各自得到正确的结果。
