@@ -1,6 +1,6 @@
 /**
- * D 构建产物装配:`lib/client.js` 装进 ModuleLoader 桩 + 假 React,核对
- * 插件导出面、inject / 注册项、设置行渲染、通知链路与 disposer 退订。
+ * D 构建产物装配:把 `lib/client.js` 装进 ModuleLoader 桩与假 React,核对插件
+ * 导出面、inject / 注册项、设置行渲染、通知链路与 disposer 退订。
  *
  * 运行:`node test/artifact-client.test.mjs`(或 pnpm test 跑全部)。
  */

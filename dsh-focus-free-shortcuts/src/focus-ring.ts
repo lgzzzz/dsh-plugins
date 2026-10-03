@@ -1,36 +1,20 @@
 /**
- * Ring suppression for a control the keyboard was taken from.
+ * 抑制刚被夺走按键的控件的焦点环。
  *
- * The app paints focus rings from `:focus-visible` alone, and keeps them
- * invisible while a pointer owns focus: `ui-theme`'s `focus.css` makes the ring
- * colour transparent under
- * `html[data-input-modality='pointer'] body :focus-visible:not(:read-write)`,
- * and the shell's `ui-primitives` input-modality tracker publishes `pointer`
- * until a non-composing navigation key, or a non-composing key followed by
- * focus landing on a different control, restores keyboard styling.
+ * 应用只在 `:focus-visible` 时画焦点环，并在指针持有焦点时让其不可见：`ui-theme` 的
+ * `focus.css` 在 `html[data-input-modality='pointer'] body :focus-visible:not(:read-write)`
+ * 下把环色设为透明，`ui-primitives` 的输入模态跟踪器在非组合导航键（或其后焦点落到
+ * 其他控件）出现前一直发布 `pointer`。
  *
- * Answering an approval moves focus — the composer takeover belongs to the
- * Session and hands the keyboard back when it unloads — so the press this plugin
- * takes is immediately followed by exactly that focus move. The app flips to
- * keyboard modality, the ring colour stops being transparent, and a control that
- * is still `:focus-visible` (the process card the user had just clicked) starts
- * painting its outline. That is the artifact: the press itself was consumed, yet
- * the visual state reads as "keyboard navigation happened".
- *
- * The app already owns the tool for this. `focusWithoutRing(element)` marks an
- * element with `data-dsh-automatic-focus`; the theme turns that marker into
- * `outline: none` for as long as the element keeps focus, and the marker is
- * released on blur or on a navigation key, so normal keyboard styling resumes.
- * Marking the control whose press was taken keeps focus exactly where the user
- * put it and removes only the ring the taken press would otherwise reveal. The
- * release rule is mirrored here rather than imported: this bundle carries no
- * runtime dependency on the primitives package (see `docs/06` §8).
+ * 本模块给元素加上 `data-dsh-automatic-focus`：主题在该标记存在期间把 outline 设为
+ * none，标记在 blur 或导航键时释放，恢复正常键盘样式。释放规则在此复刻而不导入，
+ * 因此打包产物对 primitives 包没有运行时依赖。
  */
 
-/** The marker `focusWithoutRing` publishes; the theme suppresses the outline while it is present. */
+/** `focusWithoutRing` 发布的标记；存在期间主题抑制 outline。 */
 const RING_SUPPRESSION_ATTRIBUTE = 'data-dsh-automatic-focus'
 
-/** Navigation keys that release the marker and restore normal focus styling. */
+/** 释放标记、恢复正常焦点样式的导航键。 */
 const RING_RELEASE_KEYS = new Set([
   'Tab',
   'ArrowUp',
@@ -41,27 +25,18 @@ const RING_RELEASE_KEYS = new Set([
   'End',
 ])
 
-/** One live release per marked element, so a repeated press replaces the previous marker. */
+/** 每个元素只保留一个释放函数，重复按键时先执行并替换上一个。 */
 const ringReleases = new WeakMap<Element, () => void>()
 
-/**
- * The document's focused element, or null where there is no document.
- * @returns the focused element, or null.
- */
+/** 文档当前聚焦的元素；没有 document 时返回 null。 */
 function focusedElement(): Element | null {
   if (typeof document === 'undefined') return null
   return document.activeElement ?? null
 }
 
 /**
- * Keep one control from painting a focus ring, without moving focus.
- *
- * Only the element that currently holds focus can paint a ring, and only a real
- * control benefits: the document element and `<body>` are left untouched, and an
- * element that already lost focus is left alone rather than marked. Repeat calls
- * for the same element replace the previous marker, and the marker itself is
- * withdrawn again on blur or on the first navigation key.
- * @param element - the control whose press was taken, or null without one.
+ * 让一个控件不画焦点环，且不移动焦点：元素为 null、没有 document、是 body 或
+ * documentElement、不是当前焦点、或不支持 `setAttribute` / `addEventListener` 时直接返回。
  */
 export function suppressFocusRing(element: Element | null): void {
   if (element === null) return
@@ -70,8 +45,7 @@ export function suppressFocusRing(element: Element | null): void {
   if (typeof document === 'undefined') return
   if (element === document.body || element === document.documentElement) return
   if (focusedElement() !== element) return
-  // Only a real control reaches this point: the guards above reject anything
-  // that cannot carry the marker and its release listeners.
+  // 上面的守卫已排除不能承载标记与释放监听的元素，这里只会是真实控件。
   const target = element as HTMLElement
 
   function release(): void {
@@ -90,7 +64,6 @@ export function suppressFocusRing(element: Element | null): void {
   target.setAttribute(RING_SUPPRESSION_ATTRIBUTE, '')
   target.addEventListener('blur', release)
   target.addEventListener('keydown', navigate, true)
-  // Focus can move between the check above and the marker landing; a control that
-  // is no longer focused paints nothing, so its marker is withdrawn again.
+  // 检查与标记之间焦点可能已经移走；不再聚焦的控件不画环，撤销其标记。
   if (focusedElement() !== target) release()
 }

@@ -1,65 +1,45 @@
 /**
- * Shared runtime ground for the three bridges.
- *
- * `pane-keys.ts`, `stop-sequence.ts`, and `approval-keys.ts` each open the same
- * fixed-input channel and each need the same small set of runtime facts:
- *
- *   - the plugin name diagnostics are prefixed with;
- *   - the keydown branch of the registry's own fixed-input union, narrowed without
- *     a cast at every use site;
- *   - the one Session the main view currently retains, which the stop and the
- *     approval bridge both resolve without DOM focus.
- *
- * Service faces are *not* restated here: each bridge imports the upstream face it
- * uses (`Shortcuts`, `ISessions`, `UiSession`, …) from the package that declares it.
- * Nothing here decides ownership — the gesture/binding rules live in `binding.ts`.
+ * 各桥接共用的运行时基础：诊断用的插件名、注册表固定输入联合类型里的 keydown 分支，
+ * 以及主视图当前保留的那个 Session（停手与审批桥接都在无 DOM 焦点时解析它）。
  */
 import type {ShortcutFixedInput} from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {SessionListState, SessionSummary} from '@deepseek-ai/dsh-api-session-controller/client'
-// 空导入(不引入任何名字):只为让 TS 加载本包的 `declare module` 增强 ——
-// `SessionReferenceSourceMap` 上的 `mainView` 来源标记由它声明(`retainedBy.mainView`
-// 由此合法);它同时声明了 `Context` 上的 `uiSession`。type-only 导入在打包前被擦除。
+// 空导入：让 TS 加载该包的 `declare module` 增强 —— 它声明
+// `SessionReferenceSourceMap` 上的 `mainView` 来源标记(使 `retainedBy.mainView`
+// 合法)与 `Context` 上的 `uiSession`。type-only 导入在打包前被擦除。
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 
-/** Plugin id: the module-table id, the diagnostic prefix, and the fixed-input labels. */
+/** 插件 id：模块表 id、诊断前缀与固定输入标签都用它。 */
 export const name = 'dsh-focus-free-shortcuts'
 
-/** Session identity, taken from the catalog row's own id field. */
+/** Session 标识，取自目录行自身的 id 字段。 */
 export type SessionId = SessionSummary['id']
 
-/** One fixed keydown, as the registry publishes it. */
+/** 注册表发布的固定输入中的一次 keydown。 */
 export type KeydownInput = Extract<ShortcutFixedInput, { type: 'keydown' }>
 
-/** Emit one prefixed diagnostic line. */
+/** 输出一行带插件前缀的诊断信息。 */
 export function warn(message: string, detail?: unknown): void {
   if (detail === undefined) console.warn(`[${name}] ${message}`)
   else console.warn(`[${name}] ${message}`, detail)
 }
 
-/** Narrow the fixed-input union without a cast at every use site. */
+/** 收窄固定输入联合类型，调用处不必各自断言。 */
 export function isKeydown(input: ShortcutFixedInput): input is KeydownInput {
   return input.type === 'keydown'
 }
 
 /**
- * The one Session the main view currently retains, read without DOM focus.
+ * 主视图当前保留的唯一 Session id，无 DOM 焦点读取。
  *
- * `sessions.list.byId[id].retainedBy.mainView` is the same fact `UiSession`
- * reads in `isMain`. More than one retained id means a Session switch is in
- * flight, and no answer is safer than cancelling the wrong turn.
- * @param list - the Session list snapshot.
- * @returns the retained main-view Session id, or undefined when it is ambiguous.
+ * 保留 id 多于一个表示 Session 正在切换，此时返回 undefined 而不做动作。
  */
 export function mainViewSessionId(list: SessionListState): SessionId | undefined {
   const mains = list.ids.filter((id) => hasMainViewRetention(list.byId[id]?.retainedBy))
   return mains.length === 1 ? mains[0] : undefined
 }
 
-/**
- * Read the positive `mainView` source count off a row's retention record.
- * @param retainedBy - a Session summary's retention counts.
- * @returns whether the main view retains that Session.
- */
+/** 一行的保留记录中 `mainView` 来源计数是否为正。 */
 function hasMainViewRetention(retainedBy: SessionSummary['retainedBy'] | undefined): boolean {
   if (retainedBy === undefined) return false
   const count = retainedBy.mainView

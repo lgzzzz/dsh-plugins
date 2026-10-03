@@ -1,5 +1,5 @@
 /**
- * B 装配与重排:`src/client.ts` 装进假 slots 后 —— inject 后立刻重排、
+ * 装配与重排:`src/client.ts` 装进假 slots 后 —— inject 后立刻重排、
  * 后到注册被重放带回、冻结 options 只放弃那一条、服务缺席 / entries 抛错
  * 时 no-op。
  *

@@ -10,5 +10,3 @@
 | [2. 每个名字逐个展开](plugin-naming/02-each-name-explained.md) | 每种名字的写入位置、语义、谁在读、写错会怎样 |
 | [3. 完整数据流与三个易混点](plugin-naming/03-data-flow-and-pitfalls.md) | 从 patch 文件到名字落地；`id` ≠ `name`、default 导出压过 `export const name`、服务名与插件名无关；客户端半部的名字 |
 | [4. 本仓库约定与术语速查表](plugin-naming/04-conventions-and-glossary.md) | 本仓库的命名 / 写法约定；术语表 |
-
-> 阅读约定：各分册的章节号沿用拆分前的编号（第 1～8 节），跨册引用已改为指向对应分册的链接。

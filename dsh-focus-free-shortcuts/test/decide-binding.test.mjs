@@ -1,8 +1,6 @@
 /**
- * A 绑定判定:`src/binding.ts` 的纯函数 —— 修饰键归一、绑定匹配、生效绑定
- * (解绑 / 保留 / 冲突 / 缺席),以及 `src/pane-keys.ts` 里"谁是这一按的 owner"。
- *
- * 运行:`node test/decide-binding.test.mjs`(或 pnpm test 跑全部)。
+ * 绑定纯函数:修饰键归一、绑定匹配、生效绑定(解绑 / 保留 / 冲突 / 缺席),
+ * 以及"谁是这一按的 owner"。
  */
 import { bindingMatches, enabledBinding, modifiersOf } from '../src/binding.ts'
 import { paneActionFor } from '../src/pane-keys.ts'

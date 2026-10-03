@@ -1,8 +1,6 @@
 /**
- * J 聚焦输入框判定:`src/focus-composer.ts` 与 `src/binding.ts` 的纯决策 ——
- * 固定行预约的物理组合(`Ctrl+Alt+J`)、无焦点准入、以及"行不在就不出手"。
- *
- * 运行:`node test/decide-focus-composer.test.mjs`(或 pnpm test 跑全部)。
+ * 聚焦输入框纯决策:固定行预约的物理组合(`Ctrl+Alt+J`)、无焦点准入,
+ * 以及"行不在就不出手"。
  */
 import { fixedRowOwns } from '../src/binding.ts'
 import {
@@ -43,7 +41,7 @@ console.log('--- J③ 无焦点准入:page 与文本控件都准入,模态 / 终
   check('已被消费否决', focusComposerEligible(gesture('KeyJ', { control: true, alt: true, defaultPrevented: true }), shortcutContext()), false)
 }
 
-// 准入只负责"能不能出手",具体键归固定行管 —— 与审批桥的分工一致。
+// 准入只负责"能不能出手",具体键归固定行管。
 {
   check('别的键同样准入(是否动作由固定行决定)', focusComposerEligible(gesture('Enter'), shortcutContext()), true)
 }

@@ -1,6 +1,6 @@
 /**
- * A 插件形状与系统提示词区段:name / apply / guard 形状、tools/pre-execute
- * hook、区段注册与 order、区段文本的四种断言,以及完全权限会话的空文本。
+ * 插件形状与系统提示词区段:name / apply / guard 形状、tools/pre-execute
+ * hook、区段注册与 order、区段文本断言,以及完全权限会话的空文本。
  *
  * 运行:`node test/plugin-shape.test.mjs`(或 pnpm test 跑全部)。
  */

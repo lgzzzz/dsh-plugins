@@ -2,7 +2,7 @@
   "name": "dsh-directory-picker-browse",
   "version": "1.0.0",
   "private": true,
-  "description": "Local persistent bundle patch: pin the in-app directory picker to browse mode (host `@deepseek-ai/dsh-host-directory-picker-browse` + client `@deepseek-ai/dsh-client-ui-directory-picker-browse`) while leaving upstream `ui-deliverables` mounted.",
+  "description": "把应用内的目录选择器固定为 browse 模式：挂载宿主的 dsh-host-directory-picker-browse 与客户端的 dsh-client-ui-directory-picker-browse。",
   "type": "module",
   "dsh": {
     "bundle": {

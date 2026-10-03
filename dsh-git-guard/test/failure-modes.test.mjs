@@ -1,6 +1,6 @@
 /**
- * D 失败模式:sandboxPolicy 服务缺席 / 无 resolve / resolve 抛错时仍 ask,
- * resolve 抛错时区段仍保留,以及非 shell 工具直接放行。
+ * 失败模式:sandboxPolicy 服务缺席 / 无 resolve / resolve 抛错时仍请许可,
+ * resolve 抛错时区段仍保留,非 shell 工具直接放行。
  *
  * 运行:`node test/failure-modes.test.mjs`(或 pnpm test 跑全部)。
  */

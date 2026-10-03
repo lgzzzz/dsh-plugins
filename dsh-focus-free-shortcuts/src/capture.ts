@@ -1,48 +1,32 @@
 /**
- * Capture-phase ground: the shared "read the press before any local control" layer.
+ * 捕获阶段共用层：在任何本地控件之前读取按键。
  *
- * Two bridges must decide a keydown *before* the page's own handler sees it, so
- * both install a window capture listener:
+ * 两个桥需要在页面自身处理器之前判定 keydown，因此在 window 上安装捕获监听：
+ * `page-cycle.ts` 处理聚焦终端吞掉按键的情形，`approval-keys.ts` 处理聚焦卡片
+ * 自行 `preventDefault()` 的情形。
  *
- *   - `page-cycle.ts` — a focused terminal handles every key it owns on its
- *     textarea and calls `stopPropagation()`, so the press never ascends to the
- *     window-level fixed-input channel;
- *   - `approval-keys.ts` — a focused process card (a tool card's
- *     `div[role="button"][tabindex="0"]`, a trajectory row's `tr[tabindex="0"]`)
- *     answers `Enter` in its own React handler and calls `preventDefault()`
- *     first, so by the time the fixed channel runs the card has already acted
- *     *and* the press reads as consumed — the observer would stand down.
+ * 捕获监听早于目标/冒泡处理器运行，读不到键盘适配器为冒泡路径构建的读数，这里重新
+ * 推导同样三项：按键元素、物理手势与归属上下文(region + modal)。
  *
- * A capture listener runs before every target/bubble handler, so it cannot read
- * the readings the keyboard adapter builds for its own bubble path; it re-derives
- * the same three here: the press's element, its physical gesture, and its
- * ownership context (region + modal). Keeping them in one module means both
- * hooks read a press exactly the way the adapter does.
- *
- * Only `import type` reaches upstream: the modal and text-control scopes are
- * restated as the literals the adapter and the primitives package both use,
- * because this bundle carries no runtime dependency on either.
+ * 仅以 `import type` 引用上游；modal 与文本控件作用域按适配器和 primitives 包共用的
+ * 字面量复述。
  */
 import type {
   ShortcutContext,
   ShortcutGesture,
 } from '@deepseek-ai/dsh-client-shortcuts/client'
 
-/** The modal scopes the keyboard adapter reads; the same literal `modalSelector` publishes. */
+/** 模态作用域选择器；与 `modalSelector` 发布的字面量相同。 */
 const MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], [role="menu"]'
 
-/** The input scopes that keep their own keys; the adapter's own `closest()` list. */
+/** 保留自身按键的输入作用域；与适配器的 `closest()` 列表相同。 */
 const TEXT_SELECTOR = 'input, textarea, select, [contenteditable="true"], [contenteditable=""]'
 
 /**
- * The first Element on the event's composed path.
+ * 事件组合路径上的第一个 Element。
  *
- * A capture hook needs the press's destination before any bubble listener has
- * run; `composedPath()` is the native way to name it. Entries are duck-typed by
- * the one capability the hooks need — `Element.prototype.closest` — so tests
- * may hand the hook plain fake elements.
- * @param event - the keydown in the capture phase.
- * @returns the innermost Element of the path, or null when there is none.
+ * 按 `closest` 这一项能力做鸭子类型判断，因此测试可以传入普通假元素。
+ * @returns 路径中最内层的 Element，没有则返回 null。
  */
 export function composedElement(event: KeyboardEvent): Element | null {
   for (const value of event.composedPath()) {
@@ -52,11 +36,7 @@ export function composedElement(event: KeyboardEvent): Element | null {
 }
 
 /**
- * The document's focused element, or null where there is no document.
- *
- * The same reading the keyboard adapter falls back to when a press carries no
- * Element of its own (`target instanceof Element ? target : document.activeElement`).
- * @returns the focused element, or null.
+ * 文档当前聚焦的元素；没有文档时返回 null。
  */
 function focusedElement(): Element | null {
   if (typeof document === 'undefined') return null
@@ -64,31 +44,17 @@ function focusedElement(): Element | null {
 }
 
 /**
- * The element one capture-phase press belongs to.
- *
- * The press's own element, else the focused element — the same resolution
- * {@link captureContext} applies, exposed because a hook that takes a press also
- * needs the control it took it from (for example to withdraw the focus ring that
- * press would otherwise reveal).
- * @param event - the keydown in the capture phase.
- * @returns the press's element, or null when neither exists.
+ * 一次捕获阶段按键所属的元素：优先按键自身元素，否则退回当前聚焦元素。
  */
 export function pressElement(event: KeyboardEvent): Element | null {
   return composedElement(event) ?? focusedElement()
 }
 
 /**
- * Build the gesture facts a capture-phase keydown carries, in the shape the
- * shared decisions read.
+ * 构建捕获阶段 keydown 的手势事实，形状与共用判定读取的一致。
  *
- * Composition is read from the event's own flag (`isComposing`) rather than the
- * keyboard adapter's live observer: at the capture phase the observer has not
- * run yet, and the flag is the same intent — do not steal half-typed input.
- * `defaultPrevented` is always false at the capture phase (nothing has run yet);
- * the bridges that ignore it do so deliberately, the others re-check it after
- * their own preconditions.
- * @param event - the keydown in the capture phase.
- * @returns the gesture in the shared decisions' shape.
+ * 组合输入取自事件自身的 `isComposing`；捕获阶段尚无处理器运行，因此
+ * `defaultPrevented` 恒为 false。
  */
 export function captureGesture(event: KeyboardEvent): ShortcutGesture {
   return {
@@ -105,13 +71,7 @@ export function captureGesture(event: KeyboardEvent): ShortcutGesture {
 }
 
 /**
- * The input region one press descends into, as the adapter classifies it.
- *
- * The order matters and mirrors the adapter: a terminal subtree is checked
- * first (xterm's helper textarea is a `<textarea>`, but the terminal owns it),
- * then the text controls that keep their own keys, then the page.
- * @param target - the press's own element, or null without one.
- * @returns the region name the keyboard adapter would publish for this press.
+ * 一次按键落入的输入区域，判定顺序为终端、文本控件、页面。
  */
 function regionOf(target: Element | null): ShortcutContext['region'] {
   if (target === null) return 'page'
@@ -121,13 +81,8 @@ function regionOf(target: Element | null): ShortcutContext['region'] {
 }
 
 /**
- * Whether a modal layer is currently open.
- *
- * Mirrors the primitives package's `modalSelector` — any element matching
- * `[role="dialog"][aria-modal="true"]` or `[role="menu"]` currently mounted — as
- * a boolean, which is all the shared eligibility checks consult
- * (`context.modal === null`).
- * @returns whether a modal is currently open.
+ * 当前是否有模态层打开：即是否存在匹配 `[role="dialog"][aria-modal="true"]` 或
+ * `[role="menu"]` 的元素。
  */
 export function modalOpen(): boolean {
   if (typeof document === 'undefined') return false
@@ -135,16 +90,8 @@ export function modalOpen(): boolean {
 }
 
 /**
- * Build the ownership context a capture-phase keydown carries.
- *
- * The same facts the keyboard adapter publishes for the bubble path: the press's
- * element (falling back to the focused element, exactly as the adapter does),
- * its region, and whether a modal sits above it. The `modal` field is the
- * adapter's opaque identifier; the shared checks only compare it against null,
- * so the single `'other'` label the adapter itself uses for unmarked modals is
- * the faithful value here.
- * @param element - the press's own element, or null to fall back to the focused one.
- * @returns the context in the shared decisions' shape.
+ * 构建捕获阶段 keydown 的归属上下文：按键元素(无则退回当前聚焦元素)、其区域，
+ * 以及其上方是否有模态。`modal` 只与 null 比较，未标记的模态统一取 `'other'`。
  */
 export function captureContext(element: Element | null): ShortcutContext {
   const target = element ?? focusedElement()

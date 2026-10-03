@@ -1,29 +1,17 @@
 /**
- * Shortcut group 6 — `Esc` cancels the pending user question.
+ * `Esc` 取消待答的用户问题。
  *
- * `ask_user_question` presents its card as a composer takeover: the card owns the
- * composer seat while the request waits, and the only way to leave it without
- * answering is the panel's own close/cancel button, which calls
- * `PendingQuestion.dismiss()`. That single verb covers both card shapes the
- * package declares: a request the Host named by tool call is only withdrawn
- * (`hide` — the request stands, and its tool call row brings the panel back),
- * while a request that carries no tool call has no row to return from, so closing
- * it rejects the whole wait as `ASK_CANCELLED` (the button's own "Dismiss all
- * questions"). No key is bound to that action: the card answers `Enter` on its own
- * options and fields, and `Escape` reaches the page with no owner at all.
+ * `ask_user_question` 把卡片作为输入区接管呈现，未作答时唯一的退出方式是面板自身的
+ * 关闭/取消按钮，它调用 `PendingQuestion.dismiss()`。该动作没有绑定任何按键：卡片自己
+ * 用 `Enter` 处理选项与输入框，`Escape` 则无主地传到页面。
  *
- * This bridge opens the fixed-input channel (which runs for every keydown *before*
- * configurable dispatch and can consume the press) and answers Escape through the
- * same published pending interaction the approval bridge reads, narrowed to the
- * question domain. One Session publishes one pending interaction at a time, so the
- * approval domain and this one can never both claim the same press.
+ * 本模块从固定输入通道（每个 keydown 都早于可配置派发运行，可消费该按键）取该按键，
+ * 并经与审批桥接相同的已发布 pending interaction 作答，只是收窄到 question 域；一个
+ * Session 同时只发布一个 pending interaction，所以两个域不会同时认领同一按键。
  *
- * Target rules, in the same spirit as the other bridges but with one deliberate
- * widening: the panel binds no Escape anywhere, so a press inside *this* panel's
- * own answer field (a `<textarea>`, hence the `editable` region) is this bridge's
- * to take — the field's own `keydown` only ever looks at `Enter`. Every other
- * owned region stands: a terminal keeps its keys, and an editable target outside
- * this card (the sidebar's search box, a rename field) keeps its own.
+ * 目标规则：终端保留自己的按键；`editable` 区默认保留，唯一例外是本面板自己的答题
+ * 输入框（`[data-question-key]` / `[data-plan-review-key]` 卡片内），它的 keydown 只处理
+ * `Enter`。
  */
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -36,24 +24,15 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-session/client'
 import type {Context} from '@deepseek-ai/cordis'
 
-/** The two card roots the question package renders, by their request key. */
+/** 问题包渲染的两种卡片根节点。 */
 const QUESTION_CARD_SELECTOR = '[data-question-key], [data-plan-review-key]'
 
-/** The two attribute names those roots carry the request key on. */
+/** 这两个根节点携带请求 key 的属性名。 */
 const QUESTION_CARD_ATTRIBUTES = ['data-question-key', 'data-plan-review-key'] as const
 
 /**
- * Whether one press may cancel a pending question without DOM focus.
- *
- * The same admission the bundled stop sequence applies before it looks for its
- * own target — a bare, first, unconsumed Escape outside a modal and outside a
- * terminal — except that the turn-stop condition (`pendingInteraction ===
- * undefined`) is exactly the fact this bridge acts on. A terminal keeps its
- * Escape, and `editable` passes here on purpose: the handler narrows it through
- * {@link questionCardOwnsTarget}, so only this panel's own answer field is taken.
- * @param gesture - the physical press being routed.
- * @param context - modal and region ownership for this press.
- * @returns whether the press may cancel a pending question.
+ * 该按键能否在无 DOM 焦点时取消待答问题：`Escape`、首次、未消费、无修饰键、
+ * `modal === null` 且 `region !== 'terminal'`；`editable` 在此放行，由调用方再收窄。
  */
 export function questionEscapeEligible(gesture: ShortcutGesture, context: ShortcutContext): boolean {
   return gesture.code === 'Escape'
@@ -69,14 +48,8 @@ export function questionEscapeEligible(gesture: ShortcutGesture, context: Shortc
 }
 
 /**
- * Whether the press lands inside the presented card itself.
- *
- * The key comparison is what makes this precise: a card that is still mounted
- * after the registry moved on (or a read-only review card of another call) is a
- * different request, and its field is not this bridge's to take.
- * @param target - the keydown target, or null without one.
- * @param key - the presented question's `PendingQuestion.key`.
- * @returns whether the target sits inside that exact card.
+ * 目标是否落在指定 key 的那张卡片内（比对 `data-question-key` / `data-plan-review-key`）；
+ * key 不同则不是同一个请求。
  */
 export function questionCardOwnsTarget(target: Element | null, key: string): boolean {
   if (target === null || typeof target.closest !== 'function') return false
@@ -86,16 +59,8 @@ export function questionCardOwnsTarget(target: Element | null, key: string): boo
 }
 
 /**
- * Narrow one published pending interaction to the question this bridge may close.
- *
- * The slot's declared type is a merge-extensible map that admits every pending
- * domain (the approval panel is one), so the runtime checks stay: only a card
- * that names itself a question or a plan review, carries a string key, and offers
- * the same `dismiss()` its close/cancel button calls is returned. A settled card
- * is gone from the registry, and a card whose close is already in flight removes
- * itself idempotently.
- * @param value - one Session's published pending interaction.
- * @returns the dismissable question, or undefined for anything else.
+ * 把已发布的 pending interaction 收窄为可关闭的问题：`kind` 为 `'question'` 或
+ * `'plan-review'`、`key` 为字符串且 `dismiss` 为函数。
  */
 export function asDismissableQuestion(value: SessionPendingInteraction | undefined): PendingQuestion | undefined {
   if (typeof value !== 'object' || value === null) return undefined
@@ -110,16 +75,7 @@ export function asDismissableQuestion(value: SessionPendingInteraction | undefin
   return candidate as unknown as PendingQuestion
 }
 
-/**
- * The question the main view is presenting for one Session, or undefined.
- *
- * The composer takeover renders the card for exactly the Session whose published
- * pending interaction is that card, and the retained main-view Session is the one
- * on screen — the same fact the stop and approval bridges resolve without focus.
- * @param sessionId - the retained main-view Session, or undefined when ambiguous.
- * @param statuses - published per-Session UI status.
- * @returns the dismissable question, or undefined when none is on screen.
- */
+/** 主视图为某个 Session 呈现的问题卡片；没有则返回 undefined。 */
 export function presentedQuestion(
   sessionId: SessionId | undefined,
   statuses: SessionStatusSnapshot,
@@ -129,15 +85,8 @@ export function presentedQuestion(
 }
 
 /**
- * Bridge the question card's Escape cancel.
- *
- * Unlike the pane keys these are not configurable bindings on any runtime, so the
- * bridge installs wherever the fixed-input channel exists — no runtime guard is
- * needed, because nothing here can double-dispatch. The card itself is a Web
- * client feature (`dsh-client-ui-user-questions` declares `platform: "web"`), so
- * on a Client that does not mount it nothing ever publishes a question
- * interaction and this bridge stays a no-op.
- * @param ctx - client root context.
+ * 安装问题卡片的 Escape 取消桥接：注册固定输入观察者。卡片本身是 Web 客户端功能，
+ * 未挂载它的 Client 不会发布问题交互，此桥接保持为空操作。
  */
 export function installQuestionBridge(ctx: Context): void {
   ctx.inject(['shortcuts', 'sessions', 'uiSession'], (scope) => {
@@ -155,12 +104,7 @@ export function installQuestionBridge(ctx: Context): void {
   })
 }
 
-/**
- * Handle one keydown against the presented question card.
- * @param sessions - Session catalog and main-view owner.
- * @param uiSession - publisher of each Session's pending interaction.
- * @param input - one fixed keydown.
- */
+/** 用当前呈现的问题卡片处理一次固定通道的 keydown。 */
 function handleQuestionInput(
   sessions: ISessions,
   uiSession: UiSession,
@@ -174,12 +118,9 @@ function handleQuestionInput(
     uiSession.sessionStatus.getSnapshot(),
   )
   if (question === undefined) return
-  // An editable target keeps its own keys — except this panel's own answer field,
-  // whose keydown handles Enter alone. Without this check, the first Escape in the
-  // sidebar's search box would cancel the question showing on the other side.
+  // editable 区保留自己的按键，例外是本面板自己的答题输入框（它的 keydown 只处理 Enter）。
   if (context.region === 'editable' && !questionCardOwnsTarget(context.target, question.key)) return
-  // Consume before closing: the press must not also reach the browser, and a
-  // half-consumed cancel would leave the request waiting with no owner.
+  // 先消费再关闭：该按键不得再传给浏览器，半消费的取消会让请求无人接管。
   input.consume()
   question.dismiss().catch((error: unknown) => {
     warn(`question ${question.key} was not cancelled:`, error)

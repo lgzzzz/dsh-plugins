@@ -1,9 +1,4 @@
-/**
- * G 产物:`lib/client.js` 的模块 id / 插件名 / `inject` 声明,以及用真产物
- * 装配一遍的端到端走线(产物零 external,不应要求任何外部模块)。
- *
- * 运行:`node test/artifact-client.test.mjs`(或 pnpm test 跑全部)。
- */
+/** 校验 `lib/client.js` 的模块 id / 插件名 / `inject` 声明,并用真产物装配一遍端到端走线(产物零 external)。 */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -40,7 +35,7 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
   })
   const sidebar = fakeSidebar()
   sidebar.command = { paneId: 'p1' }
-  // 待答状态表按引用读取:先无待答(停止桥接照常),再挂上一条审批。
+  // 待答状态表按引用读取:先无待答,再挂上一条审批。
   const status = new Map()
   const ctx = new FakeCtx({
     shortcuts,
@@ -63,7 +58,7 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
   check('产物里审批键生效', approval.answers, ['allowed-once', 'rejected'])
   check('产物里审批键不误停回合', cancelled, 1)
 
-  // 待答提问换成提问域:同一个 Esc 现在归提问桥,关掉卡片而不是停回合。
+  // 换成待答提问:同一个 Esc 归提问桥,关卡片而非停回合。
   const question = questionPending()
   status.set('s1', { running: true, pendingInteraction: question, completionUnread: false })
   shortcuts.emit(keydown(gesture('Escape'), shortcutContext({ target: domBody })).input)

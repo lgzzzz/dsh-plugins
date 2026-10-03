@@ -1,9 +1,6 @@
 /**
- * F 桥接:停止序列 —— 走线 `src/stop-sequence.ts` 的 Esc Esc 停止桥。覆盖焦点不在
- * 输入框时的两按停止、内置序列掌权时让位、reset、各类否决(不在运行 /
- * 有待答交互 / 会话歧义 / 带修饰键 / 超窗)、失败模式与卸载复位。
- *
- * 运行:`node test/bridge-stop-sequence.test.mjs`(或 pnpm test 跑全部)。
+ * 停止序列桥:焦点不在输入框时 `Esc Esc` 停止回合;覆盖内置序列掌权时让位、reset、
+ * 各类否决(不在运行 / 有待答交互 / 会话歧义 / 带修饰键 / 超窗)、失败模式与卸载复位。
  */
 import { applyPlugin, captureWarnings, check, checkTrue, domBody, domComposer, fakeSessions, fakeShortcuts, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, sleep } from './helpers.mjs'
 

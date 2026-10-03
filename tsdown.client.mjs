@@ -1,28 +1,15 @@
 /**
- * Shared tsdown preset for dsh-plugins plugin bundles.
+ * dsh-plugins 插件包的共享 tsdown 预设:产出浏览器半部与宿主半部两个 bundle。
  *
- * Adapted from deepseek-harness `packages/client/tsdown.client.ts` for this
- * standalone workspace (no monorepo two-level `packages` layout, no `tsc -b`
- * build-face pipeline). It reproduces the same artifact contract as the upstream tsdown
- * preset and the previous esbuild `scripts/build*.mjs`:
+ *   - 浏览器半部是包在 `window.__ModuleLoader__.load({ id, factory })` 里的 CJS 工厂;
+ *     平台模块表种子(react / cordis / dsh-client-* 等)保持 external,其余依赖内联;
+ *   - `@deepseek-ai` 包的值导入只允许:请求的模块表行、可内联的 wire 层 / 第三方库 /
+ *     生成的 /remote 产物;三者都不是则构建失败;
+ *   - `*.module.css` 经 lightningcss 编译成哈希类名表 + 运行时 <style> 注入器,
+ *     全局 `*.css` 同样注入,`*.css?inline` 只导出编译后的文本;
+ *   - 宿主半部是普通 ESM 库 bundle,生产依赖保持 external。
  *
- *   - the browser half is a CJS factory wrapped in
- *     `window.__ModuleLoader__.load({ id, factory })`;
- *   - platform module-table seeds (react / cordis / dsh-client-* shell seeds)
- *     stay external and resolve through the shell at runtime, everything else
- *     inlines;
- *   - a value import of an `@deepseek-ai` package that is neither a requested
- *     module-table row nor an inline-safe wire layer / vendored library /
- *     generated /remote contribution fails the build (upstream purity gate);
- *   - `*.module.css` compiles through lightningcss into a hashed class map +
- *     a runtime `<style>` injector, global `*.css` is injected too, and
- *     `*.css?inline` exports the compiled text for a plugin-owned lifecycle
- *     effect (the ui-theme fork mounts its global sheets that way);
- *   - the node (host) half is a plain ESM library bundle that keeps production
- *     dependencies external.
- *
- * Kept as plain `.mjs` (not `.ts`) so tsdown's config loader never has to run
- * Node's native TypeScript stripping on it (known Node bug with complex types).
+ * 用 `.mjs` 而非 `.ts`,避免 tsdown 加载配置时走 Node 原生 TypeScript 擦除。
  */
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -30,19 +17,16 @@ import { isBuiltin } from 'node:module'
 import { basename, dirname, resolve } from 'node:path'
 import { transform } from 'lightningcss'
 
-/** Virtual-id suffix keeps module CSS away from tsdown's own css pipeline. */
+/** 虚拟模块 id 前缀:让 CSS 不走 tsdown 自带的 css 流水线。 */
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const GLOBAL_CSS_VIRTUAL_PREFIX = '\0dsh-global-css:'
 const INLINE_CSS_VIRTUAL_PREFIX = '\0dsh-inline-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 
-/** Query suffix marking a stylesheet a plugin imports as text, not as a side effect. */
+/** 查询后缀:把样式表当文本导入,而不是当副作用导入。 */
 const INLINE_CSS_QUERY = '?inline'
 
-/**
- * Module-table seeds the DSH web shell shares. Mirrors deepseek-harness
- * `PLATFORM_MODULES` (`packages/client/web/src/platform.ts`).
- */
+/** DSH web 外壳共享的模块表种子:这些说明符保持 external,运行时由外壳提供。 */
 const PLATFORM_EXTERNALS = [
   'react',
   'react/jsx-runtime',
@@ -56,29 +40,26 @@ const PLATFORM_EXTERNALS = [
   '@deepseek-ai/dsh-client-ui-dockkit',
 ]
 
-/**
- * Upstream INLINE_SAFE: contract layers and pure folds with no runtime identity
- * to share (no Symbol/instanceof/singleton state) — safe to inline.
- */
+/** 可内联的契约层与纯函数:没有需要共享的运行时标识(Symbol / instanceof / 单例状态)。 */
 const INLINE_SAFE = /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$)/
 
-/** Upstream VENDORED_LIBRARY: rescoped framework libraries a browser bundle inlines. */
+/** 浏览器 bundle 需要内联的框架库(已改作用域的 cosmokit / schemastery)。 */
 const VENDORED_LIBRARY = /^@deepseek-ai\/(cosmokit|schemastery)(\/|$)/
 
-/** Upstream GENERATED_REMOTE: generated descriptor/codec contribution. */
+/** 生成的 /remote 描述符 / 编解码产物。 */
 const GENERATED_REMOTE = /^@deepseek-ai\/dsh-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
 
-/** Whether a specifier equals a seed or a subpath of it. */
+/** 说明符是否等于某个种子,或是它的子路径。 */
 function matchesAny(specifier, seeds) {
   return seeds.some(seed => specifier === seed || specifier.startsWith(`${seed}/`))
 }
 
-/** Read the package manifest for the package in the current working directory. */
+/** 读取当前工作目录下的 package.json。 */
 function readManifest() {
   return JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'))
 }
 
-/** Production dependency names: the sections a real install materializes on disk. */
+/** 生产依赖名:真实安装会落到磁盘上的三个依赖段。 */
 function productionExternals() {
   const manifest = readManifest()
   return [
@@ -88,7 +69,7 @@ function productionExternals() {
   ]
 }
 
-/** `dsh.client.external` — module-table rows a package requests beyond the baseline. */
+/** `dsh.client.external`:包在基线之外额外请求的模块表行。 */
 function requestedClientExternals() {
   const value = readManifest().dsh?.client?.external
   if (value === undefined) return []
@@ -98,7 +79,7 @@ function requestedClientExternals() {
   return value
 }
 
-/** Emit one plugin-owned style injector and an optional CSS Modules export. */
+/** 生成插件自有的样式注入模块,并按需导出 CSS Modules 类名表。 */
 function styleInjectionModule(id, fileId, css, classMap) {
   const source = [
     `const css = ${JSON.stringify(css)};`,
@@ -115,7 +96,7 @@ function styleInjectionModule(id, fileId, css, classMap) {
   return source.join('\n')
 }
 
-/** Compile `x.module.css` into a hashed class map + runtime style injector. */
+/** 把 `x.module.css` 编译成哈希类名表 + 运行时样式注入器。 */
 function cssModulesInlinePlugin(id) {
   return {
     name: 'dsh-css-modules-inline',
@@ -142,7 +123,7 @@ function cssModulesInlinePlugin(id) {
   }
 }
 
-/** Inject a global `x.css` (non-module) stylesheet at factory execution. */
+/** 在工厂执行时注入全局 `x.css`(非 module)样式表。 */
 function cssGlobalInlinePlugin(id) {
   return {
     name: 'dsh-css-global-inline',
@@ -163,13 +144,10 @@ function cssGlobalInlinePlugin(id) {
 }
 
 /**
- * Export a `x.css?inline` stylesheet as compiled text.
+ * 把 `x.css?inline` 样式表导出为编译后的文本。
  *
- * The importing plugin owns the lifecycle (it creates and removes the `<style>`
- * tag inside its own effect), which is why the sheet must not self-inject the
- * way `x.css` and `x.module.css` do. Resolution runs before the global handler:
- * a `?inline` source still names a stylesheet, and the first plugin to claim a
- * specifier wins.
+ * <style> 标签的生命周期由导入方插件自己管理,所以这里不像 `x.css` /
+ * `x.module.css` 那样自行注入。解析排在全局处理器之前,同一说明符由先声明的插件接管。
  */
 function cssTextInlinePlugin() {
   return {
@@ -192,11 +170,9 @@ function cssTextInlinePlugin() {
 }
 
 /**
- * Build-time mirror of the module-edge rules: an inlined `@deepseek-ai` value
- * import must be identity-free (a wire layer, vendored library, or generated
- * /remote contribution); anything else must be a requested module-table row
- * (external) — otherwise the build fails. Cross-plugin collaboration goes
- * through cordis services, never a second inlined copy.
+ * 构建期的模块边规则:内联的 `@deepseek-ai` 值导入必须是无运行时标识的
+ * (wire 层、第三方库或生成的 /remote 产物),否则必须是请求的模块表行(external),
+ * 两者都不是则构建失败。
  */
 function purityGatePlugin(id, isRequested) {
   return {
@@ -215,7 +191,7 @@ function purityGatePlugin(id, isRequested) {
   }
 }
 
-/** Public client environment folded into the browser artifact. */
+/** 折进浏览器产物的客户端公开环境变量。 */
 function clientBuildEnvironmentDefines(environment) {
   const defines = { 'process.env': '{}' }
   for (const [name, value] of Object.entries(environment)) {
@@ -227,8 +203,8 @@ function clientBuildEnvironmentDefines(environment) {
 }
 
 /**
- * Build the browser (client) half: `lib/client.js` as a `__ModuleLoader__`
- * CJS factory. Platform seeds stay external; everything else is bundled.
+ * 构建浏览器半部:`lib/client.js`,即 `__ModuleLoader__` 的 CJS 工厂。
+ * 平台种子保持 external,其余全部打包。
  */
 export function clientBundle(id, options = {}) {
   const entry = options.entry ?? 'src/client.ts'
@@ -250,12 +226,9 @@ export function clientBundle(id, options = {}) {
       alwaysBundle: specifier => !isBuiltin(specifier) && !isRequested(specifier),
     },
     inputOptions: {
-      // Dual-mode libraries (lexical's `exports` carry development/production/
-      // node conditions; the node file picks its flavor with a top-level await
-      // a CJS bundle cannot carry) must resolve their static flavor. Naming the
-      // env condition first is what selects it: condition order is the
-      // resolver's own priority list, and `node` would otherwise win by being
-      // in the default condition set for a `platform: 'browser'` build.
+      // 双模式库(如 lexical:exports 带 development/production/node 条件,node 入口
+      // 用了 CJS bundle 承载不了的顶层 await)必须解析到静态形态。把环境条件排在最前
+      // 即可选中它:条件顺序就是解析器的优先级,否则默认条件集里的 `node` 会胜出。
       resolve: {
         conditionNames: [
           nodeEnv === 'development' ? 'development' : 'production',
@@ -286,8 +259,8 @@ export function clientBundle(id, options = {}) {
 }
 
 /**
- * Build the node (host) half: an ESM library bundle from `src/` into `lib/`.
- * Production dependencies stay external; everything else is bundled.
+ * 构建宿主半部:把 `src/` 打成 `lib/` 下的 ESM 库 bundle。
+ * 生产依赖保持 external,其余全部打包。
  */
 export function nodeBundle(entry, options = {}) {
   const entries = Array.isArray(entry) ? entry : [entry]
@@ -311,9 +284,8 @@ export function nodeBundle(entry, options = {}) {
 }
 
 /**
- * Build both halves of a full plugin package (node library + browser bundle).
- * @returns an array of tsdown configs run in one invocation; `clean` stays off
- * so the two halves write into `lib/` without wiping each other.
+ * 一次性构建完整插件的两半(宿主库 + 浏览器 bundle)。
+ * `clean` 保持关闭,避免两半互相清空 `lib/`。
  */
 export function clientPackage(id, options) {
   return [

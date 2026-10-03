@@ -2,7 +2,7 @@
   "name": "dsh-desktop-notify",
   "version": "1.0.0",
   "private": true,
-  "description": "Local persistent Web plugin: desktop notifications through the browser's Notification API. A bell button in the conversation header grants the permission (one user gesture) and toggles the feature; the plugin then watches ctx.uiSession.sessionStatus and fires a system notification when a top-level session's turn finishes (running true → false) or when the agent starts waiting for you (approval / question / plan-review pending). Notifies only while the page is open and not focused. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (tsdown, react left external as a platform seed).",
+  "description": "本插件在页面不处于前台时,通过浏览器 Notification API 发送桌面通知:回合结束或出现待审批/待回答/待确认计划时弹系统通知,并提供设置项开关。",
   "type": "module",
   "exports": {
     ".": {

@@ -1,8 +1,8 @@
 # dsh-workspace-activity-sort 的挂载行：随 dsh.profile.bundles 自动挂载。
-# 只有宿主半部（index.ts，Node Type Stripping 直载，无构建产物）：它盯住
+# 只有宿主半部 index.ts（Node Type Stripping 直载，无构建产物）：它盯住
 # api-session/activity 与新建会话的归属，用 workspace 注册表自己的 insertBefore
 # 把最近活跃的工作区提到持久显示顺序的最前；浏览器侧通过 workspace 控制器的
-# follow() 增量自然跟随，没有客户端代码，也不需要重建 Web 资源。
+# follow() 增量跟随，没有客户端代码。
 - insert:
     - id: dsh-workspace-activity-sort
       name: dsh-workspace-activity-sort

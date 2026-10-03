@@ -1,33 +1,22 @@
 /**
- * 宿主半部：左侧栏里最近有会话活动的工作区自动浮到最前。
+ * 宿主半部：把最近有会话活动的工作区提到左侧栏 Workspace 分组最前。
  *
- * 侧边栏的 Workspace 分组顺序不是浏览器本地状态，而是 Workspace 注册表的持久显示
- * 顺序（`ctx.workspaceRegistry` 的 `workspaceIds`）；浏览器通过 workspace 控制器
- * follow() 的 order 增量跟随它。所以本插件不碰任何 UI：只在会话活跃时用注册表自己的
- * `insertBefore` 把那个工作区移到最前，顺序随即成为权威事实，重连的客户端与第二个
- * GUI 看到同一份顺序。
+ * 分组顺序就是 Workspace 注册表的持久显示顺序（`ctx.workspaceRegistry` 的 `workspaceIds`），
+ * 浏览器通过 workspace 控制器 follow() 的 order 增量跟随。插件只写注册表顺序：用注册表自己的
+ * `insertBefore` 把目标工作区移到最前。
  *
  * 触发与动作：
- *   - `api-session/activity`：用户消息提交（也就是侧边栏会话行右侧时间更新的那一刻）
- *     → 该会话所属工作区上浮到最前；
- *   - `session/created`：新会话此刻还没有工作区归属（注册表的 attach 写在创建之后），
- *     先把非 subagent 且还没有归属的新会话登记下来；
- *   - `domain/changed`（workspace 域、工作区表）：attach 落盘后让登记的新会话认领
- *     工作区，认领到就上浮一次。
+ *   - `api-session/activity`：该会话所属工作区上浮到最前；
+ *   - `session/created`：登记非 subagent 且此刻还没有工作区归属的新会话；
+ *   - `domain/changed`（workspace 域、工作区表）：让登记的新会话认领工作区，认领到就上浮一次。
  *
- * 其余时候一律不动顺序：手动拖拽、改名、新建/删除工作区都不会被覆盖，只有下一次
- * 会话活动才会重排。每一轮都跳过「已经在最前」的请求，因此本插件自己的写入不会触发
- * 自己——它只写全局顺序单例（`table` 为 `''`），而本插件只听工作区表。
- *
- * 插件不记账任何「活跃时间」：`api-session/activity` 与侧边栏显示的时间来自同一事实
- * （`max(会话 createdAt, 最后一条用户消息时间)`），所以「谁该在最前」由事件本身决定，
- * 不需要冷读会话历史，也没有重启后需要恢复的状态。
+ * 其余情况不动顺序：手动拖拽、改名、新建/删除工作区都不会被覆盖。每一轮都跳过「已经在最前」
+ * 的请求；插件只写全局顺序单例（`table` 为 `''`），只听工作区表。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { WorkspaceId, WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
-// 空类型导入：只为加载这些包对 cordis Events 的类型增强（session/created、
-// api-session/activity、domain/changed），让下面的 ctx.on 回调参数有类型。
-// 它们不引入任何运行时导入：本插件运行时零 import。
+// 空类型导入：加载这些包对 cordis Events 的类型增强（session/created、
+// api-session/activity、domain/changed），让下面的 ctx.on 回调参数有类型；不引入运行时导入。
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-storage-domain'
@@ -43,28 +32,18 @@ import type { WorkspaceRow } from './src/bump.ts'
 /** 插件标识（日志名，与包名一致）。 */
 export const name = 'dsh-workspace-activity-sort'
 
-/**
- * 依赖的宿主服务。注册表就绪（含首次历史引导）之前不挂载，因此第一次上浮一定跑在
- * 权威顺序与工作区账都存在之后。
- */
+/** 依赖的宿主服务：注册表就绪前不挂载。 */
 export const inject = ['workspaceRegistry']
 
-/** 一轮里最多连续收敛几次；正常一轮就够，重入时只补一轮空轮。 */
+/** 一轮收敛循环的最大轮数。 */
 const MAX_ROUNDS = 8
 
-/**
- * 挂载自动上浮。
- * @param ctx - 宿主上下文（提供 workspaceRegistry）。
- */
+/** 挂载自动上浮。 */
 export function apply(ctx: Context): void {
   mount(ctx.workspaceRegistry, ctx)
 }
 
-/**
- * 订阅会话活动与工作区写入，驱动上浮。
- * @param registry - 权威 Workspace 注册表。
- * @param ctx - 宿主上下文（事件、effect、日志）。
- */
+/** 订阅会话活动与工作区写入，驱动上浮。 */
 function mount(registry: WorkspaceRegistry, ctx: Context): void {
   let active = true
   /** 已登记、还没认领工作区的新会话：会话 id → 登记时刻。 */
@@ -100,10 +79,8 @@ function mount(registry: WorkspaceRegistry, ctx: Context): void {
   }
 
   /**
-   * 把某个工作区提到最前；已在最前或不在注册表里时一次写盘都不做。
-   *
-   * 注册表拒绝（例如它在这两步之间被删掉）只记一条告警：同一批里其余工作区的
-   * 上浮不该被一个已经消失的工作区带停。
+   * 把某个工作区提到最前；已在最前或不在注册表里时不写盘。
+   * 注册表拒绝时记一条告警并返回 false。
    */
   const front = async (workspaceId: string): Promise<boolean> => {
     const { byId, rows } = snapshot()
@@ -146,10 +123,8 @@ function mount(registry: WorkspaceRegistry, ctx: Context): void {
   }
 
   /**
-   * 请求一轮收敛：空闲时排到下一个宏任务，正忙就记下「还要再跑一轮」。
-   *
-   * 宏任务这一步是必需的：工作区表的 `domain/changed` 在实体快照换新之前就发出来了
-   * （持久写入 → 事件 → 注册表实体换新），下一轮事件循环才读得到 attach 之后的归属。
+   * 请求一轮收敛：空闲时排到下一个宏任务，正忙就记下还要再跑一轮。
+   * 延迟一个宏任务是为了读到 `domain/changed` 之后的注册表实体快照。
    */
   const schedule = (): void => {
     if (!active) return
@@ -192,13 +167,13 @@ function mount(registry: WorkspaceRegistry, ctx: Context): void {
     }
   }
 
-  // 用户消息提交：侧边栏会话行右侧时间更新的那一刻，也是本插件唯一的上浮依据。
+  // 用户消息提交：把该会话所属工作区提到最前。
   ctx.on('api-session/activity', (sessionId) => {
     activeSessions.push(String(sessionId))
     schedule()
   })
 
-  // 新会话：此刻注册表还没把它记到工作区账下（attach 写在创建之后）。
+  // 新会话：此刻注册表还没把它记到工作区账下（attach 写在创建之后），先登记。
   // 已经在账下的（resume / 重新打开旧会话）不是新建，不参与上浮。
   ctx.on('session/created', (session) => {
     if (session.header.origin === 'subagent') return
@@ -213,19 +188,14 @@ function mount(registry: WorkspaceRegistry, ctx: Context): void {
   })
 
   // 工作区表的持久写入（attach / detach / 改名 …）：让登记的新会话认领一次归属。
-  // 只听工作区表，因此本插件自己写全局顺序单例时不会触发自己。
+  // 只听工作区表，因此插件自己写全局顺序单例时不会触发自己。
   ctx.on('domain/changed', (change) => {
     if (change.domain !== 'workspace' || change.table !== 'workspaces') return
     schedule()
   })
 }
 
-/**
- * 报告一次真实发生的上浮：首次是 info（说明插件确实在起作用），之后降为 debug。
- * @param ctx - 宿主上下文。
- * @param moved - 本次移动的工作区数量。
- * @param announced - 之前是否已经报过。
- */
+/** 报告一次真实发生的上浮：首次 info，之后 debug。 */
 function report(ctx: Context, moved: number, announced: boolean): void {
   const line = `dsh-workspace-activity-sort: 会话活动上浮工作区（${moved} 次移动）`
   if (announced) ctx.logger.debug(line)

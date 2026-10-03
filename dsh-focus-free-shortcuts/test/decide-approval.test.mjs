@@ -1,9 +1,6 @@
 /**
- * H 审批判定:`src/approval-keys.ts` 与 `src/binding.ts` 的纯审批决策 —— 已挂载的
- * 固定行是否仍预约这一次按键、这一次按键算哪个决定、无焦点准入、面板归属,
+ * 审批纯决策:固定行是否仍预约这一按、这一按算哪个决定、无焦点准入、面板归属,
  * 以及"哪个待答审批可以答"。
- *
- * 运行:`node test/decide-approval.test.mjs`(或 pnpm test 跑全部)。
  */
 import { approvalCaptureOutcome, approvalEligible, approvalOutcomeFor, approvalPanelOwnsTarget, asAnswerableApproval, presentedApproval } from '../src/approval-keys.ts'
 import { fixedRowOwns } from '../src/binding.ts'
@@ -20,7 +17,7 @@ console.log('--- H① 已挂载的固定审批行与决定 ---')
   checkTrue('fixedRowOwns 命中已挂载行', fixedRowOwns(APPROVAL_FIXED_ROWS, 'approval.reject', gesture('Escape')))
   check('fixedRowOwns 未挂载行', fixedRowOwns(APPROVAL_FIXED_ROWS, 'approval.other', gesture('Escape')), false)
 
-  // 固定行不可改键,但跟随属主:行换了物理组合,桥就跟着换。
+  // 行换物理组合后,判定跟随新的绑定。
   const rebound = [fixedRow('approval.allow', [{ code: 'KeyY', modifiers: ['meta'] }])]
   check('行改键后旧键落空', approvalOutcomeFor(rebound, gesture('Enter'), APPROVAL_IDS), undefined)
   check('行改键后新键命中', approvalOutcomeFor(rebound, gesture('KeyY', { meta: true }), APPROVAL_IDS), 'allowed-once')
@@ -63,8 +60,7 @@ console.log('--- H④ 可作答的审批 ---')
 
 console.log('--- H⑤ 捕获阶段判定:焦点停在过程卡片上也算审批的 ---')
 {
-  // 过程卡片:工具卡的 role=button + tabindex=0,以及轨迹行的 tr[tabindex=0],
-  // 都会在自己的 keydown 里 preventDefault() 后折叠 / 选中 —— 捕获判定必须无视这一点。
+  // 过程卡片:工具卡的 role=button + tabindex=0、轨迹行的 tr[tabindex=0];捕获判定照样命中。
   const staleCard = new FakeElement('div', { role: 'button', tabindex: '0' })
   const panel = new FakeElement('div', { 'data-approval-key': 'approval:1' })
   const panelButton = panel.append(new FakeElement('button'))

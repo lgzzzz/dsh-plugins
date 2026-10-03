@@ -1,9 +1,7 @@
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
-// 空导入(不引入任何名字):只为让 TS 加载 ui-conversation/client 的类型 —— 该包用
-// `declare module '@deepseek-ai/dsh-client-ui-slots'` 给 SlotMap 追加了
-// 'conversation.session.header.actions' 这个 key。TS 只处理被 import 过的文件,
-// 少了这一行 SlotMap 就只剩 'root',下面 slots.entries(HEADER_ACTION_SLOT) 会报类型错。
+// 空导入(不引入任何名字):让 TS 加载该包对 SlotMap 的模块扩展,否则下面
+// slots.entries(HEADER_ACTION_SLOT) 会报类型错。
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 export const HEADER_ACTION_SLOT = 'conversation.session.header.actions'

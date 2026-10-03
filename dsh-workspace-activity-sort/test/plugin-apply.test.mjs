@@ -1,8 +1,6 @@
 /**
- * 宿主挂载测试（假 ctx）：验证插件形状、活动即上浮、已在最前不写盘、Ungrouped 会话
- * 被忽略、新会话落位（attach）才上浮、重新打开旧会话不上浮、subagent 子会话不参与、
- * 手动拖拽被保留到下一次活动、改名不重排、突发合并、注册表拒绝时的降级，以及卸载
- * 后停手。真实框架下的挂载见 cordis-integration.test.mjs。
+ * 宿主挂载测试（假 ctx）：验证插件形状、会话活动上浮、新会话落位后上浮、
+ * 拖拽与改名不被覆盖、注册表拒绝时的降级，以及卸载后停手。
  *
  * 运行：`node test/plugin-apply.test.mjs`。
  */
@@ -12,7 +10,7 @@ import { createHarness, sessionFixture, settle, ws } from './helpers.mjs'
 
 const { apply, inject, name } = plugin
 
-// ---- 插件形状 ----------------------------------------------------------------
+// 插件形状
 
 assert.equal(name, 'dsh-workspace-activity-sort', '导出 name 与包名一致')
 assert.deepEqual(inject, ['workspaceRegistry'], '声明依赖 Workspace 注册表')
@@ -22,7 +20,7 @@ assert.equal(plugin.default.apply, apply, '默认导出的 apply 与具名导出
 assert.deepEqual(plugin.default.inject, inject, '默认导出带 inject')
 assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话活跃即上浮」这一条')
 
-// ---- 会话活动让工作区上浮 ----------------------------------------------------
+// 会话活动让工作区上浮
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b']), ws('c', ['s-c'])] })
@@ -43,7 +41,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 已在最前 / Ungrouped 都不写盘 -------------------------------------------
+// 已在最前 / Ungrouped 都不写盘
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
@@ -60,7 +58,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 只有第一次上浮报 info ---------------------------------------------------
+// 只有第一次上浮报 info
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b']), ws('c', ['s-c'])] })
@@ -76,7 +74,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 新会话落位才上浮 --------------------------------------------------------
+// 新会话落位才上浮
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', [])] })
@@ -94,7 +92,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 重新打开旧会话（resume）不是新建 ----------------------------------------
+// 重新打开旧会话（resume）不是新建
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-old']), ws('c', ['s-c'])] })
@@ -110,7 +108,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- subagent 子会话不参与 ---------------------------------------------------
+// subagent 子会话不参与
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', [])] })
@@ -123,7 +121,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 手动拖拽被保留到下一次活动 ----------------------------------------------
+// 手动拖拽被保留到下一次活动
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b']), ws('c', ['s-c'])] })
@@ -140,7 +138,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 改名、新建 / 删除工作区都不重排 -----------------------------------------
+// 改名、新建 / 删除工作区都不重排
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
@@ -157,7 +155,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 突发活动：最后一次停在最前，写入次数就是次数本身 ------------------------
+// 突发活动：最后一次停在最前，写入次数等于上浮次数
 
 {
   const harness = createHarness({
@@ -175,7 +173,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 新会话落位与活动同一轮：较晚的活动停在最前 ------------------------------
+// 新会话落位与活动同一轮：较晚的活动停在最前
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', [])] })
@@ -189,7 +187,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 两个新会话：登记更晚的停在最前 ------------------------------------------
+// 两个新会话：登记更晚的停在最前
 
 {
   const harness = createHarness({ entities: [ws('a', []), ws('b', []), ws('c', [])] })
@@ -204,7 +202,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 一直不落位的登记会到点放弃 ----------------------------------------------
+// 一直不落位的登记会到点放弃
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', [])] })
@@ -231,7 +229,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 会话被销毁：登记一并作废 ------------------------------------------------
+// 会话被销毁：登记一并作废
 
 {
   const harness = createHarness({ entities: [ws('a', []), ws('b', [])] })
@@ -246,7 +244,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 注册表拒绝重排：告警但不崩，之后仍能工作 --------------------------------
+// 注册表拒绝重排：告警但不崩，之后仍能工作
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])], insertFails: true })
@@ -267,7 +265,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 一批里只有个别工作区被拒绝：其余照常上浮 --------------------------------
+// 一批里只有个别工作区被拒绝：其余照常上浮
 
 {
   const harness = createHarness({
@@ -287,7 +285,7 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.dispose()
 }
 
-// ---- 卸载后停手 --------------------------------------------------------------
+// 卸载后停手
 
 {
   const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })

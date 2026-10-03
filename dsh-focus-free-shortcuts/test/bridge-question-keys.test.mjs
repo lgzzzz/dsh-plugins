@@ -1,10 +1,6 @@
 /**
- * O 桥接:提问卡片 —— 走线 `src/question-keys.ts` 的提问桥(`Esc` 关掉正在等答的提问)。
- * 覆盖无焦点关闭(卡片在页面空白处、焦点在卡片自己的答案文本域里)、别的文本控件
- * 不抢、plan-review 卡片、准入否决(终端 / 模态 / repeat / 组字 / 已被消费 / 带修饰键)、
- * 别的待答域、主视图歧义、别的会话的提问、服务缺失即不装、关闭失败告警,以及卸载复位。
- *
- * 运行:`node test/bridge-question-keys.test.mjs`(或 pnpm test 跑全部)。
+ * 提问桥:`Esc` 关掉正在等答的提问卡片(含 plan-review)。覆盖无焦点关闭、别的文本控件
+ * 不抢、准入否决、归属歧义、服务缺失即不装、关闭失败告警与卸载复位。
  */
 import { applyPlugin, approvalPending, captureWarnings, check, checkTrue, domBody, domComposer, domPlanReviewButton, domQuestionField, fakeSessions, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, gesture, harness, keydown, PLAN_REVIEW_KEY, QUESTION_KEY, questionPending, session, shortcutContext, sleep, statusWith } from './helpers.mjs'
 
@@ -25,13 +21,13 @@ console.log('--- O① 无焦点:Esc 关掉正在等答的提问 ---')
   check('Esc 被消费', press.consumed.count, 1)
   check('关卡片不是停回合', cancelled, 0)
 
-  // 焦点在卡片自己的答案文本域里(自由文本问题会自动聚焦它)同样关得掉。
+  // 焦点在卡片自己的答案文本域里同样关得掉。
   const inside = keydown(gesture('Escape'), shortcutContext({ region: 'editable', target: domQuestionField }))
   shortcuts.emit(inside.input)
   check('卡片自己文本域里的 Esc → 仍然关闭', pending.dismissals, 2)
   check('卡片内 Esc 被消费', inside.consumed.count, 1)
 
-  // 焦点落在会话里别的地方(消息上)也照关。
+  // 焦点落在别处(消息上)也照关。
   const elsewhere = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
   shortcuts.emit(elsewhere.input)
   check('焦点在别处也关闭', pending.dismissals, 3)
@@ -56,7 +52,7 @@ console.log('--- O③ plan-review 卡片与别的待答域 ---')
   check('plan-review 卡片也由 Esc 关闭', review.dismissals, 1)
   check('plan-review 的 Esc 被消费', press.consumed.count, 1)
 
-  // 审批域的这一按不归提问桥:把审批桥的固定行摘掉(审批桥 no-op),这一按就没人消费。
+  // 审批域的这一按不归提问桥:摘掉审批桥的固定行后没人消费。
   const approval = approvalPending()
   const approvalHarness = withPending(approval, { fixedRows: [] })
   const other = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
@@ -97,8 +93,7 @@ console.log('--- O⑤ 归属歧义:主视图不唯一 / 提问属于别的会话
   check('切换中(两个主视图)不关闭', ambiguous.dismissals, 0)
   check('切换中不消费', press.consumed.count, 0)
 
-  // 提问属于别的会话(如后台子代理):它的卡片不在这个屏上,提问桥不关它;主视图
-  // 自己既没有提问可关,这一按就照旧落回停止序列(第一下起序列)。
+  // 提问属于别的会话:提问桥不关它,这一按落回停止序列(第一下起序列)。
   const background = questionPending()
   let stopped = 0
   const detached = harness({
@@ -122,7 +117,7 @@ console.log('--- O⑥ 失败模式:服务缺失即不装 ---')
   check('缺 uiSession 不装提问桥', noUi.shortcuts.listenerCount(), 4)
   check('缺 uiSession 不告警', noUi.warnings.length, 0)
 
-  // 没有 sessions 同样不装(主视图会话无从解析)。
+  // 没有 sessions 同样不装。
   const noSessions = harness({ withSessions: false })
   check('缺 sessions 不装提问桥', noSessions.shortcuts.listenerCount(), 2)
 

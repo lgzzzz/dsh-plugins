@@ -1,13 +1,6 @@
 /**
- * dsh-git-guard 行为测试的共享装置。
- *
- * 这里只放与"测什么"无关的东西:原来的假 ctx(listeners / sections /
- * sessionModes / 权限开关 / requestedServices)、`guard.apply(ctx)` 装配、
- * `sectionText()` 与 `decide()`。原 test.mjs 是一条顶层脚本,可变状态按顺序
- * 共享;这里改成"每次调用返回一套全新场景"的工厂 `createHarness()`,各测试
- * 文件各自装配,互不影响:
- *
- *   node test/plugin-shape.test.mjs
+ * dsh-git-guard 行为测试的共享装置:假 ctx(listeners / sections / sessionModes /
+ * 权限开关 / requestedServices)、`guard.apply(ctx)` 装配、`sectionText()` 与 `decide()`。
  *
  * 跑全部请用 `node test/run-all.mjs`(或 pnpm test)。
  * 依赖 Node 22+ 的 Type Stripping 直接 import .ts。
@@ -19,15 +12,9 @@ export const workspaceSession = { id: 'session-workspace-write' }
 /** danger-full-access 会话:插件完全放行(区段文本为空)。 */
 export const fullAccessSession = { id: 'session-full-access' }
 
-// ---------------------------------------------------------------- 假场景
-
 /**
- * 装配一套全新的假 ctx 与插件实例,返回各部件与判定入口。
- *
- * @param {object} [options]
- * @param {(deps: string[]) => void} [options.onInject]
- *   每次 `ctx.inject` 时回调,供形状测试断言请求了 `systemPrompt` 服务;
- *   其余文件不传,避免同一断言在多份场景里重复计数。
+ * 装配一套假 ctx 与插件实例,返回各部件与判定入口;
+ * 传入的 `onInject` 在每次 `ctx.inject` 时回调。
  */
 export function createHarness({ onInject } = {}) {
   const listeners = new Map()

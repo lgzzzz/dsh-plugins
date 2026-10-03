@@ -9,7 +9,7 @@
     "lib": ["esnext"],
 
     "noEmit": true,
-    // 允许 .ts 相对导入（运行时同样支持），需配合 noEmit
+    // 允许 .ts 相对导入，需配合 noEmit
     "allowImportingTsExtensions": true,
 
     // 强制可擦除语法：禁 enum / namespace / 参数属性，与 Type Stripping 运行时一致

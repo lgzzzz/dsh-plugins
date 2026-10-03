@@ -1,9 +1,6 @@
 /**
- * C 目标归属:`src/stop-sequence.ts` 的 `conversationOwnsTarget` —— 内置 stop 是否按
- * target 掌权;以及 `src/runtime.ts` 的 `mainViewSessionId` 靠 `retainedBy.mainView`
- * 找出唯一的主视图会话(歧义就不动手)。
- *
- * 运行:`node test/decide-ownership.test.mjs`(或 pnpm test 跑全部)。
+ * 目标归属:`conversationOwnsTarget` 判断内置 stop 是否按 target 掌权;
+ * `mainViewSessionId` 靠 `retainedBy.mainView` 找出唯一的主视图会话(歧义就不动手)。
  */
 import { conversationOwnsTarget } from '../src/stop-sequence.ts'
 import { mainViewSessionId } from '../src/runtime.ts'

@@ -1,7 +1,7 @@
 {
   "name": "normal-plugin",
   "version": "1.0.0",
-  "description": "示例插件",
+  "description": "示例插件：注册一个 greet 工具，并在加载时记录一次 metrics。",
   "type": "module",
   "main": "index.ts",
   "dsh": {

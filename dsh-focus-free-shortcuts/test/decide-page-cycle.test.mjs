@@ -1,10 +1,6 @@
 /**
- * L 页面循环判定:`src/page-cycle.ts` 与 `src/binding.ts` 的纯决策 ——
- * 固定行同时预约两个方向(`Ctrl+Alt+←` / `Ctrl+Alt+→`)、准入(刻意放行终端与
- * 已被消费的按)、环状步进,以及展开补位对内置 `sidebar.right.toggle` 有效
- * 行的跟随。
- *
- * 运行:`node test/decide-page-cycle.test.mjs`(或 pnpm test 跑全部)。
+ * 页面循环纯决策:固定行同时预约 `Ctrl+Alt+←` / `Ctrl+Alt+→`、准入(放行终端与已被
+ * 消费的按)、环状步进,以及展开补位对内置 `sidebar.right.toggle` 有效行的跟随。
  */
 import {
   PAGE_CYCLE_COMMAND,
@@ -50,7 +46,7 @@ console.log('--- L③ 准入:页 / 文本控件 / 终端 / 已被消费都准入
   check('组字中否决', pageCycleEligible(gesture('ArrowLeft', { control: true, alt: true, composing: true }), shortcutContext()), false)
 }
 
-// 准入只负责"能不能出手",具体键归固定行管 —— 与其余几组的分工一致。
+// 准入只负责"能不能出手",具体键归固定行管。
 {
   check('别的键同样准入(是否动作由固定行决定)', pageCycleEligible(gesture('Enter'), shortcutContext()), true)
 }

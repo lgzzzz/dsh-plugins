@@ -1,6 +1,6 @@
 /**
- * C 会话权限解析:完全权限放行、resolve 收到本次会话、只在将要介入时解析、
- * 部署默认 danger-full-access、workspace-write / read-only 仍 ask,以及
+ * 会话权限解析:完全权限放行、resolve 收到本次会话、只在将要介入时解析一次、
+ * 部署默认 danger-full-access、workspace-write / read-only 仍请许可,
  * 权限判定只取用 sandboxPolicy 服务。
  *
  * 运行:`node test/session-policy.test.mjs`(或 pnpm test 跑全部)。

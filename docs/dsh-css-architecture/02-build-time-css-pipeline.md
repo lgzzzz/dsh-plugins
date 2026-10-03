@@ -2,8 +2,6 @@
 
 > 本文件是 [DSH 组件 CSS 架构](../dsh-css-architecture.md) 的第 2 册：`\0dsh-css:` / `\0dsh-global-css:` / `\0dsh-inline-css:` 三个虚拟模块。
 
----
-
 ## 3. 构建期 CSS 处理：三个虚拟模块
 
 在 `tsdown.client.mjs` 里，CSS 通过三个 `\0` 前缀的虚拟模块 ID 处理，避免进入 tsdown 自带的 CSS 管道（由 lightningcss 直接编译）：
@@ -22,7 +20,7 @@
 - `cssGlobalInlinePlugin()` 处理普通 `.css`（副作用注入）。
 - `cssTextInlinePlugin()` 处理 `.css?inline`（导出编译后的字符串，供插件自己挂载）。
 
-**产物长什么样**（真实截取自 `@deepseek-ai/dsh-client-ui-theme/lib/client.js`，展示 `AppearanceRow.module.css` 编译后的样子）：
+**产物示例**（`@deepseek-ai/dsh-client-ui-theme/lib/client.js` 中 `AppearanceRow.module.css` 编译后的结果）：
 
 ```js
 // \0dsh-css: …/AppearanceRow.module.css.mjs
@@ -48,4 +46,4 @@ var AppearanceRow_module_css_default = {
 return jsx("div", { className: AppearanceRow_module_css_default.group, children: … })
 ```
 
-即：JS 里写的是语义化的 `AppearanceRow_module_css_default.group`，落到 DOM 上是哈希类名 `_8HJdBW_group`。类名对插件作者**不可预测**，这就是为什么插件不能靠类名覆盖，只能靠 `data-*` 锚点。
+即：JS 里写的是语义化的 `AppearanceRow_module_css_default.group`，落到 DOM 上是哈希类名 `_8HJdBW_group`。类名带构建哈希、每版构建都变，插件无法靠类名覆盖，只能用 `data-*` 锚点。
