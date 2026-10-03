@@ -1,5 +1,5 @@
 # dsh-ui-chat-verbose-fold 的 web bundle 挂载行:随 dsh.profile.bundles 自动挂载。
-# 本插件不 disable 也不改名官方 ui-chat,只在其之后挂一行运行时补丁。
+# 只在官方 ui-chat 之后插入本插件一行,不改动其它挂载项。
 - insert:
     - id: dsh-ui-chat-verbose-fold
       name: dsh-ui-chat-verbose-fold

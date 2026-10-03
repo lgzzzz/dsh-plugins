@@ -1,5 +1,5 @@
 /**
- * C 运行时与发送:`src/notify-runtime.ts` 的订阅装配 / 前台判定 / 退订,
+ * C 运行时与发送:核对 `src/notify-runtime.ts` 的订阅装配、前台判定与退订,
  * 以及 `src/notify-delivery.ts` 构造浏览器通知的方式与兜底。
  *
  * 运行:`node test/notify-runtime.test.mjs`(或 pnpm test 跑全部)。

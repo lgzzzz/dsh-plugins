@@ -1,8 +1,6 @@
 /**
- * B Escape 准入:`src/stop-sequence.ts` 的 `escapeEligible` 逐项否决 —— 裸 Escape
- * 才准入,repeat / composing / 已被消费 / 任何修饰键 / 模态 / 终端区都被挡下。
- *
- * 运行:`node test/decide-escape.test.mjs`(或 pnpm test 跑全部)。
+ * `escapeEligible` 逐项否决:裸 Escape 才准入,repeat / composing / 已被消费 /
+ * 任何修饰键 / 模态 / 终端区都被挡下。
  */
 import { escapeEligible } from '../src/stop-sequence.ts'
 import { check, checkTrue, finish, gesture, shortcutContext } from './helpers.mjs'

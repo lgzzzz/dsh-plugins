@@ -1,10 +1,6 @@
 /**
- * E 桥接:面板键 —— 在假 Cordis 上下文里走线 `src/pane-keys.ts` 的面板命令桥
- * (由入口 `src/client.ts` 装上)。
- * 覆盖聚焦让位、回退到活动 dock pane、折叠 / 无 pane / 模态 / repeat / 过期
- * 目标,跟随生效绑定(改绑 / 解绑 / 冲突),以及 desktop 让位与服务缺席。
- *
- * 运行:`node test/bridge-pane-keys.test.mjs`(或 pnpm test 跑全部)。
+ * 面板键桥:聚焦让位、回退到活动 dock pane、折叠 / 无 pane / 模态 / repeat / 过期目标,
+ * 跟随生效绑定(改绑 / 解绑 / 冲突),以及 desktop 让位与服务缺席。
  */
 import { check, checkTrue, domComposer, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, harness, keydown, row, shortcutContext, SPLIT_PRESS } from './helpers.mjs'
 
@@ -115,8 +111,7 @@ console.log('--- E⑤ 跟随生效绑定:改绑 / 解绑 / 冲突都不接管 --
 }
 console.log('--- E⑥ 失败模式:desktop 让位、服务缺席即 no-op ---')
 {
-  // Desktop 只关掉面板桥接(配置键由原生通道派发);停止序列、审批键与提问键照常安装
-  // ——后三者都是固定动作,DOM 固定通道在两端都跑。
+  // Desktop 只关掉面板桥接;停止、审批、提问、聚焦与页面循环桥照常安装。
   const desktop = harness({ runtime: 'desktop' })
   check('desktop 不装面板桥(停止 + 审批 + 提问 + 聚焦 + 页面循环)', desktop.shortcuts.listenerCount(), 5)
   checkTrue('desktop 记一条 warn', desktop.warnings.some((line) => line.includes('native keyboard bridge')))

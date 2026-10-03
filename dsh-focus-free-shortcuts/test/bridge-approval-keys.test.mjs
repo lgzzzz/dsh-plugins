@@ -1,14 +1,6 @@
 /**
- * I 桥接:审批键 —— 走线 `src/approval-keys.ts` 的审批桥(Enter 允许一次 / Esc 拒绝)。
- * 覆盖无焦点作答、面板让位、无待答与已作答、别的待答域、准入否决(文本控件 / 终端 /
- * 模态 / repeat / 组字 / 已被消费)、主视图歧义、别的会话的审批、固定行缺失、
- * 服务缺失即不装、答案拒绝告警,以及卸载复位。
- * I⑧–I⑪ 是同一条桥的第二个投递路径 —— **捕获阶段**抢先:焦点停在某张过程卡片
- * (工具卡 `div[role="button"][tabindex="0"]` / 轨迹行 `tr[tabindex="0"]`)上时,
- * 卡片自己的 React keydown 会在冒泡阶段的固定通道之前 `preventDefault()` 并折叠 /
- * 选中,所以桥在 window 捕获阶段先于一切目标 / 冒泡处理器拦下,两路共用同一判定。
- *
- * 运行:`node test/bridge-approval-keys.test.mjs`(或 pnpm test 跑全部)。
+ * 审批键桥:`Enter` 允许一次 / `Esc` 拒绝;覆盖准入否决、归属歧义、固定行与服务缺失、
+ * 卸载复位,以及 window 捕获阶段路径(焦点在过程卡片上时先于卡片自己的 keydown 拦下)。
  */
 import { applyPlugin, approvalPending, captureWarnings, check, checkTrue, domApproval, domBody, domComposer, FakeElement, fakeDocument, fakeKeyEvent, fakeShortcuts, fakeSidebar, fakeSessions, fakeUiSession, fakeWindow, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, sleep, statusWith } from './helpers.mjs'
 
@@ -17,14 +9,13 @@ function withPending(pending, options = {}) {
   return harness({ ...options, uiSession: fakeUiSession({ status: statusWith('s1', pending) }) })
 }
 
-/** 一张焦点停在它上面的过程卡片:工具卡 / 轨迹行的共同形状(可聚焦 + 自己消费 Enter)。 */
+/** 一张过程卡片:工具卡 / 轨迹行的共同形状(可聚焦,并自己消费 Enter)。 */
 function staleCard(app) {
   return app.append(new FakeElement('div', { role: 'button', tabindex: '0' }))
 }
 
 /**
  * 置入假 document / 假 window(审批捕获钩子装在 window 上),用完即还原。
- * 捕获路径的用例必须先把 window 放上全局,`harness()` 里的 `apply` 才会装上监听;
  * `emit` 只调用与 `phase` 相符的那批监听(默认捕获阶段)。
  */
 function withApprovalDom({ app, activeElement = null, window = fakeWindow() } = {}) {
@@ -60,7 +51,7 @@ console.log('--- I① 无焦点:Enter 允许一次、Esc 拒绝 ---')
   check('Esc 被消费', reject.consumed.count, 1)
   check('审批未竟时不误停回合', cancelled, 0)
 
-  // 目标在聊天区(有人把焦点落在消息上)同样无焦点作答。
+  // 焦点落在聊天区消息上同样作答。
   const elsewhere = keydown(gesture('Enter'), shortcutContext({ region: 'page', target: domComposer }))
   shortcuts.emit(elsewhere.input)
   check('焦点在别处也作答', pending.answers, ['allowed-once', 'rejected', 'allowed-once'])
@@ -81,7 +72,7 @@ console.log('--- I② 面板自己掌权 / 无待答 / 已作答 ---')
   const enter = keydown(gesture('Enter'), shortcutContext({ target: domBody }))
   idle.shortcuts.emit(enter.input)
   check('没有待答审批时不接 Enter', enter.consumed.count, 0)
-  // 没有待答审批时 Esc 仍完整归停止序列:第一下起序列,第二下停止回合。
+  // 无待答审批时 Esc 仍归停止序列:第一下起序列,第二下停回合。
   const escape = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
   idle.shortcuts.emit(escape.input)
   check('第一下 Esc 起停止序列', idleCancelled, 0)
@@ -152,7 +143,7 @@ console.log('--- I⑤ 失败模式:固定行缺失 / 服务缺失即不装 ---')
   check('审批插件未装载(无固定行)时不代答', unmounted.answers, [])
   check('审批插件未装载时不消费', press.consumed.count, 0)
 
-  // 没有 uiSession 就没有待答事实可读:审批桥与提问桥都不安装(只剩面板桥、停止桥、聚焦桥与页面循环桥)。
+  // 没有 uiSession 就没有待答事实可读:审批桥与提问桥都不安装。
   const noUi = harness({ withUiSession: false })
   check('缺 uiSession 只装面板桥、停止桥、聚焦桥与页面循环桥', noUi.shortcuts.listenerCount(), 4)
   check('缺 uiSession 不告警', noUi.warnings.length, 0)
@@ -160,7 +151,7 @@ console.log('--- I⑤ 失败模式:固定行缺失 / 服务缺失即不装 ---')
   noUi.shortcuts.emit(orphan.input)
   check('缺 uiSession 时不消费', orphan.consumed.count, 0)
 
-  // 没有 sessions 就连停止桥、审批桥、提问桥与聚焦桥都不装。
+  // 没有 sessions 时停止桥、审批桥、提问桥与聚焦桥都不装。
   const noSessions = harness({ withSessions: false })
   check('缺 sessions 只装面板桥与页面循环桥', noSessions.shortcuts.listenerCount(), 2)
 
@@ -346,7 +337,7 @@ console.log('--- I⑫ 作答后的焦点环:被按下过的控件不再画边框
   const MARKER = 'data-dsh-automatic-focus'
   const navKey = (key, overrides = {}) => ({ key, isComposing: false, ctrlKey: false, altKey: false, metaKey: false, ...overrides })
 
-  // ① 捕获路径:焦点停在工具行上 → 作答、打上"无环聚焦"标记,且不移动焦点。
+  // ① 捕获路径:焦点停在工具行上 → 作答、打上"无环聚焦"标记,且不移焦点。
   {
     const app = new FakeElement('div', { 'data-app': '' })
     const card = staleCard(app)
@@ -385,7 +376,7 @@ console.log('--- I⑫ 作答后的焦点环:被按下过的控件不再画边框
     }
   }
 
-  // ③ 观察者路径(焦点在页面控件上、固定通道自己消费了这一按)同样处理。
+  // ③ 观察者路径(固定通道自己消费了这一按)同样处理。
   {
     const app = new FakeElement('div', { 'data-app': '' })
     const control = app.append(new FakeElement('button'))
@@ -402,7 +393,7 @@ console.log('--- I⑫ 作答后的焦点环:被按下过的控件不再画边框
     }
   }
 
-  // ④ 目标不是当前焦点(焦点不在任何控件上)→ 不打标记、不动任何东西。
+  // ④ 目标不是当前焦点(焦点不在任何控件上)→ 不打标记。
   {
     const app = new FakeElement('div', { 'data-app': '' })
     const card = staleCard(app)

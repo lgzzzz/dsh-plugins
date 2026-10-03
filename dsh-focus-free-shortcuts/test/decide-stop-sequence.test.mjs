@@ -1,8 +1,6 @@
 /**
- * D Escape 序列:`src/stop-sequence.ts` 的 `createStopSequence` / `sameStopToken`
- * —— 两按窗口、同一代际、reset、以及注入时钟与真实计时器两条路径。
- *
- * 运行:`node test/decide-stop-sequence.test.mjs`(或 pnpm test 跑全部)。
+ * `createStopSequence` / `sameStopToken`:两按窗口、同一代际、reset,
+ * 以及注入时钟与真实计时器两条路径。
  */
 import { createStopSequence, sameStopToken } from '../src/stop-sequence.ts'
 import { check, checkTrue, finish, sleep } from './helpers.mjs'

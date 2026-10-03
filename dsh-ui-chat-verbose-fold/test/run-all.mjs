@@ -1,10 +1,7 @@
 /**
- * 一次性跑完 test/ 下所有 `*.test.mjs`,按 A–C 的主题顺序执行并汇总结果。
+ * 按 A–C 的主题顺序跑完 test/ 下所有 `*.test.mjs`,并汇总各文件结果。
  *
- *   node test/run-all.mjs                 # 全部
- *   node test/run-all.mjs inject          # 只跑文件名/主题匹配 "inject" 的
- *
- * 单跑某个主题也可以直接 `node test/projection.test.mjs`。
+ * 命令行参数按子串过滤文件名: `node test/run-all.mjs inject` 只跑匹配 "inject" 的。
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -13,7 +10,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// A–C 的主题顺序(与 README 的「构建与测试」一节对应);其余文件按名字补在后面。
+// A–C 的主题顺序;不在表内的测试文件按名字排在其后。
 const ORDER = [
   'projection.test.mjs',
   'inject-wrap.test.mjs',

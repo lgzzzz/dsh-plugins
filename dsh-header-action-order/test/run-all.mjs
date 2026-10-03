@@ -1,10 +1,8 @@
 /**
- * 一次性跑完 test/ 下所有 `*.test.mjs`,按 A–C 的主题顺序执行并汇总结果。
+ * 跑完 test/ 下所有 `*.test.mjs`,按主题顺序执行并汇总结果。
  *
  *   node test/run-all.mjs                 # 全部
  *   node test/run-all.mjs slots           # 只跑文件名/主题匹配 "slots" 的
- *
- * 单跑某个主题也可以直接 `node test/order-plan.test.mjs`。
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -13,7 +11,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// A–C 的主题顺序;其余文件按名字补在后面。
+// 主题顺序;其余文件按名字补在后面。
 const ORDER = [
   'order-plan.test.mjs',
   'slots-inject.test.mjs',

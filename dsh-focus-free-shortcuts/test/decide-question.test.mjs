@@ -1,8 +1,6 @@
 /**
- * N 提问判定:`src/question-keys.ts` 的纯提问决策 —— `Esc` 的无焦点准入、
- * "这一按落在哪张卡片里"的归属判定,以及"哪个待答提问可以关"。
- *
- * 运行:`node test/decide-question.test.mjs`(或 pnpm test 跑全部)。
+ * 提问纯决策:`Esc` 的无焦点准入、"这一按落在哪张卡片里"的归属判定,
+ * 以及"哪个待答提问可以关"。
  */
 import { asDismissableQuestion, presentedQuestion, questionCardOwnsTarget, questionEscapeEligible } from '../src/question-keys.ts'
 import { approvalPending, check, checkTrue, domApproval, domBareQuestionCard, domBody, domComposer, domPlanReviewButton, domPlanReviewCard, domQuestionCard, domQuestionField, finish, gesture, PLAN_REVIEW_KEY, QUESTION_KEY, questionPending, shortcutContext, statusWith } from './helpers.mjs'
@@ -20,8 +18,8 @@ console.log('--- N① 无焦点准入:只有"裸 Esc 的第一下"才谈得上�
   check('已被消费否决', questionEscapeEligible(gesture('Escape', { defaultPrevented: true }), shortcutContext()), false)
   check('模态层之上否决', questionEscapeEligible(gesture('Escape'), shortcutContext({ modal: 'settings' })), false)
   check('终端内否决(终端的 Esc 归终端)', questionEscapeEligible(gesture('Escape'), shortcutContext({ region: 'terminal' })), false)
-  // `editable` 本身不否决:卡片自己的答案文本域就是 `editable`,它只绑 Enter。
-  // 真正决定"这一按归谁"的是下面 N② 的归属判定(由桥组合成一条完整判定)。
+  // `editable` 本身不否决:卡片自己的答案文本域就是 `editable`,它只绑 Enter;
+  // 这一按归谁由下面 N② 的归属判定收口。
   checkTrue('文本控件内仍准入(归属判定再收口)', questionEscapeEligible(gesture('Escape'), shortcutContext({ region: 'editable' })))
 }
 

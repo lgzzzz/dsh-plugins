@@ -1,11 +1,4 @@
-/**
- * 一次性跑完 test/ 下所有 `*.test.mjs`,按 A–I 的主题顺序执行并汇总结果。
- *
- *   node test/run-all.mjs                 # 全部
- *   node test/run-all.mjs stop            # 只跑文件名/主题匹配 "stop" 的
- *
- * 单跑某个主题也可以直接 `node test/decide-escape.test.mjs`。
- */
+/** 按主题顺序跑完 test/ 下所有 `*.test.mjs` 并汇总结果;可传参按文件名过滤。 */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -13,7 +6,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// A–O 的主题顺序(与 README 第 9 节对应);其余文件按名字补在后面。
+// 先判定类、再桥接类,产物测试最后;其余文件按名字补在后面。
 const ORDER = [
   'decide-binding.test.mjs',
   'decide-escape.test.mjs',

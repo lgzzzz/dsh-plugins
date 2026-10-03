@@ -1,61 +1,23 @@
 /**
- * Browser entry: installs one focus-free bridge per shortcut group.
+ * 浏览器入口：为每个快捷键分组安装一个免聚焦桥接。
  *
- * A keydown is dispatched to the focused element — or to `<body>` when nothing
- * is focused — and every bundled owner derives its owner from that target, so all
- * of them silently decline until the user clicks into the exact region. The
- * fixed-input channel runs for every keydown *before* configurable dispatch and
- * can consume the press, so each bridge opens its own fixed observer and resolves
- * its owner without DOM focus:
+ * keydown 派发给当前聚焦元素（没有聚焦元素时派给 `<body>`），内置占用者据此判断归属，
+ * 因此它们在用户点进具体区域前都不响应。固定输入通道在每个 keydown 上先于可配置派发
+ * 运行且可消费按键，所以每个桥接各自打开固定观察者，不依赖 DOM 焦点解析归属：
  *
- *   - pane commands (`⌘⌥Enter` / `⌘\`) → `pane-keys.ts`;
- *   - stop (`Esc` `Esc`) → `stop-sequence.ts`;
- *   - approval (`Enter` / `Esc`) → `approval-keys.ts` — the one group that
- *     needs a second delivery path for a *local* owner rather than a silent one:
- *     a process card the user clicked (a tool card's `div[role="button"]`, a
- *     trajectory row's `tr[tabindex=0]`) answers `Enter` in its own React handler
- *     and calls `preventDefault()` before the bubble-phase fixed channel can run,
- *     so the press is claimed and then reads as consumed. A window capture
- *     listener resolves the same ownership one phase earlier and swallows the
- *     press, so the card never acts and the approval is answered instead;
- *   - question cancel (`Esc` on a presented `ask_user_question` card) →
- *     `question-keys.ts` — the one group whose bundled owner is *nobody* rather
- *     than an owner that declines without focus: the card binds no Escape in any
- *     focus state (only its close/cancel button dismisses it), and both stop
- *     sequences refuse while a pending interaction exists. This bridge reads the
- *     same published `pendingInteraction` slot as the approval bridge but
- *     narrowed to the question domain, and calls the card's own `dismiss()` (the
- *     operation that button calls) instead of `answer()`;
- *   - focus composer (`Ctrl+Alt+J`) → `focus-composer.ts` — this one is a new
- *     key with no bundled owner, so it registers its own fixed row and then
- *     follows that row like the approval bridge follows its mounted rows;
- *   - page cycle (`Ctrl+Alt+←` / `Ctrl+Alt+→`) → `page-cycle.ts` — the other
- *     new key pair, also with no bundled owner: it registers one fixed row
- *     carrying both arrows, steps the Right Sidebar's shown page through the
- *     public Sidebar face, and hands the keyboard to the page it lands on
- *     (a terminal takes it itself; the bridge only fills the gap). A focused
- *     terminal stops the keydown before it reaches the fixed-input channel, so
- *     this bridge additionally withholds terminal-bound presses at the capture
- *     phase (see `page-cycle.ts`). The same module carries the expand hand-over:
- *     when the bundled `sidebar.right.toggle` key expands the column, the
- *     toggle focuses the active *pane container* after the terminal's own
- *     self-focus ran, so the bridge descends one frame later into the page's
- *     own input (the terminal's xterm) — never consuming the toggle's press.
+ *   - pane 命令（`⌘⌥Enter` / `⌘\`）→ `pane-keys.ts`；
+ *   - stop（`Esc` `Esc`）→ `stop-sequence.ts`；
+ *   - approval（`Enter` / `Esc`）→ `approval-keys.ts`：额外挂 window 捕获阶段监听，
+ *     在卡片自身的 React 处理器 `preventDefault()` 之前取走按键；
+ *   - question 取消（`Esc`）→ `question-keys.ts`：读 `pendingInteraction` 槽并调用
+ *     卡片自己的 `dismiss()`；
+ *   - focus composer（`Ctrl+Alt+J`）→ `focus-composer.ts`：自挂固定行；
+ *   - page cycle（`Ctrl+Alt+←` / `Ctrl+Alt+→`）→ `page-cycle.ts`：自挂固定行，另含
+ *     展开侧栏后的焦点交接。
  *
- * Each group file carries its own pure decision and the observer that runs it, and
- * imports the upstream faces it uses (`Shortcuts`, `ISessions`, `UiSession`, …)
- * directly from the package that declares them — no upstream shape is restated
- * here. `binding.ts` holds the gesture/binding model both shortcut catalogs match
- * against, `capture.ts` the capture-phase readings (press element, raw gesture,
- * ownership context) the page-cycle and approval hooks share, `focus-ring.ts` the
- * outline suppression the approval bridge applies to the control it takes a press
- * from, and `runtime.ts` the plugin name, the fixed-input narrowing, and the
- * main-view Session. For the bundled commands nothing is registered in the
- * shortcut catalog: no default bindings, no conflicts, no settings edits — each
- * bridge follows the effective catalog row or the mounted fixed row, so a
- * rebound, unbound, or absent bundled command is left alone. The two exceptions
- * are the focus-composer key and the page-cycle pair, which mount their own fixed
- * rows because no bundled feature reserves them.
+ * `binding.ts` 提供两个快捷键目录共用的手势/绑定匹配，`capture.ts` 提供捕获阶段读数，
+ * `focus-ring.ts` 提供 outline 抑制，`runtime.ts` 提供插件名、固定输入收窄与主视图
+ * Session。内置命令不在快捷键目录里注册，桥接只跟随生效目录行或已挂载固定行。
  */
 import { installApprovalBridge } from './approval-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
@@ -68,13 +30,10 @@ import type {Context} from '@deepseek-ai/cordis'
 
 export { name }
 
-/** The keyboard service owns fixed input; without it there is nothing to bridge. */
+/** 固定输入由键盘服务提供；没有该服务就没有可桥接的内容。 */
 export const inject = ['shortcuts']
 
-/**
- * Client plugin body.
- * @param ctx - client root context carrying the keyboard service.
- */
+/** 客户端插件主体：依次安装各分组的桥接。 */
 export function apply(ctx: Context): void {
   installPaneBridge(ctx)
   installStopBridge(ctx)

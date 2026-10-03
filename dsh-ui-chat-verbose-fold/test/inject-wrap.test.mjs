@@ -1,9 +1,7 @@
 /**
- * B 包装与装配:`src/policy-fold.ts` 的原地包装 + `src/client.ts` 的 slots
- * 装配 —— 包装后就地生效、注入面透传、幂等、晚到注册、目标缺席自检、
- * 形状变化告警,以及服务缺席 / `entries` 抛错 / 无 `inject` 方法时的 no-op。
- *
- * 运行:`node test/inject-wrap.test.mjs`(或 pnpm test 跑全部)。
+ * B 包装与装配:`src/policy-fold.ts` 的原地包装 + `src/client.ts` 的 slots 装配 ——
+ * 包装后就地生效、注入面透传、幂等、晚到注册、目标缺席自检、形状变化告警,以及
+ * 服务缺席 / `entries` 抛错 / 无 `inject` 方法时的 no-op。
  */
 import { CHAT_VIEW_ID, CHAT_VIEW_SLOT, createFoldPatchState, wrapPresentationSource } from '../src/policy-fold.ts'
 import { apply as applyPlugin } from '../src/client.ts'

@@ -1,6 +1,6 @@
 /**
- * B 判定矩阵:ask(commit) / ask(push) / ask(破坏性)、不再产生 deny、
- * 混合与多语句命令优先提示破坏性操作,以及 allow 列表。
+ * 判定矩阵:commit / push / 破坏性操作都要求用户许可,混合与多语句命令优先
+ * 提示破坏性操作,不产生 deny,其余命令放行。
  *
  * 运行:`node test/decision-matrix.test.mjs`(或 pnpm test 跑全部)。
  */

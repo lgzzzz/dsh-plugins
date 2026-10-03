@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 // check-css.mjs — 构建后静态契约校验器
-// 验证统一 CSS 补丁插件 dsh-ui-css-patches 所依赖的 data-* 属性与 CSS 变量，
-// 是否仍存在于 DSH Web 前端构建产物中。无需运行时、无需浏览器。
+// 验证 dsh-ui-css-patches 依赖的 data-* 属性与 CSS 变量是否仍存在于 DSH Web
+// 前端构建产物中。无需运行时、无需浏览器。
 //
-// 用法(本脚本与 css-contract.json 同目录,即 dsh-ui-css-patches/):
+// 用法(本脚本与 css-contract.json 同目录):
 //   node dsh-ui-css-patches/check-css.mjs [--dsh-root <path>] [--manifest <json>]
-//   在插件目录内: node check-css.mjs
 // DSH 根目录解析顺序: --dsh-root > $DSH_ROOT > `npm root -g` > 常见全局安装路径
-// (受限沙箱下 `npm root -g` 会因 EPERM 失败,故必须保留无需 spawn 的路径回退)
 //
 // 退出码: 0 = 全部通过(或无法定位 DSH 根目录时仅告警), 1 = 存在契约缺失, 2 = 配置错误
 
@@ -16,7 +14,7 @@ import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 
-// 契约清单默认与脚本同目录(随插件一起移动/复制,不依赖仓库根布局)。
+// 契约清单默认与脚本同目录。
 const here = dirname(fileURLToPath(import.meta.url))
 
 function parseArgs(argv) {
@@ -38,9 +36,9 @@ function resolveDshRoot(opt) {
   try {
     const g = execSync('npm root -g', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
     if (g) candidates.push(g)
-  } catch { /* 受限沙箱下 spawn 子进程会被拒(EPERM),继续走下面的纯路径回退 */ }
+  } catch { /* spawn 被拒(受限环境下为 EPERM)时,继续走下面的纯路径回退 */ }
 
-  // 纯路径回退:不 spawn 任何子进程,因此在受限环境下同样可用。
+  // 纯路径回退:不 spawn 任何子进程。
   if (process.env.APPDATA) candidates.push(join(process.env.APPDATA, 'npm', 'node_modules'))
   const execDir = dirname(process.execPath) // <prefix>/bin/node
   candidates.push(join(execDir, '..', 'lib', 'node_modules'))

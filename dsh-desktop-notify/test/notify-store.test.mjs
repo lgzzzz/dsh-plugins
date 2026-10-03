@@ -1,6 +1,6 @@
 /**
- * B 开关 store:`src/notify-store.ts` 的授权与开关状态 —— 点击开关时如何
- * 申请权限、何时落盘、refresh 如何读外部授权,以及各种异常兜底。
+ * B 开关 store:核对 `src/notify-store.ts` 的授权与开关状态 —— 点击开关时如何
+ * 申请权限、何时落盘、refresh 如何读外部授权,以及异常兜底。
  *
  * 运行:`node test/notify-store.test.mjs`(或 pnpm test 跑全部)。
  */

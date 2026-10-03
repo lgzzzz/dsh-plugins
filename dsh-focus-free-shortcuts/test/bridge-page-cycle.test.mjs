@@ -1,26 +1,15 @@
 /**
- * M 页面循环桥接:走线 `src/page-cycle.ts` 的 Ctrl+Alt+←/→ 桥。覆盖切页并自动
- * 聚焦(且聚焦发生在 commit 之后)、页面自聚焦时不抢、从页面内(文本控件 / 终端 /
- * 已被消费)仍切页、折叠 / 单页 / 无活动页 / 无会话让位、缺服务即不装、与卸载复位;
- * 以及终端内的捕获阶段拦截(M⑦–M⑩):`.xterm` 内的事件在冒泡到固定输入通道之前
- * 就被终端自己停掉,所以该桥在 window 捕获阶段先于 xterm 拦下,两路共用同一判定。
- * M⑪–M⑲ 是同一观察者上的第二个(非消费)任务——展开补位:按内置
- * `sidebar.right.toggle`(折叠态)时,有界轮询"面板是否已展开",一旦展开就把
- * 键盘交到活动页自己的输入面(终端的 xterm textarea);面板稍后才打开时轮询
- * 兜住(M⑰),始终没打开则有界放弃(M⑱),同 id 双层根(会话包装 + 内层面板)
- * 时取内层面板(M⑲);页面已自聚焦 / 只读 / 非终端 / 已展开 / 卸载后都让位,
- * 且绝不消费这一按。
- *
- * 运行:`node test/bridge-page-cycle.test.mjs`(或 pnpm test 跑全部)。
+ * 页面循环桥:`Ctrl+Alt+←/→` 切页,并在 commit 之后聚焦活动 pane;页面自聚焦时不抢,
+ * 折叠 / 单页 / 无活动页 / 无会话让位,缺服务即不装。终端内(`.xterm`)的按键在
+ * window 捕获阶段拦下。展开补位:折叠态按内置 `sidebar.right.toggle` 后有界轮询面板
+ * 是否展开,展开后把键盘交给活动页的终端输入面(自聚焦 / 只读 / 非终端 / 已展开 /
+ * 卸载后让位,且不消费这一按)。
  */
 import { applyPlugin, captureWarnings, check, checkTrue, fakeDocument, FakeElement, fakeKeyEvent, fakePageSidebar, fakeShortcuts, fakeWindow, FakeCtx, finish, gesture, harness, keydown, row, shortcutContext, PAGE_CYCLE_ID, PAGE_NEXT_PRESS, PAGE_PREVIOUS_PRESS, SIDEBAR_TOGGLE_BINDING, SIDEBAR_TOGGLE_PRESS } from './helpers.mjs'
 
 /**
  * 置入假 document / 假 window(捕获监听就装在上面)/ 可选的 rAF 队列与定时器队列,
- * 用完即还原。rAF 与定时器都用手动泵出:rAF 模拟"store commit 之后再聚焦"的
- * 时序;定时器用于展开补位对"面板何时算打开"的有界轮询。捕获路径的用例必须先
- * 把 window 放上全局(harness 里 applyPlugin 才会装上监听),再调用 harness。
- * `pump()` 先泵定时器、再泵 rAF(展开补位的探针在定时器里,交棒在 rAF 里)。
+ * 用完即还原。`pump()` 先泵定时器、再泵 rAF。
  */
 function withPageDom({ app, activeElement = null, raf = false, window = fakeWindow() } = {}) {
   const document = fakeDocument({ root: app, activeElement })
@@ -314,7 +303,7 @@ console.log('--- M⑪ 展开补位:折叠态按展开键,下一帧把键盘交�
     const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
     shortcuts.emit(press.input)
     check('不消费这一按(主人是内置 toggle)', press.consumed.count, 0)
-    // 模拟内置 toggle 的提交:展开 + 聚焦活动 pane(openWithPaneFocus)。
+    // 模拟内置 toggle 的提交:展开 + 聚焦活动 pane。
     sidebar.expanded = true
     root.setAttribute('data-sidebar-right-open', '')
     pane.focus({ preventScroll: true })
@@ -441,7 +430,7 @@ console.log('--- M⑰ 展开补位:面板稍后才打开,轮询在打开后才�
   try {
     const press = keydown(SIDEBAR_TOGGLE_PRESS, shortcutContext({ target: null }))
     shortcuts.emit(press.input)
-    dom.pump(1) // 第一次探针:还没打开,继续等(只泵一个定时器)
+    dom.pump(1) // 第一次探针:还没打开(只泵一个定时器)
     check('面板未开时先不交棒', textarea.focusCount, 0)
     sidebar.expanded = true
     root.setAttribute('data-sidebar-right-open', '')
@@ -479,9 +468,9 @@ console.log('--- M⑲ 展开补位选根:会话包装与面板两层同 id,取�
   const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
   const { shortcuts } = harness({ sidebar, rows: [row('sidebar.right.toggle', SIDEBAR_TOGGLE_BINDING)] })
   const app = new FakeElement('div', { 'data-app': '' })
-  // 外层:SessionView 包装(同 id,不带 data-sidebar-right-open)。
+  // 外层包装(同 id,不带 data-sidebar-right-open)。
   const outer = app.append(new FakeElement('div', { 'data-sidebar-right-session': 's1' }))
-  // 内层:SidebarPanel(同 id,展开时带 data-sidebar-right-open,panes 都在这里)。
+  // 内层面板(同 id,展开时带 data-sidebar-right-open,panes 都在这里)。
   const inner = outer.append(new FakeElement('div', { 'data-sidebar-right-session': 's1' }))
   const paneEl = inner.append(new FakeElement('section', { 'data-dockkit-pane': 'p1', 'data-dockkit-pane-active': '' }))
   const terminal = paneEl.append(new FakeElement('div', { class: 'xterm' }))

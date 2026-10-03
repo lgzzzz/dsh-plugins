@@ -14,7 +14,7 @@
 | **导出 `name`** | 插件模块的 `export const name` / 类名 | Cordis 的日志 / 诊断（`fiber.name`） | **日志里叫什么** |
 | **服务名** | `static provide` / `super(ctx, 'x')` / `ctx.provide('x', …)` | `ctx.x`、`inject` 数组、`ctx.get('x')` | **注入用的键** |
 
-> 核心区别：**包名是「引用它就能加载该包」的身份；patch `id` 定位「入口树里是哪一行」；patch `name` 指定「这一行 import 哪个模块」；导出 `name` 只是日志标签；服务名是「依赖注入的键」。五者互不派生**，DSH 里只是约定把它们写成同一个字符串（见 [第 7 节](04-conventions-and-glossary.md)）。
+> 五者互不派生：包名是「引用它就能加载该包」的身份，patch `id` 定位「入口树里是哪一行」，patch `name` 指定「这一行 import 哪个模块」，导出 `name` 只是日志标签，服务名是「依赖注入的键」。DSH 里只是约定把它们写成同一个字符串（见 [第 7 节](04-conventions-and-glossary.md)）。
 
 ---
 
@@ -46,7 +46,7 @@ class MetricsService extends Service {
 }
 ```
 
-一个「id 与 name 不同」的真实例子（本仓库 `dsh-directory-picker-browse/cordis.patch.yml`）：
+一个「id 与 name 不同」的例子（本仓库 `dsh-directory-picker-browse/cordis.patch.yml`）：
 
 ```yaml
 - id: directory-picker                   # 定位官方那行，禁用它
@@ -60,4 +60,4 @@ class MetricsService extends Service {
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 ```
 
-这里 `id` 是 `directory-picker-browse`，而 `name` 是 `@deepseek-ai/dsh-host-directory-picker-browse`——两者明显不同，且 `id` 跟「加载哪个包」毫无关系。
+这里 `id` 是本地标识、与「加载哪个包」无关，`name` 才是被 import 的完整包名。

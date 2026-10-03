@@ -1,6 +1,5 @@
 {
-  // 仅类型检查(npm run typecheck),不产出文件:index.ts 由 Node 22+ Type
-  // Stripping 直接加载;src/**/*.ts 由 tsdown.config.mjs(tsdown)打包。
+  // 仅类型检查(npm run typecheck)，不产出文件。
   "compilerOptions": {
     "target": "esnext",
     "module": "nodenext",
@@ -9,10 +8,10 @@
 
     "noEmit": true,
 
-    // 相对 import 带显式 .ts 扩展名(Node Type Stripping 与 tsdown 均支持)
+    // 相对 import 带显式 .ts 扩展名。
     "allowImportingTsExtensions": true,
 
-    // 仅可擦除语法 + 显式 import type,与 Node Type Stripping 一致
+    // 仅可擦除语法 + 显式 import type，兼容 Node Type Stripping。
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,

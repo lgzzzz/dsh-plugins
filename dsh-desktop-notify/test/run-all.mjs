@@ -1,10 +1,8 @@
 /**
- * 一次性跑完 test/ 下所有 `*.test.mjs`,按 A–D 的主题顺序执行并汇总结果。
+ * 按 A–D 的顺序跑完 test/ 下所有 `*.test.mjs`,并汇总结果。
  *
  *   node test/run-all.mjs                 # 全部
- *   node test/run-all.mjs store           # 只跑文件名/主题匹配 "store" 的
- *
- * 单跑某个主题也可以直接 `node test/notify-policy.test.mjs`。
+ *   node test/run-all.mjs store           # 只跑文件名匹配 "store" 的
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -13,7 +11,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// A–D 的主题顺序(与测试文件头部的小节编号对应);其余文件按名字补在后面。
+// A–D 的主题顺序;其余文件按名字补在后面。
 const ORDER = [
   'notify-policy.test.mjs',
   'notify-store.test.mjs',

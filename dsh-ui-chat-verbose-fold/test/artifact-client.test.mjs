@@ -1,8 +1,6 @@
 /**
- * C 产物:`lib/client.js` 的模块 id / 插件名 / `inject` 声明,以及用真产物
- * 装配一遍的端到端走线(产物零 external,不应要求任何外部模块)。
- *
- * 运行:`node test/artifact-client.test.mjs`(或 pnpm test 跑全部)。
+ * C 产物:校验 `lib/client.js` 的模块 id / 插件名 / `inject` 声明,并用真产物装配
+ * 一遍端到端走线(产物零 external,不应要求任何外部模块)。
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

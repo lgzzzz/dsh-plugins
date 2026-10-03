@@ -1,11 +1,6 @@
 /**
- * dsh-header-action-order 行为测试的共享装置。
- *
- * 这里只放与"测什么"无关的东西:断言与失败计数、上游注册项夹具、
- * 假 slots,以及包根路径常量。各测试文件按主题分组(A–C),各自 import
- * 本模块并独立运行:
- *
- *   node test/order-plan.test.mjs
+ * dsh-header-action-order 行为测试的共享装置:断言与失败计数、上游注册项夹具、
+ * 假 slots,以及包根路径常量。
  *
  * 跑全部请用 `node test/run-all.mjs`(或 pnpm test)。
  * 依赖 Node 22+ 的 Type Stripping 直接 import .ts。
@@ -19,11 +14,9 @@ import { apply as applyPlugin } from '../src/client.ts'
 /** 本插件的包根目录(测试文件在 test/ 下,所以是上一级)。 */
 export const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-// ---------------------------------------------------------------- 断言
-
 let failures = 0
 
-/** 已失败的断言数,供测试文件自行判断。 */
+/** 已失败的断言数。 */
 export function failureCount() {
   return failures
 }
@@ -42,7 +35,7 @@ export function checkTrue(label, actual) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 true,实得 ${JSON.stringify(actual)}`}`)
 }
 
-/** 收集 console.warn,同时把原文打出来,便于人工核对诊断文本。 */
+/** 收集 console.warn 的输出。 */
 export function captureWarnings(run) {
   const warnings = []
   const original = console.warn
@@ -60,8 +53,6 @@ export function finish() {
   console.log(failures === 0 ? '\n全部通过' : `\n${failures} 项失败`)
   process.exitCode = failures === 0 ? 0 : 1
 }
-
-// ---------------------------------------------------------------- 夹具
 
 export function entry(id, order) {
   return { options: { id, order } }
@@ -84,8 +75,6 @@ export function renderedOrder(entries) {
     .sort((a, b) => (a.options?.order ?? 0) - (b.options?.order ?? 0))
     .map((e) => e.options?.id)
 }
-
-// ---------------------------------------------------------------- 假 slots
 
 export class FakeSlots {
   constructor(entries) {

@@ -1,22 +1,4 @@
-/**
- * Binding layer: the gesture/binding model both shortcut catalogs match against.
- *
- * Pure and DOM-free, and typed with the registry's own published declarations
- * (`@deepseek-ai/dsh-client-shortcuts`): `ShortcutGesture` for one physical press,
- * `NormalizedBinding` for a catalog binding, `ShortcutCatalogEntry` for an
- * editable row, and `ShortcutFixedCatalogEntry` for a mounted read-only row.
- * Nothing here restates an upstream shape.
- *
- * Every bridge asks the same question — "is this press the keys of that command?" —
- * and each group file asks it about a different catalog:
- *
- *   - `pane-keys.ts` reads the *effective* configurable row (`shortcuts.catalog`),
- *     so a rebound, disabled, or conflicted command no longer owns its keys;
- *   - `approval-keys.ts` reads the *mounted fixed* row (`shortcuts.fixedCatalog`),
- *     where a row's presence is its reservation.
- *
- * Keeping the match rules here means no bridge compares keys itself.
- */
+/** 手势与绑定匹配：纯函数、不碰 DOM，两个快捷键目录都用这里的规则判断按键归属。 */
 import type {
   ShortcutCatalogEntry,
   ShortcutFixedCatalogEntry,
@@ -24,25 +6,18 @@ import type {
 } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {NormalizedBinding} from '@deepseek-ai/dsh-client-shortcuts/protocol'
 
-/** One normalized modifier name, exactly as the registry publishes it. */
+/** 一个规范化修饰键名，取值同注册表发布的名字。 */
 export type ModifierName = NormalizedBinding['modifiers'][number]
 
-/** Normalized modifier order is also the keycap order (`normalizeBinding`). */
+/** 修饰键规范顺序，同时也是键帽顺序（`normalizeBinding`）。 */
 export const MODIFIER_ORDER = ['control', 'alt', 'shift', 'meta'] as const satisfies readonly ModifierName[]
 
-/** Ordered modifiers actually held for one gesture. */
+/** 一次手势实际按下的修饰键，按 `MODIFIER_ORDER` 排序返回。 */
 export function modifiersOf(gesture: ShortcutGesture): ModifierName[] {
   return MODIFIER_ORDER.filter((name) => gesture[name])
 }
 
-/**
- * Whether one gesture is exactly this binding. Two-key chords never match (both
- * bridged commands are single keys); modifiers compare as an unordered set, so
- * the decision does not depend on the catalog's canonical ordering.
- * @param binding - the catalog binding the command currently owns.
- * @param gesture - the physical press being routed.
- * @returns whether this press is that command's binding.
- */
+/** 判断一次手势是否恰好等于该绑定；双键组合一律不匹配，修饰键按无序集合比较。 */
 export function bindingMatches(binding: NormalizedBinding, gesture: ShortcutGesture): boolean {
   if (binding.code !== gesture.code) return false
   if (binding.secondCode !== undefined || gesture.secondCode !== undefined) return false
@@ -51,14 +26,7 @@ export function bindingMatches(binding: NormalizedBinding, gesture: ShortcutGest
   return binding.modifiers.every((name) => held.includes(name))
 }
 
-/**
- * The binding a command currently owns, or undefined while the row is unbound,
- * reserved by an editor/system rule, or in conflict — the same predicate
- * `refreshLabels` applies before it publishes an enabled binding.
- * @param rows - the effective catalog snapshot.
- * @param id - registered command id.
- * @returns the effective binding, or undefined when the command owns no keys.
- */
+/** 命令当前占用的绑定；行不存在、binding 为 null、有 issue 或存在冲突时返回 undefined。 */
 export function enabledBinding(
   rows: readonly ShortcutCatalogEntry[],
   id: string,
@@ -69,18 +37,7 @@ export function enabledBinding(
   return row.binding
 }
 
-/**
- * Whether one mounted fixed row still reserves exactly this press.
- *
- * A fixed row carries no overrides and no enabled flag of its own: its presence
- * *is* its reservation, and it disappears with its owning plugin. Following the
- * row instead of hardcoding the keys keeps a bridge out of a combination the
- * assembled Client no longer declares.
- * @param rows - the mounted fixed catalog snapshot.
- * @param id - registered fixed command id.
- * @param gesture - the physical press being routed.
- * @returns whether a mounted row reserves this press.
- */
+/** 已挂载的固定行是否占用了这次按键：在行的 `bindings` 里逐个匹配，行不存在则返回 false。 */
 export function fixedRowOwns(
   rows: readonly ShortcutFixedCatalogEntry[],
   id: string,

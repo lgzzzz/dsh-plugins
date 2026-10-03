@@ -1,6 +1,7 @@
-# web bundle 补丁：关默认 auto 目录选择器，挂 browse 变体（两个 in-box 包，由安装锚点解析）。
-# 勿停用 ui-deliverables：它承载整个 turn-tail 产物面（回合改动文件卡片、present 交付卡片、
-# 收尾正文文件链接、changes-review tab、`ui:deliverable-file-references` 提示词段）。
+# web bundle 补丁：停用默认的 directory-picker，挂载 browse 变体
+# （两个 in-box 包，由安装锚点解析）。
+# ui-deliverables 必须保持启用：turn-tail 产物面（回合改动文件卡片、present 交付卡片、
+# 收尾正文文件链接、changes-review tab、`ui:deliverable-file-references` 提示词段）由它提供。
 - id: directory-picker
   disabled: true
 

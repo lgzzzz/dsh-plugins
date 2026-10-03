@@ -1,8 +1,6 @@
 /**
  * A 纯投影与定位:`src/policy-fold.ts` 里不碰 slots 的那几个纯函数 ——
  * verbose 折叠的纯投影(其余模式按身份透传)、注入面形状判定、按 id 找注册项。
- *
- * 运行:`node test/projection.test.mjs`(或 pnpm test 跑全部)。
  */
 import { findChatViewEntry, foldCompletedForVerbose, presentationOf } from '../src/policy-fold.ts'
 import { chatEntry, check, checkTrue, FakeSlots, finish, makeSource, policyFor } from './helpers.mjs'

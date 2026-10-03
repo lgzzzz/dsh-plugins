@@ -2,16 +2,15 @@ packages:
   - 'dsh-*'
   - 'example/*'
 
-# 依赖全部提升到仓库根 node_modules（插件目录自身不落 node_modules），
-# 与各插件 scripts 里 `tsc` / `tsdown` 及平台二进制包（`@rolldown/binding-*`、
-# `lightningcss-*`）的自解析路径一致。
+# 依赖提升到仓库根 node_modules(插件目录自身不落 node_modules),
+# 与各插件 scripts 里 `tsc` / `tsdown` 及平台二进制包的自解析路径一致。
 nodeLinker: hoisted
 
-# 仓库内本地 store（.gitignore 已忽略），清理 node_modules 后可离线重装。
+# 仓库内本地 store(已 gitignore),清掉 node_modules 后可离线重装。
 storeDir: .pnpm-store
 
-# pnpm 11 默认只接受发布满 24h 的版本；dsh 预发布包正是本机正在跟的版本，需放行。
-#（此列表由 pnpm 在安装时自行维护。）
+# 放行发布未满 24h 的预发布版本(pnpm 11 默认只接受发布满 24h 的版本)。
+# 此列表由 pnpm 在安装时自行维护。
 minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-agent@0.2.0-rc.2'
   - '@deepseek-ai/dsh-brand@0.2.0-rc.2'

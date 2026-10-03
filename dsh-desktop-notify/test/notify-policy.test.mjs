@@ -1,6 +1,6 @@
 /**
- * A 判定器:`src/notify-policy.ts` 的纯状态判定 —— 什么时候该发通知
- * (回合完成、待回答、待审批、计划评审),以及标题/正文/去重/截断规则。
+ * A 判定器:核对 `src/notify-policy.ts` 的通知判定 —— 回合完成、待回答、待审批、
+ * 计划评审的触发条件,以及标题/正文/去重/截断规则。
  *
  * 运行:`node test/notify-policy.test.mjs`(或 pnpm test 跑全部)。
  */

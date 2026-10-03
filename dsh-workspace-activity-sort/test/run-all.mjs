@@ -1,10 +1,6 @@
 /**
- * 一次性跑完 test/ 下所有 `*.test.mjs`，按主题顺序执行并汇总结果。
- *
- *   node test/run-all.mjs            # 全部
- *   node test/run-all.mjs apply      # 只跑文件名匹配 "apply" 的
- *
- * 单跑某个主题也可以直接 `node test/bump-plan.test.mjs`。
+ * 跑完 test/ 下所有 `*.test.mjs` 并汇总结果；命令行参数是文件名过滤子串，
+ * 例如 `node test/run-all.mjs apply` 只跑文件名匹配 "apply" 的。
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -13,7 +9,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// 主题顺序：纯规划 → 宿主挂载 → 真实 cordis；其余文件按名字补在后面。
+// 先跑这三个测试文件，其余按名字排在后面。
 const ORDER = ['bump-plan.test.mjs', 'plugin-apply.test.mjs', 'cordis-integration.test.mjs']
 
 const filters = process.argv.slice(2)

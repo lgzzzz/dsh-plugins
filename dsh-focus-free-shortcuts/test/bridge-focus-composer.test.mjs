@@ -1,10 +1,6 @@
 /**
- * K 桥接:聚焦输入框 —— 走线 `src/focus-composer.ts` 的 Ctrl+Alt+J 桥。覆盖无焦点聚焦、
- * 从文本控件抢键盘、固定行挂载、各类否决(模态 / 终端 / repeat / 组字 / 已被消费 /
- * 主视图歧义 / 无 scope / input 缺失 / for 抛错)、失败模式(缺 sessions / 缺
- * observeFixedInput 即不装)、与卸载复位(监听与固定行一起释放)。
- *
- * 运行:`node test/bridge-focus-composer.test.mjs`(或 pnpm test 跑全部)。
+ * 聚焦输入框桥:`Ctrl+Alt+J` 聚焦 composer 输入面。覆盖固定行挂载、从文本控件抢键盘、
+ * 各类否决与失败模式(缺 sessions / 缺 observeFixedInput 即不装),以及卸载复位。
  */
 import { applyPlugin, captureWarnings, check, checkTrue, domBody, domComposer, fakeSessions, fakeShortcuts, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, FOCUS_COMPOSER_ID, FOCUS_COMPOSER_PRESS } from './helpers.mjs'
 
@@ -99,7 +95,7 @@ console.log('--- K④ 失败模式:无 scope / 缺 conversation.input / for 抛�
   check('缺 conversation.input 不消费', missing.consumed.count, 0)
   checkTrue('缺 conversation.input 告警', warnings.some((line) => line.includes('conversation input registry unavailable')))
 
-  // for() 抛错(会话代际刚变):捕获并告警,按键不归本桥。
+  // for() 抛错:捕获并告警,按键不归本桥。
   const throwing = focusHarness({ onFor: () => { throw new Error('boom') } })
   const broken = keydown(FOCUS_COMPOSER_PRESS, shortcutContext({ target: domBody }))
   const warnings2 = captureWarnings(() => throwing.shortcuts.emit(broken.input))

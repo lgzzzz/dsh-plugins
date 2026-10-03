@@ -1,6 +1,6 @@
 /**
- * C 产物装配:`lib/client.js` 作为独立 bundle 注册了正确的模块 id / 插件名 /
- * inject 声明,装配后同样把上游注册项排成目标序,后到注册也归位。
+ * 产物装配:`lib/client.js` 作为独立 bundle 注册正确的模块 id / 插件名 / inject 声明,
+ * 装配后把上游注册项排成目标序,后到注册也归位。
  *
  * 运行:`node test/artifact-client.test.mjs`(或 pnpm test 跑全部)。
  */

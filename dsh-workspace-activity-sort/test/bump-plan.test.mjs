@@ -1,7 +1,5 @@
 /**
- * 纯规划测试：不挂插件、不碰事件总线，只验证「谁拥有这个会话」「上浮需要哪一次移动」
- * 与「待落位新会话的认领 / 放弃」这三条判定。宿主接线见 plugin-apply.test.mjs，
- * 真实 cordis 挂载见 cordis-integration.test.mjs。
+ * 纯规划测试：验证归属查找、上浮所需移动、待落位新会话的认领与放弃。
  *
  * 运行：`node test/bump-plan.test.mjs`。
  */
@@ -9,7 +7,7 @@ import assert from 'node:assert/strict'
 import { frontMove, owningWorkspaceId, planActivityFronts, planPendingFronts } from '../src/bump.ts'
 import { ws } from './helpers.mjs'
 
-// ---- 归属查找 ----------------------------------------------------------------
+// 归属查找
 
 {
   const workspaces = [ws('a', ['s-1', 's-2']), ws('b', ['s-3'])]
@@ -20,7 +18,7 @@ import { ws } from './helpers.mjs'
   assert.equal(owningWorkspaceId([ws('a', [])], 's-1'), undefined, '工作区账下为空时没有归属')
 }
 
-// ---- 上浮需要的那一次移动 ----------------------------------------------------
+// 上浮需要的那一次移动
 
 {
   assert.deepEqual(frontMove(['a', 'b', 'c'], 'c'), { id: 'c', beforeId: 'a' }, '不在最前就移到当前第一名之前')
@@ -31,7 +29,7 @@ import { ws } from './helpers.mjs'
   assert.deepEqual(frontMove(['a', 'b'], 'b'), { id: 'b', beforeId: 'a' }, '第二个上浮到第一个之前')
 }
 
-// ---- 活动事件 → 上浮请求 -----------------------------------------------------
+// 活动事件 → 上浮请求
 
 {
   const workspaces = [ws('a', ['s-a']), ws('b', ['s-b', 's-b2'])]
@@ -59,7 +57,7 @@ import { ws } from './helpers.mjs'
   )
 }
 
-// ---- 待落位新会话的认领与放弃 ------------------------------------------------
+// 待落位新会话的认领与放弃
 
 const TTL = 60_000
 

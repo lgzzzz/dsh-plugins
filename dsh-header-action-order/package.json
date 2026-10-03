@@ -2,7 +2,7 @@
   "name": "dsh-header-action-order",
   "version": "1.0.0",
   "private": true,
-  "description": "Local persistent Web UI patch: reorder the session-header action icons (conversation.session.header.actions, a list slot) by rewriting each live entry's options.order in place and replaying on every slot registration change. Upstream sorts the rendered rows by that value, and the slot API has no reorder surface, so the plugin edits the live entry objects instead of shadowing/re-registering foreign components. TypeScript: host half index.ts (type stripping), browser half src/client.ts → lib/client.js (tsdown).",
+  "description": "按固定顺序重排会话标题栏的动作图标(conversation.session.header.actions 列表槽位):就地改写各注册项的 options.order,并在槽位注册变化时重排。",
   "type": "module",
   "exports": {
     ".": {

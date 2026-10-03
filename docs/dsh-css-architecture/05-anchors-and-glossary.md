@@ -2,8 +2,6 @@
 
 > 本文件是 [DSH 组件 CSS 架构](../dsh-css-architecture.md) 的第 5 册：代码位置清单与术语表。
 
----
-
 ## 6. 已验证的关键锚点（代码位置清单）
 
 - `dsh-web-frontend/dist/index.html`：静态 `<link>` 两处（`vendor-BNsW4eBh.css`、`index-BPHePDI_.css`）。
@@ -16,9 +14,7 @@
 - 本仓库 [`../../tsdown.client.mjs`](../../tsdown.client.mjs)：三个 CSS 虚拟模块（`\0dsh-css:` / `\0dsh-global-css:` / `\0dsh-inline-css:`）、`styleInjectionModule()`、lightningcss `cssModules: { pattern: '[hash]_[local]' }`。
 - 本仓库 [`../../dsh-ui-css-patches/src/css.ts`](../../dsh-ui-css-patches/src/css.ts)、[`../../dsh-ui-css-patches/src/client.ts`](../../dsh-ui-css-patches/src/client.ts)：插件自己的 `data-*` + CSS 变量规则与注入生命周期。
 - 本仓库 [`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json) + [`../../dsh-ui-css-patches/check-css.mjs`](../../dsh-ui-css-patches/check-css.mjs)：构建后契约校验。
-- dockkit tab 真实 DOM：`<div role="tab" data-dockkit-tab="<id>" class="_tab_6nhg2_134 …">` —— 两属性同元素，复合选择器**仍然命中**（`css-contract.json` 里「复合选择器失效」的 hint 与当前构建不符，当前是命中的）。
-
----
+- dockkit tab 真实 DOM：`<div role="tab" data-dockkit-tab="<id>" class="_tab_6nhg2_134 …">` —— 两属性同元素，复合选择器命中；`css-contract.json` 里「复合选择器失效」的 hint 与当前构建不符。
 
 ## 7. 术语速查表
 

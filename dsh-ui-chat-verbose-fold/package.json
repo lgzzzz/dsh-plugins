@@ -2,7 +2,7 @@
   "name": "dsh-ui-chat-verbose-fold",
   "version": "1.0.0",
   "private": true,
-  "description": "Local runtime patch: make ui-chat's Verbose work-details mode fold completed Turns (POLICIES.verbose.foldCompletedTurns: true) without forking the official @deepseek-ai/dsh-client-ui-chat package. It reuses the live slot ledger instead of replacing a component: the conversation.view#chat entry's inject factory is wrapped, and the shared presentation observable it returns is patched in place. ui-renderer's bindSnapshotSelector reads source.getSnapshot() dynamically, so selectors bound before the patch observe it without a remount. Nothing upstream is disabled or shadowed; when the target shape is absent the plugin is a no-op that reports once.",
+  "description": "本地 Web UI 运行时补丁:让 ui-chat 的 verbose 工作详情模式折叠已完成的 Turn。",
   "type": "module",
   "exports": {
     ".": {

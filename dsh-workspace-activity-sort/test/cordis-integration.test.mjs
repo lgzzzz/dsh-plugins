@@ -1,11 +1,8 @@
 /**
- * 真实 cordis 集成测试：用 `new Context()` 起一个真正的宿主上下文，把注册表当成真服务
- * provide 进去，再按加载器的方式挂载插件（对象插件），走真实的事件总线。验证的是假 ctx
- * 测不到的两件事：
- *
- *   1. `inject: ['workspaceRegistry']` 的等待语义——服务缺席时不运行，出现即运行；
- *   2. 真实事件总线上的三条事件（`api-session/activity`、`session/created` +
- *      `domain/changed`、`session/disposed`）确实驱动上浮，卸载后停手。
+ * 真实 cordis 集成测试：用 `new Context()` 起宿主上下文，把注册表 provide 成真服务，
+ * 以对象插件方式按加载器挂载，走真实事件总线。验证两件事：`inject: ['workspaceRegistry']`
+ * 的等待语义（服务缺席时不运行，出现即运行），以及三条事件（`api-session/activity`、
+ * `session/created` + `domain/changed`、`session/disposed`）确实驱动上浮。
  *
  * 运行：`node test/cordis-integration.test.mjs`。
  */
@@ -14,14 +11,14 @@ import { Context } from '@deepseek-ai/cordis'
 import plugin, { apply, inject, name } from '../index.ts'
 import { FakeRegistry, sessionFixture, settle, ws } from './helpers.mjs'
 
-// ---- 导出形态 ----------------------------------------------------------------
+// 导出形态
 
 assert.equal(plugin.name, name, '默认导出的 name 与具名导出一致')
 assert.equal(plugin.apply, apply, '默认导出的 apply 与具名导出一致')
 assert.deepEqual(plugin.inject, inject, '默认导出带 inject')
 assert.equal(plugin.Config, undefined, '没有配置 schema：插件不接受配置')
 
-// ---- 等待服务 + 真实事件总线上的活动 -----------------------------------------
+// 等待服务 + 真实事件总线上的活动
 
 {
   const root = new Context()
@@ -54,7 +51,7 @@ assert.equal(plugin.Config, undefined, '没有配置 schema：插件不接受配
   await root.fiber.dispose()
 }
 
-// ---- 真实事件总线上的新会话落位 ----------------------------------------------
+// 真实事件总线上的新会话落位
 
 {
   const root = new Context()
@@ -80,7 +77,7 @@ assert.equal(plugin.Config, undefined, '没有配置 schema：插件不接受配
   await root.fiber.dispose()
 }
 
-// ---- 真实事件总线上的会话销毁 ------------------------------------------------
+// 真实事件总线上的会话销毁
 
 {
   const root = new Context()

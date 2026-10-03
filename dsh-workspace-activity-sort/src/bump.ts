@@ -1,18 +1,14 @@
 /**
- * 上浮规划：把「注册表当前顺序 + 工作区归属 + 待落位的新会话」算成上浮请求与
- * 移动动作，不碰任何服务，因此可以脱离宿主单独测试。
+ * 上浮规划：把注册表当前顺序、工作区归属与待落位的新会话算成上浮请求与移动动作，不碰任何服务。
  *
- * 三条纯函数对应三件事：
- *   - {@link owningWorkspaceId}：这个会话属于哪个工作区（归属的唯一真源是注册表
- *     实体的 `sessionIds`，也就是侧边栏分组用的那份账）；
- *   - {@link frontMove}：把它提到最前需要注册表的哪一次 `insertBefore`
- *     （DOM insertBefore 语义：移到锚点之前；已经在最前就一次写盘都不做）；
- *   - {@link planPendingFronts}：新会话还没有归属时先登记，等归属出现再认领。
+ *   - `owningWorkspaceId`：这个会话属于哪个工作区（依据注册表实体的 `sessionIds`）；
+ *   - `frontMove`：把它提到最前需要注册表的哪一次 `insertBefore`（DOM insertBefore 语义）；
+ *   - `planPendingFronts`：新会话还没有归属时先登记，等归属出现再认领。
  */
 
 /** 规划只读到的工作区字段。 */
 export interface WorkspaceRow {
-  /** 注册表记录 id 的字符串形态（比较与查找都用它）。 */
+  /** 注册表记录 id 的字符串形态。 */
   readonly id: string
   /** 该工作区账下的会话 id（注册表实体 `sessionIds` 的字符串形态）。 */
   readonly sessionIds: readonly string[]
@@ -22,7 +18,7 @@ export interface WorkspaceRow {
 export interface PendingSession {
   /** 会话 id 的字符串形态。 */
   readonly sessionId: string
-  /** 登记时刻（epoch ms）；只用来判定「等太久仍无归属」而放弃。 */
+  /** 登记时刻（epoch ms），用于判定等待超时。 */
   readonly since: number
 }
 
@@ -40,15 +36,10 @@ export interface FrontMove {
   readonly beforeId: string
 }
 
-/** 待落位的新会话最长等多久；还没有归属就放弃（它可能压根不属于任何工作区）。 */
+/** 待落位的新会话最长等待时间；超时仍无归属就放弃。 */
 export const PENDING_TTL_MS = 60_000
 
-/**
- * 这个会话属于哪个工作区。
- * @param workspaces - 当前工作区投影（入参顺序无关）。
- * @param sessionId - 会话 id 的字符串形态。
- * @returns 拥有它的工作区 id；不属于任何工作区时 undefined。
- */
+/** 返回拥有该会话的工作区 id；不属于任何工作区时为 undefined。 */
 export function owningWorkspaceId(
   workspaces: readonly WorkspaceRow[],
   sessionId: string,
@@ -60,10 +51,8 @@ export function owningWorkspaceId(
 }
 
 /**
- * 把 `workspaceId` 提到最前所需的那一次移动。
- * @param order - 注册表当前顺序。
- * @param workspaceId - 想提到最前的工作区。
- * @returns 需要的移动；注册表为空、它已经在最前、或它不在注册表里时 undefined（无需写盘）。
+ * 返回把 `workspaceId` 提到最前所需的那一次移动。
+ * 注册表为空、它已经在最前、或它不在注册表里时返回 undefined（无需写盘）。
  */
 export function frontMove(order: readonly string[], workspaceId: string): FrontMove | undefined {
   const first = order[0]
@@ -73,12 +62,8 @@ export function frontMove(order: readonly string[], workspaceId: string): FrontM
 }
 
 /**
- * 把一串「刚有会话活动」的会话解析成上浮请求，顺序与到达顺序一致。
- * 认不出归属（不属于任何工作区、或已从工作区账下移除）的会话被丢掉：侧边栏的
- * 「Ungrouped」桶不是工作区，没有可上浮的分组。
- * @param workspaces - 当前工作区投影。
- * @param sessionIds - 活动会话 id，按事件到达顺序。
- * @returns 逐个对应的上浮请求。
+ * 把一串刚有会话活动的会话按到达顺序解析成上浮请求。
+ * 认不出归属的会话（不属于任何工作区，或已从工作区账下移除）被丢掉。
  */
 export function planActivityFronts(
   workspaces: readonly WorkspaceRow[],
@@ -94,10 +79,7 @@ export function planActivityFronts(
 
 /** 一轮里待落位新会话的三种归宿。 */
 export interface PendingPlan {
-  /**
-   * 按登记先后给出的上浮请求：越晚登记的越靠后，因此最终停在最前的是最新的那个
-   * 新会话所属的工作区。
-   */
+  /** 按登记先后给出的上浮请求；越晚登记的越靠后。 */
   readonly fronts: readonly FrontRequest[]
   /** 已经认领到工作区、可以从待落位表里删掉的会话。 */
   readonly settled: readonly string[]
@@ -106,14 +88,8 @@ export interface PendingPlan {
 }
 
 /**
- * 让待落位的新会话认领工作区。
- *
- * 新会话在 `session/created` 时还没有工作区归属（注册表的 attach 写在那之后），
- * 所以插件先登记、等归属出现（工作区表的持久写入）时再上浮一次。多个新会话落在
- * 同一个工作区时各自给出一次请求，重复的请求会被 {@link frontMove} 的「已在最前」
- * 判定吃掉，不会多写盘。
- * @param input - 当前工作区投影、待落位登记、当前时刻与等待上限。
- * @returns 上浮请求与两种清理结果；两者都为空表示这一批还在等归属。
+ * 让待落位的新会话认领工作区：有归属的给出上浮请求并计入 `settled`，超时的计入 `expired`。
+ * 多个新会话落在同一工作区时各自给出一次请求，重复的请求会被 {@link frontMove} 判定为已在最前。
  */
 export function planPendingFronts(input: {
   readonly workspaces: readonly WorkspaceRow[]

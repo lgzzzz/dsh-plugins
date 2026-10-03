@@ -1,19 +1,12 @@
 /**
- * Shortcut group 2 — the double-Escape turn stop.
+ * 连按两次 Escape 停止当前回合。
  *
- * The fixed `response.stop` sequence requires its target inside
- * `[data-conversation-session]` / `[data-conversation-region]`, so it declines
- * until the user clicks into the conversation. This bridge opens its own
- * fixed-input observer — the channel that runs for every keydown *before*
- * configurable dispatch and can consume the press — and resolves the same owner
- * without DOM focus: the main-view Session from `sessions.list`, whose
- * `retainedBy.mainView` count is the same fact `UiSession.isMain` reads, then the
- * public `conversation.cancel()` of that Session's scope.
+ * 打开自己的 fixed-input 观察者(在可配置分发之前运行，可消费按键)，不依赖 DOM
+ * 焦点解析归属：从 `sessions.list` 取主视图 Session(`retainedBy.mainView` 计数即
+ * `UiSession.isMain` 读的事实)，再调用该 Session scope 上的 `conversation.cancel()`。
  *
- * Presses the bundled sequence owns belong to it alone: it holds turn identity,
- * which is not public, so this bridge stands down instead of running a second
- * cancel. Nothing is registered in the shortcut catalog, and the two presses are
- * the same short-lived sequence the bundled command applies.
+ * 目标位于 `[data-conversation-session]` / `[data-conversation-region]` 内的按键归
+ * 官方 fixed 序列所有，本桥不动作。不在快捷键目录中注册任何条目。
  */
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -23,13 +16,8 @@ import type {UiSession} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {Context} from '@deepseek-ai/cordis'
 
 /**
- * Whether one press may start or complete this plugin's stop sequence: a bare
- * Escape, not a key repeat, not composing, not already consumed, outside a
- * terminal and with no modal open — the admission the bundled fixed sequence
- * applies before it even looks for its own target.
- * @param gesture - the physical press being routed.
- * @param context - modal and region ownership for this press.
- * @returns whether the press is eligible to stop a turn.
+ * 该次按键能否启动或完成停止序列：裸 Escape、非重复、非输入法组合中、未被消费、
+ * 无修饰键、无模态，且区域不是终端。
  */
 export function escapeEligible(gesture: ShortcutGesture, context: ShortcutContext): boolean {
   return gesture.code === 'Escape'
@@ -44,49 +32,37 @@ export function escapeEligible(gesture: ShortcutGesture, context: ShortcutContex
     && context.region !== 'terminal'
 }
 
-/** One press's identity for the stop sequence: a Session and its binding generation. */
+/** 停止序列中一次按键的身份：一个 Session 及其绑定代次。 */
 export interface StopToken {
   readonly sessionId: SessionId
-  /** The Session binding object itself; identity is the generation. */
+  /** 绑定对象本身；其身份即代次。 */
   readonly binding: SessionBinding
 }
 
-/**
- * The two presses must name the same Session generation.
- * @param left - the pending first press.
- * @param right - the press being considered.
- * @returns whether both presses address the same generation.
- */
+/** 两次按键是否指向同一 Session 代次。 */
 export function sameStopToken(left: StopToken, right: StopToken): boolean {
   return left.sessionId === right.sessionId && left.binding === right.binding
 }
 
-/** Clock and equality seams, so the sequence is testable without real time. */
+/** 时钟与相等性接缝，使该序列无需真实时间即可测试。 */
 export interface StopSequenceOptions {
-  /** Maximum time between the two independent presses, from the shortcut service. */
+  /** 两次独立按键之间的最大间隔，取自快捷键服务。 */
   readonly intervalMs: number
   now?: () => number
   same?: (left: StopToken, right: StopToken) => boolean
 }
 
-/** One short-lived first press. */
+/** 一次短命的首次按键。 */
 export interface StopSequence {
-  /**
-   * Record one eligible press.
-   * @param token - the Session generation this press would stop.
-   * @returns whether this press completes the sequence.
-   */
+  /** 记录一次符合条件的按键；返回该次按键是否完成序列。 */
   press(token: StopToken): boolean
-  /** Drop the pending first press and its expiry timer. */
+  /** 丢弃待定的首次按键及其过期定时器。 */
   reset(): void
 }
 
 /**
- * Mirror of the bundled `StopSequence`: remember one press for at most
- * `intervalMs`, and treat a second press inside that window against the same
- * Session generation as the stop request.
- * @param options - interval plus optional clock/equality seams.
- * @returns the press/reset pair.
+ * 记住一次按键至多 `intervalMs`；窗口内针对同一 Session 代次的第二次按键视为停止
+ * 请求。返回 press/reset 组合。
  */
 export function createStopSequence(options: StopSequenceOptions): StopSequence {
   const now = options.now ?? (() => performance.now())
@@ -114,15 +90,8 @@ export function createStopSequence(options: StopSequenceOptions): StopSequence {
 }
 
 /**
- * Whether the bundled stop sequence owns this press by target.
- *
- * Mirrors the bundled guard: an Element inside both conversation markers, and
- * not an approval control, an embedding frame, a terminal, or inert content.
- * When this holds, the bundled handler has strictly better evidence (turn
- * identity, which is not public) than this plugin can read, so this plugin must
- * stand down instead of running a second cancel.
- * @param target - the keydown target, or null without one.
- * @returns whether the bundled fixed sequence owns the press.
+ * 该次按键的目标是否属于官方停止序列：位于 `[data-conversation-session]` 与
+ * `[data-conversation-region]` 之内，且不在审批控件、内嵌 frame、终端或惰性内容中。
  */
 export function conversationOwnsTarget(target: Element | null): boolean {
   if (target === null || typeof target.closest !== 'function') return false
@@ -133,15 +102,14 @@ export function conversationOwnsTarget(target: Element | null): boolean {
   return target.closest('[data-approval-key], iframe, .xterm, [inert]') === null
 }
 
-/** One eligible press's resolved Session. */
+/** 一次符合条件的按键解析出的 Session。 */
 interface StopCandidate {
   readonly sessionId: SessionId
   readonly binding: SessionBinding
 }
 
 /**
- * Bridge the double-Escape turn stop.
- * @param ctx - client root context.
+ * 桥接连按两次 Escape 停止回合。
  */
 export function installStopBridge(ctx: Context): void {
   ctx.inject(['shortcuts', 'sessions'], (scope) => {
@@ -172,12 +140,7 @@ export function installStopBridge(ctx: Context): void {
 }
 
 /**
- * Handle one keydown against the bundled stop sequence.
- * @param ctx - injected scope carrying optional services.
- * @param shortcuts - keyboard service.
- * @param sessions - Session catalog and scope owner.
- * @param sequence - pending first press.
- * @param input - one fixed keydown.
+ * 处理一次 keydown：判定通过后消费该按键，第二次按键命中同一 Session 代次时取消回合。
  */
 function handleStopInput(
   ctx: Context,
@@ -192,8 +155,7 @@ function handleStopInput(
     sequence.reset()
     return
   }
-  // Presses the bundled sequence owns belong to it alone: it holds turn
-  // identity this plugin cannot read, and sharing the press would cancel twice.
+  // 官方序列占用的按键归其所有：共享该按键会取消两次。
   if (conversationOwnsTarget(context.target)) {
     sequence.reset()
     return
@@ -203,8 +165,7 @@ function handleStopInput(
     sequence.reset()
     return
   }
-  // Same as the bundled first press: an accepted press is consumed, so a
-  // half-sequence never leaks the Escape to the browser or a local control.
+  // 被接受的按键即被消费，序列未完成时 Escape 也不会泄漏给浏览器或本地控件。
   input.consume()
   const token: StopToken = { sessionId: candidate.sessionId, binding: candidate.binding }
   if (!sequence.press(token)) return
@@ -212,14 +173,10 @@ function handleStopInput(
 }
 
 /**
- * Resolve the Session a focus-free stop should address.
+ * 解析无焦点停止应作用的 Session；没有可停止的对象时返回 undefined。
  *
- * The main view's retained Session is the on-screen conversation; the running
- * and pending-interaction facts come from the same sources the bundled
- * sequence reads, minus the DOM target.
- * @param ctx - injected scope carrying optional services.
- * @param sessions - Session catalog and scope owner.
- * @returns the live candidate, or undefined when nothing may be stopped.
+ * 主视图保留的 Session 即在屏会话；运行中与待交互状态取自官方序列读取的同一来源，
+ * 只是不经 DOM 目标。
  */
 function resolveStopSession(ctx: Context, sessions: ISessions): StopCandidate | undefined {
   const list = sessions.list.getSnapshot()
@@ -238,10 +195,8 @@ function resolveStopSession(ctx: Context, sessions: ISessions): StopCandidate | 
 }
 
 /**
- * Cancel one Session's in-flight turn through its scoped Conversation face,
- * the same operation the composer's Stop button uses.
- * @param sessions - Session catalog and scope owner.
- * @param sessionId - the Session to stop.
+ * 通过该 Session scope 上的 Conversation 面取消进行中的回合，与输入框的停止按钮
+ * 是同一操作。
  */
 function cancelSession(sessions: ISessions, sessionId: SessionId): void {
   const scoped = sessions.scope(sessionId)

@@ -1,48 +1,44 @@
 /**
- * Pure logic for the Verbose work-details fold patch.
+ * verbose 工作详情折叠补丁的纯逻辑。
  *
- * The plugin does not replace ui-chat, it reuses the live slot ledger. A
- * registered view entry carries its own `inject` factory, and ui-renderer's
- * `bindSnapshotSelector` reads `source.getSnapshot()` dynamically rather than
- * capturing it once, so wrapping the shared presentation source *in place*
- * reaches every existing `usePresentation` selector without a remount.
+ * 复用实时 slots 账本:注册项自带 inject 工厂,ui-renderer 的 bindSnapshotSelector
+ * 每次快照都动态读 source.getSnapshot(),因此在原地包装共享的 presentation source
+ * 就能让已绑定的 usePresentation 选择器直接读到折叠值,无需重挂载。
  *
- * Everything here is side-effect free except the deliberate in-place writes to
- * the two live objects (the entry's `inject` and the source's `getSnapshot`),
- * which keeps the decisions testable against plain fakes.
+ * 除两处原地写入(注册项的 inject 与 source 的 getSnapshot)外无副作用。
  */
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { ChatPresentationPolicy } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 
-/** Slot that renders the conversation target's body. */
+/** 渲染会话目标主体的槽。 */
 export const CHAT_VIEW_SLOT = 'conversation.view'
 
-/** Registration id ui-chat uses for its Chat target inside that slot. */
+/** ui-chat 在该槽内给 Chat 目标使用的注册 id。 */
 export const CHAT_VIEW_ID = 'chat'
 
-/** Work-details mode whose normally completed Turns should fold. */
+/** 需要折叠已完成 Turn 的工作详情模式。 */
 export const VERBOSE_MODE = 'verbose'
 
-/** Diagnostic sink; tests capture it instead of touching the console. */
+/** 告警输出回调;测试用它捕获告警而不碰 console。 */
 export type FoldWarn = (message: string, detail?: unknown) => void
 
-/** Mutable bookkeeping for one installed patch. */
+/** 一次已安装补丁的可变记账。 */
 export interface FoldPatchState {
-  /** Sources already wrapped, so one source is wrapped at most once. */
+  /** 已包装的 source,保证每个 source 最多包装一次。 */
   readonly patchedSources: WeakSet<object>
-  /** Entries whose inject factory is already ours, so re-scans do not stack wrappers. */
+  /** inject 工厂已被替换的注册项,重复扫描不会叠加包装。 */
   readonly wrappedEntries: WeakSet<object>
-  /** Distinct sources wrapped (a WeakSet cannot report its size). */
+  /** 已包装的不同 source 数(WeakSet 取不到大小)。 */
   patchedCount: number
-  /** Distinct chat-view entries wrapped. */
+  /** 已包装的不同 chat 视图注册项数。 */
   wrappedCount: number
-  /** Whether the missing-presentation warning already fired. */
+  /** presentation 缺失的告警是否已发出。 */
   shapeWarned: boolean
 }
 
-/** Empty bookkeeping for one install. */
+/** 一次安装用的空记账对象。 */
 export function createFoldPatchState(): FoldPatchState {
   return {
     patchedSources: new WeakSet(),
@@ -54,11 +50,8 @@ export function createFoldPatchState(): FoldPatchState {
 }
 
 /**
- * Project one live policy: Verbose always folds completed Turns. Every other
- * value passes through by identity, so selectors over unrelated modes keep
- * their stable references and re-render only on real mode changes.
- * @param policy - the current policy read from the presentation source.
- * @returns the same policy, or a folded copy when Verbose still had it open.
+ * 投影一份实时策略:verbose 始终折叠已完成 Turn;其余模式以及已折叠的 verbose
+ * 都按原对象返回,使无关模式上的选择器保持稳定引用。
  */
 export function foldCompletedForVerbose(policy: ChatPresentationPolicy): ChatPresentationPolicy {
   if (policy.mode !== VERBOSE_MODE || policy.foldCompletedTurns === true) return policy
@@ -66,11 +59,8 @@ export function foldCompletedForVerbose(policy: ChatPresentationPolicy): ChatPre
 }
 
 /**
- * Read the presentation source out of one inject face, when the shape matches.
- * A face without a usable `hooks.presentation` is reported as absent rather
- * than guessed at, so a shape change degrades to a no-op plus one warning.
- * @param face - whatever the wrapped inject factory returned.
- * @returns the source, or undefined when the face does not carry one.
+ * 从注入面里取出 presentation source;缺少可用的 hooks.presentation 时返回
+ * undefined(按缺失处理,降级为空操作并告警一次)。
  */
 export function presentationOf(face: unknown): ObservableSnapshot<ChatPresentationPolicy> | undefined {
   if (face === null || typeof face !== 'object') return undefined
@@ -84,9 +74,7 @@ export function presentationOf(face: unknown): ObservableSnapshot<ChatPresentati
 }
 
 /**
- * Locate ui-chat's Chat view registration in the live ledger.
- * @param slots - the slots registry.
- * @returns the entry, or undefined while it is absent or the ledger is unreadable.
+ * 在实时账本里按 id 定位 ui-chat 的 Chat 视图注册项;缺席或账本不可读时返回 undefined。
  */
 export function findChatViewEntry(slots: SlotRegistry): StoredEntry | undefined {
   if (typeof slots.entries !== 'function') return undefined
@@ -96,12 +84,8 @@ export function findChatViewEntry(slots: SlotRegistry): StoredEntry | undefined 
 }
 
 /**
- * Wrap one live source in place. Reads arriving through `getSnapshot` pick the
- * fold up immediately, including selectors bound before this call, because the
- * renderer re-reads `source.getSnapshot()` on every snapshot.
- * @param source - the presentation observable returned by ui-chat's inject factory.
- * @param state - bookkeeping that keeps the wrap single-shot.
- * @returns whether this call performed the wrap.
+ * 原地包装一个实时 source:渲染每次快照都重读 source.getSnapshot(),因此包装后
+ * (含此前已绑定的选择器)立即读到折叠值。返回本次是否执行了包装。
  */
 export function wrapPresentationSource(source: ObservableSnapshot<ChatPresentationPolicy>, state: FoldPatchState): boolean {
   if (state.patchedSources.has(source)) return false
@@ -112,23 +96,18 @@ export function wrapPresentationSource(source: ObservableSnapshot<ChatPresentati
   return true
 }
 
-/** Outcome of one patch attempt against the live ledger. */
+/** 一次打补丁尝试的结果。 */
 export type PatchOutcome =
-  /** The chat entry was found and its inject factory wrapped. */
+  /** 已找到 chat 注册项并包装了它的 inject 工厂。 */
   | 'patched'
-  /** The chat entry was already wrapped by an earlier scan. */
+  /** 该注册项在此前的扫描中已被包装。 */
   | 'already'
-  /** No chat entry (or no inject factory) is on the ledger yet. */
+  /** 账本上还没有 chat 注册项(或其 inject 工厂)。 */
   | 'pending'
 
 /**
- * Wrap the Chat view's inject factory so every face it returns carries the
- * folded policy. Re-runnable: a later registration is a fresh entry object and
- * gets wrapped, while an already-wrapped entry is left alone.
- * @param slots - the slots registry.
- * @param state - bookkeeping shared across scans.
- * @param warn - optional diagnostic sink for a shape change.
- * @returns what this scan did.
+ * 包装 Chat 视图的 inject 工厂,使它返回的每个注入面都带折叠后的策略;可重复调用,
+ * 已包装的注册项不再处理。返回本次扫描的结果。
  */
 export function patchChatView(slots: SlotRegistry, state: FoldPatchState, warn?: FoldWarn): PatchOutcome {
   const entry = findChatViewEntry(slots)

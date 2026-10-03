@@ -13,7 +13,7 @@
 - **谁用**：
   - **宿主侧**：loader 的 patch `name` 若是裸包名，`EntryTree.import(name)` 会 `import(name)`，Node 按包名解析到 `node_modules/<包名>`；
   - **客户端侧**：浏览器模块 id **就是包名**（`graphRow` 的 `id`、bundle 工厂注册的 `id` 都是它；`<包名>/client` 子路径会被 `stripClientSuffix` 归一成裸包名）。
-- **后果**：包名写错、包没安装、或 `exports` 没暴露对应入口 → 这一行 `import` 失败，loader 记一条 error，该行不会加载。
+- **失败表现**：包名写错、包没安装、或 `exports` 没暴露对应入口 → 这一行 `import` 失败，loader 记一条 error，该行不会加载。
 - **注意**：包名是「身份」而非「展示名」。它必须满足 npm 包名规则（小写、可含 `-` / scope `@scope/name`），跟后面的「导出 name」没有任何自动同步。
 
 ### 3.2 patch `id`（`cordis.patch.yml` 行的 `id`）
@@ -26,7 +26,7 @@
   - 非 insert 补丁的定位（如 `- id: directory-picker, disabled: true`）：按 id 找到目标行再应用覆盖；
   - 嵌套 id 用 `:` 分隔（`EntryTree.sep = ':'`）。
 - **可省略**：`EntryGroup.create()` 会调用 `EntryTree.ensureId()`，缺失时自动生成 `Math.random().toString(16).slice(2, 10)`（8 位随机 hex）。
-- **注意**：**别随便改已发布的 `id`**。因为「定位行」全靠 id，改了 id 等于把它当成另一个新行，`remove`/`update`/`disabled` 会定位不到原行（补丁会 warn「entry %C not found」并被跳过）。
+- **注意**：定位行全靠 `id`；把已发布的 `id` 改掉等于多出一个新行——`remove`/`update`/`disabled` 定位不到原行，补丁会 warn「entry %C not found」并被跳过。
 
 ### 3.3 patch `name`（`cordis.patch.yml` 行的 `name`）
 
@@ -55,7 +55,7 @@
   - **相对路径**（如 `./local.ts`）→ 相对 `baseUrl` 加载本地文件；
   - **`cordis:` 内建**（如 `cordis:group`）→ 取 loader 注册的内建对象（不是包）。
 
-- **在非 insert 补丁里，`name` 是可选的安全校验**：`applyEntryPatches` 里若补丁带了 `name` 且与目标行的 `name` 不一致，会 warn「name mismatch」并跳过该补丁（防止定位错行时误改）。
+- **在非 insert 补丁里，`name` 是可选的安全校验**：`applyEntryPatches` 里若补丁带了 `name` 且与目标行的 `name` 不一致，会 warn「name mismatch」并跳过该补丁。
 
 ### 3.4 导出 `name`（`export const name` / 类名）
 

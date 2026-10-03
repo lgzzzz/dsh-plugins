@@ -1,14 +1,8 @@
 /**
- * dsh-ui-chat-verbose-fold 行为测试的共享装置。
- *
- * 这里只放与"测什么"无关的东西:断言与失败计数、模式策略夹具、活的
+ * dsh-ui-chat-verbose-fold 行为测试的共享装置:断言与失败计数、模式策略夹具、活的
  * presentation source、ui-chat 形状的注册项、极简 slots 注册表,以及定位
- * `lib/client.js` 用的包根路径。各测试文件按主题分组(A–C),各自 import
- * 本模块并独立运行:
+ * `lib/client.js` 用的包根路径。
  *
- *   node test/projection.test.mjs
- *
- * 跑全部请用 `node test/run-all.mjs`(或 pnpm test)。
  * 依赖 Node 22+ 的 Type Stripping 直接 import .ts。
  */
 import { fileURLToPath } from 'node:url'
@@ -20,8 +14,6 @@ import { CHAT_VIEW_ID, CHAT_VIEW_SLOT } from '../src/policy-fold.ts'
 export const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 export { CHAT_VIEW_ID, CHAT_VIEW_SLOT }
-
-// ---------------------------------------------------------------- 断言
 
 let failures = 0
 
@@ -39,7 +31,7 @@ export function checkTrue(label, actual) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 true,实得 ${JSON.stringify(actual)}`}`)
 }
 
-/** Capture console.warn for the duration of `run`. */
+/** 在 `run` 执行期间捕获 console.warn。 */
 export function captureWarnings(run) {
   const warnings = []
   const original = console.warn
@@ -58,9 +50,7 @@ export function finish() {
   process.exitCode = failures === 0 ? 0 : 1
 }
 
-// ---------------------------------------------------------------- 夹具
-
-/** Fresh policy objects per mode, mirroring upstream's table (verbose starts open). */
+/** 按模式返回全新的策略对象(verbose 初始不折叠)。 */
 export function policyFor(mode) {
   const table = {
     compact: { mode: 'compact', foldCompletedTurns: false, stepGrouping: 'collapsed' },
@@ -71,7 +61,7 @@ export function policyFor(mode) {
   return { ...table[mode] }
 }
 
-/** A live presentation source whose mode can be flipped between reads. */
+/** 可切换 mode 的实时 presentation source。 */
 export function makeSource(initialMode) {
   let mode = initialMode
   const listeners = new Set()
@@ -93,7 +83,7 @@ export function makeSource(initialMode) {
   }
 }
 
-/** One ui-chat-shaped view entry carrying the given presentation source. */
+/** 一个 ui-chat 形状的视图注册项,携带给定的 presentation source。 */
 export function chatEntry(source) {
   return {
     options: { id: CHAT_VIEW_ID },
@@ -101,7 +91,7 @@ export function chatEntry(source) {
   }
 }
 
-/** Minimal slots registry: no declaration wait, entries + change fan-out. */
+/** 极简 slots 注册表:entries 查询 + 变化广播,不做声明等待。 */
 export class FakeSlots {
   constructor(entries) {
     this.list = entries

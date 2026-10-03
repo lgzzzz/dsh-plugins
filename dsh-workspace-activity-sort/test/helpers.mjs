@@ -1,14 +1,13 @@
 /**
- * 测试共用的夹具：忠实复刻注册表语义的假注册表、假 ctx（事件总线 + effect + logger），
- * 以及等待插件异步收敛的 `settle()`。
+ * 测试共用的夹具：假 Workspace 注册表、假 ctx（事件总线 + effect + logger），以及等待插件
+ * 异步收敛的 `settle()`。
  *
- * 假注册表刻意复刻真注册表的四条行为：DOM insertBefore 语义、锚点/来源缺失即抛错、
- * 「顺序没变就一次写盘都不发生」，以及两种持久写入各自的 `domain/changed` 形状——
- * 重排只写全局顺序单例（`table` 为 `''`），而 attach / 改名等实体变更写工作区表
- * （`table` 为 `workspaces`）。插件只听后者，这正是它的写入不会触发自己的原因。
+ * 假注册表复刻注册表的四条行为：DOM insertBefore 语义、锚点/来源缺失即抛错、顺序没变就不
+ * 写盘，以及两种持久写入各自的 `domain/changed` 形状——重排写全局顺序单例（`table` 为 `''`），
+ * attach / 改名等实体变更写工作区表（`table` 为 `workspaces`）。
  */
 
-/** 一份注册表实体：插件只读 `id` 与 `sessionIds`，其余字段只为贴近真实实体。 */
+/** 一份注册表实体：插件只读 `id` 与 `sessionIds`。 */
 export function ws(id, sessionIds = [], title = id, path = `C:\\work\\${id}`) {
   return { id, title, path, sessionIds: [...sessionIds] }
 }
@@ -54,7 +53,7 @@ export class FakeRegistry {
     return this.order
   }
 
-  /** 模拟注册表把新会话记到工作区账下（attach）：注册表把新会话插到最前。 */
+  /** 模拟 attach：把新会话插到工作区账最前。 */
   attach(id, sessionId) {
     const entity = this.entities.get(id)
     if (entity === undefined) throw new Error(`unknown workspace ${id}`)
@@ -93,7 +92,7 @@ export class FakeRegistry {
     this.globalChanged()
   }
 
-  /** 用户手动拖拽走的就是 insertBefore，它只写全局顺序单例。 */
+  /** 模拟手动拖拽：走 insertBefore，只写全局顺序单例。 */
   drag(id, beforeId) {
     return this.insertBefore(id, beforeId)
   }
@@ -115,10 +114,7 @@ export class FakeRegistry {
 
 /**
  * 装配一套全新的假 ctx 并挂载插件。
- *
- * @param {object} [options]
- * @param {Array} [options.entities] 初始工作区实体。
- * @param {boolean|string[]} [options.insertFails] 让注册表拒绝全部重排（`true`）或只拒绝列出的工作区。
+ * `entities` 是初始工作区实体；`insertFails` 为 `true` 时注册表拒绝全部重排，为数组时只拒绝列出的工作区。
  */
 export function createHarness({ entities = [], insertFails = false } = {}) {
   const listeners = new Map()
@@ -156,7 +152,7 @@ export function createHarness({ entities = [], insertFails = false } = {}) {
     logs,
     listeners,
     emit,
-    /** 一条用户消息提交（也就是侧边栏时间更新的那一刻）。 */
+    /** 一条用户消息提交。 */
     activity: (sessionId) => emit('api-session/activity', sessionId, Date.now()),
     /** 会话被创建 / 被重新打开（resume 也走这一条）。 */
     created: (session) => emit('session/created', session),

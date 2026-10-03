@@ -1,22 +1,13 @@
 /**
- * Shortcut group 1 — the Right-Sidebar pane keys (`⌘⌥Enter` fullscreen, `⌘\` split).
+ * 右侧栏面板按键：`⌘⌥Enter` 全屏切换、`⌘\` 分屏。
  *
- * `pane.fullscreen.toggle` and `pane.split` call `sidebarRight.focusedTarget(element)`
- * and return `command.noFocus` when the keydown target is outside a visible dock
- * pane. A keydown is dispatched to the focused element — or to `<body>` when
- * nothing is focused — so both decline until the user clicks into the pane.
- *
- * This bridge opens its own fixed-input observer — the channel that runs for every
- * keydown *before* configurable dispatch and can consume the press — and resolves
- * the same owner without DOM focus: `sidebarRight.commandTarget(element)`, whose
- * documented fallback is the on-screen Session's active dock pane.
- *
- * The focused pane stays authoritative (a press the bundled command already owns
- * is left untouched), so exactly one owner remains per press, and the bridge
- * follows the *effective* catalog row: a rebound, disabled, or absent bundled
- * command is left alone. Nothing is registered in the shortcut catalog. Web
- * runtime only — on Desktop these are configurable bindings dispatched by the
- * native keyboard bridge, which this DOM observer cannot suppress.
+ * `pane.fullscreen.toggle` 与 `pane.split` 调用 `sidebarRight.focusedTarget(element)`，
+ * 目标不在可见 dock 面板内时返回 `command.noFocus`，所以用户点击进面板之前两者都会拒绝。
+ * 本模块改用固定输入观察者（每个 keydown 都早于可配置派发运行，可消费该按键），通过
+ * `sidebarRight.commandTarget(element)`（回退为当前 Session 的活动 dock 面板）解析同一归属：
+ * 已聚焦的面板仍然优先，并且只跟随生效的目录行（被重绑、禁用或不存在的内置命令不动）。
+ * 不向快捷键目录注册任何条目。仅 Web 运行时：Desktop 上这些可配置绑定由原生键盘桥接派发，
+ * 本 DOM 观察者无法抑制。
  */
 import { bindingMatches, enabledBinding } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
@@ -26,33 +17,23 @@ import type {
   Shortcuts,
 } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {Context} from '@deepseek-ai/cordis'
-// 空导入(不引入任何名字):只为让 TS 加载本包的 `declare module '@deepseek-ai/cordis'`
-// 增强 —— `ctx.sidebarRight` 由它声明。该面带 `focusedTarget` / `commandTarget` 的类
-// 并不在包的 `/client` 导出名单里,所以 `Context['sidebarRight']` 是取它的公开途径。
+// 空导入：让 TS 加载本包对 `@deepseek-ai/cordis` 的模块增强，它声明了 `ctx.sidebarRight`，
+// 该公开接口带有 `focusedTarget` / `commandTarget`，且不在包的 `/client` 导出名单里。
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 
-/** The Right-Sidebar face, exactly as the Cordis augmentation declares it. */
+/** 右侧栏接口，取自 Cordis 模块增强声明的类型。 */
 type Sidebar = Context['sidebarRight']
 
-/** The two pane commands this plugin bridges, by their registered ids. */
+/** 本插件桥接的两个面板命令的注册 id。 */
 export interface PaneCommandIds {
   readonly fullscreen: string
   readonly split: string
 }
 
-/** Which bundled pane action a press belongs to. */
+/** 该按键属于哪个内置面板动作。 */
 export type PaneAction = 'fullscreen' | 'split'
 
-/**
- * Which bundled pane command currently owns this press, if any.
- *
- * Reading the effective catalog instead of hardcoding a combination is what
- * keeps a rebound command authoritative and this bridge out of its way.
- * @param rows - the effective catalog snapshot.
- * @param gesture - the physical press being routed.
- * @param ids - the two command ids to test.
- * @returns the owned action, or undefined for any other press.
- */
+/** 当前生效目录中拥有该按键的内置面板命令；其他按键返回 undefined。 */
 export function paneActionFor(
   rows: readonly ShortcutCatalogEntry[],
   gesture: ShortcutGesture,
@@ -70,19 +51,15 @@ export function paneActionFor(
   return undefined
 }
 
-/** Registered ids of the two bundled pane commands this bridge follows. */
+/** 本桥接跟踪的两个内置面板命令的注册 id。 */
 const PANE_COMMAND_IDS: PaneCommandIds = {
   fullscreen: 'pane.fullscreen.toggle',
   split: 'pane.split',
 }
 
 /**
- * Bridge the pane fullscreen/split keys.
- *
- * Web runtime only: on Desktop these are configurable bindings dispatched by
- * the native keyboard bridge, and this DOM observer cannot suppress that
- * dispatch, so acting here as well would toggle twice.
- * @param ctx - client root context.
+ * 安装面板全屏/分屏键的桥接。仅 Web 运行时：Desktop 上这些可配置绑定由原生键盘桥接派发，
+ * 本 DOM 观察者无法抑制，重复执行会切换两次。
  */
 export function installPaneBridge(ctx: Context): void {
   ctx.inject(['shortcuts', 'sidebarRight'], (scope) => {
@@ -103,37 +80,24 @@ export function installPaneBridge(ctx: Context): void {
   })
 }
 
-/**
- * Handle one keydown against the bundled pane commands.
- *
- * Resolve what the bundled command would do first: it runs its own resolve in
- * this same keydown, and its verdict is the authority on who owns the press.
- * @param shortcuts - keyboard service.
- * @param sidebar - Right-Sidebar face.
- * @param input - one fixed keydown.
- */
+/** 用内置面板命令处理一次固定通道的 keydown。 */
 function handlePaneInput(shortcuts: Shortcuts, sidebar: Sidebar, input: KeydownInput): void {
   const gesture: ShortcutGesture = input.gesture
   const context = input.context
   if (gesture.composing || gesture.defaultPrevented) return
-  // `pane.fullscreen.toggle` and `pane.split` declare no modals, so a modal
-  // press is consumed-and-blocked by the bundled dispatch; stay out of it.
+  // 两个命令都未声明模态，模态下的按键由内置派发消费并阻断。
   if (context.modal !== null) return
   const rows = shortcuts.catalog.getSnapshot()
   const action = paneActionFor(rows, gesture, PANE_COMMAND_IDS)
   if (action === undefined) return
   const element = context.target ?? (typeof document === 'undefined' ? null : document.activeElement)
-  // A focused pane is the bundled command's own case: `focusedTarget` resolves,
-  // its command runs in this keydown, and a second action here would undo it.
+  // 面板已聚焦时由内置命令处理，这里再执行一次会抵消它。
   if (sidebar.focusedTarget(element) !== undefined) return
-  // Without a visible panel there is no pane to present fullscreen; expanding
-  // first also focuses the active pane, after which the bundled command works.
+  // 未展开时没有面板可全屏；展开本身也会聚焦活动面板，之后内置命令即可生效。
   if (!sidebar.isExpanded()) return
   const target = sidebar.commandTarget(element)
   if (target === undefined) return
-  // Consume before acting: the bundled command would otherwise resolve to
-  // `command.noFocus` and call preventDefault itself, and this press must not
-  // reach it once this bridge has taken the owner over.
+  // 先消费再执行：否则内置命令会解析为 `command.noFocus` 并自行 preventDefault。
   input.consume()
   if (gesture.repeat) return
   if (!sidebar.isTargetCurrent(target)) return

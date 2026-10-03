@@ -2,8 +2,6 @@
 
 > 本文件是 [DSH 组件 CSS 架构](../dsh-css-architecture.md) 的第 3 册：作用域差异、设计令牌的完整定义位置、模块系统如何回收 `<style>`。
 
----
-
 ## 4. 全局生效，还是组件局部生效？
 
 三类 CSS 都进了 `document.head`，在「级联」意义上都是全局的，但**作用域**不同：
@@ -11,10 +9,10 @@
 | 类型 | 注册位置 | 作用域 | 说明 |
 |---|---|---|---|
 | **CSS Modules 组件样式** | `<link>`（外壳）或运行时 `<style>`（插件） | **组件局部**（等效） | 规则用唯一哈希类名选择器，只命中自己组件的元素 |
-| **设计令牌（CSS 变量）** | 运行时 `<style>`（theme 包的全局 sheet） | **全局**（刻意） | 定义在 `:root`、`body`，沿 DOM 级联，供所有组件消费 |
+| **设计令牌（CSS 变量）** | 运行时 `<style>`（theme 包的全局 sheet） | **全局** | 定义在 `:root`、`body`，沿 DOM 级联，供所有组件消费 |
 | **`data-*` 选择器** | 随组件 CSS 一起 | 全局属性选择器，但**受属性限定** | `[data-pinned]` 能匹配文档任意位置，但只命中带该属性的元素，等效局部 |
 
-### 4.1 设计令牌的完整定义位置（不是只有 `base.css`）
+### 4.1 设计令牌的定义位置
 
 官方 theme 包 `@deepseek-ai/dsh-client-ui-theme` 的客户端 bundle 里，令牌被拆成 **8 个全局 sheet**，统一在 `apply()` 里由 `installThemeStyles()` 挂载（每个 sheet 一个 `<style data-plugin data-plugin-css>`，并通过 `ctx.effect` 在插件卸载时移除）：
 
@@ -53,11 +51,11 @@ function installThemeStyles(ctx) {
 - **`shiki.css`**：`--shiki-*` 代码高亮配色，含 `body[data-ds-dark-theme]` 暗色覆盖。
 - **`corner-shape.css`**：`@supports (corner-shape: superellipse(1.5))` 下的圆角形状开关。
 
-> 也就是说，原文档「theme 里就 3 处注入（AppearanceRow.module.css / FontSizeRow.module.css / base.css）」是不完整的。真实情况是：**2 个 CSS Module sheet（自注入）+ 8 个全局 inline sheet（apply 里挂载）**。而暗色覆盖 `body[data-ds-dark-theme]` 也不是只在 `base.css` 里，而是分散在 `design-platform.css`、`onboarding.css`、`gradient-shadow-text.css`、`shiki.css` 等多个 sheet 中。
+theme 包的 CSS 注入合计 **2 个 CSS Module sheet（自注入）+ 8 个全局 inline sheet（`apply()` 里挂载）**；暗色覆盖 `body[data-ds-dark-theme]` 分散在 `design-platform.css`、`onboarding.css`、`gradient-shadow-text.css`、`shiki.css` 等多个 sheet 中。
 
 ### 4.2 除 theme 外，其它 `dsh-client-ui-*` 也各自内联自己的 CSS Module
 
-theme 只是其中一个例子。其它 UI 包（chat / conversation / tool / primitives / sidebar-* / …）的 `.module.css` 也走同一套 `\0dsh-css:` 虚拟模块，被内联进各自的 `lib/client.js`，在物化时自注入 `<style data-plugin-css>`。所以一个页面最终会有**很多条**带 `data-plugin-css` 的 `<style>`，每条归某个包所有。
+其它 UI 包（chat / conversation / tool / primitives / sidebar-* / …）的 `.module.css` 也走同一套 `\0dsh-css:` 虚拟模块，被内联进各自的 `lib/client.js`，在物化时自注入 `<style data-plugin-css>`。所以一个页面最终会有**很多条**带 `data-plugin-css` 的 `<style>`，每条归某个包所有。
 
 ### 4.3 模块系统如何回收这些 `<style>`
 
@@ -66,4 +64,4 @@ theme 只是其中一个例子。其它 UI 包（chat / conversation / tool / pr
 - `claimStyles(id)`：物化一个工厂时，把「工厂执行期间注入的、还没打 `data-plugin` 标记的 `<style>`」认领到该插件名下（`el.setAttribute("data-plugin", id)`），并收集其 `data-plugin-css` 值。
 - `removeOwnedStyles(id)`：卸载 / 刷新某插件时，删除所有 `style[data-plugin="<id>"]`。
 
-这套机制让「运行时注入的 CSS」拥有了和插件生命周期一致的清理语义。
+于是运行时注入的 CSS 拥有与插件生命周期一致的清理语义。
