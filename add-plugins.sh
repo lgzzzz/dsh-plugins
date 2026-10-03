@@ -15,7 +15,6 @@ PLUGINS=(
   dsh-header-action-order
   dsh-ui-css-patches
   dsh-workspace-activity-sort
-  dsh-workspace-auto-sort
 )
 
 failed=()
