@@ -1,0 +1,7 @@
+# dsh-workspace-auto-sort 的挂载行：随 dsh.profile.bundles 自动挂载。
+# 只有宿主半部（index.ts，Node Type Stripping 直载，无构建产物）：它盯住
+# workspace 注册表的持久顺序，按配置重算后用注册表自己的 insertBefore 落盘；
+# 浏览器侧通过 workspace 控制器的 follow() 增量自然跟随，无需任何客户端代码。
+- insert:
+    - id: dsh-workspace-auto-sort
+      name: dsh-workspace-auto-sort
