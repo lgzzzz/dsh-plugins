@@ -180,7 +180,17 @@ return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallba
 
 > 注意这一条的让位语义与停止序列同源：内置 stop guard 的归属检查里也写着 `target.closest("[data-approval-key], iframe, .xterm, [inert]")`——**只要目标落在审批控件里，内置序列就主动放弃**。本插件沿用同一个标记做让位（见 [第 5 册](05-approval-key-bridge.md)）。
 
-### 3.5 为什么"点一下"就好了
+### 3.5 提问卡片：`Esc` 在任何焦点位置都没有主人
+
+审批面板是"要先聚焦才生效"；提问卡片（`ask_user_question` 的 composer 顶替卡片）比它更彻底：**它压根没绑 `Esc`**。
+
+- 卡片根节点带 `[data-question-key]`（plan-review 卡片换成 `[data-plan-review-key]`），组件里只有两处 `keydown`：聚焦选项上的 `Enter`（尝试提交整组答案）与自定义答案文本域上的 `Enter`（继续 / 提交，`Shift+Enter` 换行）。**没有任何一处读 `Escape`**。
+- 卡片唯一的出口是头部那个关闭 / 取消按钮，它调 `PendingQuestion.dismiss()`。
+- "停止"这条路也不接管：内置 `currentTurn()` 与本插件的 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛（[第 4 册](04-stop-sequence-bridge.md) 第 5.4.3、5.5 节），有待答交互时不停止、也不消费。
+
+所以"点一下卡片"在这里**救不了**：焦点落在卡片里（自由文本问题还会自动把焦点放进它的答案文本域），那一按依然没有 owner——这与审批面板不同，点进审批详情区就能让面板自己接手。唯一能做的是走固定输入通道，把这一按接到面板那个按钮调的同一个操作上：这正是 [第 5 册](05-approval-key-bridge.md) 第 5.6.3、5.7 节讲的提问桥。
+
+### 3.6 为什么"点一下"就好了
 
 点击（pointerdown）会**把焦点搬进那个容器**：
 
@@ -190,7 +200,7 @@ return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallba
 
 所以"先点一下"不是巧合，也不是什么隐藏机制，而是**手动把下一次按键的 target 修对了**。本插件要做的，就是在这两步之间插入一个"不需要手动点"的兜底。
 
-### 3.6 为什么改键位 / 换绑定没用
+### 3.7 为什么改键位 / 换绑定没用
 
 拒绝发生在**归属判定**这一步，而不是"按哪个键触发"这一步。
 

@@ -8,20 +8,21 @@
 
 既然根因是"归属判定读焦点"，那就**换一个不依赖焦点的归属判定来源**，同时**只在确定自己该接管时才出手**，避免和内置命令打架。
 
-本插件做的四件事：
+本插件做的是这几件事：
 
-1. **不注册任何可配置命令**：不往 shortcut catalog 里加可配置命令，因此没有默认键位、没有冲突、不需要改设置。（例外：聚焦输入框与页面循环这两把键官方不存在，插件各为它们挂一条**固定键**——只读预约、不可改绑，见下面第 4 点。固定键与可配置命令是两套目录，不产生"改设置"负担。）
+1. **不注册任何可配置命令**：不往 shortcut catalog 里加可配置命令，因此没有默认键位、没有冲突、不需要改设置。（例外：聚焦输入框与页面循环这两把键官方不存在，插件各为它们挂一条**固定键**——只读预约、不可改绑，它们各自的归属判定见下面第 3 点的最后两条。固定键与可配置命令是两套目录，不产生"改设置"负担。）
 2. **挂在固定输入通道上，先于内置命令观察每一次按键**，并能在合适的时候 `consume()`（= 接管这一按）。
 3. **用不读焦点的来源做归属判定**：
    - 面板键 → 用 `sidebarRight.commandTarget()` 的"活动 dock pane"回退（这正是 `sidebar.right.toggle` 那个"在哪儿按都能展开侧栏"的键用的同一机制）；
    - 停止 → 用 `sessions.list` 里"主视图正在持有的会话"来定位要停的会话，再调该会话上的 `conversation.cancel()`；
    - 审批键 → 用同一条"主视图持有的会话"取出它当前发布的 `pendingInteraction`（`{ kind: 'approval', answerable, answer() }`），再调面板按钮用的同一个 `answer()`；
+   - 提问卡片 → 用同一条"主视图持有的会话"取出它当前发布的 `pendingInteraction`，**收窄到提问域**（`kind` 为 `question` / `plan-review`、`key` 是字符串、带 `dismiss()`），再调卡片关闭 / 取消按钮用的同一个 `dismiss()`（**从不**调 `answer()`）；审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按；
    - 聚焦输入框 → 用同一条"主视图持有的会话"找到它的 scope，再经 `conversation.input.for(scope)` 取到 composer 的输入面，调它的 `focus()`（与应用自己在遮罩结束后把键盘还给输入框用的是同一个操作，光标位置也会还原）；
    - 页面切换 → 用 `sidebar.mounted`（右侧栏正在画的会话）取页面列表（`tabsIn`）与当前页（`active()`），`focus(tabId)` 切页（与点击芯片同一操作、记入布局历史）；store commit 通常异步渲染，所以切页后**在下一帧**把键盘交给新显示的页面（`focusShownPage`，页面自聚焦如终端时则不抢）。
 
-   页面切换比其它四组多一条**捕获阶段拦截**：固定输入通道挂在 window 的冒泡监听上，而终端在它自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`——焦点在终端里时，按键根本到不了通道。所以这组桥还在 window **捕获阶段**挂了一个 keydown 监听（早于一切冒泡/目标处理器），只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C` 塞给 shell），其余按键放行给通道；两路共用同一个判定。这就是"焦点在终端里依然能切页"的实现方式。
+   页面切换比其它五组多一条**捕获阶段拦截**：固定输入通道挂在 window 的冒泡监听上，而终端在它自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`——焦点在终端里时，按键根本到不了通道。所以这组桥还在 window **捕获阶段**挂了一个 keydown 监听（早于一切冒泡/目标处理器），只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C` 塞给 shell），其余按键放行给通道；两路共用同一个判定。这就是"焦点在终端里依然能切页"的实现方式。
 
-下面从 [第 5 节](03-solution-overview-and-pane-keys.md) 起把这些机制一条一条展开（面板键 → [第 4 册](04-stop-sequence-bridge.md) 停止序列 → [第 5 册](05-approval-key-bridge.md) 审批键），聚焦输入框与页面循环这两把新键的逐行说明放在 [第 6 册](06-comparison-boundaries-contracts.md) 的对照与边界里。
+下面从 [第 5 节](03-solution-overview-and-pane-keys.md) 起把这些机制一条一条展开（面板键 → [第 4 册](04-stop-sequence-bridge.md) 停止序列 → [第 5 册](05-approval-key-bridge.md) 审批键与提问卡片），聚焦输入框与页面循环这两把新键的逐行说明放在 [第 6 册](06-comparison-boundaries-contracts.md) 的对照与边界里。
 
 ---
 
