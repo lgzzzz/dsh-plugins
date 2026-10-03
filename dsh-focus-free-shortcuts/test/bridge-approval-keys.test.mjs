@@ -3,14 +3,44 @@
  * 覆盖无焦点作答、面板让位、无待答与已作答、别的待答域、准入否决(文本控件 / 终端 /
  * 模态 / repeat / 组字 / 已被消费)、主视图歧义、别的会话的审批、固定行缺失、
  * 服务缺失即不装、答案拒绝告警,以及卸载复位。
+ * I⑧–I⑪ 是同一条桥的第二个投递路径 —— **捕获阶段**抢先:焦点停在某张过程卡片
+ * (工具卡 `div[role="button"][tabindex="0"]` / 轨迹行 `tr[tabindex="0"]`)上时,
+ * 卡片自己的 React keydown 会在冒泡阶段的固定通道之前 `preventDefault()` 并折叠 /
+ * 选中,所以桥在 window 捕获阶段先于一切目标 / 冒泡处理器拦下,两路共用同一判定。
  *
  * 运行:`node test/bridge-approval-keys.test.mjs`(或 pnpm test 跑全部)。
  */
-import { applyPlugin, captureWarnings, check, checkTrue, domApproval, domBody, domComposer, fakeShortcuts, fakeSidebar, fakeSessions, fakeUiSession, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, sleep, statusWith, approvalPending } from './helpers.mjs'
+import { applyPlugin, approvalPending, captureWarnings, check, checkTrue, domApproval, domBody, domComposer, FakeElement, fakeDocument, fakeKeyEvent, fakeShortcuts, fakeSidebar, fakeSessions, fakeUiSession, fakeWindow, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, sleep, statusWith } from './helpers.mjs'
 
 /** 装配一个"主视图 s1 正挂着一条待答审批"的场景。 */
 function withPending(pending, options = {}) {
   return harness({ ...options, uiSession: fakeUiSession({ status: statusWith('s1', pending) }) })
+}
+
+/** 一张焦点停在它上面的过程卡片:工具卡 / 轨迹行的共同形状(可聚焦 + 自己消费 Enter)。 */
+function staleCard(app) {
+  return app.append(new FakeElement('div', { role: 'button', tabindex: '0' }))
+}
+
+/**
+ * 置入假 document / 假 window(审批捕获钩子装在 window 上),用完即还原。
+ * 捕获路径的用例必须先把 window 放上全局,`harness()` 里的 `apply` 才会装上监听;
+ * `emit` 只调用与 `phase` 相符的那批监听(默认捕获阶段)。
+ */
+function withApprovalDom({ app, activeElement = null, window = fakeWindow() } = {}) {
+  const previousDocument = globalThis.document
+  const previousWindow = globalThis.window
+  globalThis.document = fakeDocument({ root: app, activeElement })
+  globalThis.window = window
+  return {
+    window,
+    restore() {
+      if (previousDocument === undefined) delete globalThis.document
+      else globalThis.document = previousDocument
+      if (previousWindow === undefined) delete globalThis.window
+      else globalThis.window = previousWindow
+    },
+  }
 }
 
 console.log('--- I① 无焦点:Enter 允许一次、Esc 拒绝 ---')
@@ -175,6 +205,216 @@ console.log('--- I⑦ 卸载:固定监听全部释放 ---')
   const press = keydown(gesture('Enter'), shortcutContext({ target: domBody }))
   shortcuts.emit(press.input)
   check('释放后不再消费', press.consumed.count, 0)
+}
+
+console.log('--- I⑧ 捕获阶段抢先:焦点停在过程卡片上,Enter / Esc 直接答审批 ---')
+{
+  const app = new FakeElement('div', { 'data-app': '' })
+  const card = staleCard(app)
+  const dom = withApprovalDom({ app, activeElement: card })
+  const pending = approvalPending()
+  try {
+    withPending(pending)
+    const enter = fakeKeyEvent({ path: [card, app], code: 'Enter' })
+    dom.window.emit(enter)
+    check('卡片焦点上的 Enter → 允许一次', pending.answers, ['allowed-once'])
+    check('这一按在捕获阶段就被吞掉(卡片与固定通道都收不到)', [enter.prevented, enter.stopped], [1, 1])
+
+    const escape = fakeKeyEvent({ path: [card, app], code: 'Escape' })
+    dom.window.emit(escape)
+    check('卡片焦点上的 Esc → 拒绝', pending.answers, ['allowed-once', 'rejected'])
+    check('Esc 同样被吞', [escape.prevented, escape.stopped], [1, 1])
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- I⑨ 捕获路径让位:面板内 / 文本控件 / 终端 / 模态 / 长按 / 组字 / 别的键 ---')
+{
+  const cases = [
+    {
+      label: '目标落在面板内',
+      make: (app) => {
+        const panel = app.append(new FakeElement('div', { 'data-approval-key': 'approval:1' }))
+        return panel.append(new FakeElement('button'))
+      },
+    },
+    { label: '文本控件内', make: (app) => app.append(new FakeElement('textarea')) },
+    { label: '终端内', make: (app) => app.append(new FakeElement('div', { class: 'xterm' })) },
+    {
+      label: '模态层之上',
+      make: (app) => {
+        app.append(new FakeElement('div', { role: 'dialog', 'aria-modal': 'true' }))
+        return staleCard(app)
+      },
+    },
+    { label: '长按重复', make: (app) => staleCard(app), overrides: { repeat: true } },
+    { label: '组字中', make: (app) => staleCard(app), overrides: { isComposing: true } },
+    { label: '别的键', make: (app) => staleCard(app), overrides: { code: 'KeyK' } },
+    { label: '带修饰键', make: (app) => staleCard(app), overrides: { shiftKey: true } },
+    {
+      label: '路径上没有元素时回退到焦点(焦点在面板内)',
+      make: (app) => {
+        const panel = app.append(new FakeElement('div', { 'data-approval-key': 'approval:1' }))
+        return panel.append(new FakeElement('button'))
+      },
+      path: () => [],
+    },
+  ]
+  for (const { label, make, overrides = {}, path } of cases) {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const target = make(app)
+    const dom = withApprovalDom({ app, activeElement: target })
+    const pending = approvalPending()
+    try {
+      withPending(pending)
+      const event = fakeKeyEvent({ path: path === undefined ? [target, app] : path(app), code: 'Enter', ...overrides })
+      dom.window.emit(event)
+      check(`${label}:不代答`, pending.answers, [])
+      check(`${label}:不吞事件`, [event.prevented, event.stopped], [0, 0])
+    } finally {
+      dom.restore()
+    }
+  }
+}
+
+console.log('--- I⑩ 捕获路径让位:无待答 / 行缺席 / 已作答 / 主视图歧义 / 别的会话 ---')
+{
+  const scenarios = [
+    { label: '没有待答审批', pending: null, build: () => harness() },
+    { label: '审批插件未装载(无固定行)', pending: approvalPending(), build: (pending) => withPending(pending, { fixedRows: [] }) },
+    { label: '审批已作答', pending: approvalPending({ answerable: false }), build: (pending) => withPending(pending) },
+    {
+      label: '主视图歧义(两个主视图)',
+      pending: approvalPending(),
+      build: (pending) => withPending(pending, { summary: { s1: session('s1'), s2: session('s2') } }),
+    },
+    {
+      label: '审批属于别的会话',
+      pending: approvalPending(),
+      build: (pending) => harness({
+        summary: { s1: session('s1'), s2: { id: 's2', running: true, retainedBy: {} } },
+        uiSession: fakeUiSession({ status: statusWith('s2', pending) }),
+      }),
+    },
+  ]
+  for (const { label, pending, build } of scenarios) {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const card = staleCard(app)
+    const dom = withApprovalDom({ app, activeElement: card })
+    try {
+      build(pending)
+      const event = fakeKeyEvent({ path: [card, app], code: 'Enter' })
+      dom.window.emit(event)
+      if (pending !== null) check(`${label}:不代答`, pending.answers, [])
+      check(`${label}:不吞事件`, [event.prevented, event.stopped], [0, 0])
+    } finally {
+      dom.restore()
+    }
+  }
+}
+
+console.log('--- I⑪ 卸载:捕获监听随桥一起释放 ---')
+{
+  const app = new FakeElement('div', { 'data-app': '' })
+  const card = staleCard(app)
+  const dom = withApprovalDom({ app, activeElement: card })
+  const pending = approvalPending()
+  try {
+    const { ctx } = withPending(pending)
+    const before = fakeKeyEvent({ path: [card, app], code: 'Enter' })
+    dom.window.emit(before)
+    check('卸载前:捕获作答', pending.answers, ['allowed-once'])
+    check('卸载前:吞事件', [before.prevented, before.stopped], [1, 1])
+
+    for (const effect of ctx.effects) {
+      if (typeof effect.dispose === 'function') effect.dispose()
+    }
+    check('释放后 window 上不留捕获监听(页面循环桥的一并释放)', dom.window.listeners.size, 0)
+
+    const after = fakeKeyEvent({ path: [card, app], code: 'Enter' })
+    dom.window.emit(after)
+    check('卸载后:不再作答', pending.answers, ['allowed-once'])
+    check('卸载后:不吞事件', [after.prevented, after.stopped], [0, 0])
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- I⑫ 作答后的焦点环:被按下过的控件不再画边框 ---')
+{
+  const MARKER = 'data-dsh-automatic-focus'
+  const navKey = (key, overrides = {}) => ({ key, isComposing: false, ctrlKey: false, altKey: false, metaKey: false, ...overrides })
+
+  // ① 捕获路径:焦点停在工具行上 → 作答、打上"无环聚焦"标记,且不移动焦点。
+  {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const card = staleCard(app)
+    const dom = withApprovalDom({ app, activeElement: card })
+    const pending = approvalPending()
+    try {
+      withPending(pending)
+      dom.window.emit(fakeKeyEvent({ path: [card, app], code: 'Enter' }))
+      check('捕获路径作答', pending.answers, ['allowed-once'])
+      checkTrue('工具行被打上无环标记', card.hasAttribute(MARKER))
+      check('焦点没有被移动', card.focusCount, 0)
+      card.dispatch('keydown', navKey('Control', { ctrlKey: true }))
+      checkTrue('带修饰键的按键不解除标记', card.hasAttribute(MARKER))
+      card.dispatch('keydown', navKey('Tab'))
+      check('Tab 导航后恢复常规焦点样式', card.hasAttribute(MARKER), false)
+      check('释放后不留下监听', card.listenerCount('keydown'), 0)
+    } finally {
+      dom.restore()
+    }
+  }
+
+  // ② blur 同样释放标记。
+  {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const card = staleCard(app)
+    const dom = withApprovalDom({ app, activeElement: card })
+    try {
+      withPending(approvalPending())
+      dom.window.emit(fakeKeyEvent({ path: [card, app], code: 'Enter' }))
+      checkTrue('先打上标记', card.hasAttribute(MARKER))
+      card.dispatch('blur', {})
+      check('失焦后移除标记', card.hasAttribute(MARKER), false)
+      check('解除后不留下监听', card.listenerCount('blur'), 0)
+    } finally {
+      dom.restore()
+    }
+  }
+
+  // ③ 观察者路径(焦点在页面控件上、固定通道自己消费了这一按)同样处理。
+  {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const control = app.append(new FakeElement('button'))
+    const dom = withApprovalDom({ app, activeElement: control })
+    const pending = approvalPending()
+    try {
+      const { shortcuts } = withPending(pending)
+      const press = keydown(gesture('Enter'), shortcutContext({ target: control }))
+      shortcuts.emit(press.input)
+      check('观察者路径作答', pending.answers, ['allowed-once'])
+      checkTrue('观察者路径也打标记', control.hasAttribute(MARKER))
+    } finally {
+      dom.restore()
+    }
+  }
+
+  // ④ 目标不是当前焦点(焦点不在任何控件上)→ 不打标记、不动任何东西。
+  {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const card = staleCard(app)
+    const dom = withApprovalDom({ app, activeElement: null })
+    try {
+      withPending(approvalPending())
+      dom.window.emit(fakeKeyEvent({ path: [card, app], code: 'Enter' }))
+      check('目标不是焦点时不打标记', card.hasAttribute(MARKER), false)
+    } finally {
+      dom.restore()
+    }
+  }
 }
 
 finish()

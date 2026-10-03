@@ -21,6 +21,9 @@
 | 焦点在审批详情区，按 `Enter` / `Esc` | 面板自己作答（允许一次 / 拒绝） | 让位，不动作、不消费（目标落在 `[data-approval-key]` 内） |
 | 焦点在 `<body>`（审批把 composer 隐掉后焦点退回），按 `Enter` | 无人处理（面板收不到这一按） | 主视图会话的审批：允许一次 |
 | 同上，按 `Esc` | 无人处理 | 主视图会话的审批：拒绝（一下即拒，不走双按停止） |
+| 焦点停在某张**过程卡片**上（工具卡 `div[role="button"][tabindex="0"]` / 轨迹行 `tr[tabindex="0"]`），按 `Enter` | 卡片自己折叠 / 选中：卡片自己的 React 处理器先跑并 `preventDefault()`，等这一按冒泡到固定通道时已被认领，审批无人处理 | 主视图会话的审批：允许一次，且**卡片收不到这一按**（捕获路先 `stopPropagation()` 再作答，卡片不再折叠 / 选中） |
+| 同上，按 `Esc` | 无人处理（卡片只绑 `Enter` / `Space`，这一按冒泡到固定通道后由审批桥按旧路拒绝） | 主视图会话的审批：拒绝（捕获路合规则由捕获路拦下，否则固定通道接手；两条路互斥，不双答） |
+| 同上，作答之后那张卡片的外观 | 卡片被再次折叠 / 选中；作答后可能留下一圈焦点边框（作答把键盘交回 composer，应用切到键盘模态，`html[data-input-modality]` 一变，卡片原本透明的 `:focus-visible` 环就显形了） | 卡片收不到这一按、**且不留焦点边框**：桥在拿走这一按的同时给该控件打上 `data-dsh-automatic-focus`（官方"无环聚焦"标记），焦点未移动，环不显形；下一次 Tab / 方向键导航或失焦即恢复正常焦点样式 |
 | 有待答审批时按 `Esc` | 不停止（`currentTurn()` 因待答返回 `undefined`） | 不停止，改为拒绝该审批 |
 | 有待答提问时按 `Esc` | 不停止（`currentTurn()` 因待答返回 `undefined`），也没有任何一方取消卡片（卡片自己完全不绑 `Esc`） | 不停止，改为取消该提问（调卡片关闭 / 取消按钮的同一个 `dismiss()`，一下即取消，不走双按停止） |
 | 待答提问是提问卡片（`kind === 'question'`）里"带工具调用线索"的那一类（`dismissal === 'hide'`） | 无人处理 | `dismiss()` 只收起面板：请求继续、倒计时照跑，问题仍可从它的 `ask_user_question` 工具调用行重新打开 |
@@ -71,6 +74,8 @@
 | 待答审批属于别的会话（如后台子代理） | 不代答 | composer 顶替面板只渲染"当前会话"的待答交互；别的会话的审批在插件这条路上没有可见面板，代答等于替用户做了一个他没看见的决定。 |
 | 待答交互不是审批（如提问） | 不代答 | `pendingInteraction` 这个槽位是复用域；`asAnswerableApproval` 要求 `kind === 'approval'`，别的域留给它自己的 UI（提问域由第 6 组的提问桥接手，见第 5 册第 5.6.3、5.7.1 节）。 |
 | 审批已作答 / 已撤销 / 被中止（`answerable === false`） | 不代答、不消费 | 请求已定局，再答会被 `PendingApproval` 的锁拒绝；插件提前让位，把这一按留给别的 owner。 |
+| 焦点停在过程卡片上（工具卡 / 轨迹行，卡片自己会用 `preventDefault()` 消费 `Enter`） | 照常代答，并吞掉这一按 | 固定通道是 window **冒泡**监听，晚于卡片自己的 React 处理器——那一按到不了它，或者到了也已读成"被消费"。所以审批桥另挂 window **捕获**监听，在卡片之前读到同一按，命中即 `preventDefault() + stopPropagation()`：卡片完全收不到，审批照常作答。 |
+| 作答后按下的那个控件 | 保留焦点，但**不画焦点边框**（打上 `data-dsh-automatic-focus`） | 作答会把键盘交回 composer，应用随即切到键盘模态（`input-modality` 跟踪器的"按键之后焦点落到别的控件"分支），此后 `:focus-visible` 的环色不再是透明——被按下的控件自己没做错任何事，却会因此显出一圈边框。桥在拿走按键的同时给该控件打上官方"无环聚焦"标记，焦点位置不变；下一次 Tab / 方向键导航或失焦时按官方同一套释放规则摘除标记，恢复正常焦点样式。若上游改了这个属性名，最坏情形是边框照旧出现（回到修复前的观感），不误动作。 |
 | 审批键被按下时焦点在 `editable` 或 `terminal` 区域 | 不代答、不消费 | 与面板自己的守卫同源："输入控件与 IME 候选保持自己的按键"。正常路径上 composer 已被顶替隐藏、焦点退回 `<body>`（`page`），所以这条不会挡住用户的正常操作。 |
 | 模态层打开时按审批键 | 不代答、不消费 | 模态层之上的按键属于模态层（Web/Linux 的模态层本来就会挡住后台命令）；此时审批面板在模态层之下，代答会越过用户正在看的界面。 |
 | `answer()` 拒绝（返回 rejected Promise） | 捕获并告警，不冒泡 | 与 `cancel()` 同理，避免未处理的 Promise 拒绝污染控制台/运行时。 |
@@ -93,7 +98,7 @@
 | 右侧栏折叠 / 只有一张页面 / 没有活动页 / 没有会话，按 `Ctrl+Alt+←/→` | 不动作、不消费 | 折叠时没有"当前显示的页面"可切换；页面数少于两张、当前页不在列表、或没有 on-screen 会话时没有可切的目标。这与面板键的"折叠即让位"同一条边界。 |
 | 页面循环顺序 | 按 `tabsIn()`（`layout.tabs` 的记录顺序，≈ 打开顺序）循环，跨分屏 / 浮动 pane 一起循环 | 切页走公开服务面（`tabsIn` / `active` / `focus`），就没有可读的 DOM 条带顺序；拖拽改序后循环顺序保持记录顺序不变。 |
 | 终端里按 `Ctrl+Alt+←/→` | 照常切页并消费 | xterm 对“方向键 + 修饰”产出 `\x1b[1;7D` / `\x1b[1;7C` 转义序列并 `preventDefault()+stopPropagation()`——事件到不了 window 冒泡上的固定通道，观察者收不到、也就没法动作。所以本桥在 window **捕获阶段**另挂一个 keydown 监听（早于一切目标 / 冒泡处理器），**只**对会落进 `.xterm` 的按键拦下：判定与通道共用 `pageCycleTarget`，命中即 `preventDefault()+stopPropagation` 吞掉、顺带不让转义序列进 shell，未命中就放行。文本控件不吞箭头键，仍走通道；两条路共用同一判定、互斥不双触发。 |
-| 其它也会 `stopPropagation` 的本地控件（若有） | 该按到不了通道 | 捕获钩子目前只认 `.xterm`（迄今唯一会为这些键停掉事件的本地控件）；若将来出现别的这类控件，需在同一钩子里补上它的范围，否则那一处焦点下无法切页。 |
+| 其它也会 `stopPropagation` / `preventDefault` 的本地控件（若有） | 该按到不了通道，或到了也已读成"被消费" | 页面循环桥的捕获钩子**只认 `.xterm`**：它抢的是 `Ctrl+Alt+←/→`，那是终端唯一会为它停掉事件的组合，若将来出现别的会吞这对方向键的控件，需在同一钩子里补上它的范围。审批桥的捕获钩子则是**全 page 区域抢 `Enter` / `Esc`**（准入与让位同固定通道），所以"自己消费 `Enter` 的过程卡片"这一类已经由它兜住——焦点落在卡片上时那一按不会再被卡片吃掉。 |
 | 切页后的自动聚焦 | 只补位、不抢键盘 | `sidebar.focus()` 提交的是 store 变更，React 异步渲染，所以桥在**下一帧**才定位新显示的 pane（`[data-sidebar-right-session]` 根 + 带 `-active` 标记的可见 pane）。若新页面自己聚焦了（终端 body 在 `visible` 变化时聚焦 xterm），`document.activeElement` 已落在 pane 内，桥不碰键盘。 |
 | 快捷键**展开**右栏（`sidebar.right.toggle`） | 面板确认展开后把键盘交到活动页自己的输入面（终端的 xterm） | 内置 toggle 走 `openWithPaneFocus`：`flushSync` 提交展开后**同步**聚焦活动 **pane 容器**——这一步发生在终端"`visible` 变化时自聚焦"之后，把刚落到 xterm 的焦点顶掉，此后 `visible` / `writable` 不再变化，终端不会二次自聚焦。所以展开路径不能沿用"页面自聚焦就让位"的假设：补位**不假定展开与按键同步**，以 50ms 间隔有界轮询（≤800ms）`sidebar.isExpanded()`，面板一确认展开就在下一帧调用 `focusShownPage`；当焦点停在 pane 容器本身、而该页有输入面（`.xterm-helper-textarea`，`readOnly` 视为页面自己拒绝）时补位聚焦它；页面内部控件已持键盘则仍不碰。这一按**不消费**，owner 仍是内置 toggle；窗口内面板始终没展开则放弃（如按键被别的消费）。 |
 
@@ -122,3 +127,7 @@
 13. `pendingInteraction` 槽位的**提问域运行时形状**：类型就是 `@deepseek-ai/dsh-client-ui-user-questions/client` 的 `PendingQuestion`，但该槽位是复用的，所以 `asDismissableQuestion` 仍在运行时确认 `kind` 为 `'question'` 或 `'plan-review'`、`key` 为字符串、`dismiss` 为函数之后才代关（第 6 条是审批侧的同一条约定；两侧共用同一个槽位、靠 `kind` 分工，谁都不越界）。
 14. DOM 标记 `[data-question-key]` / `[data-plan-review-key]`（提问卡片两处根节点携带请求 key 的属性名）：`questionCardOwnsTarget` 先用 `closest('[data-question-key], [data-plan-review-key]')` 找到卡片，再要求**该元素自身的属性值恰好等于本次待答提问的 `key`**——因此过期卡片、另一次调用的 review 卡片、以及没有 `getAttribute` 的裸节点都匹配不上。这是与官方提问卡片渲染之间的非正式契约：若上游改了标记名、或把 key 挪到子节点上，`editable` 区域内的 `Esc` 会退化成"不再取消"（不误动作），而卡片之外的文本控件本来就保留自己的 `Esc`。
 15. `PendingQuestion.dismiss()` 的语义（卡片关闭 / 取消按钮调用的同一个公开动词），按上游卡片的形状分三种：提问卡片（`kind === 'question'`）带工具调用线索时是 `hide`——只收起面板，请求继续等待、倒计时照跑，`ask_user_question` 的工具调用行能重新打开它；同一 `kind` 里 Host 未命名（没带 `wait`，因而没有 call id）的阻塞式请求则把整个等待拒绝为 `ASK_CANCELLED`（按钮自己的标签是「取消」/「放弃整组问题」/「Dismiss all questions」）；**活着的** plan-review 卡片（`kind === 'plan-review'`，`exit_plan_mode` 的 Approve / Request changes）的 `dismiss()` 就是「Request changes」按钮的动词，同样是"带线索收起面板 / 未命名以 `ASK_CANCELLED` 结束等待并把 composer 交回写反馈"；而从 `ask_user_question` 工具调用行重新打开的只读 review 卡片（`review !== undefined`，可承载两种 `kind`）是回看、没有作答通道也没有倒计时，`dismiss()` 就是 `card.remove`。插件**只**调这一个动词、从不调 `answer()`，所以 `Esc` 与"点关闭 / 取消按钮"永远同义；若上游改了 `dismiss()` 的语义，取消行为会跟着变（但不会变成代答）。
+16. **焦点环的两块拼图**（`src/focus-ring.ts` 为此而写，两处都与官方同源、都必须同时成立才会画出边框）：
+    - `html[data-input-modality]` 属性由 shell（`@deepseek-ai/dsh-client-ui-primitives` 的 `src/input-modality.ts`，随 web 前端 bundle 在**页面加载时**注册，早于任何客户端插件）发布：`pointerdown` 发布 `pointer`；**非组字的导航键**（Tab / 方向键 / Home / End / PageUp / PageDown），或**非组字按键之后焦点落在另一个控件上**，发布 `keyboard`；同一个控件重新聚焦不算。
+    - 焦点环本身来自 `@deepseek-ai/dsh-client-ui-theme` 的 `focus.css`：`:focus-visible{outline-color:var(--dsw-focus-ring-color,…);outline-width:var(--dsw-focus-ring-width)}`，并在 `html[data-input-modality=pointer] body :focus-visible:not(:read-write)` 下把环色设为透明——所以指针模态下不画环，键盘模态下才画。
+    17. `data-dsh-automatic-focus` 标记（官方 `focusWithoutRing(element)` 用的同一个属性）：主题的 `base.css` 把它翻成 `[data-dsh-automatic-focus]:focus{outline:none}`，官方在 blur 或导航键（Tab / 方向键 / Home / End）时移除标记、恢复正常焦点样式。本插件在"把按键从某个控件手里拿走"之后给该控件打上同一标记，从而**不移动焦点**地去掉那圈边框，并按同一套释放规则在 `src/focus-ring.ts` 里自行摘除（本 bundle 不引入 primitives 的运行时依赖）。若上游改了这个属性名或释放规则，最坏情形是边框照旧出现（回到修复前的观感），不误动作。
