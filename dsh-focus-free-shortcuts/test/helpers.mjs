@@ -209,7 +209,9 @@ export const PLAN_REVIEW_KEY = 'question:s1:call-2'
 /**
  * 值感知的假元素:属性带值(`FakeNode` 的 `attrs` 集合仍兼任"存在性"匹配,
  * `closest` 因此照常用)。本插件页面循环的 DOM 步只读存在性选择器 + 一个
- * 值比较(`data-sidebar-right-session`),与真实 HTML 元素足够同形。
+ * 值比较(`data-sidebar-right-session`),与真实 HTML 元素足够同形;
+ * `data-dsh-automatic-focus` 的"无环聚焦"标记则要求真实的属性写入与
+ * `blur` / `keydown` 监听,所以这里也登记监听。
  */
 export class FakeElement extends FakeNode {
   constructor(tag = 'div', attributes = {}) {
@@ -221,6 +223,22 @@ export class FakeElement extends FakeNode {
     }
     this.focusCount = 0
     this.lastFocusOptions = undefined
+    this.listeners = new Map()
+  }
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) ?? new Set()
+    listeners.add(listener)
+    this.listeners.set(type, listeners)
+  }
+  removeEventListener(type, listener) {
+    this.listeners.get(type)?.delete(listener)
+  }
+  /** 手动派发一个合成事件给本元素的监听(测试用;不做冒泡)。 */
+  dispatch(type, event = {}) {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) listener(event)
+  }
+  listenerCount(type) {
+    return this.listeners.get(type)?.size ?? 0
   }
   getAttribute(name) {
     return this.values.has(name) ? this.values.get(name) : null
@@ -231,6 +249,10 @@ export class FakeElement extends FakeNode {
   setAttribute(name, value) {
     this.attrs.add(name)
     this.values.set(name, value)
+  }
+  removeAttribute(name) {
+    this.attrs.delete(name)
+    this.values.delete(name)
   }
   querySelectorAll(selector) {
     const found = []
@@ -281,7 +303,8 @@ export function fakeDocument({ root, activeElement = null } = {}) {
 
 /**
  * 假 window:只登记捕获/冒泡阶段的 keydown 监听,`emit` 按注册顺序调用与
- * `phase` 相符的那批。页面循环桥的捕获钩子是这里唯一的常驻监听,足够仿真。
+ * `phase` 相符的那批。页面循环桥(终端)与审批桥(过程卡片)各挂一个捕获钩子,
+ * 是这里的常驻监听,足够仿真。
  */
 export function fakeWindow() {
   const listeners = new Set()

@@ -34,18 +34,21 @@
  *
  * Being the page-stepper is why this group keeps working **from inside a
  * page**: the press is accepted in every input region, including `terminal`
- * and `editable`. But a focused terminal is also the one place the DOM channel
+ * and `editable`. But a focused terminal is also one place the DOM channel
  * cannot reach: xterm owns every key it handles and calls `stopPropagation()`
  * on its textarea handler, so the keydown never ascends to the window-level
  * fixed-input listener — a press the observer never receives is a press the
- * observer cannot act on. This group therefore takes the extra step the other
- * four never need: a **capture-phase** `keydown` listener on the window that
- * runs *before* the event descends into the terminal, and withholds the press
- * exactly when the event would land inside `.xterm` — the one local control
- * the channel cannot outrun. Withholding there also stops the escape sequence
- * (`\x1b[1;7D` / `\x1b[1;7C`) xterm would otherwise send to the shell. Every
- * other press keeps flowing to the observer, so the two paths never act on the
- * same event; both paths run the same decision (`pageCycleTarget`).
+ * observer cannot act on. This group therefore installs a **capture-phase**
+ * `keydown` listener on the window that runs *before* the event descends into
+ * the terminal, and withholds the press exactly when the event would land
+ * inside `.xterm` — the one local control the channel cannot outrun. Withholding
+ * there also stops the escape sequence (`\x1b[1;7D` / `\x1b[1;7C`) xterm would
+ * otherwise send to the shell. Every other press keeps flowing to the observer,
+ * so the two paths never act on the same event; both paths run the same decision
+ * (`pageCycleTarget`). The three readings a capture hook needs before the
+ * adapter has built them — the press's element, its raw gesture, and its
+ * ownership context — live in `capture.ts`, shared with the approval bridge's
+ * own capture hook.
  *
  * The same hand-over also covers the **expand key**. The bundled
  * `sidebar.right.toggle` command expands the column and focuses the *active
@@ -65,6 +68,7 @@
  * native keyboard bridge for these keys), so the bridge installs on Web and
  * Desktop alike.
  */
+import { captureContext, captureGesture, composedElement } from './capture.ts'
 import { bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
 import type {
@@ -573,23 +577,6 @@ function whenLater(ms: number, run: () => void): void {
 }
 
 /**
- * The first Element on the event's composed path.
- *
- * The capture hook needs the press's destination before any bubble listener has
- * run; `composedPath()` is the native way to name it. Entries are duck-typed by
- * the one capability the hook needs — `Element.prototype.closest` — so tests
- * may hand the hook plain fake elements.
- * @param event - the keydown in the capture phase.
- * @returns the innermost Element of the path, or null when there is none.
- */
-function composedElement(event: KeyboardEvent): Element | null {
-  for (const value of event.composedPath()) {
-    if (typeof value === 'object' && value !== null && 'closest' in value) return value as Element
-  }
-  return null
-}
-
-/**
  * Whether the press would land inside a terminal — the one local control the
  * DOM channel cannot outrun.
  *
@@ -608,58 +595,3 @@ function terminalTarget(element: Element | null): element is Element {
   return element.closest('.xterm') !== null
 }
 
-/**
- * The same modal facts the keyboard adapter computes for the observer path,
- * re-derived because a capture-phase listener runs before the adapter's
- * context is built.
- *
- * Mirrors the primitives package's `modalSelector` — any element matching
- * `[role="dialog"][aria-modal="true"]` or `[role="menu"]` currently mounted —
- * as a boolean, which is all the eligibility check consults (`modal === null`).
- * @returns whether a modal is currently open.
- */
-function modalOpen(): boolean {
-  if (typeof document === 'undefined') return false
-  return document.querySelector('[role="dialog"][aria-modal="true"], [role="menu"]') !== null
-}
-
-/**
- * Build the gesture facts a capture-phase keydown carries, in the shape the
- * shared decision reads.
- *
- * Composition is read from the event's own flag (`isComposing`) rather than the
- * keyboard adapter's live observer: at the capture phase the observer has not
- * run yet, and the flag is the same intent — do not steal half-typed input.
- * `defaultPrevented` is always false at the capture phase (nothing has run
- * yet), and the decision does not consult it anyway.
- * @param event - the keydown in the capture phase.
- * @returns the gesture in the shared decision's shape.
- */
-function captureGesture(event: KeyboardEvent): ShortcutGesture {
-  return {
-    code: event.code,
-    secondCode: undefined,
-    control: event.ctrlKey,
-    alt: event.altKey,
-    shift: event.shiftKey,
-    meta: event.metaKey,
-    repeat: event.repeat,
-    composing: event.isComposing,
-    defaultPrevented: false,
-  }
-}
-
-/**
- * Build the ownership context a capture-phase keydown carries: the press's own
- * terminal region (the terminal-subtree scope is implied by the `.xterm` gate)
- * and the modal facts `modalOpen()` derives.
- * @param element - the press's innermost element.
- * @returns the context in the shared decision's shape.
- */
-function captureContext(element: Element): ShortcutContext {
-  return {
-    region: 'terminal',
-    modal: modalOpen() ? 'other' : null,
-    target: element,
-  }
-}

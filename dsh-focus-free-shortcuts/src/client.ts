@@ -10,7 +10,14 @@
  *
  *   - pane commands (`⌘⌥Enter` / `⌘\`) → `pane-keys.ts`;
  *   - stop (`Esc` `Esc`) → `stop-sequence.ts`;
- *   - approval (`Enter` / `Esc`) → `approval-keys.ts`;
+ *   - approval (`Enter` / `Esc`) → `approval-keys.ts` — the one group that
+ *     needs a second delivery path for a *local* owner rather than a silent one:
+ *     a process card the user clicked (a tool card's `div[role="button"]`, a
+ *     trajectory row's `tr[tabindex=0]`) answers `Enter` in its own React handler
+ *     and calls `preventDefault()` before the bubble-phase fixed channel can run,
+ *     so the press is claimed and then reads as consumed. A window capture
+ *     listener resolves the same ownership one phase earlier and swallows the
+ *     press, so the card never acts and the approval is answered instead;
  *   - question cancel (`Esc` on a presented `ask_user_question` card) →
  *     `question-keys.ts` — the one group whose bundled owner is *nobody* rather
  *     than an owner that declines without focus: the card binds no Escape in any
@@ -39,7 +46,10 @@
  * imports the upstream faces it uses (`Shortcuts`, `ISessions`, `UiSession`, …)
  * directly from the package that declares them — no upstream shape is restated
  * here. `binding.ts` holds the gesture/binding model both shortcut catalogs match
- * against, and `runtime.ts` the plugin name, the fixed-input narrowing, and the
+ * against, `capture.ts` the capture-phase readings (press element, raw gesture,
+ * ownership context) the page-cycle and approval hooks share, `focus-ring.ts` the
+ * outline suppression the approval bridge applies to the control it takes a press
+ * from, and `runtime.ts` the plugin name, the fixed-input narrowing, and the
  * main-view Session. For the bundled commands nothing is registered in the
  * shortcut catalog: no default bindings, no conflicts, no settings edits — each
  * bridge follows the effective catalog row or the mounted fixed row, so a

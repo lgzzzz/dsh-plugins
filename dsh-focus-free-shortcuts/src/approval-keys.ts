@@ -11,12 +11,43 @@
  * upstream `PendingApproval`, whose `answer()` is the same operation the panel's
  * Allow once / Reject buttons call.
  *
+ * The fixed channel is a **bubble-phase** listener on the window, so it is the
+ * last stop of a press, not the first: anything focused answers before it, and a
+ * process card answers `Enter` itself. A tool card's
+ * `div[role="button"][tabindex="0"]` and a trajectory row's `tr[tabindex="0"]`
+ * both toggle or select from their own React `keydown` handler and call
+ * `preventDefault()` on the way. That leaves the observer standing down twice
+ * over: the card has already acted, and the press reads as consumed. Focus is
+ * therefore not only "outside the panel" but possibly parked on a control that
+ * owns the very key the user means as the decision — clicking a card and then
+ * pressing `Enter` re-triggered the card instead of allowing the request.
+ *
+ * The bridge therefore delivers through **two** paths, exactly as the page-cycle
+ * bridge does for a focused terminal: the fixed-channel observer above, and a
+ * window **capture-phase** listener that runs before any target or bubble handler
+ * (`capture.ts` supplies the readings a capture hook needs). Both paths resolve
+ * the same ownership (`approvalCaptureOutcome` shares `approvalOutcomeFor`,
+ * `approvalEligible`, and `approvalPanelOwnsTarget`) and a press is acted on
+ * exactly once: a capture hook that answers swallows the event, so the card never
+ * runs and the observer never sees it; a hook that declines leaves the press
+ * flowing, and the observer then decides identically.
+ *
  * It follows the mounted `approval.allow` / `approval.reject` fixed rows, so it
  * stays out of the keys once that panel unloads, and it stands down whenever the
  * panel itself owns the press (a target inside `[data-approval-key]`). Nothing is
  * registered in the shortcut catalog. Unlike the pane keys these are fixed
  * actions on every runtime, so this bridge installs on Web and Desktop alike.
+ *
+ * Answering also moves focus: the composer takeover belongs to the Session and
+ * hands the keyboard back when it unloads, so the app switches to keyboard
+ * modality right after the press and whatever is still `:focus-visible` starts
+ * painting a ring. Both paths therefore withdraw the ring on the control they
+ * took the press from, through the app's own `data-dsh-automatic-focus` marker
+ * (`focus-ring.ts`) — focus stays where the user put it, and the outline the
+ * taken press would otherwise reveal never appears.
  */
+import { captureContext, captureGesture, pressElement } from './capture.ts'
+import { suppressFocusRing } from './focus-ring.ts'
 import { fixedRowOwns } from './binding.ts'
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {
@@ -98,6 +129,37 @@ export function approvalPanelOwnsTarget(target: Element | null): boolean {
 }
 
 /**
+ * Whether one capture-phase press is the approval's own, and which decision it is.
+ *
+ * The same ownership question {@link handleApprovalInput} asks of the fixed
+ * channel, asked one phase earlier and with one deliberate difference: the
+ * captured gesture never carries `defaultPrevented` (`capture.ts` builds it
+ * before anything has run), so the gate that makes the observer stand down
+ * cannot veto a press the user means as the decision. That is exactly the press
+ * this path exists for — the one a stale local control would claim moments
+ * later. The panel's own target still wins, and every other precondition
+ * (region, modal, repeat, composition, the mounted row) is the observer's own.
+ * @param rows - the mounted fixed catalog snapshot.
+ * @param gesture - the physical press being routed, built at the capture phase.
+ * @param element - the press's own element, or null to fall back to the focused one.
+ * @returns the requested decision, or undefined when the press is not the approval's.
+ */
+export function approvalCaptureOutcome(
+  rows: readonly ShortcutFixedCatalogEntry[],
+  gesture: ShortcutGesture,
+  element: Element | null,
+): ApprovalDecision | undefined {
+  // The mounted row is the cheap gate and the reservation: a press that is not
+  // `Enter` / `Escape` (as the panel currently declares them) never pays for the
+  // context the next line builds, which reads the document for a modal layer.
+  const outcome: ApprovalDecision | undefined = approvalOutcomeFor(rows, gesture, APPROVAL_COMMAND_IDS)
+  if (outcome === undefined) return undefined
+  const context: ShortcutContext = captureContext(element)
+  if (!approvalEligible(gesture, context)) return undefined
+  return approvalPanelOwnsTarget(context.target) ? undefined : outcome
+}
+
+/**
  * Narrow one published pending interaction to the approval this bridge may answer.
  *
  * The slot's declared type is the approval domain's `PendingApproval`, but it is
@@ -154,9 +216,12 @@ const APPROVAL_COMMAND_IDS: ApprovalCommandIds = {
  * `[data-approval-key]`, and while it is presented the composer takeover hides
  * the composer bar (`renderChainResult` sets `display: none` on the unused
  * fallback), so the focused element — the composer textarea — is removed and
- * focus falls back to `<body>`. Both keys then reach the application with no
- * owner at all. Unlike the pane keys, these are fixed actions on every runtime,
- * so this bridge installs on Web and Desktop alike.
+ * focus falls back to `<body>`. That press has no owner at all, which is what
+ * the fixed-input observer below rescues. Focus can just as well be parked on a
+ * process card the user clicked, which is worse: the card owns the press, acts
+ * on it, and marks it consumed before the observer runs, so the capture listener
+ * takes that one a phase earlier. Unlike the pane keys, these are fixed actions
+ * on every runtime, so this bridge installs on Web and Desktop alike.
  * @param ctx - client root context.
  */
 export function installApprovalBridge(ctx: Context): void {
@@ -172,7 +237,63 @@ export function installApprovalBridge(ctx: Context): void {
       if (!isKeydown(input)) return
       handleApprovalInput(shortcuts, sessions, uiSession, input)
     }), `${name}: approval keys`)
+    // The capture half: presses a local control claims before the bubble-phase
+    // channel can receive them (see `installApprovalCapture`). Both halves live
+    // in this scope, and the disposer pair tears them down together.
+    scope.effect(() => installApprovalCapture(shortcuts, sessions, uiSession), `${name}: approval capture`)
   })
+}
+
+/**
+ * Bridge the approval keys ahead of every local control.
+ *
+ * A capture-phase listener on the window runs before any target or bubble
+ * handler — before React's root handlers, which is where a focused process card
+ * answers `Enter` and calls `preventDefault()`. Reading the press there restores
+ * the ownership the bubble channel can no longer see, and swallowing it keeps
+ * the card from acting at all. The decision is the observer's own
+ * (`approvalCaptureOutcome`); only the resolution of "which approval" is
+ * repeated, because it also needs the mounted row and the published pending
+ * interaction.
+ * @param shortcuts - keyboard service.
+ * @param sessions - Session catalog and main-view owner.
+ * @param uiSession - publisher of each Session's pending interaction.
+ * @returns disposer releasing the listener (a no-op where no window exists).
+ */
+function installApprovalCapture(
+  shortcuts: Shortcuts,
+  sessions: ISessions,
+  uiSession: UiSession,
+): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const onKeydown = (event: KeyboardEvent): void => {
+    if (event.type !== 'keydown') return
+    const target: Element | null = pressElement(event)
+    const outcome: ApprovalDecision | undefined = approvalCaptureOutcome(
+      shortcuts.fixedCatalog.getSnapshot(),
+      captureGesture(event),
+      target,
+    )
+    if (outcome === undefined) return
+    const approval: PendingApproval | undefined = presentedApproval(
+      mainViewSessionId(sessions.list.getSnapshot()),
+      uiSession.sessionStatus.getSnapshot(),
+    )
+    if (approval === undefined) return
+    // Stamp the press out before answering: the card that holds focus must not
+    // also act on it, and the bubble channel must not see the same press again.
+    event.preventDefault()
+    event.stopPropagation()
+    // Answering the approval hands the keyboard back to the composer, and that
+    // focus move is what makes the app paint the ring this press would otherwise
+    // reveal on the card it was taken from (`focus-ring.ts`).
+    suppressFocusRing(target)
+    approval.answer(outcome).catch((error: unknown) => {
+      warn(`approval ${approval.key} was not sent:`, error)
+    })
+  }
+  window.addEventListener('keydown', onKeydown, true)
+  return () => window.removeEventListener('keydown', onKeydown, true)
 }
 
 /**
@@ -206,6 +327,9 @@ function handleApprovalInput(
   // Consume before answering: this press must not also reach the browser, and a
   // half-consumed decision would leave the request waiting with no owner.
   input.consume()
+  // Same courtesy as the capture path: the control the press was taken from
+  // keeps its focus, without the ring the answer's focus move would reveal.
+  suppressFocusRing(context.target)
   approval.answer(outcome).catch((error: unknown) => {
     warn(`approval ${approval.key} was not sent:`, error)
   })

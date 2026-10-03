@@ -5,9 +5,9 @@
  *
  * 运行:`node test/decide-approval.test.mjs`(或 pnpm test 跑全部)。
  */
-import { approvalEligible, approvalOutcomeFor, approvalPanelOwnsTarget, asAnswerableApproval, presentedApproval } from '../src/approval-keys.ts'
+import { approvalCaptureOutcome, approvalEligible, approvalOutcomeFor, approvalPanelOwnsTarget, asAnswerableApproval, presentedApproval } from '../src/approval-keys.ts'
 import { fixedRowOwns } from '../src/binding.ts'
-import { APPROVAL_FIXED_ROWS, APPROVAL_IDS, approvalPending, check, checkTrue, domApproval, domBody, domComposer, finish, fixedRow, gesture, shortcutContext, statusWith } from './helpers.mjs'
+import { APPROVAL_FIXED_ROWS, APPROVAL_IDS, approvalPending, check, checkTrue, domApproval, domBody, domComposer, FakeElement, finish, fixedRow, gesture, shortcutContext, statusWith } from './helpers.mjs'
 
 console.log('--- H① 已挂载的固定审批行与决定 ---')
 {
@@ -59,6 +59,30 @@ console.log('--- H④ 可作答的审批 ---')
   check('没有该会话的状态不接', presentedApproval('s2', statuses), undefined)
   check('主视图歧义(undefined)不接', presentedApproval(undefined, statuses), undefined)
   check('状态表为空不接', presentedApproval('s1', new Map()), undefined)
+}
+
+console.log('--- H⑤ 捕获阶段判定:焦点停在过程卡片上也算审批的 ---')
+{
+  // 过程卡片:工具卡的 role=button + tabindex=0,以及轨迹行的 tr[tabindex=0],
+  // 都会在自己的 keydown 里 preventDefault() 后折叠 / 选中 —— 捕获判定必须无视这一点。
+  const staleCard = new FakeElement('div', { role: 'button', tabindex: '0' })
+  const panel = new FakeElement('div', { 'data-approval-key': 'approval:1' })
+  const panelButton = panel.append(new FakeElement('button'))
+  const terminal = new FakeElement('div', { class: 'xterm' })
+
+  check('卡片焦点上的 Enter → 允许一次', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter'), staleCard), 'allowed-once')
+  check('卡片焦点上的 Esc → 拒绝', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Escape'), staleCard), 'rejected')
+  check('已被消费的手势形状落空(捕获阶段不会出现这种形状)', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter', { defaultPrevented: true }), staleCard), undefined)
+  check('别的键落空', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('KeyK'), staleCard), undefined)
+  check('带修饰键落空', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter', { shift: true }), staleCard), undefined)
+  check('长按重复落空', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter', { repeat: true }), staleCard), undefined)
+  check('组字中落空', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter', { composing: true }), staleCard), undefined)
+  check('面板根让位', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter'), panel), undefined)
+  check('面板内按钮让位(Enter 归那个按钮)', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter'), panelButton), undefined)
+  check('文本控件内落空', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter'), domComposer), undefined)
+  check('终端内落空', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter'), terminal), undefined)
+  check('固定行缺席(审批插件未装载)落空', approvalCaptureOutcome([], gesture('Enter'), staleCard), undefined)
+  check('没有元素时按焦点回退(page)仍命中', approvalCaptureOutcome(APPROVAL_FIXED_ROWS, gesture('Enter'), null), 'allowed-once')
 }
 
 finish()
