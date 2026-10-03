@@ -225,7 +225,7 @@ function resolveStopSession(ctx: Context, sessions: ISessions): StopCandidate | 
   const list = sessions.list.getSnapshot()
   const sessionId = mainViewSessionId(list)
   if (sessionId === undefined) return undefined
-  if (list.byId[sessionId]?.running !== true) return undefined
+  if (!list.byId[sessionId]?.running) return undefined
   const binding = sessions.binding(sessionId)
   if (binding === undefined) return undefined
   const snapshot = binding.session.getSnapshot()
