@@ -14,6 +14,7 @@ PLUGINS=(
   dsh-git-guard
   dsh-header-action-order
   dsh-ui-css-patches
+  dsh-workspace-auto-sort
 )
 
 failed=()

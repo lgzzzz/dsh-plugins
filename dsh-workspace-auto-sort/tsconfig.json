@@ -1,0 +1,27 @@
+{
+  // 无编译步骤：index.ts 与 src/order.ts 由 Node Type Stripping 直接加载，
+  // 本配置只服务 tsserver 与 pnpm typecheck。
+  "compilerOptions": {
+    // 与宿主运行时（Node 22+，type=module）一致的 ESM 语义
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["esnext"],
+
+    "noEmit": true,
+    // 允许 .ts 相对导入（运行时同样支持），需配合 noEmit
+    "allowImportingTsExtensions": true,
+
+    // 强制可擦除语法：禁 enum / namespace / 参数属性，与 Type Stripping 运行时一致
+    "erasableSyntaxOnly": true,
+    // 类型导入须显式 import type，保证运行时可安全擦除
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}
