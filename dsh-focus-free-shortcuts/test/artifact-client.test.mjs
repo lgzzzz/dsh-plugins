@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { captureWarnings, check, checkTrue, domBody, domComposer, fakeSessions, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, APPROVAL_FIXED_ROWS, approvalPending, questionPending } from './helpers.mjs'
+import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, sidebarTree, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_CYCLE_ID, SESSION_NEXT_PRESS } from './helpers.mjs'
 
 console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
 {
@@ -35,13 +35,15 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
   })
   const sidebar = fakeSidebar()
   sidebar.command = { paneId: 'p1' }
+  const navigation = fakeSessionNavigation()
   // 待答状态表按引用读取:先无待答,再挂上一条审批。
   const status = new Map()
   const ctx = new FakeCtx({
     shortcuts,
     sidebarRight: sidebar,
-    sessions: fakeSessions({ summary: { s1: session('s1') }, scope: () => ({ get: () => ({ cancel: () => { cancelled += 1; return Promise.resolve() } }) }) }),
+    sessions: fakeSessions({ summary: { s1: session('s1'), s2: session('s2', { mainView: 0, running: false }) }, scope: () => ({ get: () => ({ cancel: () => { cancelled += 1; return Promise.resolve() } }) }) }),
     uiSession: fakeUiSession({ status }),
+    uiWorkspace: navigation,
   })
   const warnings = captureWarnings(() => plugin.apply(ctx))
   check('产物装配无告警', warnings, [])
@@ -64,6 +66,20 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
   shortcuts.emit(keydown(gesture('Escape'), shortcutContext({ target: domBody })).input)
   check('产物里提问键生效', question.dismissals, 1)
   check('产物里提问键不误停回合', cancelled, 1)
+
+  // 会话循环桥:按左侧栏前三个工作区当前渲染出来的会话行切换(这里装一段假侧栏 DOM)。
+  const previousDocument = globalThis.document
+  globalThis.document = fakeDocument({ root: sidebarTree([{ key: 'w1', sessions: ['s1', 's2'] }]) })
+  try {
+    checkTrue('产物里会话循环固定行已挂载', shortcuts.fixedCatalog.getSnapshot().some((entry) => entry.id === SESSION_CYCLE_ID))
+    const press = keydown(SESSION_NEXT_PRESS, shortcutContext({ target: domBody }))
+    shortcuts.emit(press.input)
+    check('产物里会话循环桥接生效', navigation.opened, ['s2'])
+    check('产物里会话循环消费按键', press.consumed.count, 1)
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document
+    else globalThis.document = previousDocument
+  }
 }
 
 finish()

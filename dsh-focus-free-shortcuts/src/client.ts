@@ -13,7 +13,9 @@
  *     卡片自己的 `dismiss()`；
  *   - focus composer（`Ctrl+Alt+J`）→ `focus-composer.ts`：自挂固定行；
  *   - page cycle（`Ctrl+Alt+←` / `Ctrl+Alt+→`）→ `page-cycle.ts`：自挂固定行，另含
- *     展开侧栏后的焦点交接。
+ *     展开侧栏后的焦点交接；
+ *   - session cycle（`Ctrl+Alt+↑` / `Ctrl+Alt+↓`）→ `session-cycle.ts`：自挂固定行，
+ *     候选取左侧栏前三个工作区当前渲染出来的会话行，活跃会话优先，另有终端内的捕获拦截。
  *
  * `binding.ts` 提供两个快捷键目录共用的手势/绑定匹配，`capture.ts` 提供捕获阶段读数，
  * `focus-ring.ts` 提供 outline 抑制，`runtime.ts` 提供插件名、固定输入收窄与主视图
@@ -24,6 +26,7 @@ import { installFocusComposerBridge } from './focus-composer.ts'
 import { installPageCycleBridge } from './page-cycle.ts'
 import { installPaneBridge } from './pane-keys.ts'
 import { installQuestionBridge } from './question-keys.ts'
+import { installSessionCycleBridge } from './session-cycle.ts'
 import { installStopBridge } from './stop-sequence.ts'
 import { name } from './runtime.ts'
 import type {Context} from '@deepseek-ai/cordis'
@@ -41,4 +44,5 @@ export function apply(ctx: Context): void {
   installQuestionBridge(ctx)
   installFocusComposerBridge(ctx)
   installPageCycleBridge(ctx)
+  installSessionCycleBridge(ctx)
 }

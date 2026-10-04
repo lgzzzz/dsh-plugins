@@ -122,6 +122,16 @@ export const PAGE_CYCLE_FIXED_ROWS = [
 export const PAGE_PREVIOUS_PRESS = gesture('ArrowLeft', { control: true, alt: true })
 export const PAGE_NEXT_PRESS = gesture('ArrowRight', { control: true, alt: true })
 
+export const SESSION_CYCLE_ID = 'dsh-focus-free-shortcuts.session-cycle'
+export const SESSION_PREVIOUS_BINDING = { code: 'ArrowUp', modifiers: ['control', 'alt'] }
+export const SESSION_NEXT_BINDING = { code: 'ArrowDown', modifiers: ['control', 'alt'] }
+/** 本插件自己挂载的固定行:一行同时预约 `Ctrl+Alt+↑` 与 `Ctrl+Alt+↓`。 */
+export const SESSION_CYCLE_FIXED_ROWS = [
+  fixedRow(SESSION_CYCLE_ID, [SESSION_PREVIOUS_BINDING, SESSION_NEXT_BINDING], { group: 'application' }),
+]
+export const SESSION_PREVIOUS_PRESS = gesture('ArrowUp', { control: true, alt: true })
+export const SESSION_NEXT_PRESS = gesture('ArrowDown', { control: true, alt: true })
+
 /** 内置"展开/折叠右侧栏"命令 id,展开补位跟随它的有效行。 */
 export const SIDEBAR_TOGGLE_ID = 'sidebar.right.toggle'
 /** Web 上的默认绑定:primary+shift+B(Windows/Linux 的 primary 是 control)。 */
@@ -139,6 +149,10 @@ export class FakeNode {
     child.parent = this
     this.children.push(child)
     return child
+  }
+  /** 真实 DOM 的读数名:本插件的分组归属按 `parentElement` 上溯。 */
+  get parentElement() {
+    return this.parent
   }
   closest(selector) {
     for (let node = this; node !== null; node = node.parent) {
@@ -430,6 +444,70 @@ export function fakePageSidebar({ list = ['t1', 't2', 't3'], active = 't1', expa
   return sidebar
 }
 
+/**
+ * 会话导航假面:上游 `UiWorkspace` 的公开面里本插件要用的那一个动词。
+ * `openSession` 记录每一次切换,`opened` 就是调用顺序。
+ */
+export function fakeSessionNavigation() {
+  const navigation = {
+    opened: [],
+    openSession(target) {
+      navigation.opened.push(target)
+    },
+  }
+  return navigation
+}
+
+/** 会话状态表:按 id → 部分状态构造(未给的字段取假值),供活跃判定读取。 */
+export function statusTable(entries = {}) {
+  return new Map(Object.entries(entries).map(([id, status]) => [id, {
+    running: false,
+    pendingInteraction: undefined,
+    completionUnread: false,
+    ...status,
+  }]))
+}
+
+/**
+ * 一段侧栏工作区浏览器的假 DOM:外层是 `role="tree"` 的列表,里面一个分组一层容器。
+ *
+ * 容器里的顺序与官方渲染一致:自己的分组行 →(嵌套子分组)→ 自己名下的会话行 →
+ *(「展开更多」行);分组行与会话行外面都包着一层 HoverCard 的 `span`,所以本插件
+ * 按「最近的 div 祖先」找分组容器。
+ *
+ * @param groups - `[{ key, sessions?, children?, overflow?, archived? }]`;
+ *   `key` 为 `''` 表示「未分组」桶,`archived` 里的会话行带官方那个「不可打开」标记。
+ */
+export function sidebarTree(groups = []) {
+  const tree = new FakeElement('div', { role: 'tree' })
+  for (const group of groups) tree.append(sidebarGroup(group))
+  return tree
+}
+
+/** 一个分组容器;`hoverRow` 复刻官方那层 HoverCard 包装。 */
+function sidebarGroup({ key, sessions = [], children = [], overflow = false, archived = [] }) {
+  const section = new FakeElement('div')
+  section.append(hoverRow(`workspace:${key}`))
+  if (children.length > 0) {
+    const nested = section.append(new FakeElement('div', { role: 'group' }))
+    for (const child of children) nested.append(sidebarGroup(child))
+  }
+  for (const id of sessions) {
+    const attributes = { 'data-row-key': `session:${id}` }
+    if (archived.includes(id)) attributes['aria-description'] = 'Archived sessions cannot be opened.'
+    section.append(hoverRow(undefined, attributes))
+  }
+  if (overflow) section.append(new FakeElement('button', { 'data-row-key': `overflow:${key}` }))
+  return section
+}
+
+/** 官方给每个行外面包一层 HoverCard 的 `span`;行本身是它唯一的锚点子节点。 */
+function hoverRow(rowKey, attributes = {}) {
+  const wrapper = new FakeElement('span')
+  wrapper.append(new FakeElement('div', rowKey === undefined ? attributes : { 'data-row-key': rowKey, ...attributes }))
+  return wrapper
+}
+
 export function fakeSessions({ summary = {}, bindingSnapshot = {}, scope } = {}) {
   const binding = {
     session: {
@@ -537,9 +615,11 @@ export function harness({
   sidebar = fakeSidebar(),
   conversation = { cancel: () => Promise.resolve() },
   uiSession = fakeUiSession(),
+  navigation = fakeSessionNavigation(),
   withSidebar = true,
   withSessions = true,
   withUiSession = true,
+  withUiWorkspace = true,
 } = {}) {
   const shortcuts = fakeShortcuts({ runtime, rows, fixedRows })
   const sessions = fakeSessions({ summary, bindingSnapshot, scope: () => ({ get: (name) => (name === 'conversation' ? conversation ?? undefined : undefined) }) })
@@ -547,9 +627,10 @@ export function harness({
   if (withSidebar) services.sidebarRight = sidebar
   if (withSessions) services.sessions = sessions
   if (withUiSession) services.uiSession = uiSession
+  if (withUiWorkspace) services.uiWorkspace = navigation
   const ctx = new FakeCtx(services)
   const warnings = captureWarnings(() => applyPlugin(ctx))
-  return { ctx, shortcuts, sessions, sidebar, conversation, uiSession, warnings }
+  return { ctx, shortcuts, sessions, sidebar, conversation, uiSession, navigation, warnings }
 }
 
 export { applyPlugin }
