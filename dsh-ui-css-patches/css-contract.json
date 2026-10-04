@@ -31,6 +31,8 @@
     {"id":"header-actions-render","pattern":"renderSlot\\(\\s*\"conversation\\.session\\.header\\.actions\"","paths":["dsh-client-ui-conversation/lib"],"hint":"会话头部不再渲染 header.actions slot outlet，[data-slot=\"conversation.session.header.actions\"] * 选择器落空，操作区字号从 14px 变为上游默认的 10–13px"},
     {"id":"slot-outlet-attr","pattern":"\"data-slot\":\\s*slotKey","paths":["dsh-client-ui-renderer/lib"],"hint":"SlotOutlet 不再输出 data-slot=slotKey，所有 [data-slot=…] 锚点（含 header.actions 字号统一、main.conversation 正文宽度）一并落空"},
     {"id":"chat-width-declared","pattern":"--dsh-chat-content-width\\s*:","paths":[],"hint":"--dsh-chat-content-width 声明消失，正文宽度无变化（插件仍覆盖为 100%）"},
-    {"id":"chat-width-consumed","token":"var(--dsh-chat-content-width","paths":[],"hint":"var(--dsh-chat-content-width) 消费消失，正文宽度从 100% 变为 920px"}
+    {"id":"chat-width-consumed","token":"var(--dsh-chat-content-width","paths":[],"hint":"var(--dsh-chat-content-width) 消费消失，正文宽度从 100% 变为 920px"},
+    {"id":"subagent-tree-role","pattern":"role:\\s*\"tree\"[\\s\\S]{0,200}?tree\\.aria","paths":["dsh-client-ui-subagent/lib"],"hint":"子智能体会话树的 role=\"tree\" + aria-label 锚点消失，该面板字号从 14px 变回上游的 12px"},
+    {"id":"subagent-tree-aria-zh","token":"\"tree.aria\": \"子智能体会话\"","paths":["dsh-client-ui-subagent/lib"],"hint":"子智能体会话树的中文 aria-label 文案变更，div[role=\"tree\"][aria-label=\"子智能体会话\"] 落空（英文界面用的是 Subagent sessions）"}
   ]
 }
