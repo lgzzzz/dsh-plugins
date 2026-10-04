@@ -179,7 +179,7 @@ function installApprovalCapture(shortcuts, sessions, uiSession) {
 - **③④⑤ 复用同一套判定。** 捕获路不另立规则：固定行预约（④）、准入（③）、面板归属（⑤）全部复用。`captureGesture` 在捕获阶段构造的手势 `defaultPrevented` 恒为 `false`（此时还没有处理器运行），因此能通过 ③ 的"已被消费"门槛。
 - **⑥ 先吞，再答。** `stopPropagation()` 让事件到不了目标，卡片的 React 处理器不执行；`preventDefault()` 拦掉浏览器默认动作。只答不吞时，按一次 `Enter` 会既批准又折叠卡片。
 - **两路互斥，不会双答。** 捕获路命中并吞掉事件 → 固定通道收不到；捕获路放行 → 事件照常冒泡，固定通道再决定一次（判定相同）。无论焦点在 `<body>` 还是某张卡片上，每按恰好一个 owner。未命中捕获（例如捕获监听被卸载、或目标区域整体让位）时，固定通道仍是正常投递路径。
-- **`src/capture.ts` 提供共用的三样读数。** 按键落点、原始手势（`captureGesture`）与归属上下文（`captureContext`，含区域与模态）都由 `src/capture.ts` 导出，本桥与页面循环桥（第 6 册）共用。
+- **`src/capture.ts` 提供共用的读数。** 按键落点（`composedElement` / `pressElement`）、原始手势（`captureGesture`）、归属上下文（`captureContext`，含区域与模态）与终端落点判定（`terminalTarget`）都由 `src/capture.ts` 导出，本桥与页面循环桥、会话循环桥（第 6 册）共用。
 - **`suppressFocusRing` 抑制焦点环。** 作答会把键盘交回 composer，应用随即切到键盘模态；`ui-theme` 的 `focus.css` 只在 `html[data-input-modality=pointer]` 下把焦点环设为透明，切到 `keyboard` 后仍处于 `:focus-visible` 的过程卡片会显出边框。两条路都在作答前调用 `suppressFocusRing`（`src/focus-ring.ts`）：给该控件打上官方的 `data-dsh-automatic-focus`（"无环聚焦"标记），焦点不动、边框不画，并在 blur 或 Tab / 方向键导航时按官方同一套规则摘除标记。模态判定仍归应用（测试 I⑫；第 6 册 §8 第 16、17 条）。
 - **让位条件一条不少。** 目标落在 `[data-approval-key]` 内、落在 `input/textarea/select/contenteditable` 或 `.xterm` 内、模态层打开、长按、组字中、别的键、固定行缺席、审批已作答、主视图歧义、审批属于别的会话——都由同一套判定否决，捕获监听既不作答也不吞事件（测试 I⑨、I⑩）。
 

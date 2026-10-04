@@ -15,7 +15,7 @@
  * 同一观察者还带一项非消费任务：按键为 `sidebar.right.toggle` 的生效绑定时，
  * 在有界窗口内轮询右栏展开，展开后把键盘交给当前显示页。
  */
-import { captureContext, captureGesture, composedElement } from './capture.ts'
+import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
 import { bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
 import type {
@@ -381,16 +381,5 @@ function whenLater(ms: number, run: () => void): void {
   if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
     window.setTimeout(run, ms)
   }
-}
-
-/**
- * 该次按键是否落入终端内，即是否位于 `.xterm` 内；这类按键不会到达 DOM 通道的
- * window 监听。
- *
- * 同时作为类型守卫：判断通过后 `element` 为 Element。
- */
-function terminalTarget(element: Element | null): element is Element {
-  if (element === null) return false
-  return element.closest('.xterm') !== null
 }
 

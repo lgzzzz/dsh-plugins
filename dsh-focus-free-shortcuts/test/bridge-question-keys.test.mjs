@@ -155,7 +155,7 @@ console.log('--- O⑧ 卸载:固定监听全部释放 ---')
 {
   const pending = questionPending()
   const { ctx, shortcuts } = withPending(pending)
-  check('注册了六个固定监听', shortcuts.listenerCount(), 6)
+  check('注册了七个固定监听', shortcuts.listenerCount(), 7)
   for (const effect of ctx.effects) {
     if (typeof effect.dispose === 'function') effect.dispose()
   }

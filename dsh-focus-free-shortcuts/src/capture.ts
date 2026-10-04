@@ -1,9 +1,9 @@
 /**
  * 捕获阶段共用层：在任何本地控件之前读取按键。
  *
- * 两个桥需要在页面自身处理器之前判定 keydown，因此在 window 上安装捕获监听：
- * `page-cycle.ts` 处理聚焦终端吞掉按键的情形，`approval-keys.ts` 处理聚焦卡片
- * 自行 `preventDefault()` 的情形。
+ * 三个桥需要在页面自身处理器之前判定 keydown，因此在 window 上安装捕获监听：
+ * `page-cycle.ts` 与 `session-cycle.ts` 处理聚焦终端吞掉按键的情形，`approval-keys.ts`
+ * 处理聚焦卡片自行 `preventDefault()` 的情形。
  *
  * 捕获监听早于目标/冒泡处理器运行，读不到键盘适配器为冒泡路径构建的读数，这里重新
  * 推导同样三项：按键元素、物理手势与归属上下文(region + modal)。
@@ -48,6 +48,17 @@ function focusedElement(): Element | null {
  */
 export function pressElement(event: KeyboardEvent): Element | null {
   return composedElement(event) ?? focusedElement()
+}
+
+/**
+ * 该次按键是否落入终端内，即是否位于 `.xterm` 内；这类按键不会到达 DOM 通道的
+ * window 监听（终端在自己的 textarea 处理器里停掉了它）。
+ *
+ * 同时作为类型守卫：判断通过后 `element` 为 Element。
+ */
+export function terminalTarget(element: Element | null): element is Element {
+  if (element === null) return false
+  return element.closest('.xterm') !== null
 }
 
 /**

@@ -16,12 +16,14 @@ const ORDER = [
   'decide-question.test.mjs',
   'decide-focus-composer.test.mjs',
   'decide-page-cycle.test.mjs',
+  'decide-session-cycle.test.mjs',
   'bridge-pane-keys.test.mjs',
   'bridge-stop-sequence.test.mjs',
   'bridge-approval-keys.test.mjs',
   'bridge-question-keys.test.mjs',
   'bridge-focus-composer.test.mjs',
   'bridge-page-cycle.test.mjs',
+  'bridge-session-cycle.test.mjs',
   'artifact-client.test.mjs',
 ]
 
