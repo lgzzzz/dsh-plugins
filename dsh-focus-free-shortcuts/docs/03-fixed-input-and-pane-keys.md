@@ -23,7 +23,7 @@
 
 页面切换另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C` 塞给 shell），其余按键放行给通道；两路共用同一个判定。
 
-下面逐条展开：面板键见 [第 5 节](03-solution-overview-and-pane-keys.md)，停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键与提问卡片见 [第 5 册](05-approval-key-bridge.md)，聚焦输入框与页面循环的逐行说明见 [第 6 册](06-comparison-boundaries-contracts.md)。
+下面逐条展开：面板键见 [第 5 节](03-fixed-input-and-pane-keys.md)，停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键与提问卡片见 [第 5 册](05-approval-key-bridge.md)，聚焦输入框与页面循环的逐行说明见 [第 6 册](06-boundaries-and-contracts.md)。
 
 ---
 

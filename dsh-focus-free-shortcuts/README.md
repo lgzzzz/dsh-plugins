@@ -14,10 +14,10 @@
 
 | 分册 | 内容 |
 |---|---|
-| [1. 行为差异与影响面](docs/01-problem-and-background.md) | 五条「按下去没反应」的快捷键:前四条要先聚焦,最后一条(提问卡片 `Esc`)是既有键在那个状态下没有主人;DOM / 焦点 / `keydown` / `closest()` / `preventDefault()` 预备知识 |
-| [2. 归属判定](docs/02-root-cause.md) | 键盘事件的完整链路;面板命令、停止序列与审批面板各自的归属判定;提问卡片的判定 |
-| [3. 固定输入通道与面板键桥接](docs/03-solution-overview-and-pane-keys.md) | 机制总览;固定输入通道与「消费即让位」;`enabledBinding`;`handlePaneInput` |
+| [1. 行为差异与影响面](docs/01-behavior-difference.md) | 五条「按下去没反应」的快捷键:前四条要先聚焦,最后一条(提问卡片 `Esc`)是既有键在那个状态下没有主人;DOM / 焦点 / `keydown` / `closest()` / `preventDefault()` 预备知识 |
+| [2. 归属判定](docs/02-ownership-resolution.md) | 键盘事件的完整链路;面板命令、停止序列与审批面板各自的归属判定;提问卡片的判定 |
+| [3. 固定输入通道与面板键桥接](docs/03-fixed-input-and-pane-keys.md) | 机制总览;固定输入通道与「消费即让位」;`enabledBinding`;`handlePaneInput` |
 | [4. 停止桥接(`Esc Esc`)](docs/04-stop-sequence-bridge.md) | `handleStopInput`;轮次身份(turn identity);双按序列;归属不重叠 |
 | [5. 审批键桥接(`Enter` / `Esc`)](docs/05-approval-key-bridge.md) | `handleApprovalInput`;面板 / 审批桥 / 提问桥 / 停止序列的归属不重叠;提问卡片取消桥的 `editable` 放宽与 `dismiss()` |
-| [6. 边界与依赖契约](docs/06-comparison-boundaries-contracts.md) | 与内置命令的对照表;已知边界与失败模式;依赖的非正式契约 |
+| [6. 边界与依赖契约](docs/06-boundaries-and-contracts.md) | 与内置命令的对照表;已知边界与失败模式;依赖的非正式契约 |
 | [7. 构建、测试与启用](docs/07-build-test-and-enable.md) | 构建 / 测试命令;`test/` 分组;启用与撤销 |
