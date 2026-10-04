@@ -16,19 +16,19 @@
 | 审批：允许一次 `Enter` / 拒绝 `Esc` | 审批面板自己的 `onKeyDown`；`registerFixed()` 另登记 `approval.allow` / `approval.reject`，仅用于声明键位与冲突检查 | 焦点落在审批详情区（`[data-approval-key]` 子树内，且 `currentTarget.contains(document.activeElement)` 成立） | 面板收不到这一按，`Enter` 与 `Esc` 都是无反应 |
 | 取消提问卡片 `Esc` | 无按键绑定；卡片唯一出口是头部关闭 / 取消按钮，调 `PendingQuestion.dismiss()` | 无（组件里只有两处 `keydown`，都只读 `Enter`，不读 `Escape`） | `Esc` 既不取消提问、也不停止回合 |
 
-> 术语：**composer** = 主界面底部的输入区；**dock pane** = 右侧栏里的面板；**审批详情区** = 审批卡片里那块可聚焦的说明区域。前两者的 DOM 标记见 [第 2.2 节](#22-本-gui-里的两个关键区域composer-与-dock-pane)，审批面板见 [第 5 册](05-approval-key-bridge.md)；提问卡片（`ask_user_question` 的 composer 顶替卡片）见同册第 5.6.3、5.7 节与 [第 6 册](06-comparison-boundaries-contracts.md) 第 7 节的边界表。
+> 术语：**composer** = 主界面底部的输入区；**dock pane** = 右侧栏里的面板；**审批详情区** = 审批卡片里那块可聚焦的说明区域。前两者的 DOM 标记见 [第 2.2 节](#22-本-gui-里的两个关键区域composer-与-dock-pane)，审批面板见 [第 5 册](05-approval-key-bridge.md)；提问卡片（`ask_user_question` 的 composer 顶替卡片）见同册第 5.6.3、5.7 节与 [第 6 册](06-boundaries-and-contracts.md) 第 7 节的边界表。
 
 > 键位写法：官方把主修饰键记作 `primary`，在 macOS 上映射成 `⌘`（`meta`），在 Windows/Linux 上映射成 `Ctrl`（`control`）。因此 `primary+alt+Enter` 是 `⌘⌥Enter` / `Ctrl+Alt+Enter`，`primary+Backslash` 是 `⌘\` / `Ctrl+\`。
 
 > 第 5 行的前提条件：有待答交互时，内置 `response.stop` 固定序列与本插件的停止桥都以 `pendingInteraction !== undefined` 为门槛拒绝这一按，且都不消费。插件把这一按接到卡片关闭 / 取消按钮调用的同一个 `PendingQuestion.dismiss()` 上（见 [第 5 册](05-approval-key-bridge.md) 第 5.6.3、5.7 节）。
 
-> 本插件另有两条官方没有任何命令占用的固定键：`Ctrl+Alt+J`（`dsh-focus-free-shortcuts.focus-composer`，把键盘交还 composer）与 `Ctrl+Alt+←` / `Ctrl+Alt+→`（`dsh-focus-free-shortcuts.page-cycle`，把右侧栏切到下一张页面并把键盘交给新页面）。两者都走固定输入通道，实现分别在 `src/focus-composer.ts` 与 `src/page-cycle.ts`；对照表见 [第 6 册](06-comparison-boundaries-contracts.md)，构建与启用见 [第 7 册](07-build-test-and-enable.md)。
+> 本插件另有两条官方没有任何命令占用的固定键：`Ctrl+Alt+J`（`dsh-focus-free-shortcuts.focus-composer`，把键盘交还 composer）与 `Ctrl+Alt+←` / `Ctrl+Alt+→`（`dsh-focus-free-shortcuts.page-cycle`，把右侧栏切到下一张页面并把键盘交给新页面）。两者都走固定输入通道，实现分别在 `src/focus-composer.ts` 与 `src/page-cycle.ts`；对照表见 [第 6 册](06-boundaries-and-contracts.md)，构建与启用见 [第 7 册](07-build-test-and-enable.md)。
 
 ---
 
 ## 2. 预备知识
 
-本节解释后文反复出现的概念。若已熟悉，可直接跳到 [第 3 节](02-root-cause.md)。
+本节解释后文反复出现的概念。若已熟悉，可直接跳到 [第 3 节](02-ownership-resolution.md)。
 
 ### 2.1 DOM 元素（Element）与文档树
 

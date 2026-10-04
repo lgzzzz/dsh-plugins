@@ -9,4 +9,4 @@
 | [1. 字段形状与语义](dsh-client-inject/01-fields-and-semantics.md) | 写在哪里、长什么样;三个同名 `inject` 的区别;`dsh.client` 四个字段各自的作用 |
 | [2. 完整数据流](dsh-client-inject/02-data-flow.md) | 宿主半部 → 线上传输 → 浏览器半部;`inject` 到底「得到什么 / 失去什么」 |
 | [3. 同步 `require` 的边界与失败表现](dsh-client-inject/03-require-and-failure-modes.md) | 构建期纯度门与同步 `require` 的真实边界;三种依赖在目标缺失 / 被禁用时的表现 |
-| [4. 术语速查表](dsh-client-inject/04-glossary-and-case.md) | 术语表 |
+| [4. 术语速查表](dsh-client-inject/04-glossary.md) | 术语表 |

@@ -53,7 +53,7 @@ shortcuts.dispatch({ ...gesture, defaultPrevented: event.defaultPrevented }, con
 
 - **固定输入通道（fixed input）**：处理键位不可改的固定序列，例如 `Esc Esc` 停止。
 - **可配置命令（configurable commands）**：处理可在「设置 → 快捷键」里改键位的命令，例如 `⌘⌥Enter` 全屏、`⌘\` 分屏。
-- 桌面端（Desktop）macOS/Windows 上，可配置键位不走这段 DOM 监听，而由 Electron 的原生键盘桥派发，因此那段代码在 `if (native) return` 提前返回（对插件的影响见 [第 3 册](03-solution-overview-and-pane-keys.md)）。
+- 桌面端（Desktop）macOS/Windows 上，可配置键位不走这段 DOM 监听，而由 Electron 的原生键盘桥派发，因此那段代码在 `if (native) return` 提前返回（对插件的影响见 [第 3 册](03-fixed-input-and-pane-keys.md)）。
 
 链路里只有 `target`（当前聚焦元素），没有「鼠标悬停在哪」「上次点过哪」的信息；焦点为空时 `target` 就是 `<body>`，靠 target 做的判定随之落空。
 
@@ -181,4 +181,4 @@ return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallba
 - 卡片唯一的出口是头部那个关闭 / 取消按钮，它调 `PendingQuestion.dismiss()`。
 - 「停止」这条路也不接管：内置 `currentTurn()` 与本插件的 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛（[第 4 册](04-stop-sequence-bridge.md) 第 5.4.3、5.5 节），有待答交互时不停止、也不消费。
 
-因此焦点落在卡片里时这一按仍然没有 owner（自由文本问题还会自动把焦点放进它的答案文本域）。唯一可行的接法是走固定输入通道，把这一按接到面板关闭 / 取消按钮调用的同一个操作上：即 [第 5 册](05-approval-key-bridge.md) 第 5.6.3、5.7 节讲的提问桥；与内置命令的对照见 [第 6 册](06-comparison-boundaries-contracts.md)。
+因此焦点落在卡片里时这一按仍然没有 owner（自由文本问题还会自动把焦点放进它的答案文本域）。唯一可行的接法是走固定输入通道，把这一按接到面板关闭 / 取消按钮调用的同一个操作上：即 [第 5 册](05-approval-key-bridge.md) 第 5.6.3、5.7 节讲的提问桥；与内置命令的对照见 [第 6 册](06-boundaries-and-contracts.md)。
