@@ -110,4 +110,10 @@ export const CSS = `
 [data-slot="conversation.session.header"] * {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
+
+/* 子智能体会话树（role="tree" 精确锚点）自身与子元素 14px */
+div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"]),
+div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"]) * {
+  font-size: var(--dsh-content-font-size, 14px) !important;
+}
 `
