@@ -22,7 +22,7 @@
 
 > 第 5 行的前提条件：有待答交互时，内置 `response.stop` 固定序列与本插件的停止桥都以 `pendingInteraction !== undefined` 为门槛拒绝这一按，且都不消费。插件把这一按接到卡片关闭 / 取消按钮调用的同一个 `PendingQuestion.dismiss()` 上（见 [第 5 册](05-approval-key-bridge.md) 第 5.6.3、5.7 节）。
 
-> 本插件另有三条官方没有任何命令占用的固定键：`Ctrl+Alt+J`（`dsh-focus-free-shortcuts.focus-composer`，把键盘交还 composer）、`Ctrl+Alt+←` / `Ctrl+Alt+→`（`dsh-focus-free-shortcuts.page-cycle`，把右侧栏切到下一张页面并把键盘交给新页面）与 `Ctrl+Alt+↑` / `Ctrl+Alt+↓`（`dsh-focus-free-shortcuts.session-cycle`，在左侧栏前三个工作区当前显示出来的会话行之间切换）。三者都走固定输入通道，实现分别在 `src/focus-composer.ts`、`src/page-cycle.ts` 与 `src/session-cycle.ts`；对照表见 [第 6 册](06-boundaries-and-contracts.md)，构建与启用见 [第 7 册](07-build-test-and-enable.md)。
+> 本插件另有四条官方没有任何命令占用的固定键：`Ctrl+Alt+J`（`dsh-focus-free-shortcuts.focus-composer`，把键盘交还 composer）、`Ctrl+Alt+←` / `Ctrl+Alt+→`（`dsh-focus-free-shortcuts.page-cycle`，把右侧栏切到下一张页面并把键盘交给新页面）、`Ctrl+↑` / `Ctrl+↓`（`dsh-focus-free-shortcuts.session-cycle`，在左侧栏前三个工作区当前显示出来的会话行之间导航）与 `Ctrl+Alt+↑` / `Ctrl+Alt+↓`（`dsh-focus-free-shortcuts.session-active-cycle`，只在其中带状态点的活跃会话之间切换）。四者都走固定输入通道，实现分别在 `src/focus-composer.ts`、`src/page-cycle.ts` 与 `src/session-cycle.ts`；对照表见 [第 6 册](06-boundaries-and-contracts.md)，构建与启用见 [第 7 册](07-build-test-and-enable.md)。
 
 ---
 

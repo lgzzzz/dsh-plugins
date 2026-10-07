@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, sidebarTree, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_CYCLE_ID, SESSION_NEXT_PRESS } from './helpers.mjs'
+import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, sidebarTree, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_ACTIVE_CYCLE_ID, SESSION_CYCLE_ID, SESSION_NEXT_PRESS } from './helpers.mjs'
 
 console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
 {
@@ -71,7 +71,7 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
   const previousDocument = globalThis.document
   globalThis.document = fakeDocument({ root: sidebarTree([{ key: 'w1', sessions: ['s1', 's2'] }]) })
   try {
-    checkTrue('产物里会话循环固定行已挂载', shortcuts.fixedCatalog.getSnapshot().some((entry) => entry.id === SESSION_CYCLE_ID))
+    checkTrue('产物里两条会话循环固定行都已挂载', [SESSION_CYCLE_ID, SESSION_ACTIVE_CYCLE_ID].every((id) => shortcuts.fixedCatalog.getSnapshot().some((entry) => entry.id === id)))
     const press = keydown(SESSION_NEXT_PRESS, shortcutContext({ target: domBody }))
     shortcuts.emit(press.input)
     check('产物里会话循环桥接生效', navigation.opened, ['s2'])

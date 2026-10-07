@@ -123,14 +123,20 @@ export const PAGE_PREVIOUS_PRESS = gesture('ArrowLeft', { control: true, alt: tr
 export const PAGE_NEXT_PRESS = gesture('ArrowRight', { control: true, alt: true })
 
 export const SESSION_CYCLE_ID = 'dsh-focus-free-shortcuts.session-cycle'
-export const SESSION_PREVIOUS_BINDING = { code: 'ArrowUp', modifiers: ['control', 'alt'] }
-export const SESSION_NEXT_BINDING = { code: 'ArrowDown', modifiers: ['control', 'alt'] }
-/** 本插件自己挂载的固定行:一行同时预约 `Ctrl+Alt+↑` 与 `Ctrl+Alt+↓`。 */
+export const SESSION_PREVIOUS_BINDING = { code: 'ArrowUp', modifiers: ['control'] }
+export const SESSION_NEXT_BINDING = { code: 'ArrowDown', modifiers: ['control'] }
+export const SESSION_ACTIVE_CYCLE_ID = 'dsh-focus-free-shortcuts.session-active-cycle'
+export const SESSION_ACTIVE_PREVIOUS_BINDING = { code: 'ArrowUp', modifiers: ['control', 'alt'] }
+export const SESSION_ACTIVE_NEXT_BINDING = { code: 'ArrowDown', modifiers: ['control', 'alt'] }
+/** 本插件自己挂载的两条固定行:`Ctrl+↑/↓` 走全部候选,`Ctrl+Alt+↑/↓` 只走活跃会话。 */
 export const SESSION_CYCLE_FIXED_ROWS = [
   fixedRow(SESSION_CYCLE_ID, [SESSION_PREVIOUS_BINDING, SESSION_NEXT_BINDING], { group: 'application' }),
+  fixedRow(SESSION_ACTIVE_CYCLE_ID, [SESSION_ACTIVE_PREVIOUS_BINDING, SESSION_ACTIVE_NEXT_BINDING], { group: 'application' }),
 ]
-export const SESSION_PREVIOUS_PRESS = gesture('ArrowUp', { control: true, alt: true })
-export const SESSION_NEXT_PRESS = gesture('ArrowDown', { control: true, alt: true })
+export const SESSION_PREVIOUS_PRESS = gesture('ArrowUp', { control: true })
+export const SESSION_NEXT_PRESS = gesture('ArrowDown', { control: true })
+export const SESSION_ACTIVE_PREVIOUS_PRESS = gesture('ArrowUp', { control: true, alt: true })
+export const SESSION_ACTIVE_NEXT_PRESS = gesture('ArrowDown', { control: true, alt: true })
 
 /** 内置"展开/折叠右侧栏"命令 id,展开补位跟随它的有效行。 */
 export const SIDEBAR_TOGGLE_ID = 'sidebar.right.toggle'
