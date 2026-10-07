@@ -8,6 +8,7 @@ else
 fi
 [ -n "$BASE" ] || BASE="$PWD"
 PLUGINS=(
+  dsh-changes-hover-off
   dsh-desktop-notify
   dsh-directory-picker-browse
   dsh-focus-free-shortcuts

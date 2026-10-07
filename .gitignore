@@ -15,6 +15,7 @@ package-lock.json
 
 # 构建产物:以下 lib/ 由 `pnpm -r build`(tsdown)生成,
 # clone 后须先构建才能被 DSH 加载(profile 以 link: 指向本目录,读取 lib/client.js)。
+dsh-changes-hover-off/lib/
 dsh-desktop-notify/lib/
 dsh-focus-free-shortcuts/lib/
 dsh-header-action-order/lib/

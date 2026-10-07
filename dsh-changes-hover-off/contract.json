@@ -1,0 +1,8 @@
+{
+  "description": "dsh-changes-hover-off 依赖的上游事实:改动文件卡片根元素的稳定锚点,以及「500ms 悬停打开单列 diff 浮层」这条被本插件拦掉的行为。用 dsh-ui-css-patches 的 check-css.mjs --manifest contract.json 校验(即本包 build 脚本的后半段)。",
+  "checks": [
+    {"id":"changed-files-attr","plugin":"dsh-changes-hover-off","token":"data-changed-files","paths":["dsh-client-ui-deliverables/lib"],"hint":"改动文件卡片根元素的 data-changed-files 属性消失,悬停闸门作用域落空 —— 浮层会重新出现"},
+    {"id":"hover-open-delay","plugin":"dsh-changes-hover-off","pattern":"openDelayMs:\\s*500","paths":["dsh-client-ui-deliverables/lib"],"hint":"上游不再用 500ms 悬停打开改动浮层(可能已提供开关或改走别的路径),本插件可能已多余"},
+    {"id":"hover-preview-attr","plugin":"dsh-changes-hover-off","token":"data-changes-hover-preview","paths":["dsh-client-ui-deliverables/lib"],"hint":"浮层内容标记消失,说明上游重写了这条预览,需要重新确认拦停位置"}
+  ]
+}
