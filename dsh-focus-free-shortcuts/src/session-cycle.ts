@@ -17,6 +17,9 @@
  * 落在 `.xterm` 内的按键不会到达 window 上的 fixed-input 监听(终端在自己的 textarea
  * 处理器里 `stopPropagation()`)，因此与页面循环桥一样另装捕获阶段的 window `keydown`，
  * 两条路径共用同一个判定函数(`sessionCyclePlan`)，一次按键只被处理一次。
+ *
+ * 切换动词 `uiWorkspace.openSession` 所在的服务声明为注入依赖:它来自 Workspace browser
+ * 的客户端包,激活可能晚于本插件,直接 `ctx.get` 一次会把「还没激活」误判成「缺席」。
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
 import { bindingMatches } from './binding.ts'
@@ -43,8 +46,8 @@ type UiSession = Context['uiSession']
  * 会话导航面:上游 `UiWorkspace` 的公开面里本插件唯一要用的动词。
  *
  * 该服务由 Workspace browser 所在的上游客户端包提供。本插件不为它多拉一个类型依赖,
- * 只按这份结构读取 `ctx.get('uiWorkspace')`;服务缺席(没有 Workspace browser 的客户端)
- * 时本桥告警一次并整体不安装。
+ * 只按这份结构读取 `scope.get('uiWorkspace')`;该服务由注入列表声明,因此读取时它必然
+ * 已经激活 —— 形状不符(上游改了方法名)时才告警一次并整体不安装。
  */
 export interface SessionNavigation {
   /**
@@ -362,9 +365,15 @@ export function sessionCyclePlan(
  * 通过两条路径投递按键:观察者处理 DOM 通道收到的按键;捕获阶段 window `keydown`
  * 监听处理落在 `.xterm` 内、通道收不到的按键。两条路径运行同一判定
  * (`sessionCyclePlan`)与同一切换,一次按键只被处理一次。
+ *
+ * `uiWorkspace` 与其余三项一样声明在注入列表里,而不是在回调里直接 `get` 一次:
+ * `ctx.get` 默认只认**已激活**的服务,而 Workspace browser 的客户端包依赖一长串服务
+ * (`layout` / `remote.directoryPicker` 等),它的激活可能晚于本插件 —— 采样一次会把
+ * 「还没激活」错当成「缺席」,整条桥就再也不安装了。声明成依赖后本 scope 会等到该服务
+ * 真正可用再跑,服务缺席(没有 Workspace browser 的客户端)时同样退化为不安装。
  */
 export function installSessionCycleBridge(ctx: Context): void {
-  ctx.inject(['shortcuts', 'sessions', 'uiSession'], (scope) => {
+  ctx.inject(['shortcuts', 'sessions', 'uiSession', 'uiWorkspace'], (scope) => {
     const shortcuts: Shortcuts = scope.shortcuts
     const sessions: ISessions = scope.sessions
     const uiSession: UiSession = scope.uiSession
