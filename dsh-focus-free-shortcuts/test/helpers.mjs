@@ -585,12 +585,25 @@ export class FakeCtx {
   constructor(services) {
     this.services = services
     this.effects = []
+    /** 依赖未就绪的注入:复刻 Cordis 的「等」,而不是直接放弃。 */
+    this.pending = []
   }
   get(name) {
     return this.services[name]
   }
+  /** 新增一项服务,并按 Cordis 的语义重试等待中的注入。 */
+  provide(name, value) {
+    this.services[name] = value
+    const waiting = this.pending
+    this.pending = []
+    for (const entry of waiting) this.inject(entry.deps, entry.callback)
+  }
   inject(deps, callback) {
-    if (deps.some((name) => this.services[name] === undefined)) return undefined
+    if (deps.some((name) => this.services[name] === undefined)) {
+      // 服务缺席时 Cordis 让这段逻辑停在等待中,服务到齐后再跑(见 provide)。
+      this.pending.push({ deps, callback })
+      return undefined
+    }
     const scope = {
       get: (name) => this.services[name],
       effect: (execute, label) => {

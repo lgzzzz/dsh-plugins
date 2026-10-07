@@ -113,7 +113,8 @@
 | 当前会话不在候选里（它在第四个 / 别的工作区） | `↓` 落候选首、`↑` 落候选尾 | 当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出；它不在候选里时按「进入候选列表」处理，方向决定落在哪一端。 |
 | 候选里唯一的活跃会话**正是**当前会话 | 改用全部候选继续走 | 否则这一按会原地不动，用户到了那个会话之后就走不下去了。 |
 | 上游改了行标记 / 分组结构 / 归档标记 | 最坏情形是候选变空（不动作），不误动作 | 候选依赖三项文档事实：`[data-row-key]` 的 `workspace:` / `session:` 两种前缀（只有 Workspace browser 发布这个属性）、行的归属（HoverCard 包装下的「父节点的最近 `div` 祖先 = 分组容器；容器里第一个工作区行 = 它的分组行」）、归档行的 `aria-description` 标记。认不出归属的行直接丢掉，绝不猜它属于谁。 |
-| `uiWorkspace` 服务缺席 | 会话循环桥不安装，告警一次 | 会话导航面由 Workspace browser 所在的客户端包提供；没有它既没有侧栏行、也没有可切换的动作。插件不把该包声明成类型依赖，只按结构读 `ctx.get('uiWorkspace').openSession`。 |
+| `uiWorkspace` 服务缺席（没有 Workspace browser 的客户端） | 会话循环桥不安装，不告警 | 会话导航面由 Workspace browser 所在的客户端包提供；没有它既没有侧栏行、也没有可切换的动作。该服务名与其余三项一样声明在 `ctx.inject` 的依赖列表里：`ctx.get` 默认只认**已激活**的服务，而 Workspace browser 的客户端包依赖一长串服务（`layout` / `remote.directoryPicker` 等），激活可能晚于本插件，采样一次会把「还没激活」错判成「缺席」。 |
+| `uiWorkspace` 在、但公开面形状不符（上游改了 `openSession` 的方法名） | 会话循环桥不安装，告警一次 | 本插件不把该包声明成类型依赖，只按结构读 `scope.get('uiWorkspace').openSession`（见下面第 21 条）；注入只保证服务来了，形状仍要运行时确认。 |
 | 终端内按 `Ctrl+Alt+↓/↑` | 照常切换并消费 | 与页面循环同一条机制：`.xterm` 内的 keydown 到不了固定通道的 window 冒泡监听，所以桥在 window **捕获阶段**另挂一个 keydown 监听，只对会落进 `.xterm` 的按键拦下（判定与通道路径共用 `sessionCyclePlan`），其余按键放行。 |
 | 会话切换后键盘落在哪里 | 键盘留在原地，桥不搬焦点 | 与点击那一行同一效果：`uiWorkspace.openSession()` 只换主视图会话，不聚焦任何人；新会话的 composer 是否取键盘由应用自己决定（页面切换键的「补位聚焦新页面」是另一条规则，见第 6 节）。 |
 
@@ -123,7 +124,7 @@
 
 ## 8. 依赖的非正式契约
 
-本插件**不重述上游已有的类型**：物理按键手势 / 绑定 / 两类快捷键目录行取自 `@deepseek-ai/dsh-client-shortcuts`（`NormalizedBinding` 走 `/protocol` 入口），会话目录、会话绑定与列表快照取自 `@deepseek-ai/dsh-api-session-controller/client`，会话 UI 状态与 `pendingInteraction` 槽位取自 `@deepseek-ai/dsh-client-ui-session/client`，待答审批取自 `@deepseek-ai/dsh-client-ui-approval/client` 的 `PendingApproval` / `ApprovalDecision`，待答提问取自 `@deepseek-ai/dsh-client-ui-user-questions/client` 的 `PendingQuestion`，会话级 `cancel()` 与 composer 输入面 `conversation.input`（`SessionInputResolver` / `SessionInput`）取自 `@deepseek-ai/dsh-client-ui-conversation/client` 的 `IConversation`，Sidebar 面取自 Cordis 上的 `Context['sidebarRight']`。会话导航面则按结构读 `ctx.get('uiWorkspace')`（上游 `UiWorkspace` 的公开面，本插件不为它多拉一个类型依赖，见下面第 21 条）。全部类型都是 `import type`，打包时被擦除（客户端纯度门看不到它们）。
+本插件**不重述上游已有的类型**：物理按键手势 / 绑定 / 两类快捷键目录行取自 `@deepseek-ai/dsh-client-shortcuts`（`NormalizedBinding` 走 `/protocol` 入口），会话目录、会话绑定与列表快照取自 `@deepseek-ai/dsh-api-session-controller/client`，会话 UI 状态与 `pendingInteraction` 槽位取自 `@deepseek-ai/dsh-client-ui-session/client`，待答审批取自 `@deepseek-ai/dsh-client-ui-approval/client` 的 `PendingApproval` / `ApprovalDecision`，待答提问取自 `@deepseek-ai/dsh-client-ui-user-questions/client` 的 `PendingQuestion`，会话级 `cancel()` 与 composer 输入面 `conversation.input`（`SessionInputResolver` / `SessionInput`）取自 `@deepseek-ai/dsh-client-ui-conversation/client` 的 `IConversation`，Sidebar 面取自 Cordis 上的 `Context['sidebarRight']`。会话导航面则把 `uiWorkspace` 声明为 Cordis 注入依赖、再按结构读 `scope.get('uiWorkspace')`（上游 `UiWorkspace` 的公开面，本插件不为它多拉一个类型依赖，见下面第 21 条）。全部类型都是 `import type`，打包时被擦除（客户端纯度门看不到它们）。
 
 下面列的则是**不是正式对外契约**的事实，都与官方代码同源，但官方没有承诺"永不变名"。若上游改名，本插件会**退化成 no-op（什么都不做，但绝不误动作）**，并在诊断里说明。
 
@@ -149,4 +150,4 @@
 18. DOM 标记 `[data-row-key]`（Workspace browser 的行标记）与它的取值：分组行 `workspace:<workspaceId>`、「未分组」桶同样是 `workspace:`（键为空串）、会话行 `session:<sessionId>`，另有两种**不是会话**的行 `empty`（空列表占位）与 `overflow:<groupKey>`（「展开更多」按钮）。只有 Workspace browser 发布这个属性（轨迹视图用的是 `data-trajectory-row-key`、搜索结果是普通 `role="treeitem"`、子代理下拉也没有），所以会话循环桥全文档扫一遍不会收到别处的行。若上游改了标记名，候选退化为空（不动作、不误动作）。
 19. 分组结构与归属判定：每个分组渲染成「分组容器 `div` > 自己的分组行 →（嵌套子分组）→ 自己名下的会话行 →（「展开更多」行）」，而分组行与会话行外面各包着一层 HoverCard 的 `span`。会话循环桥据此归属：**会话行父节点的最近 `div` 祖先就是分组容器，容器里第一个工作区行就是它自己的分组行**。嵌套子分组排在父分组自己的会话行之前，所以「工作区树」模式下父分组自己的会话行仍归父分组；「单列表」模式下会话行的最近 `div` 祖先是列表本身、里面没有工作区行，这些行直接丢掉。
 20. 归档行标记 `aria-description`（官方只对归档行写「已归档，不可打开」的提示文案）与官方 `guardedOpen` 的语义（打开归档行只弹提示、不切换）。会话循环桥据此把归档行排除在候选之外。若上游改用别的标记，最坏情形是归档行回到候选里——按下去弹一次提示、不切换会话，仍然不误动作。
-21. `uiWorkspace.openSession(sessionId)` 的语义（上游 `UiWorkspace` 的公开面里本插件唯一要用的动词：选中一个会话并把它的 Conversation 显示出来，与点击侧栏那一行完全同路，只换主视图、不聚焦任何人）。本插件不为它多拉一个类型依赖，只按结构读 `ctx.get('uiWorkspace')` 的 `openSession`；服务缺席（没有 Workspace browser 的客户端）时告警一次 `uiWorkspace service unavailable; session-cycle keys not installed`、整条桥不安装。若上游改了这个方法名，则同样退化为不安装并告警。
+21. `uiWorkspace.openSession(sessionId)` 的语义（上游 `UiWorkspace` 的公开面里本插件唯一要用的动词：选中一个会话并把它的 Conversation 显示出来，与点击侧栏那一行完全同路，只换主视图、不聚焦任何人）。本插件不为它多拉一个类型依赖，但把 `uiWorkspace` 写进会话循环桥的注入依赖列表，等服务**激活**后再按结构读 `scope.get('uiWorkspace')` 的 `openSession`（`ctx.get` 默认只认已激活的服务；Workspace browser 的客户端包激活可能晚于本插件，采样一次会把「还没激活」误判成「缺席」而永不安装）。服务缺席（没有 Workspace browser 的客户端）时 Cordis 不跑桥的回调，整条桥不安装、也不告警；服务在而形状不符（上游改了这个方法名）时告警一次 `uiWorkspace service unavailable; session-cycle keys not installed`、整条桥同样不安装。

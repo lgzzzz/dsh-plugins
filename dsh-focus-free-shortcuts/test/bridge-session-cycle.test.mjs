@@ -3,7 +3,7 @@
  * 环状切换,活跃会话(运行中 / 有待答交互)优先 —— 唯一的活跃会话已在屏上时改用全部候选。
  * 目标就是当前会话、没有候选、缺服务时让位;终端内(`.xterm`)的按键在 window 捕获阶段拦下。
  */
-import { captureWarnings, check, checkTrue, fakeDocument, fakeKeyEvent, fakePageSidebar, fakeShortcuts, fakeSessions, fakeUiSession, fakeWindow, FakeCtx, FakeElement, finish, gesture, harness, keydown, session, shortcutContext, sidebarTree, statusTable, applyPlugin, SESSION_CYCLE_ID, SESSION_NEXT_PRESS, SESSION_PREVIOUS_PRESS } from './helpers.mjs'
+import { captureWarnings, check, checkTrue, fakeDocument, fakeKeyEvent, fakePageSidebar, fakeSessionNavigation, fakeShortcuts, fakeSessions, fakeUiSession, fakeWindow, FakeCtx, FakeElement, finish, gesture, harness, keydown, session, shortcutContext, sidebarTree, statusTable, applyPlugin, SESSION_CYCLE_ID, SESSION_NEXT_PRESS, SESSION_PREVIOUS_PRESS } from './helpers.mjs'
 
 /** 装假 document(侧栏树)与假 window(捕获监听就装在上面),用完还原。 */
 function withSidebarDom({ app, activeElement = null, window = fakeWindow() } = {}) {
@@ -354,19 +354,23 @@ console.log('--- Q⑧ 捕获路径让位:非终端目标 / 长按 / 模态 / 没
   }
 }
 
-console.log('--- Q⑨ 失败模式:缺 uiWorkspace / 缺 observeFixedInput 即不装 ---')
+console.log('--- Q⑨ 失败模式:缺 uiWorkspace 即等服务不装,形状不符才告警;缺 observeFixedInput 告警 ---')
 {
+  // uiWorkspace 是注入依赖:缺席时 Cordis 根本不跑桥的回调 —— 既没有固定行,也没有告警。
   const noWorkspace = harness({ withUiWorkspace: false })
   check('缺 uiWorkspace 时会话循环固定行未挂载', noWorkspace.shortcuts.fixedCatalog.getSnapshot().some((entry) => entry.id === SESSION_CYCLE_ID), false)
+  check('缺 uiWorkspace 时不告警(等服务激活)', noWorkspace.warnings, [])
 
+  // 服务在、但公开面不对(上游改了方法名):告警一次,不挂固定行。
   const bare = new FakeCtx({
     shortcuts: fakeShortcuts(),
     sessions: fakeSessions({ summary: { s1: session('s1') } }),
     uiSession: fakeUiSession(),
+    uiWorkspace: {},
   })
   const warnings = captureWarnings(() => applyPlugin(bare))
-  checkTrue('缺 uiWorkspace 时告警', warnings.some((line) => line.includes('uiWorkspace service unavailable; session-cycle keys not installed')))
-  check('缺 uiWorkspace 时未挂固定行', bare.effects.some((effect) => String(effect.label).includes('session cycle fixed row')), false)
+  checkTrue('uiWorkspace 形状不符时告警', warnings.some((line) => line.includes('uiWorkspace service unavailable; session-cycle keys not installed')))
+  check('uiWorkspace 形状不符时未挂固定行', bare.effects.some((effect) => String(effect.label).includes('session cycle fixed row')), false)
 
   const noObserver = new FakeCtx({
     shortcuts: { ...fakeShortcuts(), observeFixedInput: undefined },
@@ -376,6 +380,35 @@ console.log('--- Q⑨ 失败模式:缺 uiWorkspace / 缺 observeFixedInput 即�
   })
   const observerWarnings = captureWarnings(() => applyPlugin(noObserver))
   checkTrue('缺 observeFixedInput 时告警', observerWarnings.some((line) => line.includes('session-cycle keys not installed')))
+
+  // 复刻 Cordis 的注入语义:uiWorkspace 只是激活得晚(还没提供)时,桥等它到齐后补装,
+  // 而不是把「还没激活」当成「缺席」—— 真实客户端里 Workspace browser 的激活晚于本插件。
+  {
+    const sidebar = PAGE_SIDEBAR()
+    const tree = sidebarTree([{ key: 'w1', sessions: ['s1', 's2'] }])
+    const dom = withSidebarDom({ app: tree })
+    const navigation = fakeSessionNavigation()
+    const shortcuts = fakeShortcuts()
+    const ctx = new FakeCtx({
+      shortcuts,
+      sessions: fakeSessions({ summary: { s1: session('s1'), s2: session('s2', { mainView: 0, running: false }) } }),
+      uiSession: fakeUiSession(),
+    })
+    const lateWarnings = captureWarnings(() => applyPlugin(ctx))
+    try {
+      check('uiWorkspace 未就绪时未挂固定行', ctx.effects.some((effect) => String(effect.label).includes('session cycle fixed row')), false)
+      check('uiWorkspace 未就绪时不告警', lateWarnings, [])
+
+      ctx.provide('uiWorkspace', navigation)
+      checkTrue('服务到齐后补装固定行', shortcuts.fixedCatalog.getSnapshot().some((entry) => entry.id === SESSION_CYCLE_ID))
+      const press = keydown(SESSION_NEXT_PRESS, shortcutContext({ target: null }))
+      shortcuts.emit(press.input)
+      check('补装后照常切换', navigation.opened, ['s2'])
+      check('补装后消费按键', press.consumed.count, 1)
+    } finally {
+      dom.restore()
+    }
+  }
 }
 
 console.log('--- Q⑩ 卸载:固定行与捕获监听一起释放 ---')
