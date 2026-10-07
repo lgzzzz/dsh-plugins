@@ -1,0 +1,39 @@
+{
+  "name": "dsh-workspace-quick-switch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "快捷键 Ctrl+Alt+M 弹出浮层,按左侧栏当前的工作区顺序列出前 10 个工作区,↑/↓ 导航、Enter 在该工作区新建会话。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "node test/run-all.mjs",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}
