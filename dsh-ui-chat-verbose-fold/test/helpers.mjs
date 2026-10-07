@@ -9,11 +9,12 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 import { CHAT_VIEW_ID, CHAT_VIEW_SLOT } from '../src/policy-fold.ts'
+import { MISSING_PROBE_ATTEMPTS, MISSING_PROBE_MS } from '../src/client.ts'
 
 /** 本插件的包根目录(测试文件在 test/ 下,所以是上一级)。 */
 export const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-export { CHAT_VIEW_ID, CHAT_VIEW_SLOT }
+export { CHAT_VIEW_ID, CHAT_VIEW_SLOT, MISSING_PROBE_ATTEMPTS, MISSING_PROBE_MS }
 
 let failures = 0
 
@@ -48,6 +49,26 @@ export function captureWarnings(run) {
 export function finish() {
   console.log(failures === 0 ? '\n全部通过' : `\n${failures} 项失败`)
   process.exitCode = failures === 0 ? 0 : 1
+}
+
+/** 等待若干毫秒:自检窗口的测试用它等真实定时器跑完。 */
+export function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** 轮询等到 `predicate` 为真(或超时):自检窗口的告警由定时器异步发出。 */
+export async function waitFor(predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate()) {
+    if (Date.now() >= deadline) return false
+    await sleep(10)
+  }
+  return true
+}
+
+/** 自检窗口的总时长(毫秒),外加一点余量:等在窗口内排下的最后一拍跑完。 */
+export function probeWindowMs() {
+  return MISSING_PROBE_MS * MISSING_PROBE_ATTEMPTS + 300
 }
 
 /** 按模式返回全新的策略对象(verbose 初始不折叠)。 */

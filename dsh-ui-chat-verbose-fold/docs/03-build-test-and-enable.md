@@ -17,7 +17,7 @@ node test/inject-wrap.test.mjs       # 只跑某一组
 `test/` 下按主题分散(共享装置在 `test/helpers.mjs`,runner 是 `test/run-all.mjs`):
 
 - **纯投影与定位**(`test/projection.test.mjs`):策略投影(含身份透传)、注入面形状判定、注册项定位
-- **包装与装配**(`test/inject-wrap.test.mjs`):原地包装生效、幂等、晚到注册、目标缺席自检、形状变化告警、服务缺席 / 抛错 / 无 `inject` 的 no-op
+- **包装与装配**(`test/inject-wrap.test.mjs`):原地包装生效、幂等、晚到注册、目标缺席自检(有界窗口内到齐不告警 / 走满窗口才告警一次)、形状变化告警、服务缺席 / 抛错 / 无 `inject` 的 no-op
 - **产物**(`test/artifact-client.test.mjs`):`lib/client.js` 的模块 id / 插件名 / `inject` 声明与端到端装配
 
 ## 启用

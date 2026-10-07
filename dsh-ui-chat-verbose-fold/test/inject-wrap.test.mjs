@@ -1,11 +1,11 @@
 /**
  * B 包装与装配:`src/policy-fold.ts` 的原地包装 + `src/client.ts` 的 slots 装配 ——
- * 包装后就地生效、注入面透传、幂等、晚到注册、目标缺席自检、形状变化告警,以及
- * 服务缺席 / `entries` 抛错 / 无 `inject` 方法时的 no-op。
+ * 包装后就地生效、注入面透传、幂等、晚到注册、目标缺席自检(有界窗口)、形状变化告警,
+ * 以及服务缺席 / `entries` 抛错 / 无 `inject` 方法时的 no-op。
  */
 import { CHAT_VIEW_ID, CHAT_VIEW_SLOT, createFoldPatchState, wrapPresentationSource } from '../src/policy-fold.ts'
 import { apply as applyPlugin } from '../src/client.ts'
-import { captureWarnings, chatEntry, check, checkTrue, FakeSlots, finish, makeSource } from './helpers.mjs'
+import { captureWarnings, chatEntry, check, checkTrue, FakeSlots, finish, makeSource, MISSING_PROBE_MS, probeWindowMs, sleep, waitFor } from './helpers.mjs'
 
 console.log('--- B① 包装后就地生效:已折叠 + 其余模式不受影响 ---')
 {
@@ -71,17 +71,18 @@ console.log('--- B④ 晚到的注册(ui-chat 在本插件之后 apply)也被打
   check('后到注册的 inject 被包装', entry.inject().hooks.presentation.getSnapshot().foldCompletedTurns, true)
 }
 
-console.log('--- B⑤ 目标缺席:no-op 不抛,延后一拍告警一次 ---')
+console.log('--- B⑤ 目标缺席:no-op 不抛,窗口走完才告警一次 ---')
 {
   const slots = new FakeSlots([])
   const warnings = []
   const original = console.warn
+  // 告警由自检窗口的定时器异步发出,所以整个等待期间都替换 console.warn。
   console.warn = (...args) => warnings.push(args[0])
   try {
     applyPlugin({ get: (name) => (name === 'slots' ? slots : undefined) })
     check('同步阶段不告警', warnings.length, 0)
-    await Promise.resolve() // 冲掉 queueMicrotask 里的那次自检
-    check('延后一拍告警一次', warnings.length, 1)
+    checkTrue('窗口走完告警一次', await waitFor(() => warnings.length > 0))
+    check('只告警一次', warnings.length, 1)
     checkTrue('告警含槽名', String(warnings[0]).includes(CHAT_VIEW_SLOT))
   } finally {
     console.warn = original
@@ -123,6 +124,28 @@ console.log('--- B⑦ 服务缺席 / entries 抛错 / 无 inject 方法:no-op --
     threw = error
   }
   check('无 inject 方法也能直接打', threw, null)
+}
+
+console.log('--- B⑧ 启动期误报回归:chat 注册项晚到(窗口内)照样打上,且不告警 ---')
+{
+  const { source } = makeSource('verbose')
+  const slots = new FakeSlots([])
+  const warnings = []
+  const original = console.warn
+  // 整段窗口都替换 console.warn:自检如果说错了话,这里必须收到,而不是漏到真控制台。
+  console.warn = (...args) => warnings.push(args[0])
+  try {
+    applyPlugin({ get: (name) => (name === 'slots' ? slots : undefined) })
+    // 复刻真实启动:槽已声明,但 ui-chat 的包与它的依赖链还没激活,注册项晚几拍才到。
+    await sleep(MISSING_PROBE_MS * 2)
+    const entry = chatEntry(source)
+    slots.register(entry)
+    check('晚到注册的 inject 被包装', entry.inject().hooks.presentation.getSnapshot().foldCompletedTurns, true)
+    await sleep(probeWindowMs())
+    check('窗口内到齐就不告警', warnings, [])
+  } finally {
+    console.warn = original
+  }
 }
 
 finish()
