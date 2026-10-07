@@ -1,6 +1,11 @@
 /**
- * 挂载 fixed 行 `dsh-focus-free-shortcuts.session-cycle`(group `application`)，由
- * `Ctrl+Alt+↑` / `Ctrl+Alt+↓` 切换当前显示的会话。
+ * 挂载两条 fixed 行(group `application`)，把左侧栏的会话导航拆成两档：
+ *
+ *   - `dsh-focus-free-shortcuts.session-cycle`(`Ctrl+↑` / `Ctrl+↓`)：在**前三个工作区当前
+ *     显示出来的全部会话行**之间环状步进 —— 就是「在会话之间导航」本身；
+ *   - `dsh-focus-free-shortcuts.session-active-cycle`(`Ctrl+Alt+↑` / `Ctrl+Alt+↓`)：**只在
+ *     活跃会话之间**步进；没有活跃会话、或活跃池里只剩当前会话时这一按没有主人
+ *     (不动作、不消费)——常规导航交给上面那一条。
  *
  * 候选只取「左侧栏现在真的画出来的行」:前三个工作区分组里、没有被折叠、没有被每分组
  * 5 行上限挡在「展开更多」行之后、也没有被归档过滤隐藏的会话行，顺序就是侧栏显示顺序
@@ -8,11 +13,11 @@
  * `[data-row-key]` 标记识别，所以候选与「点击某一行」是同一批对象;
  * `uiWorkspace.openSession(id)` 就是那一击。
  *
- * 池子与方向:候选里「正在运行」或「有待答交互」的会话构成活跃池(状态读
- * `uiSession.sessionStatus`，缺读数退回会话目录的 `running`)。当前会话不在活跃池里时，
- * 这一按先把键盘带进活跃池(↑ 落池尾、↓ 落池首);唯一的活跃会话正是当前会话时改在全部
- * 候选里环状步进 —— 于是「一键抵达那个活跃会话」与「到了之后还能继续往下走」两件事
- * 同时成立。没有活跃候选人时在全部候选里环状步进。
+ * 活跃 = **行上有状态点的会话**:待答交互(审批 / 计划 / 提问)、正在运行、以及「已完成未读」
+ * 那一颗绿点(状态读 `uiSession.sessionStatus` 的 `pendingInteraction` / `running` /
+ * `completionUnread`，运行读数缺席时退回会话目录的 `running`，与侧栏行的判定同源)。回合以
+ * 出错收场时运行状态同样由 true 变 false 并亮起同一颗绿点，所以这类会话也在活跃池里——
+ * DSH 的会话状态面没有独立的「出错」状态，本桥也不去猜。
  *
  * 落在 `.xterm` 内的按键不会到达 window 上的 fixed-input 监听(终端在自己的 textarea
  * 处理器里 `stopPropagation()`)，因此与页面循环桥一样另装捕获阶段的 window `keydown`，
@@ -57,30 +62,57 @@ export interface SessionNavigation {
   openSession(target: SessionId): void
 }
 
-/** 一次按键在会话循环中的方向。 */
+/** 一次按键在会话导航中的方向。 */
 export type SessionStep = 'previous' | 'next'
 
-/** 本桥挂载并跟随的 fixed 会话切换行 id。 */
+/** 一次按键要走的池子:全部候选,或只走活跃会话。 */
+export type SessionPool = 'all' | 'active'
+
+/** 本桥挂载并跟随的 fixed 会话导航行 id(`Ctrl+↑` / `Ctrl+↓`,走全部候选)。 */
 export const SESSION_CYCLE_ID: ShortcutCommandId = 'dsh-focus-free-shortcuts.session-cycle' as ShortcutCommandId
 
-/** `Ctrl+Alt+↑`:向候选列表起点方向切换。 */
+/** 本桥挂载的 fixed 活跃会话行 id(`Ctrl+Alt+↑` / `Ctrl+Alt+↓`,只走活跃池)。 */
+export const SESSION_ACTIVE_CYCLE_ID: ShortcutCommandId = 'dsh-focus-free-shortcuts.session-active-cycle' as ShortcutCommandId
+
+/** `Ctrl+↑`:向候选列表起点方向切换。 */
 export const SESSION_PREVIOUS_BINDING: ShortcutFixedCommand['bindings'][number] = {
+  code: 'ArrowUp',
+  modifiers: ['control'],
+}
+
+/** `Ctrl+↓`:向候选列表终点方向切换。 */
+export const SESSION_NEXT_BINDING: ShortcutFixedCommand['bindings'][number] = {
+  code: 'ArrowDown',
+  modifiers: ['control'],
+}
+
+/** `Ctrl+Alt+↑`:向活跃池起点方向切换。 */
+export const SESSION_ACTIVE_PREVIOUS_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'ArrowUp',
   modifiers: ['control', 'alt'],
 }
 
-/** `Ctrl+Alt+↓`:向候选列表终点方向切换。 */
-export const SESSION_NEXT_BINDING: ShortcutFixedCommand['bindings'][number] = {
+/** `Ctrl+Alt+↓`:向活跃池终点方向切换。 */
+export const SESSION_ACTIVE_NEXT_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'ArrowDown',
   modifiers: ['control', 'alt'],
 }
 
-/** 本插件挂载的 fixed 行:占用两个方向键并声明该操作。 */
+/** 全部候选那一条 fixed 行:占用两个方向键并声明该操作。 */
 export const SESSION_CYCLE_COMMAND: ShortcutFixedCommand = {
   id: SESSION_CYCLE_ID,
   label: () => '切换会话',
-  keys: ['Ctrl', 'Alt', '↑/↓'],
+  keys: ['Ctrl', '↑/↓'],
   bindings: [SESSION_PREVIOUS_BINDING, SESSION_NEXT_BINDING],
+  group: 'application',
+}
+
+/** 活跃池那一条 fixed 行:占用带 `Alt` 的两个方向键并声明该操作。 */
+export const SESSION_ACTIVE_CYCLE_COMMAND: ShortcutFixedCommand = {
+  id: SESSION_ACTIVE_CYCLE_ID,
+  label: () => '切换到活跃会话',
+  keys: ['Ctrl', 'Alt', '↑/↓'],
+  bindings: [SESSION_ACTIVE_PREVIOUS_BINDING, SESSION_ACTIVE_NEXT_BINDING],
   group: 'application',
 }
 
@@ -110,7 +142,21 @@ const ARCHIVED_MARKER = 'aria-description'
 const UNGROUPED_KEY = ''
 
 /**
- * 挂载行自己的绑定为该次按键指明的方向。
+ * 两条会话切换行各自的池子与方向键读数。
+ *
+ * 两条行的物理键位只在修饰键集合上不同(有无 `Alt`),方向键是同一对,所以方向由命中的
+ * `code` 决定,池子由命中的**行**决定。
+ */
+const SESSION_CYCLE_ROWS: readonly {
+  readonly id: ShortcutCommandId
+  readonly pool: SessionPool
+}[] = [
+  { id: SESSION_CYCLE_ID, pool: 'all' },
+  { id: SESSION_ACTIVE_CYCLE_ID, pool: 'active' },
+]
+
+/**
+ * 某一条挂载行自己的绑定为该次按键指明的方向。
  *
  * 按行是否拥有该按键判定,并读取命中的 binding 的 `code`;行未挂载或未命中则返回
  * undefined —— 与页面循环的 `pageStepFor` 同一条规则。
@@ -126,6 +172,29 @@ export function sessionStepFor(
   if (matched === undefined) return undefined
   if (matched.code === SESSION_NEXT_BINDING.code) return 'next'
   if (matched.code === SESSION_PREVIOUS_BINDING.code) return 'previous'
+  return undefined
+}
+
+/** 一次按键的意图:走哪个池子、往哪个方向。 */
+export interface SessionCycleRequest {
+  readonly pool: SessionPool
+  readonly step: SessionStep
+}
+
+/**
+ * 本次按键命中的是哪一条行、往哪个方向走。
+ *
+ * 两条行都按「行是否拥有该按键」判定;一条都没命中(键位不对、行未挂载)时返回 undefined。
+ * 两条行的绑定修饰键集合互斥(`Ctrl` 对 `Ctrl+Alt`),所以至多命中一条。
+ */
+export function sessionCycleRequest(
+  rows: readonly ShortcutFixedCatalogEntry[],
+  gesture: ShortcutGesture,
+): SessionCycleRequest | undefined {
+  for (const row of SESSION_CYCLE_ROWS) {
+    const step = sessionStepFor(rows, row.id, gesture)
+    if (step !== undefined) return { pool: row.pool, step }
+  }
   return undefined
 }
 
@@ -256,10 +325,12 @@ export function displayedSessionIds(): SessionId[] {
 }
 
 /**
- * 一个候选会话是否活跃。
+ * 一个候选会话是否活跃,即它的行上此刻有没有状态点。
  *
- * 有待答交互即活跃(它正等着人);否则看运行状态 —— 状态表里的 `running` 是权威读数,
- * 还没建立读数时退回会话目录的 `running`(与 Workspace browser 的同一处判定同源)。
+ * 三项状态事实任一成立即活跃:有待答交互(它正等着人)、已完成未读(绿点)、或正在运行
+ * —— 状态表里的 `running` 是权威读数,还没建立读数时退回会话目录的 `running`(与
+ * Workspace browser 的同一处判定同源)。回合出错结束时与正常完成一样走「运行变 false」,
+ * 因此这类会话由 `completionUnread` 覆盖,不另设判定。
  */
 export function sessionActive(
   sessionId: SessionId,
@@ -268,6 +339,7 @@ export function sessionActive(
 ): boolean {
   const status = statuses?.get(sessionId)
   if (status !== undefined && status.pendingInteraction !== undefined) return true
+  if (status?.completionUnread === true) return true
   return (status?.running ?? list.byId[sessionId]?.running) === true
 }
 
@@ -293,14 +365,12 @@ export interface SessionCycleFacts {
 /**
  * 本次按键要循环的池子。
  *
- * 有活跃候选时优先在活跃候选里跳;唯一的活跃候选**正是**当前会话时改用全部候选 ——
- * 那个活跃会话已经到手,再按键就该继续往下走,而不是原地不动。
+ * `'all'` 是全部候选(`Ctrl+↑` / `Ctrl+↓` 那一条);`'active'` 只取活跃候选
+ * (`Ctrl+Alt+↑` / `Ctrl+Alt+↓` 那一条),没有活跃候选时是空池 —— 空池不动作,不退回
+ * 全部候选:常规导航本来就有自己的一条键。
  */
-export function sessionCyclePool(facts: SessionCycleFacts): readonly SessionId[] {
-  const { candidates, current, active } = facts
-  if (active.length === 0) return candidates
-  if (active.length === 1 && current === active[0]) return candidates
-  return active
+export function sessionPool(facts: SessionCycleFacts, pool: SessionPool): readonly SessionId[] {
+  return pool === 'active' ? facts.active : facts.candidates
 }
 
 /**
@@ -324,11 +394,11 @@ export function steppedSessionId(
 /**
  * 一次按键要切换到的会话;没有可切的目标时返回 undefined。
  *
- * `undefined` 覆盖:没有候选、以及算出来的目标就是当前会话(候选只有一个,或那个活跃
- * 会话已在屏上)。
+ * `undefined` 覆盖:没有候选、活跃池空、以及算出来的目标就是当前会话(池里只有一个成员,
+ * 或那个活跃会话已在屏上)。
  */
-export function sessionCycleTarget(facts: SessionCycleFacts, step: SessionStep): SessionId | undefined {
-  const next = steppedSessionId(sessionCyclePool(facts), facts.current, step)
+export function sessionCycleTarget(facts: SessionCycleFacts, request: SessionCycleRequest): SessionId | undefined {
+  const next = steppedSessionId(sessionPool(facts, request.pool), facts.current, request.step)
   if (next === undefined || next === facts.current) return undefined
   return next
 }
@@ -336,7 +406,8 @@ export function sessionCycleTarget(facts: SessionCycleFacts, step: SessionStep):
 /**
  * 一次按键切换会话所需的全部信息,按当前状态解析;返回 undefined 表示不动该按键。
  *
- * 两条投递路径(观察者与终端前的捕获拦截)共用本判定。
+ * 两条投递路径(观察者与终端前的捕获拦截)共用本判定;两条 fixed 行也共用它,池子由
+ * 命中的那一条行决定。
  */
 export function sessionCyclePlan(
   shortcuts: Shortcuts,
@@ -346,8 +417,8 @@ export function sessionCyclePlan(
   context: ShortcutContext,
 ): SessionId | undefined {
   if (!sessionCycleEligible(gesture, context)) return undefined
-  const step = sessionStepFor(shortcuts.fixedCatalog.getSnapshot(), SESSION_CYCLE_ID, gesture)
-  if (step === undefined) return undefined
+  const request = sessionCycleRequest(shortcuts.fixedCatalog.getSnapshot(), gesture)
+  if (request === undefined) return undefined
   // 侧栏没渲染(窄/收起、搜索过滤中、单列表模式下没有工作区分组)时没有候选可切。
   const candidates = displayedSessionIds()
   if (candidates.length === 0) return undefined
@@ -356,11 +427,11 @@ export function sessionCyclePlan(
     candidates,
     current: mainViewSessionId(list),
     active: activeAmong(candidates, uiSession.sessionStatus.getSnapshot(), list),
-  }, step)
+  }, request)
 }
 
 /**
- * 桥接会话切换键。
+ * 桥接会话切换键(两条 fixed 行)。
  *
  * 通过两条路径投递按键:观察者处理 DOM 通道收到的按键;捕获阶段 window `keydown`
  * 监听处理落在 `.xterm` 内、通道收不到的按键。两条路径运行同一判定
@@ -387,8 +458,15 @@ export function installSessionCycleBridge(ctx: Context): void {
       warn('uiWorkspace service unavailable; session-cycle keys not installed')
       return
     }
-    // 行必须先挂载,观察者才能读到它;两者同在本 scope,按同序销毁。
-    scope.effect(() => shortcuts.registerFixed(SESSION_CYCLE_COMMAND), `${name}: session cycle fixed row`)
+    // 行必须先挂载,观察者才能读到它们;三者在同 scope,按同序销毁。
+    scope.effect(() => {
+      const offCycle = shortcuts.registerFixed(SESSION_CYCLE_COMMAND)
+      const offActive = shortcuts.registerFixed(SESSION_ACTIVE_CYCLE_COMMAND)
+      return () => {
+        offCycle()
+        offActive()
+      }
+    }, `${name}: session cycle fixed row`)
     scope.effect(() => shortcuts.observeFixedInput((input) => {
       if (!isKeydown(input)) return
       handleSessionCycleInput(shortcuts, sessions, uiSession, navigation, input)
