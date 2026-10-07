@@ -1,0 +1,36 @@
+{
+  "name": "dsh-changes-hover-off",
+  "version": "1.0.0",
+  "private": true,
+  "description": "关掉改动文件卡片里 500ms 悬停弹出的单列 diff 浮层:在 document 捕获阶段拦下落在 [data-changed-files] 内的指针悬停手势,使 HoverCard 的 onPointerEnter 永不派发——浮层不打开,对比也不被读取;行的 hover 底色与点击打开 review 不受影响。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown && node ../dsh-ui-css-patches/check-css.mjs --manifest contract.json",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}

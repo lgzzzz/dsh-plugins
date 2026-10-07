@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 
 $Base = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 $Plugins = @(
+  'dsh-changes-hover-off'
   'dsh-desktop-notify'
   'dsh-directory-picker-browse'
   'dsh-focus-free-shortcuts'

@@ -14,6 +14,7 @@
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 |
 | `dsh-ui-chat-verbose-fold` | Verbose 模式下折叠已完成的轮次 |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 |
+| `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 |
 | `dsh-desktop-notify` | 桌面通知 |
 | `dsh-directory-picker-browse` | 应用内目录浏览选择器 |
 | `dsh-git-guard` | git 操作保护 |
