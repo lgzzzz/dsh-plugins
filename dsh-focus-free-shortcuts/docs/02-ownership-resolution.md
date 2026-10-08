@@ -1,6 +1,6 @@
 # 归属判定：从按键目标反推操作对象
 
-> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 2 册：键盘事件链路，以及面板命令、停止序列、审批面板、提问卡片各自的归属判定与失败表现。
+> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 2 册：键盘事件链路，以及面板命令、页面关闭命令、停止序列、审批面板、提问卡片各自的归属判定与失败表现。
 
 ---
 
@@ -52,7 +52,7 @@ shortcuts.dispatch({ ...gesture, defaultPrevented: event.defaultPrevented }, con
 ```
 
 - **固定输入通道（fixed input）**：处理键位不可改的固定序列，例如 `Esc Esc` 停止。
-- **可配置命令（configurable commands）**：处理可在「设置 → 快捷键」里改键位的命令，例如 `⌘⌥Enter` 全屏、`⌘\` 分屏。
+- **可配置命令（configurable commands）**：处理可在「设置 → 快捷键」里改键位的命令，例如 `⌘⌥Enter` 全屏、`⌘\` 分屏、`⌘⌥W` 关闭当前页面。
 - 桌面端（Desktop）macOS/Windows 上，可配置键位不走这段 DOM 监听，而由 Electron 的原生键盘桥派发，因此那段代码在 `if (native) return` 提前返回（对插件的影响见 [第 3 册](03-fixed-input-and-pane-keys.md)）。
 
 链路里只有 `target`（当前聚焦元素），没有「鼠标悬停在哪」「上次点过哪」的信息；焦点为空时 `target` 就是 `<body>`，靠 target 做的判定随之落空。
@@ -87,6 +87,37 @@ resolve: ({ target: element }) => {
 | composer 输入框 | `<textarea>`（祖先链里没有 `[data-dockkit-pane]`） | 第 3 步 `closest(...)` 返回 `null` → `undefined` | `noFocus`，无反应 |
 | 右侧栏 dock pane 内 | pane 元素（或 pane 内部的子元素） | 全部检查通过 → 返回该 pane | 正常全屏 / 分屏 |
 | 消息列表空白处（无焦点） | `<body>` | 第 2 步 `body.closest("[data-sidebar-right-session]")` 为 `null` → `undefined` | `noFocus`，无反应 |
+
+### 3.2.1 页面关闭命令的归属判定（`page.close`）
+
+「关闭当前页面／窗口」（`page.close`）与面板命令同族：同一条 `focusedTarget(element)` 前置判定，但它的 `resolve()` 多两级分支（精简）：
+
+```js
+resolve: ({ target: element, source, modal }) => {
+  if (modal !== null) return { status: "handled", run: () => closeTopModal(document) }   // ① 弹窗优先
+  const target = sidebar.focusedTarget(element)
+  if (target === undefined && (source === "iframe" || element?.closest("[data-sidebar-right-session]"))) {
+    return { status: "blocked", reason: "command.stale" }                               // ② 陈旧 / 内嵌
+  }
+  if (target !== undefined && sidebar.canCloseTarget(target)) return {
+    status: "handled", run: () => { sidebar.closeTarget(target) }                       // ③ 关页面
+  }
+  if (shortcuts.runtime !== "desktop") return { status: "blocked", reason: "command.noFocus" }  // ④ Web：够不着
+  return { status: "handled", run: () => { if (target === undefined || sidebar.isTargetCurrent(target)) closeWindow() } }  // ⑤ Desktop：关窗口
+}
+```
+
+- **①** 这一条与面板命令不同：`page.close` 的 `modals` 是 `["settings", "shortcuts", "other"]`，弹窗下它的语义是关掉最上面那层弹窗；
+- **⑤** Desktop 上未聚焦面板时走 `closeWindow()` —— 也就是说 `⌘W` 在桌面端**本来就免聚焦**，插件不必补；Web 上是 ④，未聚焦面板时 `blocked / command.noFocus`（提示「请先聚焦右侧面板」），打字时按 `⌘⌥W` 表现为无反应。这就是插件要补的那一半。
+
+| 焦点位置 | `keydown` 的 target | `focusedTarget(target)` | 命令表现（Web） |
+|---|---|---|---|
+| composer 输入框 | `<textarea>` | 祖先链里没有 `[data-dockkit-pane]` → `undefined` | `noFocus`，无反应（插件补上：回退到活动 dock pane 关页） |
+| 右侧栏 dock pane 内 | pane 元素（或 pane 内部的子元素） | 全部检查通过 → 返回该 pane | 正常关页（插件让位） |
+| 侧栏容器内、但不在 pane 内 | 侧栏边距之类的元素 | 第 2 步能命中会话根，但第 3 步找不到 pane → `undefined` | `command.stale`，无反应（插件的 `commandTarget` 同样不回退） |
+| 消息列表空白处（无焦点） | `<body>` | 第 2 步为 `null` → `undefined` | `noFocus`，无反应（插件补上：回退到活动 dock pane 关页） |
+
+插件的逐行实现见 [第 3 册第 5.5 节](03-fixed-input-and-pane-keys.md)。
 
 ### 3.3 停止序列的归属判定（`Esc Esc`）
 

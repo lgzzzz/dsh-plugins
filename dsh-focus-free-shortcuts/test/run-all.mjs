@@ -18,6 +18,7 @@ const ORDER = [
   'decide-page-cycle.test.mjs',
   'decide-session-cycle.test.mjs',
   'bridge-pane-keys.test.mjs',
+  'bridge-page-close.test.mjs',
   'bridge-stop-sequence.test.mjs',
   'bridge-approval-keys.test.mjs',
   'bridge-question-keys.test.mjs',
