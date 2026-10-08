@@ -1,6 +1,7 @@
 /**
  * 产物装配:`lib/client.js` 作为独立 bundle 注册正确的模块 id / 插件名 / inject 声明,并且
- * 只向模块表要 `react`;装配后固定行与浮层都生效,`Ctrl+Alt+M` 能打开候选列表。
+ * 只向模块表要 `react`;装配后固定行与浮层都生效,`Ctrl+Alt+M` 能打开候选列表,命中的那次
+ * 按键还会被消费掉(`consume`)。
  *
  * 运行:`node test/artifact-client.test.mjs`(或 pnpm test 跑全部),需要先构建 `lib/client.js`。
  */
@@ -141,6 +142,7 @@ console.log('--- D④ 产物在 macOS 平台上占 ⌘⌥M,并只认这一组 --
   check('macOS 上 Ctrl+Alt+M 不打开', parseRows(slots).length, 0)
   shortcuts.fire(fixedMacKeydown())
   check('macOS 上 ⌘⌥M 打开', parseRows(slots).map((row) => row.title), ['Alpha'])
+  check('产物只消费命中的那一次按键', shortcuts.consumeCalls(), 1)
 }
 
 finish()

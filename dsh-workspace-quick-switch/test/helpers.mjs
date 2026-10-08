@@ -173,6 +173,7 @@ export function fakeShortcuts({ platform = 'windows' } = {}) {
   const commands = []
   const observers = new Set()
   const catalog = []
+  let consumeCalls = 0
   const face = {
     platform,
     registerFixed(command) {
@@ -193,11 +194,46 @@ export function fakeShortcuts({ platform = 'windows' } = {}) {
       return () => observers.delete(listener)
     },
     fixedCatalog: { getSnapshot: () => catalog },
+    /**
+     * 派发一次固定输入,照上游 `ShortcutsService.fixedInput` 的规矩来:每个观察者拿到的是一份
+     * 带 `consume` 的读数,谁调了 `consume`,后面的观察者就会看到 `defaultPrevented` —— 于是
+     * 「谁先认领这次按键」在夹具里也能被断言。
+     *
+     * 形如 `{ type: 'reset' }` 或根本没有 `gesture` 的读数原样转发(上游对 reset 也是原样)。
+     * @param input - 固定输入读数。
+     * @returns 这次输入是否被消费。
+     */
     fire(input) {
-      for (const observer of [...observers]) observer(input)
+      let consumed = false
+      for (const observer of [...observers]) {
+        // 观察者可能在派发途中退订(上游同款保护)。
+        if (!observers.has(observer)) continue
+        if (input.type === 'reset' || input.gesture === undefined) {
+          observer(input)
+          continue
+        }
+        observer({
+          ...input,
+          gesture: { ...input.gesture, defaultPrevented: input.gesture.defaultPrevented === true || consumed },
+          consume: () => {
+            consumed = true
+          },
+        })
+      }
+      if (consumed) consumeCalls += 1
+      return consumed
     },
     commands,
     observerCount: () => observers.size,
+    /** 有多少次派发被观察者消费过(`consume()` 至少被调用一次)。 */
+    consumeCalls: () => consumeCalls,
+    /** 让本插件那条固定行从目录里消失(模拟被别的注册者挤掉):按键随即「无主」。 */
+    dropFixed(id) {
+      const index = commands.findIndex((command) => command.id === id)
+      if (index >= 0) commands.splice(index, 1)
+      const row = catalog.findIndex((row) => row.id === id)
+      if (row >= 0) catalog.splice(row, 1)
+    },
   }
   return face
 }
