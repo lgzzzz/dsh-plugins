@@ -2,7 +2,7 @@
 
 让「全屏 / 分屏」「关闭当前页面」「连按两下 `Esc` 停止」「审批面板 `Enter` 允许一次 / `Esc` 拒绝」「提问卡片 `Esc` 取消 / 关闭」这些快捷键**不再需要先点一下**目标区域;另外新增 `⌘⌥J`(macOS) / `Ctrl+Alt+J`(Windows/Linux)(把键盘拉回输入框)、`⌘⌥K` / `Ctrl+Alt+K`(把键盘交给**右侧栏当前显示**的那一页 —— 通常是终端,于是不必先点进 `.xterm` 才能打字)、`⌘⌥←` / `Ctrl+Alt+←`、`⌘⌥→` / `Ctrl+Alt+→`(切换右侧栏当前显示的页面,并把键盘落到新页面)、`⌘↑` / `Ctrl+↑`、`⌘↓` / `Ctrl+↓`(在左侧栏前三个工作区**当前显示出来**的会话行之间导航)与 `⌘⌥↑` / `Ctrl+Alt+↑`、`⌘⌥↓` / `Ctrl+Alt+↓`(**只在活跃会话之间**切换),并给内置的「新建会话」`⌘⌥N` / `Ctrl+Alt+N` 补上终端那一格。
 
-**焦点在终端里时也能用**:`⌘⌥J` / `Ctrl+Alt+J`、`⌘⌥K` / `Ctrl+Alt+K`(终端里交棒是无操作,但这一按不该被当成输入送进 shell)、`⌘⌥←/→` / `Ctrl+Alt+←/→`、两对会话键、`⌘⌥N` / `Ctrl+Alt+N`(内置 `session.new`)与 `⌘⌥M` / `Ctrl+Alt+M`(见 [dsh-workspace-quick-switch](../dsh-workspace-quick-switch/))在 `.xterm` 内同样生效 —— 终端在自己的 textarea 处理器里对经手的按键 `stopPropagation()`,事件到不了 window 上的键盘通道,所以这几条各自在 window **捕获阶段**另挂一个 `keydown` 监听,在事件进入终端前判定,命中即吞掉这一按(`preventDefault()+stopPropagation()`),既不误动作也不把它当成终端输入送进 shell。
+**焦点在终端里时也能用**:`⌘⌥J` / `Ctrl+Alt+J`、`⌘⌥K` / `Ctrl+Alt+K`(终端里交棒是无操作,但这一按不该被当成输入送进 shell)、`⌘⌥←/→` / `Ctrl+Alt+←/→`、两对会话键、`⌘⌥N` / `Ctrl+Alt+N`(内置 `session.new`)与 `⌘⌥M` / `Ctrl+Alt+M`(见 [dsh-workspace-quick-switch](dsh-workspace-quick-switch.md))在 `.xterm` 内同样生效 —— 终端在自己的 textarea 处理器里对经手的按键 `stopPropagation()`,事件到不了 window 上的键盘通道,所以这几条各自在 window **捕获阶段**另挂一个 `keydown` 监听,在事件进入终端前判定,命中即吞掉这一按(`preventDefault()+stopPropagation()`),既不误动作也不把它当成终端输入送进 shell。
 
 免掉的聚焦动作:把焦点点进右侧栏 dock pane(`⌘⌥Enter` 全屏、`⌘\` 分屏、Web 上的 `⌘⌥W` / `Ctrl+Alt+W` 关闭当前页面)、点进输入框(`Esc` `Esc` 停止)、点进审批详情区(`Enter` 允许一次、`Esc` 拒绝)。
 

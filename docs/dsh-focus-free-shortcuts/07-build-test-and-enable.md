@@ -110,7 +110,7 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 - 把焦点点进右侧栏的终端（`.xterm`）里再按 `⌘⌥J` / `Ctrl+Alt+J` → 依然聚焦回底部输入框，而且这一按不会被当成终端输入送进 shell（终端内的那一按由 window 捕获阶段先拦下）；
 - 在终端里按 `⌘⌥N`（macOS）/ `Ctrl+Alt+N`（Windows/Linux）—— 内置「新建会话」`session.new` 在 Web 上的默认键位 → 应直接新建会话并切过去，同样不会把这一按送进 shell；焦点在输入框 / 消息区时按同一键 → 由内置命令处理（插件让位），效果相同；
 - 把「新建会话」改绑到别的组合 → 新组合在终端里生效、旧组合不再触发；解绑或处于冲突中 → 无动作、也不吞这一按（键位读的是生效目录）；
-- 在终端里按 `⌘⌥M` / `Ctrl+Alt+M` → 「工作区快速切换」浮层照常弹出（那一半在 [dsh-workspace-quick-switch](../../dsh-workspace-quick-switch/) 里），这一按同样不会进 shell；
+- 在终端里按 `⌘⌥M` / `Ctrl+Alt+M` → 「工作区快速切换」浮层照常弹出（那一半在 [dsh-workspace-quick-switch](../dsh-workspace-quick-switch.md) 里），这一按同样不会进 shell；
 - 右侧栏开着并至少有两张页面时，任意焦点位置按 `⌘⌥→` / `⌘⌥←`（macOS）/ `Ctrl+Alt+→` / `Ctrl+Alt+←`（Windows/Linux） → 应切成下一页 / 上一页（环状），且键盘落到新页面：切到终端可直接打字，切到文件页方向键可直接滚动；焦点已经在终端里按这对键 → 依然能切页；
 - 只有一张页面或右侧栏折叠时按这对键 → 无动作（折叠时先用展开键展开，展开会顺手聚焦活动 pane）。
 - 页签行放不下所有页面（出现横向溢出）时来回切页 → 页签行**不应**"先回到最左、再滑到新的活动页签"：新活动页签直接出现在它该在的位置；连续往一个方向走、又切回相邻的那一颗时，**页签行完全不动**（来源页签仍在视野里，一眼能看出从哪儿切过来），只有目标页签不在当前窗口里时才最小幅度滚动（插件把 kit 那次"从 0 出发"的修正换成"以旧窗口为起点"，见第 3 册第 5.4 节；这条补偿与鼠标点页签共享前半段 —— 点页签同样不再滑动）。升级 DSH 之后想确认这层覆盖仍生效，可在 DevTools 里看 `getComputedStyle(document.querySelector('[data-sidebar-right-session] [data-dockkit-strip-tabs]')).scrollBehavior` 是否为 `auto`。
