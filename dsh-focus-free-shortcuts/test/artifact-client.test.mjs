@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, PAGE_CLOSE_BINDING, PAGE_CLOSE_ID, PAGE_CLOSE_PRESS, pluginRoot, row, session, shortcutContext, sidebarTree, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_ACTIVE_CYCLE_ID, SESSION_CYCLE_ID, SESSION_NEXT_MAC_PRESS, SESSION_NEXT_PRESS } from './helpers.mjs'
+import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeKeyEvent, FakeElement, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, PAGE_CLOSE_BINDING, PAGE_CLOSE_ID, PAGE_CLOSE_PRESS, pluginRoot, row, session, shortcutContext, sidebarTree, withWindowDom, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_ACTIVE_CYCLE_ID, SESSION_CYCLE_ID, SESSION_NEW_ID, SESSION_NEXT_MAC_PRESS, SESSION_NEXT_PRESS } from './helpers.mjs'
 
 console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
 {
@@ -116,6 +116,48 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
     } finally {
       if (macPreviousDocument === undefined) delete globalThis.document
       else globalThis.document = macPreviousDocument
+    }
+  }
+
+  console.log('--- G③ 产物里的终端捕获:⌘⌥J / Ctrl+Alt+J 与 ⌘⌥N / Ctrl+Alt+N ---')
+  {
+    // 一段终端 DOM:`.xterm` 里的 helper textarea 是按键目标,`closest('.xterm')` 判它是终端。
+    const app = new FakeElement('div', { 'data-app': '' })
+    const pane = app.append(new FakeElement('section', { 'data-dockkit-pane': 'p1' }))
+    const screen = pane.append(new FakeElement('div', { class: 'xterm' }))
+    const textarea = screen.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+    const path = [textarea, screen, pane, app]
+    const dom = withWindowDom({ root: app })
+    try {
+      const facade = { calls: 0, focus() { facade.calls += 1 } }
+      const shortcuts = fakeShortcuts({
+        rows: [row(SESSION_NEW_ID, { code: 'KeyN', modifiers: ['control', 'alt'] })],
+        fixedRows: APPROVAL_FIXED_ROWS,
+      })
+      const navigation = fakeSessionNavigation()
+      const ctx = new FakeCtx({
+        shortcuts,
+        sidebarRight: fakeSidebar(),
+        sessions: fakeSessions({
+          summary: { s1: session('s1') },
+          scope: () => ({ get: (name) => (name === 'conversation' ? { input: { for: () => facade } } : undefined) }),
+        }),
+        uiSession: fakeUiSession(),
+        uiWorkspace: navigation,
+      })
+      check('终端捕获装配无告警', captureWarnings(() => plugin.apply(ctx)), [])
+
+      const focusKey = fakeKeyEvent({ path, code: 'KeyJ', ctrlKey: true, altKey: true })
+      dom.window.emit(focusKey)
+      check('产物里终端内 Ctrl+Alt+J 聚焦输入框', facade.calls, 1)
+      check('产物里终端内 Ctrl+Alt+J 被吞', [focusKey.prevented, focusKey.stopped], [1, 1])
+
+      const newKey = fakeKeyEvent({ path, code: 'KeyN', ctrlKey: true, altKey: true })
+      dom.window.emit(newKey)
+      check('产物里终端内 Ctrl+Alt+N 新建会话', navigation.started, [undefined])
+      check('产物里终端内 Ctrl+Alt+N 被吞', [newKey.prevented, newKey.stopped], [1, 1])
+    } finally {
+      dom.restore()
     }
   }
 }

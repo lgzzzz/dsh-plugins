@@ -438,8 +438,9 @@ export function workspace(id, title, extra = {}) {
 //#region 最小 document 替身
 
 /**
- * 装一个最小的 document:捕获阶段的 keydown 监听 + 样式表注入 + 焦点目标查询。
- * @returns 派发按键的 `pressKey`、监听者集合、注入过的样式表与卸载函数。
+ * 装一个最小的 document 与 window:document 上的捕获阶段 keydown 监听(浮层内的按键)、
+ * window 上的捕获阶段 keydown 监听(终端内的打开键)、样式表注入与焦点目标查询。
+ * @returns 派发按键的 `pressKey` / `pressWindowKey`、监听者集合、注入过的样式表与卸载函数。
  */
 export function installDom() {
   const listeners = new Set()
@@ -473,34 +474,65 @@ export function installDom() {
     listenerCount: () => listeners.size,
   }
   globalThis.document = document
-  globalThis.window = { addEventListener() {}, removeEventListener() {} }
+  // window 上的捕获监听是终端那条通路挂的(见 `client.ts` 的 quick switch terminal capture),
+  // 所以这里给 window 一份真的监听登记表,`pressWindowKey` 按捕获阶段的顺序派发。
+  const windowListeners = new Set()
+  const window = {
+    addEventListener(type, listener) {
+      if (type === 'keydown') windowListeners.add(listener)
+    },
+    removeEventListener(type, listener) {
+      if (type === 'keydown') windowListeners.delete(listener)
+    },
+    listenerCount: () => windowListeners.size,
+  }
+  globalThis.window = window
+  /** 造一个原生 keydown 事实(带 `composedPath`,终端判定要读它)。 */
+  const keyEvent = (overrides = {}) => {
+    const event = {
+      type: 'keydown',
+      code: '',
+      key: '',
+      repeat: false,
+      isComposing: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false,
+      defaultPrevented: false,
+      stopped: false,
+      path: [],
+      composedPath() {
+        return event.path
+      },
+      preventDefault() {
+        event.defaultPrevented = true
+      },
+      stopPropagation() {
+        event.stopped = true
+      },
+      ...overrides,
+    }
+    return event
+  }
   const api = {
     document,
+    window,
     listeners,
     styles,
     /** 造一个 keydown 事实并派发给捕获阶段监听者。 */
     pressKey(key, overrides = {}) {
-      const event = {
-        key,
-        repeat: false,
-        isComposing: false,
-        ctrlKey: false,
-        altKey: false,
-        shiftKey: false,
-        metaKey: false,
-        defaultPrevented: false,
-        stopped: false,
-        preventDefault() {
-          event.defaultPrevented = true
-        },
-        stopPropagation() {
-          event.stopped = true
-        },
-        ...overrides,
-      }
+      const event = keyEvent({ key, ...overrides })
       for (const listener of [...listeners]) listener(event)
       return event
     },
+    /** 造一个 keydown 事实并派发给 window 捕获阶段的监听者(终端内那一按走这条)。 */
+    pressWindowKey(overrides = {}) {
+      const event = keyEvent(overrides)
+      for (const listener of [...windowListeners]) listener(event)
+      return event
+    },
+    windowListenerCount: () => windowListeners.size,
     uninstall() {
       delete globalThis.document
       delete globalThis.window

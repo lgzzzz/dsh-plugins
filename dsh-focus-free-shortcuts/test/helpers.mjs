@@ -185,6 +185,19 @@ export const SIDEBAR_TOGGLE_ID = 'sidebar.right.toggle'
 export const SIDEBAR_TOGGLE_BINDING = { code: 'KeyB', modifiers: ['control', 'shift'] }
 export const SIDEBAR_TOGGLE_PRESS = gesture('KeyB', { control: true, shift: true })
 
+/** 内置"新建会话"命令 id:Web 上的默认键位就是 primary+alt+N(桌面端是 primary+N)。 */
+export const SESSION_NEW_ID = 'session.new'
+/** Web/Windows·Linux 的默认绑定:`Ctrl+Alt+N`。 */
+export const SESSION_NEW_BINDING = { code: 'KeyN', modifiers: ['control', 'alt'] }
+/** Web/macOS 的同一份默认绑定:`⌘⌥N`。 */
+export const SESSION_NEW_MAC_BINDING = { code: 'KeyN', modifiers: ['alt', 'meta'] }
+export const SESSION_NEW_PRESS = gesture('KeyN', { control: true, alt: true })
+export const SESSION_NEW_MAC_PRESS = gesture('KeyN', { meta: true, alt: true })
+/** 生效目录里的 `session.new` 行(Windows/Linux 口径)。 */
+export const SESSION_NEW_ROWS = [row(SESSION_NEW_ID, SESSION_NEW_BINDING)]
+/** 同一行的 macOS 口径。 */
+export const SESSION_NEW_MAC_ROWS = [row(SESSION_NEW_ID, SESSION_NEW_MAC_BINDING)]
+
 export class FakeNode {
   constructor(tag = 'div', attrs = []) {
     this.tag = tag
@@ -369,6 +382,30 @@ export function fakeWindow() {
 }
 
 /**
+ * 置入假 document / 假 window(捕获监听就装在上面),用完 `restore()` 还原。
+ *
+ * 捕获路径的测试都要先装 DOM 再装配插件 —— 桥接是在装配那一刻往 `window` 上挂监听的。
+ * @param root - 充当 document 根的假元素(模态、侧栏树等锚点都挂在它下面)。
+ * @param activeElement - `document.activeElement` 的假值。
+ */
+export function withWindowDom({ root, activeElement = null } = {}) {
+  const window = fakeWindow()
+  const previousDocument = globalThis.document
+  const previousWindow = globalThis.window
+  globalThis.document = fakeDocument({ root, activeElement })
+  globalThis.window = window
+  return {
+    window,
+    restore() {
+      if (previousDocument === undefined) delete globalThis.document
+      else globalThis.document = previousDocument
+      if (previousWindow === undefined) delete globalThis.window
+      else globalThis.window = previousWindow
+    },
+  }
+}
+
+/**
  * 假键盘事件:记录 preventDefault / stopPropagation 的调用次数,
  * `composedPath` 返回测试给的元素链。
  */
@@ -500,14 +537,19 @@ export function fakePageSidebar({ list = ['t1', 't2', 't3'], active = 't1', expa
 }
 
 /**
- * 会话导航假面:上游 `UiWorkspace` 的公开面里本插件要用的那一个动词。
- * `openSession` 记录每一次切换,`opened` 就是调用顺序。
+ * 会话导航假面:上游 `UiWorkspace` 的公开面里本插件要用的两个动词 ——
+ * `openSession` 记录每一次切换(`opened` 就是调用顺序),`startSession` 记录每一次
+ * 「新建会话」(`started` 里是那一次调用带的工作区参数,省略参数时是 undefined)。
  */
 export function fakeSessionNavigation() {
   const navigation = {
     opened: [],
+    started: [],
     openSession(target) {
       navigation.opened.push(target)
+    },
+    startSession(workspaceId) {
+      navigation.started.push(workspaceId)
     },
   }
   return navigation

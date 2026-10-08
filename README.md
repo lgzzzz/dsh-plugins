@@ -8,9 +8,9 @@
 
 | 目录 | 作用 |
 | --- | --- |
-| `dsh-workspace-quick-switch` | `⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows） 弹出浮层,按左侧栏顺序列出前 10 个工作区,`↑/↓` 选、`Enter` 在该工作区新建会话 |
+| `dsh-workspace-quick-switch` | `⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows） 弹出浮层,按左侧栏顺序列出前 10 个工作区,`↑/↓` 选、`Enter` 在该工作区新建会话（焦点在终端里时同样生效） |
 | `dsh-workspace-activity-sort` | 宿主半部:最近有会话活动的工作区自动浮到最前 |
-| `dsh-focus-free-shortcuts` | 未聚焦目标区域也能触发的内置快捷键桥接 |
+| `dsh-focus-free-shortcuts` | 未聚焦目标区域也能触发的内置快捷键桥接（`⌘⌥J` / `⌘⌥N` 等在终端 `.xterm` 内同样生效） |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 |
 | `dsh-ui-chat-verbose-fold` | Verbose 模式下折叠已完成的轮次 |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 |

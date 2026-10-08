@@ -17,6 +17,7 @@ const ORDER = [
   'decide-focus-composer.test.mjs',
   'decide-page-cycle.test.mjs',
   'decide-session-cycle.test.mjs',
+  'decide-session-new.test.mjs',
   'bridge-pane-keys.test.mjs',
   'bridge-page-close.test.mjs',
   'bridge-stop-sequence.test.mjs',
@@ -25,6 +26,7 @@ const ORDER = [
   'bridge-focus-composer.test.mjs',
   'bridge-page-cycle.test.mjs',
   'bridge-session-cycle.test.mjs',
+  'bridge-session-new.test.mjs',
   'strip-scroll.test.mjs',
   'artifact-client.test.mjs',
 ]

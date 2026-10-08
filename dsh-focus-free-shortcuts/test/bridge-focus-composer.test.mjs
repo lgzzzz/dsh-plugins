@@ -1,8 +1,9 @@
 /**
  * 聚焦输入框桥:`Ctrl+Alt+J` 聚焦 composer 输入面。覆盖固定行挂载、从文本控件抢键盘、
- * 各类否决与失败模式(缺 sessions / 缺 observeFixedInput 即不装),以及卸载复位。
+ * 各类否决与失败模式(缺 sessions / 缺 observeFixedInput 即不装),以及终端内的捕获
+ * 拦截与卸载复位。
  */
-import { applyPlugin, captureWarnings, check, checkTrue, domBody, domComposer, fakeSessions, fakeShortcuts, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, FOCUS_COMPOSER_ID, FOCUS_COMPOSER_PRESS } from './helpers.mjs'
+import { applyPlugin, captureWarnings, check, checkTrue, domBody, domComposer, FakeElement, fakeKeyEvent, fakeSessions, fakeShortcuts, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, withWindowDom, FOCUS_COMPOSER_ID, FOCUS_COMPOSER_PRESS } from './helpers.mjs'
 
 /** 一个可聚焦的假 facade:`conversation.input.for()` 返回它,focus() 计数。 */
 function focusingFacade() {
@@ -134,6 +135,134 @@ console.log('--- K⑥ 卸载:固定行与监听一起释放 ---')
   const after = keydown(FOCUS_COMPOSER_PRESS, shortcutContext({ target: domBody }))
   shortcuts.emit(after.input)
   check('卸载后不再消费', after.consumed.count, 0)
+}
+
+/** 一段终端 DOM:pane 里的 `.xterm` 与它自己的 helper textarea。 */
+function terminal() {
+  const app = new FakeElement('div', { 'data-app': '' })
+  const pane = app.append(new FakeElement('section', { 'data-dockkit-pane': 'p1' }))
+  const screen = pane.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = screen.append(new FakeElement('textarea', { class: 'xterm-helper-textarea' }))
+  return { app, pane, screen, textarea, path: [textarea, screen, pane, app] }
+}
+
+console.log('--- K⑦ 终端内按 ⌘⌥J / Ctrl+Alt+J:捕获阶段抢回键盘 ---')
+{
+  const dom = withWindowDom({ root: new FakeElement('div') })
+  try {
+    const { facade } = focusHarness()
+    const { path } = terminal()
+    const event = fakeKeyEvent({ path, code: 'KeyJ', ctrlKey: true, altKey: true })
+    dom.window.emit(event)
+    check('终端内聚焦输入框', facade.calls, 1)
+    check('事件在捕获阶段被吞', [event.prevented, event.stopped], [1, 1])
+  } finally {
+    dom.restore()
+  }
+
+  // macOS 口径:同一个窗口里只认 ⌘⌥J,`Ctrl+Alt+J` 原样留给终端。
+  const macDom = withWindowDom({ root: new FakeElement('div') })
+  try {
+    const { facade } = focusHarness({ platform: 'macos' })
+    const { path } = terminal()
+    const ctrl = fakeKeyEvent({ path, code: 'KeyJ', ctrlKey: true, altKey: true })
+    macDom.window.emit(ctrl)
+    check('macOS 上 Ctrl+Alt+J 不聚焦', facade.calls, 0)
+    check('macOS 上 Ctrl+Alt+J 不吞事件', [ctrl.prevented, ctrl.stopped], [0, 0])
+    const meta = fakeKeyEvent({ path, code: 'KeyJ', metaKey: true, altKey: true })
+    macDom.window.emit(meta)
+    check('macOS 上 ⌘⌥J 聚焦', facade.calls, 1)
+    check('macOS 上 ⌘⌥J 被吞', [meta.prevented, meta.stopped], [1, 1])
+  } finally {
+    macDom.restore()
+  }
+}
+
+console.log('--- K⑧ 捕获路径让位:非终端目标 / 模态 / 长按 / 组字 / 无输入面都不吞 ---')
+{
+  const dom = withWindowDom({ root: new FakeElement('div') })
+  try {
+    const { facade } = focusHarness()
+    const { app, path } = terminal()
+    const editor = app.append(new FakeElement('textarea'))
+    const cases = [
+      ['文本控件里(仍归冒泡通道)', [editor, app], {}],
+      ['长按重复', path, { repeat: true }],
+      ['组字中', path, { isComposing: true }],
+      ['别的键', path, { code: 'KeyK' }],
+      ['缺 Alt', path, { altKey: false }],
+      ['多了 Shift', path, { shiftKey: true }],
+    ]
+    for (const [label, eventPath, overrides] of cases) {
+      const event = fakeKeyEvent({ path: eventPath, code: 'KeyJ', ctrlKey: true, altKey: true, ...overrides })
+      dom.window.emit(event)
+      check(`${label}不由捕获路径出手`, [event.prevented, event.stopped], [0, 0])
+    }
+    check('上述情形一次也没聚焦', facade.calls, 0)
+  } finally {
+    dom.restore()
+  }
+
+  // 模态层之上让位:不动作、不吞。
+  const modal = terminal()
+  modal.app.append(new FakeElement('div', { role: 'dialog', 'aria-modal': 'true' }))
+  const modalDom = withWindowDom({ root: modal.app })
+  try {
+    const { facade } = focusHarness()
+    const event = fakeKeyEvent({ path: modal.path, code: 'KeyJ', ctrlKey: true, altKey: true })
+    modalDom.window.emit(event)
+    check('模态层之上不聚焦', facade.calls, 0)
+    check('模态层之上不吞事件', [event.prevented, event.stopped], [0, 0])
+  } finally {
+    modalDom.restore()
+  }
+
+  // 主视图 Session 不唯一(切换中):不动作、不吞。
+  const ambiguousDom = withWindowDom({ root: new FakeElement('div') })
+  try {
+    const { facade } = focusHarness({ summary: { s1: session('s1'), s2: session('s2') } })
+    const event = fakeKeyEvent({ path: terminal().path, code: 'KeyJ', ctrlKey: true, altKey: true })
+    ambiguousDom.window.emit(event)
+    check('两个主视图不聚焦', facade.calls, 0)
+    check('两个主视图不吞事件', [event.prevented, event.stopped], [0, 0])
+  } finally {
+    ambiguousDom.restore()
+  }
+}
+
+console.log('--- K⑨ 终端捕获:输入面不可达时告警且不吞 ---')
+{
+  const dom = withWindowDom({ root: new FakeElement('div') })
+  try {
+    focusHarness({ conversation: undefined })
+    const event = fakeKeyEvent({ path: terminal().path, code: 'KeyJ', ctrlKey: true, altKey: true })
+    const warnings = captureWarnings(() => dom.window.emit(event))
+    checkTrue('缺 conversation.input 告警', warnings.some((line) => line.includes('conversation input registry unavailable')))
+    check('缺 conversation.input 不吞事件', [event.prevented, event.stopped], [0, 0])
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- K⑩ 卸载:终端捕获监听一起释放 ---')
+{
+  const dom = withWindowDom({ root: new FakeElement('div') })
+  try {
+    const { ctx, facade } = focusHarness()
+    const { path } = terminal()
+    const before = fakeKeyEvent({ path, code: 'KeyJ', ctrlKey: true, altKey: true })
+    dom.window.emit(before)
+    check('卸载前终端内聚焦', facade.calls, 1)
+    for (const effect of ctx.effects) {
+      if (typeof effect.dispose === 'function') effect.dispose()
+    }
+    const after = fakeKeyEvent({ path, code: 'KeyJ', ctrlKey: true, altKey: true })
+    dom.window.emit(after)
+    check('卸载后不再聚焦', facade.calls, 1)
+    check('卸载后不吞事件', [after.prevented, after.stopped], [0, 0])
+  } finally {
+    dom.restore()
+  }
 }
 
 finish()
