@@ -1,14 +1,13 @@
 /**
- * 会话循环纯决策:两条固定行(`Ctrl+↑` / `Ctrl+↓` 走全部候选,`Ctrl+Alt+↑` / `Ctrl+Alt+↓`
- * 只走活跃会话)、准入、候选口径(左侧栏前三个工作区里当前渲染出来的会话行)、归档行与
- * 「未分组」桶的取舍、活跃判定与环状步进。
+ * 会话循环纯决策:两条固定行(`primary+↑/↓` 走全部候选,`primary+alt+↑/↓` 只走活跃会话;
+ * macOS 落成 `⌘↑/↓` 与 `⌘⌥↑/↓`,Windows/Linux 落成 `Ctrl+↑/↓` 与 `Ctrl+Alt+↑/↓`)、准入、
+ * 候选口径(左侧栏前三个工作区里当前渲染出来的会话行)、归档行与「未分组」桶的取舍、
+ * 活跃判定与环状步进。
  */
 import {
-  SESSION_ACTIVE_CYCLE_COMMAND,
   SESSION_ACTIVE_CYCLE_ID,
   SESSION_ACTIVE_NEXT_BINDING,
   SESSION_ACTIVE_PREVIOUS_BINDING,
-  SESSION_CYCLE_COMMAND,
   SESSION_CYCLE_ID,
   SESSION_NEXT_BINDING,
   SESSION_PREVIOUS_BINDING,
@@ -17,6 +16,8 @@ import {
   displayedSessionIds,
   displayedSidebar,
   sessionActive,
+  sessionActiveCycleCommand,
+  sessionCycleCommand,
   sessionCycleEligible,
   sessionCycleRequest,
   sessionCycleTarget,
@@ -24,7 +25,7 @@ import {
   sessionStepFor,
   steppedSessionId,
 } from '../src/session-cycle.ts'
-import { check, checkTrue, fakeDocument, fakeSessions, FakeElement, finish, gesture, shortcutContext, sidebarTree, statusTable, SESSION_ACTIVE_NEXT_PRESS, SESSION_ACTIVE_PREVIOUS_PRESS, SESSION_CYCLE_FIXED_ROWS, SESSION_NEXT_PRESS, SESSION_PREVIOUS_PRESS } from './helpers.mjs'
+import { check, checkTrue, fakeDocument, fakeSessions, FakeElement, finish, gesture, shortcutContext, sidebarTree, statusTable, SESSION_ACTIVE_NEXT_MAC_PRESS, SESSION_ACTIVE_NEXT_PRESS, SESSION_ACTIVE_PREVIOUS_MAC_PRESS, SESSION_ACTIVE_PREVIOUS_PRESS, SESSION_CYCLE_FIXED_ROWS, SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_NEXT_MAC_PRESS, SESSION_NEXT_PRESS, SESSION_PREVIOUS_MAC_PRESS, SESSION_PREVIOUS_PRESS } from './helpers.mjs'
 
 /** 把一段假树当成整份 document,返回还原函数。 */
 function asDocument(tree) {
@@ -55,26 +56,32 @@ function request(pool, step) {
   return { pool, step }
 }
 
-console.log('--- P① 两条固定行:各自预约一对方向键,都归 application 组 ---')
+console.log('--- P① 两条固定行:各自预约一对方向键,键帽按平台落成,都归 application 组 ---')
 {
-  check('全部候选行 id', SESSION_CYCLE_COMMAND.id, SESSION_CYCLE_ID)
-  check('全部候选行 ↑ 绑定', SESSION_CYCLE_COMMAND.bindings[0], SESSION_PREVIOUS_BINDING)
-  check('全部候选行 ↓ 绑定', SESSION_CYCLE_COMMAND.bindings[1], SESSION_NEXT_BINDING)
-  check('全部候选行显示键', SESSION_CYCLE_COMMAND.keys, ['Ctrl', '↑/↓'])
-  check('全部候选行标签', SESSION_CYCLE_COMMAND.label(), '切换会话')
-  check('全部候选行分组', SESSION_CYCLE_COMMAND.group, 'application')
+  const macosCycle = sessionCycleCommand('macos')
+  const windowsCycle = sessionCycleCommand('windows')
+  check('全部候选行 id', macosCycle.id, SESSION_CYCLE_ID)
+  check('全部候选行 ↑ 绑定', macosCycle.bindings[0], SESSION_PREVIOUS_BINDING)
+  check('全部候选行 ↓ 绑定', macosCycle.bindings[1], SESSION_NEXT_BINDING)
+  check('全部候选行 macOS 显示键', macosCycle.keys, ['⌘', '↑/↓'])
+  check('全部候选行 Windows 显示键', windowsCycle.keys, ['Ctrl', '↑/↓'])
+  check('全部候选行标签', macosCycle.label(), '切换会话')
+  check('全部候选行分组', macosCycle.group, 'application')
 
-  check('活跃行 id', SESSION_ACTIVE_CYCLE_COMMAND.id, SESSION_ACTIVE_CYCLE_ID)
-  check('活跃行 ↑ 绑定', SESSION_ACTIVE_CYCLE_COMMAND.bindings[0], SESSION_ACTIVE_PREVIOUS_BINDING)
-  check('活跃行 ↓ 绑定', SESSION_ACTIVE_CYCLE_COMMAND.bindings[1], SESSION_ACTIVE_NEXT_BINDING)
-  check('活跃行显示键', SESSION_ACTIVE_CYCLE_COMMAND.keys, ['Ctrl', 'Alt', '↑/↓'])
-  check('活跃行标签', SESSION_ACTIVE_CYCLE_COMMAND.label(), '切换到活跃会话')
-  check('活跃行分组', SESSION_ACTIVE_CYCLE_COMMAND.group, 'application')
+  const macosActive = sessionActiveCycleCommand('macos')
+  const windowsActive = sessionActiveCycleCommand('windows')
+  check('活跃行 id', macosActive.id, SESSION_ACTIVE_CYCLE_ID)
+  check('活跃行 ↑ 绑定', macosActive.bindings[0], SESSION_ACTIVE_PREVIOUS_BINDING)
+  check('活跃行 ↓ 绑定', macosActive.bindings[1], SESSION_ACTIVE_NEXT_BINDING)
+  check('活跃行 macOS 显示键', macosActive.keys, ['⌘', '⌥', '↑/↓'])
+  check('活跃行 Windows 显示键', windowsActive.keys, ['Ctrl', 'Alt', '↑/↓'])
+  check('活跃行标签', macosActive.label(), '切换到活跃会话')
+  check('活跃行分组', macosActive.group, 'application')
 
   check('前三个工作区', WORKSPACE_LIMIT, 3)
 }
 
-console.log('--- P② 归属:行各自认自己那对键,方向由命中的 code 决定 ---')
+console.log('--- P② 归属:行各自认自己那对键,方向由命中的 code 决定;平台各认各的物理键 ---')
 {
   check('全部候选行 ↑ 命中为 previous', sessionStepFor(SESSION_CYCLE_FIXED_ROWS, SESSION_CYCLE_ID, SESSION_PREVIOUS_PRESS), 'previous')
   check('全部候选行 ↓ 命中为 next', sessionStepFor(SESSION_CYCLE_FIXED_ROWS, SESSION_CYCLE_ID, SESSION_NEXT_PRESS), 'next')
@@ -82,6 +89,14 @@ console.log('--- P② 归属:行各自认自己那对键,方向由命中的 code
   check('活跃行 ↑ 命中为 previous', sessionStepFor(SESSION_CYCLE_FIXED_ROWS, SESSION_ACTIVE_CYCLE_ID, SESSION_ACTIVE_PREVIOUS_PRESS), 'previous')
   check('活跃行 ↓ 命中为 next', sessionStepFor(SESSION_CYCLE_FIXED_ROWS, SESSION_ACTIVE_CYCLE_ID, SESSION_ACTIVE_NEXT_PRESS), 'next')
   check('活跃行不认不带 Alt 的那一对', sessionStepFor(SESSION_CYCLE_FIXED_ROWS, SESSION_ACTIVE_CYCLE_ID, SESSION_NEXT_PRESS), undefined)
+
+  check('macOS:全部候选行 ↑ 命中为 previous', sessionStepFor(SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_CYCLE_ID, SESSION_PREVIOUS_MAC_PRESS), 'previous')
+  check('macOS:全部候选行 ↓ 命中为 next', sessionStepFor(SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_CYCLE_ID, SESSION_NEXT_MAC_PRESS), 'next')
+  check('macOS:活跃行 ↓ 命中为 next', sessionStepFor(SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_ACTIVE_CYCLE_ID, SESSION_ACTIVE_NEXT_MAC_PRESS), 'next')
+  check('macOS:不带 Alt 的那一对不认带 Alt 的键', sessionStepFor(SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_CYCLE_ID, SESSION_ACTIVE_NEXT_MAC_PRESS), undefined)
+  check('macOS:Ctrl+↓ 不命中(那是 Windows 的键)', sessionStepFor(SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_CYCLE_ID, SESSION_NEXT_PRESS), undefined)
+  check('macOS:⌘↓ 走全部候选', sessionCycleRequest(SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_NEXT_MAC_PRESS), request('all', 'next'))
+  check('macOS:⌘⌥↓ 只走活跃', sessionCycleRequest(SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_ACTIVE_NEXT_MAC_PRESS), request('active', 'next'))
 
   check('裸 ↑ 不命中', sessionStepFor(SESSION_CYCLE_FIXED_ROWS, SESSION_CYCLE_ID, gesture('ArrowUp')), undefined)
   check('Alt+↓ 不命中', sessionStepFor(SESSION_CYCLE_FIXED_ROWS, SESSION_CYCLE_ID, gesture('ArrowDown', { alt: true })), undefined)

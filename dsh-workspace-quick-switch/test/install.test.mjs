@@ -17,6 +17,7 @@ import {
   fakeWorkspaces,
   finish,
   fixedKeydown,
+  fixedMacKeydown,
   installDom,
   renderSlotEntry,
   workspace,
@@ -37,9 +38,10 @@ function setup({
     workspace('ws-2', 'Beta', { sessionIds: ['ws-2'] }),
   ],
   current,
+  platform = 'windows',
 } = {}) {
   const slots = fakeSlots()
-  const shortcuts = fakeShortcuts()
+  const shortcuts = fakeShortcuts({ platform })
   const startCalls = []
   const list = fakeWorkspaces(workspaces)
   const sessions = fakeSessions({ current })
@@ -93,7 +95,8 @@ console.log('--- C① 固定行与浮层都挂上了 ---')
   check('固定行 id', shortcuts.commands.map((command) => command.id), ['dsh-workspace-quick-switch.quick-switch'])
   check('固定行分组', shortcuts.commands[0].group, 'application')
   check('固定行键帽', shortcuts.commands[0].keys, ['Ctrl', 'Alt', 'M'])
-  check('固定行占用 Ctrl+Alt+M', shortcuts.commands[0].bindings, [{ code: 'KeyM', modifiers: ['control', 'alt'] }])
+  check('固定行声明逻辑组合 primary+alt+M', shortcuts.commands[0].bindings, [{ code: 'KeyM', modifiers: ['primary', 'alt'] }])
+  check('注册表把 primary 落成 Ctrl:占用 Ctrl+Alt+M', shortcuts.fixedCatalog.getSnapshot()[0].bindings, [{ code: 'KeyM', modifiers: ['control', 'alt'] }])
   check('挂了固定输入观察者', shortcuts.observerCount(), 1)
   check('等 shell.overlay 声明后才注册', slots.injected, ['shell.overlay'])
   check(
@@ -285,6 +288,29 @@ console.log('--- C⑧ 工作区/会话服务晚到:等待子 fiber 补上读数 
   ctx.dispose()
   check('卸载后工作区订阅撤掉', list.listenerCount(), 0)
   check('卸载后会话订阅撤掉', sessions.list.listenerCount(), 0)
+}
+
+console.log('--- C⑩ macOS:固定行占 ⌘⌥M,键帽与按键归属都按平台走 ---')
+{
+  const { shortcuts, peek } = setup({ current: undefined, platform: 'macos' })
+  check('macOS 键帽', shortcuts.commands[0].keys, ['⌘', '⌥', 'M'])
+  check('macOS 仍是同一份逻辑声明', shortcuts.commands[0].bindings, [{ code: 'KeyM', modifiers: ['primary', 'alt'] }])
+  check('注册表把 primary 落成 meta:占用 ⌘⌥M', shortcuts.fixedCatalog.getSnapshot()[0].bindings, [{ code: 'KeyM', modifiers: ['alt', 'meta'] }])
+
+  shortcuts.fire(fixedKeydown())
+  check('macOS 上 Ctrl+Alt+M 不打开', peek().open, false)
+  shortcuts.fire(fixedMacKeydown())
+  check('macOS 上 ⌘⌥M 打开', peek().open, true)
+
+  const withShift = setup({ current: undefined, platform: 'macos' })
+  withShift.shortcuts.fire(fixedMacKeydown({ shift: true }))
+  check('macOS 上多按 Shift 不打开', withShift.peek().open, false)
+
+  const win = setup({ current: undefined })
+  win.shortcuts.fire(fixedMacKeydown())
+  check('Windows 上 ⌘⌥M 不打开', win.peek().open, false)
+  win.shortcuts.fire(fixedKeydown())
+  check('Windows 上 Ctrl+Alt+M 打开', win.peek().open, true)
 }
 
 console.log('--- C⑨ 卸载时清干净 ---')

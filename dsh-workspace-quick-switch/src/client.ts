@@ -1,5 +1,8 @@
 /**
- * 浏览器半部:快捷键 `Ctrl+Alt+M` 弹出「工作区快速切换」浮层。
+ * 浏览器半部:快捷键 `⌘⌥M`(macOS)/ `Ctrl+Alt+M`(Windows、Linux)弹出「工作区快速切换」浮层。
+ *
+ * 固定行声明的是逻辑组合 `primary+alt`+`M`,注册表在 macOS 上展开成 `meta+alt`(⌘⌥)、
+ * 在 Windows/Linux 上展开成 `control+alt`(Ctrl+Alt),所以同一份声明在两端各是各的键。
  *
  * 浮层列出的候选**就是左侧栏那一份**:上游 Workspace 控制器的 `list` 快照按宿主持久
  * 显示顺序排列(`dsh-workspace-activity-sort` 之类改的正是这份顺序),取前
@@ -9,7 +12,7 @@
  *
  * 三条通路:
  *
- *   - **固定行**注册在快捷键服务里(group `application`),占据 `Ctrl+Alt+M`,存在
+ *   - **固定行**注册在快捷键服务里(group `application`),占据 `primary+alt+M`,存在
  *     本身就是占用;按键经 `observeFixedInput` 的固定通道送达,只认这一条物理组合。
  *   - **浮层**注册进 `shell.overlay`(加法式列表槽)。候选由本插件直接订阅工作区快照
  *     得来(槽只给框架标准 props,容器与其注入面在 `ctx.inject` 的 scope 里造好),
@@ -18,7 +21,7 @@
  *     `↑` / `↓`):浮层一开它就先于任何本地控件看到按键,关掉后立即放行。
  *
  * 两条通路都**不**写进本插件的 `inject`:固定行与浮层只等 `slots` / `shortcuts`,所以
- * `Ctrl+Alt+M` 从一开始就占着、浮层也随时能开。候选与「当前」标记要用的 `workspaces` /
+ * `primary+alt+M` 从一开始就占着、浮层也随时能开。候选与「当前」标记要用的 `workspaces` /
  * `sessions` 是另一回事 —— 它们经 gateway + WebSocket 的远程链路提供,通常比本插件激活
  * 晚得多,所以各挂一个**等待子 fiber**(`scope.inject`),服务到位后再接上订阅;服务缺席
  * 就只是没有候选(浮层照常打开并提示),不会把启动审计拖成「等待激活」。
@@ -36,9 +39,12 @@ import {
   clampIndex,
   createPaletteStore,
   paletteEntries,
+  quickSwitchKeys,
+  quickSwitchPress,
   type HostWorkspace,
   type PaletteEntry,
   type PaletteStore,
+  type QuickSwitchPlatform,
 } from './palette.ts'
 
 export { name }
@@ -214,10 +220,12 @@ export interface PaletteEventLike {
   readonly defaultPrevented?: boolean
 }
 
-/** 快捷键目录面:只用到固定行注册与固定输入观察。 */
+/** 快捷键目录面:只用到固定行注册、固定输入观察与设备平台。 */
 export interface ShortcutsFace {
   registerFixed: (command: FixedCommand) => () => void
   observeFixedInput: (listener: (input: unknown) => void) => () => void
+  /** 接收输入的设备平台;`primary` 按它展开成 `meta`(macOS)或 `control`(其它)。 */
+  readonly platform?: QuickSwitchPlatform
   readonly fixedCatalog?: {
     getSnapshot(): readonly { readonly id?: string }[]
   }
@@ -512,13 +520,15 @@ function activate(store: PaletteStore, index: number): void {
   binding()
 }
 
-/** 固定行:占据 `Ctrl+Alt+M` 并出现在快捷键目录(group `application`)。 */
-const FIXED_COMMAND: FixedCommand = {
-  id: QUICK_SWITCH_ID,
-  label: () => '工作区快速切换',
-  keys: ['Ctrl', 'Alt', 'M'],
-  bindings: [QUICK_SWITCH_BINDING],
-  group: 'application',
+/** 固定行:占据 `primary+alt+M` 并出现在快捷键目录(group `application`),键帽按平台格式化。 */
+function fixedCommand(platform: QuickSwitchPlatform): FixedCommand {
+  return {
+    id: QUICK_SWITCH_ID,
+    label: () => '工作区快速切换',
+    keys: quickSwitchKeys(platform),
+    bindings: [QUICK_SWITCH_BINDING],
+    group: 'application',
+  }
 }
 
 /**
@@ -540,6 +550,8 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
     }
 
     const store = createPaletteStore()
+    // 平台只决定 `primary` 往哪边展开;服务缺席时按 Windows/Linux 的 `Ctrl+Alt` 兜底。
+    const platform: QuickSwitchPlatform = shortcuts.platform ?? 'windows'
 
     /**
      * 把上游当前读数投影进 store:候选、当前工作区标记与选中行一起对齐。
@@ -557,15 +569,15 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
     // 固定行要先挂载,固定输入观察者才读得到它;三者同属一个 scope,按同序销毁。
     scope.effect(() => {
       try {
-        return shortcuts.registerFixed(FIXED_COMMAND)
+        return shortcuts.registerFixed(fixedCommand(platform))
       } catch (error) {
-        warn('固定行注册失败(Ctrl+Alt+M 未占用):', error)
+        warn(`固定行注册失败(${quickSwitchKeys(platform).join('+')} 未占用):`, error)
         return undefined
       }
     }, `${name}: quick switch fixed row`)
     scope.effect(
       () => shortcuts.observeFixedInput((input) => {
-        if (!opensPalette(shortcuts, input)) return
+        if (!opensPalette(shortcuts, platform, input)) return
         openPalette(store, readNavigation(scope))
       }),
       `${name}: quick switch key`,
@@ -632,16 +644,18 @@ function openPalette(store: PaletteStore, navigation: WorkspaceNavigation | unde
   store.open(entry, current < 0 ? 0 : current)
 }
 
-/** 这次固定输入是否就是本插件那条 `Ctrl+Alt+M`(再看一眼固定行是否真的挂上了)。 */
-function opensPalette(shortcuts: ShortcutsFace, input: unknown): boolean {
+/**
+ * 这次固定输入是否就是本插件那条固定组合(macOS `⌘⌥M`,Windows/Linux `Ctrl+Alt+M`)。
+ *
+ * 先按平台判定物理组合(再看一眼固定行是否真的挂上了);消费与组字一类由调用处放行。
+ */
+function opensPalette(shortcuts: ShortcutsFace, platform: QuickSwitchPlatform, input: unknown): boolean {
   if (typeof input !== 'object' || input === null) return false
   const candidate = input as { readonly type?: unknown; readonly gesture?: unknown }
   if (candidate.type !== 'keydown') return false
   const gesture = candidate.gesture as Partial<Record<string, unknown>> | undefined
   if (gesture === undefined || gesture === null) return false
-  if (gesture.code !== QUICK_SWITCH_BINDING.code) return false
-  if (gesture.control !== true || gesture.alt !== true) return false
-  if (gesture.shift === true || gesture.meta === true) return false
+  if (!quickSwitchPress(platform, gesture)) return false
   if (gesture.composing === true || gesture.repeat === true || gesture.defaultPrevented === true) return false
   const rows = shortcuts.fixedCatalog?.getSnapshot()
   return rows === undefined || rows.some((row) => row.id === QUICK_SWITCH_ID)

@@ -41,24 +41,24 @@
 | 审批插件没装载（固定行缺席） | 无审批可答 | 审批桥 no-op，不消费 |
 | 桌面端（Desktop）按面板键 | native 通道派发 | **不安装面板桥**（见第 7 节） |
 | 桌面端 `Esc Esc` / 审批键 / 提问卡片 `Esc` | DOM 固定通道驱动，正常；提问卡片是 Web 独有特性，桌面端根本没有这张卡片 | 停止桥、审批桥与提问桥照常安装，正常；提问桥在桌面端是 no-op——没有卡片就没有提问域的 `pendingInteraction`，也没有会重复处理的那一按 |
-| 按 `Ctrl+Alt+J`（任意焦点位置） | 没有任何命令占用，浏览器默认无动作 | 主视图会话的 composer 输入面 `focus()`：键盘回到输入框，光标还原 |
-| 焦点已在输入框，按 `Ctrl+Alt+J` | 无动作 | 重新聚焦（幂等，光标不动） |
-| 焦点在文本控件 / 终端内的 `Ctrl+Alt+J` | 控件自己处理 | 文本控件内接管；终端内让位 |
-| 模态层打开，按 `Ctrl+Alt+J` | 模态层掌权 | 让位，不动作、不消费 |
-| 主视图会话数 ≠ 1 或没有会话，按 `Ctrl+Alt+J` | — | 不动作、不消费（没有可聚焦的 composer） |
-| 任意焦点位置按 `Ctrl+Alt+→` / `Ctrl+Alt+←` | 没有任何命令占用，浏览器默认无动作 | 右侧栏切成当前页的下一页 / 上一页（环状）；切完把键盘交给新显示的页面（页面自聚焦如终端时则不抢，只补位） |
-| 焦点在文本控件里按 `Ctrl+Alt+←/→` | 控件自己处理（本组合无动作） | 照常切页并消费（不看 `defaultPrevented`、不限制 region） |
-| 焦点在终端里按 `Ctrl+Alt+←/→` | 终端把箭头当普通输入处理并 `preventDefault()+stopPropagation()`（事件到不了固定通道） | 捕获阶段在 `.xterm` 之前拦下并照常切页 |
-| 右侧栏折叠，按 `Ctrl+Alt+←/→` | 无动作 | 不动作、不消费（没有"当前显示的页面"；与面板键同一条边界） |
-| 只有一张页面 / 没有活动页 / 没有会话，按 `Ctrl+Alt+←/→` | 无动作 | 不动作、不消费（没有可切的目标） |
-| 模态层打开，按 `Ctrl+Alt+←/→` | 模态层掌权 | 让位，不动作、不消费 |
-| 任意焦点位置按 `Ctrl+↓` / `Ctrl+↑` | 没有任何命令占用（官方唯一带方向键的固定行是菜单的裸 `↑` / `↓`，与本组合的修饰键集合不相交）；文本框里浏览器默认按段移动光标 | 在左侧栏前三个工作区**当前显示出来**的会话行之间环状切换（`↓` 往显示顺序的后一个、`↑` 往前一个）；当前会话不在候选里时 `↓` 落候选首、`↑` 落候选尾；切换调 `uiWorkspace.openSession()`，与点击侧栏那一行同一操作 |
-| 任意焦点位置按 `Ctrl+Alt+↓` / `Ctrl+Alt+↑` | 没有任何命令占用，浏览器默认无动作 | **只在活跃会话之间**环状切换：池子是候选里带状态点的会话（运行中 / 待交互 / 已完成未读）；当前会话不在活跃池里时 `↓` 落活跃池首、`↑` 落活跃池尾；切换动词同上 |
-| 候选里没有任何活跃会话（没有行带状态点） | 无动作 | 不动作、不消费：活跃池是空的，不退回全部候选（常规导航是 `Ctrl+↑/↓` 自己那一条） |
+| 按 `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux）（任意焦点位置） | 没有任何命令占用，浏览器默认无动作 | 主视图会话的 composer 输入面 `focus()`：键盘回到输入框，光标还原 |
+| 焦点已在输入框，按 `⌘⌥J` / `Ctrl+Alt+J` | 无动作 | 重新聚焦（幂等，光标不动） |
+| 焦点在文本控件 / 终端内的 `⌘⌥J` / `Ctrl+Alt+J` | 控件自己处理 | 文本控件内接管；终端内让位 |
+| 模态层打开，按 `⌘⌥J` / `Ctrl+Alt+J` | 模态层掌权 | 让位，不动作、不消费 |
+| 主视图会话数 ≠ 1 或没有会话，按 `⌘⌥J` / `Ctrl+Alt+J` | — | 不动作、不消费（没有可聚焦的 composer） |
+| 任意焦点位置按 `⌘⌥→` / `⌘⌥←`（macOS）/ `Ctrl+Alt+→` / `Ctrl+Alt+←`（Windows/Linux） | 没有任何命令占用，浏览器默认无动作 | 右侧栏切成当前页的下一页 / 上一页（环状）；切完把键盘交给新显示的页面（页面自聚焦如终端时则不抢，只补位） |
+| 焦点在文本控件里按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 控件自己处理（本组合无动作） | 照常切页并消费（不看 `defaultPrevented`、不限制 region） |
+| 焦点在终端里按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 终端把箭头当普通输入处理并 `preventDefault()+stopPropagation()`（事件到不了固定通道） | 捕获阶段在 `.xterm` 之前拦下并照常切页 |
+| 右侧栏折叠，按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 无动作 | 不动作、不消费（没有"当前显示的页面"；与面板键同一条边界） |
+| 只有一张页面 / 没有活动页 / 没有会话，按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 无动作 | 不动作、不消费（没有可切的目标） |
+| 模态层打开，按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 模态层掌权 | 让位，不动作、不消费 |
+| 任意焦点位置按 `⌘↓` / `⌘↑`（macOS）/ `Ctrl+↓` / `Ctrl+↑`（Windows/Linux） | 没有任何命令占用（官方唯一带方向键的固定行是菜单的裸 `↑` / `↓`，与本组合的修饰键集合不相交）；文本框里浏览器默认做自己的光标移动 | 在左侧栏前三个工作区**当前显示出来**的会话行之间环状切换（`↓` 往显示顺序的后一个、`↑` 往前一个）；当前会话不在候选里时 `↓` 落候选首、`↑` 落候选尾；切换调 `uiWorkspace.openSession()`，与点击侧栏那一行同一操作 |
+| 任意焦点位置按 `⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` | 没有任何命令占用，浏览器默认无动作 | **只在活跃会话之间**环状切换：池子是候选里带状态点的会话（运行中 / 待交互 / 已完成未读）；当前会话不在活跃池里时 `↓` 落活跃池首、`↑` 落活跃池尾；切换动词同上 |
+| 候选里没有任何活跃会话（没有行带状态点） | 无动作 | 不动作、不消费：活跃池是空的，不退回全部候选（常规导航是 `⌘↑/↓` / `Ctrl+↑/↓` 自己那一条） |
 | 活跃池里唯一那个活跃会话**正是**当前会话 | 无动作 | 不动作、不消费（没有可切的目标），同样不退回全部候选 |
 | 候选只有一个、或算出来的目标就是当前会话，按这两对键中的任意一对 | 无动作 | 不动作、不消费（没有可切的目标） |
-| 焦点在文本控件里按这两对键 | `Ctrl+↓/↑` 是浏览器自己的「按段移动光标」；`Ctrl+Alt+↓/↑` 无动作 | 照常切换并消费（不看 `defaultPrevented`、不限制 region）——命中候选时这一按不再落到光标上 |
-| 焦点在终端里按这两对键 | 终端把按键当普通输入处理并 `preventDefault()+stopPropagation()`（事件到不了固定通道） | 捕获阶段在 `.xterm` 之前拦下并照常切换，顺带不让 `\x1b[1;5A` / `\x1b[1;5B`（`Ctrl+方向键`）与 `\x1b[1;7A` / `\x1b[1;7B`（`Ctrl+Alt+方向键`）进 shell |
+| 焦点在文本控件里按这两对键 | `⌘↓/↑`（文档首 / 尾）/ `Ctrl+↓/↑`（按段移动光标）是浏览器自己的默认行为；`⌘⌥↓/↑` / `Ctrl+Alt+↓/↑` 无动作 | 照常切换并消费（不看 `defaultPrevented`、不限制 region）——命中候选时这一按不再落到光标上 |
+| 焦点在终端里按这两对键 | 终端把按键当普通输入处理并 `preventDefault()+stopPropagation()`（事件到不了固定通道） | 捕获阶段在 `.xterm` 之前拦下并照常切换，顺带不让 `\x1b[1;5A` / `\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）与 `\x1b[1;7A` / `\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）进 shell；macOS 上同样的行是 `⌘↑/↓` 与 `⌘⌥↑/↓`，xterm 不为它们产出这些序列，但捕获钩子照常运行 |
 | 工作区折叠 / 会话藏在「展开更多」之后 / 列表带搜索词 / 侧栏收起成窄栏 / 分组方式为「单列表」，按这两对键 | 无动作（那时也没有会话行可点） | 不动作、不消费：候选就是「此刻渲染出来的会话行」，这些情况下没有候选 |
 | 会话已归档，按这两对键 | 点那一行只弹「已归档，不可打开」的提示，不切换 | 不动作、不消费：归档行不进候选（按 `aria-description` 标记识别） |
 | 模态层打开，按这两对键 | 模态层掌权 | 让位，不动作、不消费 |
@@ -101,25 +101,25 @@
 | 上游提问包 `@deepseek-ai/dsh-client-ui-user-questions` 没装载 | 提问桥 no-op，不消费（同第 6 节对照表） | 没有提问包就永远不会有提问域的 `pendingInteraction` 发布出来，`presentedQuestion` 恒为 `undefined`，这一按归停止序列或无人。桥本身仍会安装——它只依赖固定输入通道，不依赖提问包的运行时存在。桌面端正属于这一类（该包声明 `dsh.client.platform: "web"`）：桥照常装上，但永远没有卡片可关。 |
 | `dismiss()` 拒绝（返回 rejected Promise） | 捕获并告警（`question <key> was not cancelled:`），不冒泡 | 与 `cancel()` / `answer()` 同理，避免未处理的 Promise 拒绝污染控制台 / 运行时；这一按的归属（已消费）不回退。 |
 | 卡片已经关闭 / `dismiss()` 已在关闭中 | 幂等，最多再调一次同一个动词 | 关闭中的卡片会把自己从注册表移除，之后 `presentedQuestion` 就取不到了；`dismiss()` 自身对重复调用也幂等（与面板按钮同源），所以就算时序上多按一下也不会重复取消。 |
-| 按 `Ctrl+Alt+J` 时 `conversation.input` 不存在或 `for()` 抛错 | 告警一次，不消费 | 聚焦只有 `conversation.input.for(scope).focus()` 一条公开入口；scope 不是被保留的会话代际（切换中）时 `for()` 会抛，此时不动，也不聚焦错会话。 |
-| macOS/Linux 布局把 `Ctrl+Alt`（AltGr）留给输入字符 | 若该组合被系统/布局吞掉，`Ctrl+Alt+J` 到不了 page | 官方把 macOS Web 的 `alt` 非主修饰组合标记为 reserved；本键的浏览器形态是 `control+alt`，定位以 Windows/Linux 主场景。若个别布局拦截该组合，这一按不会落地，也不误动作。 |
-| 右侧栏折叠 / 只有一张页面 / 没有活动页 / 没有会话，按 `Ctrl+Alt+←/→` | 不动作、不消费 | 折叠时没有"当前显示的页面"可切换；页面数少于两张、当前页不在列表、或没有 on-screen 会话时没有可切的目标。这与面板键的"折叠即让位"同一条边界。 |
+| 按 `⌘⌥J` / `Ctrl+Alt+J` 时 `conversation.input` 不存在或 `for()` 抛错 | 告警一次，不消费 | 聚焦只有 `conversation.input.for(scope).focus()` 一条公开入口；scope 不是被保留的会话代际（切换中）时 `for()` 会抛，此时不动，也不聚焦错会话。 |
+| Windows/Linux 布局把 `Ctrl+Alt`（AltGr）留给输入字符 | 若该组合被系统/布局吞掉，`Ctrl+Alt+J` 到不了 page | 固定行声明的是逻辑 `primary+alt`：macOS 上落成 `⌘⌥`，`⌘⌥` 系组合不被浏览器保留给字符输入，所以 AltGr 之忧不存在于 macOS；Windows/Linux 上仍是 `Ctrl+Alt`，个别布局会把 `Ctrl+Alt` 当 AltGr 用并吞掉这一按，此时该按不落地、也不误动作。 |
+| 右侧栏折叠 / 只有一张页面 / 没有活动页 / 没有会话，按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 不动作、不消费 | 折叠时没有"当前显示的页面"可切换；页面数少于两张、当前页不在列表、或没有 on-screen 会话时没有可切的目标。这与面板键的"折叠即让位"同一条边界。 |
 | 页面循环顺序 | 按 `tabsIn()`（`layout.tabs` 的记录顺序，≈ 打开顺序）循环，跨分屏 / 浮动 pane 一起循环 | 切页走公开服务面（`tabsIn` / `active` / `focus`），没有可读的 DOM 条带顺序；拖拽改序后循环顺序保持记录顺序不变。 |
-| 终端里按 `Ctrl+Alt+←/→` | 照常切页并消费 | xterm 对"方向键 + 修饰"产出 `\x1b[1;7D` / `\x1b[1;7C` 转义序列并 `preventDefault()+stopPropagation()`——事件到不了 window 冒泡上的固定通道，观察者收不到、也就没法动作。所以本桥在 window **捕获阶段**另挂一个 keydown 监听（早于一切目标 / 冒泡处理器），**只**对会落进 `.xterm` 的按键拦下：判定与通道共用 `pageCycleTarget`，命中即 `preventDefault()+stopPropagation` 吞掉、顺带不让转义序列进 shell，未命中就放行。文本控件不吞箭头键，仍走通道；两条路共用同一判定、互斥不双触发。 |
-| 其它也会 `stopPropagation` / `preventDefault` 的本地控件（若有） | 该按到不了通道，或到了也已读成"被消费" | 页面循环桥的捕获钩子**只认 `.xterm`**：它抢的是 `Ctrl+Alt+←/→`，那是终端唯一会为它停掉事件的组合，若将来出现别的会吞这对方向键的控件，需在同一钩子里补上它的范围。审批桥的捕获钩子则是**全 page 区域抢 `Enter` / `Esc`**（准入与让位同固定通道），所以"自己消费 `Enter` 的过程卡片"这一类已经由它兜住。 |
+| 终端里按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 照常切页并消费 | Windows/Linux 上 xterm 对"方向键 + 修饰"产出 `\x1b[1;7D` / `\x1b[1;7C` 转义序列并 `preventDefault()+stopPropagation()`——事件到不了 window 冒泡上的固定通道，观察者收不到、也就没法动作（macOS 上同一行是 `⌘⌥←/→`，xterm 不为它产出该序列，但事件同样要靠捕获阶段先看到）。所以本桥在 window **捕获阶段**另挂一个 keydown 监听（早于一切目标 / 冒泡处理器），**只**对会落进 `.xterm` 的按键拦下：判定与通道共用 `pageCycleTarget`，命中即 `preventDefault()+stopPropagation` 吞掉、顺带不让转义序列进 shell，未命中就放行。文本控件不吞箭头键，仍走通道；两条路共用同一判定、互斥不双触发。 |
+| 其它也会 `stopPropagation` / `preventDefault` 的本地控件（若有） | 该按到不了通道，或到了也已读成"被消费" | 页面循环桥的捕获钩子**只认 `.xterm`**：它抢的是 `⌘⌥←/→` / `Ctrl+Alt+←/→`，那是终端唯一会为它停掉事件的组合，若将来出现别的会吞这对方向键的控件，需在同一钩子里补上它的范围。审批桥的捕获钩子则是**全 page 区域抢 `Enter` / `Esc`**（准入与让位同固定通道），所以"自己消费 `Enter` 的过程卡片"这一类已经由它兜住。 |
 | 切页后的自动聚焦 | 只补位、不抢键盘 | `sidebar.focus()` 提交的是 store 变更，React 异步渲染，所以桥在**下一帧**才定位新显示的 pane（`[data-sidebar-right-session]` 根 + 带 `-active` 标记的可见 pane）。若新页面自己聚焦了（终端 body 在 `visible` 变化时聚焦 xterm），`document.activeElement` 已落在 pane 内，桥不碰键盘。 |
 | 快捷键**展开**右栏（`sidebar.right.toggle`） | 面板确认展开后把键盘交到活动页自己的输入面（终端的 xterm） | 内置 toggle 走 `openWithPaneFocus`：`flushSync` 提交展开后**同步**聚焦活动 **pane 容器**——这一步发生在终端"`visible` 变化时自聚焦"之后，把刚落到 xterm 的焦点顶掉，此后 `visible` / `writable` 不再变化，终端不会二次自聚焦。补位**不假定展开与按键同步**：以 50ms 间隔有界轮询（≤800ms）`sidebar.isExpanded()`，面板一确认展开就在下一帧调用 `focusShownPage`；当焦点停在 pane 容器本身、而该页有输入面（`.xterm-helper-textarea`，`readOnly` 视为页面自己拒绝）时补位聚焦它；页面内部控件已持键盘则仍不碰。这一按**不消费**，owner 仍是内置 toggle；窗口内面板始终没展开则放弃（如按键被别的消费）。 |
 | 会话导航的候选口径：**只看左侧栏此刻渲染出来的会话行** | 不切换、不消费 | 候选不是从服务面推导的，而是读 `[data-row-key]` 行：折叠的工作区不渲染会话行、每个分组默认最多渲染 5 行（多出来的挡在「展开更多」按钮之后）、搜索过滤把列表区换成搜索结果（没有行标记）、窄 / 收起侧栏时整个列表区不渲染、「单列表」分组模式根本没有工作区分组行。这些都不是故障，而是「没被展示出来就不切」这条规则本身；副作用是候选会随侧栏的展开状态、分组方式与搜索词实时变化。两条会话键共用同一份候选，只是池子不同。 |
 | 「未分组」桶里的会话 | 不进候选 | 「未分组」桶的分组键是空串，不是工作区：它既不占前三个名额，也不贡献候选。 |
 | 左侧栏此刻没有渲染出任何会话行（或只有一个且已是当前会话） | 不动作、不消费 | 没有候选就没有可切的目标；只有一个候选且它就是当前会话时，「切」到自己没有意义，同样不动作、不消费。 |
-| 当前会话不在候选里（它在第四个 / 别的工作区） | `Ctrl+↑/↓`：`↓` 落候选首、`↑` 落候选尾；`Ctrl+Alt+↑/↓`：`↓` 落活跃池首、`↑` 落活跃池尾 | 当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出；它不在池子里时按「进入池子」处理，方向决定落在哪一端。 |
-| 「活跃」的判定口径 | 只有行上有状态点的会话进 `Ctrl+Alt+↑/↓` 的池子 | 三项状态事实取并集，全部读 `uiSession.sessionStatus`：`pendingInteraction !== undefined`（待审批 / 计划待审 / 待回答）、`completionUnread === true`（已完成未读那一颗绿点）、`running === true`（状态表读数缺席时退回会话目录的 `running`）。回合以出错收场时运行状态同样由 true 变 false 并亮起同一颗绿点，所以这类会话在池子里——DSH 的会话状态面**没有**独立的「出错」状态，桥不去猜一个不存在的读数。子智能体还在跑的会话也不进池子（那是行上的另一个 occupant，不是会话自己的状态）。 |
-| 活跃池里唯一的活跃会话**正是**当前会话 | 不动作、不消费 | 池子里只剩当前会话，再按也没有可切的目标；**不**退回全部候选——常规导航是 `Ctrl+↑/↓` 自己那一条，两条键各守各的池子。 |
-| `Ctrl+↓/↑`（不带 `Alt`）在 Web / Windows / macOS 上被官方标为保留组合 | 固定键照常收到这一按 | `bindingIssue` 对 `runtime === 'web'` 的方向键组合返回 `reserved`，因此用户**不能**把某个可配置命令分配到 `Ctrl+↑` / `Ctrl+↓`（固定行不受这条限制——`registerFixed` 只做规范化，不查保留表）。代价是命中候选时这一按会从文本框手里拿走浏览器自己的「按段移动光标」：没有候选、或目标就是当前会话时桥不消费，光标照常移动。 |
+| 当前会话不在候选里（它在第四个 / 别的工作区） | `⌘↑/↓` / `Ctrl+↑/↓`：`↓` 落候选首、`↑` 落候选尾；`⌘⌥↑/↓` / `Ctrl+Alt+↑/↓`：`↓` 落活跃池首、`↑` 落活跃池尾 | 当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出；它不在池子里时按「进入池子」处理，方向决定落在哪一端。 |
+| 「活跃」的判定口径 | 只有行上有状态点的会话进 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` 的池子 | 三项状态事实取并集，全部读 `uiSession.sessionStatus`：`pendingInteraction !== undefined`（待审批 / 计划待审 / 待回答）、`completionUnread === true`（已完成未读那一颗绿点）、`running === true`（状态表读数缺席时退回会话目录的 `running`）。回合以出错收场时运行状态同样由 true 变 false 并亮起同一颗绿点，所以这类会话在池子里——DSH 的会话状态面**没有**独立的「出错」状态，桥不去猜一个不存在的读数。子智能体还在跑的会话也不进池子（那是行上的另一个 occupant，不是会话自己的状态）。 |
+| 活跃池里唯一的活跃会话**正是**当前会话 | 不动作、不消费 | 池子里只剩当前会话，再按也没有可切的目标；**不**退回全部候选——常规导航是 `⌘↑/↓` / `Ctrl+↑/↓` 自己那一条，两条键各守各的池子。 |
+| `primary+↓/↑`（不带 `Alt`，即 macOS `⌘↓/↑` / Windows/Linux `Ctrl+↓/↑`）在 Web 上被官方标为保留组合 | 固定键照常收到这一按 | `bindingIssue` 对 `runtime === 'web'` 的方向键组合返回 `reserved`，因此用户**不能**把某个可配置命令分配到 `⌘↓/↑` / `Ctrl+↓/↑`（macOS 的 `⌘` 形态与 Windows/Linux 的 `control` 形态一样受这条保留约束；固定行不受限制——`registerFixed` 只做规范化，不查保留表）。代价是命中候选时这一按会从文本框手里拿走浏览器自己的默认光标移动：没有候选、或目标就是当前会话时桥不消费，光标照常移动。 |
 | 上游改了行标记 / 分组结构 / 归档标记 | 最坏情形是候选变空（不动作），不误动作 | 候选依赖三项文档事实：`[data-row-key]` 的 `workspace:` / `session:` 两种前缀（只有 Workspace browser 发布这个属性）、行的归属（HoverCard 包装下的「父节点的最近 `div` 祖先 = 分组容器；容器里第一个工作区行 = 它的分组行」）、归档行的 `aria-description` 标记。认不出归属的行直接丢掉，绝不猜它属于谁。 |
 | `uiWorkspace` 服务缺席（没有 Workspace browser 的客户端） | 两条会话固定行都不安装，不告警 | 会话导航面由 Workspace browser 所在的客户端包提供；没有它既没有侧栏行、也没有可切换的动作。该服务名与其余三项一样声明在 `ctx.inject` 的依赖列表里：`ctx.get` 默认只认**已激活**的服务，而 Workspace browser 的客户端包依赖一长串服务（`layout` / `remote.directoryPicker` 等），激活可能晚于本插件，采样一次会把「还没激活」错判成「缺席」。 |
 | `uiWorkspace` 在、但公开面形状不符（上游改了 `openSession` 的方法名） | 两条会话固定行都不安装，告警一次 | 本插件不把该包声明成类型依赖，只按结构读 `scope.get('uiWorkspace').openSession`（见下面第 21 条）；注入只保证服务来了，形状仍要运行时确认。 |
-| 终端内按 `Ctrl+↓/↑` 或 `Ctrl+Alt+↓/↑` | 照常切换并消费 | 与页面循环同一条机制：`.xterm` 内的 keydown 到不了固定通道的 window 冒泡监听，所以桥在 window **捕获阶段**另挂一个 keydown 监听，只对会落进 `.xterm` 的按键拦下（判定与通道路径共用 `sessionCyclePlan`，它一次解析出命中的是哪一条行、走哪个池子），其余按键放行。 |
+| 终端内按 `⌘↓/↑` / `Ctrl+↓/↑` 或 `⌘⌥↓/↑` / `Ctrl+Alt+↓/↑` | 照常切换并消费 | 与页面循环同一条机制：`.xterm` 内的 keydown 到不了固定通道的 window 冒泡监听，所以桥在 window **捕获阶段**另挂一个 keydown 监听，只对会落进 `.xterm` 的按键拦下（判定与通道路径共用 `sessionCyclePlan`，它一次解析出命中的是哪一条行、走哪个池子），其余按键放行。 |
 | 会话切换后键盘落在哪里 | 键盘留在原地，桥不搬焦点 | 与点击那一行同一效果：`uiWorkspace.openSession()` 只换主视图会话，不聚焦任何人；新会话的 composer 是否取键盘由应用自己决定（页面切换键的「补位聚焦新页面」是另一条规则，见第 6 节）。 |
 
 告警前缀统一为 `[dsh-focus-free-shortcuts]`，方便在控制台过滤。
@@ -138,9 +138,9 @@
 4. 固定快捷键 id `approval.allow` / `approval.reject`（与官方 `shortcuts.registerFixed` 处同源）与其"预约的物理组合就是审批决定键"的语义；
 5. DOM 标记 `[data-approval-key]`（与官方审批面板根节点、以及内置 stop guard 的让位选择器同源）；
 6. `pendingInteraction` 槽位的**运行时**形状：类型就是官方的 `PendingApproval`，但该槽位可被别的域复用，所以 `asAnswerableApproval` 仍在运行时确认 `kind === 'approval'`、`key` 为字符串、`answerable === true`、`answer` 为函数之后才代答；
-7. 固定键 id `dsh-focus-free-shortcuts.focus-composer` 与它预约的物理组合 `control+alt+KeyJ`（本插件自己在 `shortcuts.registerFixed` 处声明；约定是"存在即预约、跟随挂载行"，同 `approval.allow` / `approval.reject` 的语义）；
+7. 固定键 id `dsh-focus-free-shortcuts.focus-composer` 与它声明的逻辑组合 `primary+alt+KeyJ`（`registerFixed` 按设备平台规范化成生效的物理绑定：macOS 落成 `meta+alt+KeyJ`（`⌘⌥J`），Windows/Linux 落成 `control+alt+KeyJ`（`Ctrl+Alt+J`）；本插件自己在 `shortcuts.registerFixed` 处声明，约定是"存在即预约、跟随挂载行"，同 `approval.allow` / `approval.reject` 的语义）；
 8. `conversation.input`（`SessionInputResolver.for(scope)`）与它返回的 `SessionInput.focus()` 语义——与应用在遮罩结束后把键盘还给 composer 用的是同一个操作，光标还原；若上游改了这个入口，聚焦键退化为 no-op 并告警；
-9. 固定键 id `dsh-focus-free-shortcuts.page-cycle` 与它预约的两个物理组合 `control+alt+ArrowLeft` / `control+alt+ArrowRight`（本插件自己在 `shortcuts.registerFixed` 处声明；同一行两个绑定 = 上一页 / 下一页两个方向，约定同第 7 条）；
+9. 固定键 id `dsh-focus-free-shortcuts.page-cycle` 与它声明的两个逻辑组合 `primary+alt+ArrowLeft` / `primary+alt+ArrowRight`（`registerFixed` 按平台落成 `meta+alt`（macOS `⌘⌥←/→`）或 `control+alt`（Windows/Linux `Ctrl+Alt+←/→`）；本插件自己在 `shortcuts.registerFixed` 处声明；同一行两个绑定 = 上一页 / 下一页两个方向，约定同第 7 条）；
 10. DOM 标记 `[data-sidebar-right-session]` / `[data-dockkit-pane]` / `[data-dockkit-float]`（含 `-active` 后缀与 `data-sidebar-right-open`）——自动聚焦步的 pane 选择与官方 `visibleSidebarPane` 同源；该函数不在包 `/client` 的公开导出里，所以按同一份标记重写"活动标记优先、否则第一块可见 pane"的三选逻辑。`[data-sidebar-right-session]` 同时出现在**会话包装 div 与内层面板 div** 上（同 id、嵌套）：会话根按"取带 `data-sidebar-right-open` 者、否则取最深者"复刻 `closest()` 的"最内层 owner"语义（内层面板才带 `data-sidebar-right-open` 并持有 panes）。若上游改了标记，聚焦退化为只切页不聚焦（no-op），不误动作。
 11. 终端的 `.xterm` 类——与官方键盘适配器判定 `terminal` 区域用的是同一个类（同为 `dsh-client-ui-sidebar-terminal` 的 xterm 根）。捕获阶段拦截**只**认 `closest('.xterm')` 命中的按键，其余按键一律放行给固定通道，两路共用 `pageCycleTarget`，互斥不双触发。若上游改了终端根类名，终端内切页会退化（该按到不了通道、捕获钩子也不再认它），但不会误动作。
 12. 模态选择器 `[role="dialog"][aria-modal="true"], [role="menu"]`——与 `@deepseek-ai/dsh-client-ui-primitives` 的 `modalSelector` 同源。捕获阶段跑在键盘适配器算出 `context.modal` **之前**，桥自行按这份选择器复推"当前是否有模态层"，再交给共享判定，使两路的模态否决一致。若上游改了选择器，最坏情形是捕获路径在模态层打开时仍切页（与通道路径的否决不一致），不误动作。
@@ -155,4 +155,4 @@
 19. 分组结构与归属判定：每个分组渲染成「分组容器 `div` > 自己的分组行 →（嵌套子分组）→ 自己名下的会话行 →（「展开更多」行）」，而分组行与会话行外面各包着一层 HoverCard 的 `span`。会话导航桥据此归属：**会话行父节点的最近 `div` 祖先就是分组容器，容器里第一个工作区行就是它自己的分组行**。嵌套子分组排在父分组自己的会话行之前，所以「工作区树」模式下父分组自己的会话行仍归父分组；「单列表」模式下会话行的最近 `div` 祖先是列表本身、里面没有工作区行，这些行直接丢掉。
 20. 归档行标记 `aria-description`（官方只对归档行写「已归档，不可打开」的提示文案）与官方 `guardedOpen` 的语义（打开归档行只弹提示、不切换）。会话导航桥据此把归档行排除在候选之外。若上游改用别的标记，最坏情形是归档行回到候选里——按下去弹一次提示、不切换会话，仍然不误动作。
 21. `uiWorkspace.openSession(sessionId)` 的语义（上游 `UiWorkspace` 的公开面里本插件唯一要用的动词：选中一个会话并把它的 Conversation 显示出来，与点击侧栏那一行完全同路，只换主视图、不聚焦任何人）。本插件不为它多拉一个类型依赖，但把 `uiWorkspace` 写进会话导航桥的注入依赖列表，等服务**激活**后再按结构读 `scope.get('uiWorkspace')` 的 `openSession`（`ctx.get` 默认只认已激活的服务；Workspace browser 的客户端包激活可能晚于本插件，采样一次会把「还没激活」误判成「缺席」而永不安装）。服务缺席（没有 Workspace browser 的客户端）时 Cordis 不跑桥的回调，整条桥不安装、也不告警；服务在而形状不符（上游改了这个方法名）时告警一次 `uiWorkspace service unavailable; session-cycle keys not installed`、整条桥同样不安装。
-22. 固定键 id `dsh-focus-free-shortcuts.session-cycle` 与它预约的两个物理组合 `control+ArrowUp` / `control+ArrowDown`（走全部候选），以及 `dsh-focus-free-shortcuts.session-active-cycle` 与它预约的 `control+alt+ArrowUp` / `control+alt+ArrowDown`（只走活跃池）：两条行都由本插件自己在 `shortcuts.registerFixed` 处声明，约定同第 7 / 9 条（存在即预约、跟随挂载行；同一行两个绑定 = 两个方向）。两条行的归属靠修饰键集合互斥（有没有 `Alt`），所以同一按至多命中一条。活跃池的三项状态事实（`pendingInteraction` / `running` / `completionUnread`）取自官方 `SessionStatus` 类型，是有类型保证的公开读数——本插件只做「任一成立即活跃」的并集，不引入自己的状态表。
+22. 固定键 id `dsh-focus-free-shortcuts.session-cycle` 与它声明的两个逻辑组合 `primary+ArrowUp` / `primary+ArrowDown`（走全部候选，macOS 落成 `⌘↑` / `⌘↓`、Windows/Linux 落成 `Ctrl+↑` / `Ctrl+↓`），以及 `dsh-focus-free-shortcuts.session-active-cycle` 与它声明的 `primary+alt+ArrowUp` / `primary+alt+ArrowDown`（只走活跃池，macOS 落成 `⌘⌥↑` / `⌘⌥↓`、Windows/Linux 落成 `Ctrl+Alt+↑` / `Ctrl+Alt+↓`）：两条行都由本插件自己在 `shortcuts.registerFixed` 处声明，约定同第 7 / 9 条（存在即预约、跟随挂载行；同一行两个绑定 = 两个方向）。两条行的归属靠修饰键集合互斥（有没有 `Alt`），所以同一按至多命中一条。活跃池的三项状态事实（`pendingInteraction` / `running` / `completionUnread`）取自官方 `SessionStatus` 类型，是有类型保证的公开读数——本插件只做「任一成立即活跃」的并集，不引入自己的状态表。

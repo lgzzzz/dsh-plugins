@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { normalizeBinding } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 
 /** 本插件的包根目录(测试文件在 test/ 下)。 */
 export const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -161,15 +162,25 @@ export function fakeSessions({ current, byId = {} } = {}) {
   return { list }
 }
 
-/** 造一个假的快捷键目录:固定行登记 + 观察者,可按固定通道派发输入。 */
-export function fakeShortcuts() {
+/**
+ * 造一个假的快捷键目录:固定行登记 + 观察者,可按固定通道派发输入。
+ *
+ * `platform` 默认取 Windows/Linux 口径,固定行的逻辑 `primary` 按它展开成物理键位 ——
+ * 与真实注册表 `registerFixed` 一致。
+ * @param platform - 收窄到本插件认的三种平台。
+ */
+export function fakeShortcuts({ platform = 'windows' } = {}) {
   const commands = []
   const observers = new Set()
   const catalog = []
   const face = {
+    platform,
     registerFixed(command) {
       commands.push(command)
-      catalog.push({ id: command.id, bindings: command.bindings })
+      catalog.push({
+        id: command.id,
+        bindings: command.bindings.map((binding) => normalizeBinding(binding, platform)),
+      })
       return () => {
         const index = commands.indexOf(command)
         if (index >= 0) commands.splice(index, 1)
@@ -358,7 +369,7 @@ export function fakeCtx(services) {
   return ctx
 }
 
-/** 造一条固定输入通道的 keydown 读数。 */
+/** 造一条固定输入通道的 keydown 读数(Windows/Linux 口径:`Ctrl+Alt+M`)。 */
 export function fixedKeydown(overrides = {}) {
   return {
     type: 'keydown',
@@ -374,6 +385,11 @@ export function fixedKeydown(overrides = {}) {
       ...overrides,
     },
   }
+}
+
+/** 造一条 macOS 口径的固定输入读数(`⌘⌥M`)。 */
+export function fixedMacKeydown(overrides = {}) {
+  return fixedKeydown({ control: false, meta: true, ...overrides })
 }
 
 /** 造一个宿主工作区。 */
