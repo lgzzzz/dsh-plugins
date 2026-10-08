@@ -1,6 +1,6 @@
 # 固定输入通道与面板键桥接
 
-> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 3 册：固定输入通道、归属判定来源与让位条件，以及面板键（全屏 / 分屏）的桥接实现。
+> 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 3 册：固定输入通道、归属判定来源与让位条件，以及面板键（全屏 / 分屏）的桥接实现。
 
 ---
 

@@ -1,6 +1,6 @@
 # 停止桥接（`Esc Esc`）
 
-> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 4 册：`Esc Esc` 停止序列的桥接实现，以及「每按恰好一个 owner」的归属不重叠条件。
+> 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 4 册：`Esc Esc` 停止序列的桥接实现，以及「每按恰好一个 owner」的归属不重叠条件。
 
 ---
 

@@ -1,6 +1,6 @@
 # 构建、测试与启用
 
-> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 7 册：怎么构建、怎么跑测试、怎么启用与撤销。
+> 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 7 册：怎么构建、怎么跑测试、怎么启用与撤销。
 
 ---
 

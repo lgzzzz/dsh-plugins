@@ -1,6 +1,6 @@
 # 构建、测试与启用
 
-> 本文件是 [dsh-ui-chat-verbose-fold 说明](../README.md) 的第 3 册:构建 / 测试命令、`test/` 分组与启用方式。
+> 本文件是 [dsh-ui-chat-verbose-fold 说明](../dsh-ui-chat-verbose-fold.md) 的第 3 册:构建 / 测试命令、`test/` 分组与启用方式。
 
 ---
 

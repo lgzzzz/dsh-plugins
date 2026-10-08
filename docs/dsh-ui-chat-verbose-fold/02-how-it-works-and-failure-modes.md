@@ -1,6 +1,6 @@
 # 工作原理与失败模式
 
-> 本文件是 [dsh-ui-chat-verbose-fold 说明](../README.md) 的第 2 册:补丁怎么落地,以及失败时的安全 no-op 行为。
+> 本文件是 [dsh-ui-chat-verbose-fold 说明](../dsh-ui-chat-verbose-fold.md) 的第 2 册:补丁怎么落地,以及失败时的安全 no-op 行为。
 
 ---
 

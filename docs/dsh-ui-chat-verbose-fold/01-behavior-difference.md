@@ -1,6 +1,6 @@
 # 行为差异与影响面
 
-> 本文件是 [dsh-ui-chat-verbose-fold 说明](../README.md) 的第 1 册:需要改动的策略字段,以及它所在的位置。
+> 本文件是 [dsh-ui-chat-verbose-fold 说明](../dsh-ui-chat-verbose-fold.md) 的第 1 册:需要改动的策略字段,以及它所在的位置。
 
 ---
 
