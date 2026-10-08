@@ -145,7 +145,7 @@ console.log('--- I⑤ 失败模式:固定行缺失 / 服务缺失即不装 ---')
 
   // 没有 uiSession 就没有待答事实可读:审批桥与提问桥都不安装。
   const noUi = harness({ withUiSession: false })
-  check('缺 uiSession 只装面板桥、停止桥、聚焦桥与页面循环桥', noUi.shortcuts.listenerCount(), 4)
+  check('缺 uiSession 只装面板桥、页面关闭桥、停止桥、聚焦桥与页面循环桥', noUi.shortcuts.listenerCount(), 5)
   check('缺 uiSession 不告警', noUi.warnings.length, 0)
   const orphan = keydown(gesture('Enter'), shortcutContext({ target: domBody }))
   noUi.shortcuts.emit(orphan.input)
@@ -153,7 +153,7 @@ console.log('--- I⑤ 失败模式:固定行缺失 / 服务缺失即不装 ---')
 
   // 没有 sessions 时停止桥、审批桥、提问桥与聚焦桥都不装。
   const noSessions = harness({ withSessions: false })
-  check('缺 sessions 只装面板桥与页面循环桥', noSessions.shortcuts.listenerCount(), 2)
+  check('缺 sessions 只装面板桥、页面关闭桥与页面循环桥', noSessions.shortcuts.listenerCount(), 3)
 
   // 假 shortcuts 缺 observeFixedInput:各桥各告警一次,审批桥也不装。
   const bare = new FakeCtx({
@@ -188,7 +188,7 @@ console.log('--- I⑥ answer 被拒绝:捕获并告警,按键仍已归属 ---')
 console.log('--- I⑦ 卸载:固定监听全部释放 ---')
 {
   const { ctx, shortcuts } = harness()
-  check('注册了七个固定监听', shortcuts.listenerCount(), 7)
+  check('注册了八个固定监听', shortcuts.listenerCount(), 8)
   for (const effect of ctx.effects) {
     if (typeof effect.dispose === 'function') effect.dispose()
   }

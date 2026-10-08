@@ -104,6 +104,14 @@ export const PANE_IDS = { fullscreen: 'pane.fullscreen.toggle', split: 'pane.spl
 export const FULLSCREEN_PRESS = gesture('Enter', { alt: true, meta: true })
 export const SPLIT_PRESS = gesture('Backslash', { meta: true })
 
+export const PAGE_CLOSE_ID = 'page.close'
+/** Web/macOS 上的默认绑定:primary+alt+W(带 Alt,以免被浏览器当成关标签页的 `⌘W`)。 */
+export const PAGE_CLOSE_BINDING = { code: 'KeyW', modifiers: ['alt', 'meta'] }
+/** Web/Windows/Linux 上的同一组合:primary+alt+W。 */
+export const PAGE_CLOSE_WIN_BINDING = { code: 'KeyW', modifiers: ['alt', 'control'] }
+export const PAGE_CLOSE_PRESS = gesture('KeyW', { alt: true, meta: true })
+export const PAGE_CLOSE_WIN_PRESS = gesture('KeyW', { alt: true, control: true })
+
 export const APPROVAL_IDS = { allow: 'approval.allow', reject: 'approval.reject' }
 export const APPROVAL_ALLOW_BINDING = { code: 'Enter', modifiers: [] }
 export const APPROVAL_REJECT_BINDING = { code: 'Escape', modifiers: [] }
@@ -447,15 +455,23 @@ export function fakeSidebar() {
     command: undefined,
     expanded: true,
     current: true,
+    closeable: true,
     calls: [],
     focusedTarget: () => sidebar.focused,
-    commandTarget: () => sidebar.command,
+    // 复刻官方 `commandTarget`:焦点已在面板内直接返回;焦点在侧栏容器内(陈旧标记)时不回退
+    // 到活动 pane;其余情形回退到活动 dock pane。
+    commandTarget: (element) => (sidebar.focused !== undefined || element?.closest?.('[data-sidebar-right-session]') ? sidebar.focused : sidebar.command),
     isExpanded: () => sidebar.expanded,
     isTargetCurrent: () => sidebar.current,
     toggleFullscreen: (target) => sidebar.calls.push(['fullscreen', target]),
     split: (paneId) => {
       sidebar.calls.push(['split', paneId])
       return 'new-pane'
+    },
+    canCloseTarget: () => sidebar.closeable,
+    closeTarget: (target) => {
+      sidebar.calls.push(['close', target])
+      return 'closed'
     },
   }
   return sidebar
@@ -661,7 +677,11 @@ export class FakeCtx {
 export function harness({
   runtime = 'web',
   platform = 'windows',
-  rows = [row('pane.fullscreen.toggle', FULLSCREEN_BINDING), row('pane.split', SPLIT_BINDING)],
+  rows = [
+    row('pane.fullscreen.toggle', FULLSCREEN_BINDING),
+    row('pane.split', SPLIT_BINDING),
+    row(PAGE_CLOSE_ID, PAGE_CLOSE_BINDING),
+  ],
   fixedRows = APPROVAL_FIXED_ROWS,
   summary = { s1: session('s1') },
   bindingSnapshot = {},

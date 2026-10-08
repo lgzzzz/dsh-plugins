@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, sidebarTree, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_ACTIVE_CYCLE_ID, SESSION_CYCLE_ID, SESSION_NEXT_MAC_PRESS, SESSION_NEXT_PRESS } from './helpers.mjs'
+import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, PAGE_CLOSE_BINDING, PAGE_CLOSE_ID, PAGE_CLOSE_PRESS, pluginRoot, row, session, shortcutContext, sidebarTree, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_ACTIVE_CYCLE_ID, SESSION_CYCLE_ID, SESSION_NEXT_MAC_PRESS, SESSION_NEXT_PRESS } from './helpers.mjs'
 
 console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
 {
@@ -30,7 +30,7 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
 
   let cancelled = 0
   const shortcuts = fakeShortcuts({
-    rows: [row('pane.fullscreen.toggle', FULLSCREEN_BINDING)],
+    rows: [row('pane.fullscreen.toggle', FULLSCREEN_BINDING), row(PAGE_CLOSE_ID, PAGE_CLOSE_BINDING)],
     fixedRows: APPROVAL_FIXED_ROWS,
   })
   const sidebar = fakeSidebar()
@@ -49,6 +49,11 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
   check('产物装配无告警', warnings, [])
   shortcuts.emit(keydown(FULLSCREEN_PRESS, shortcutContext({ target: domComposer })).input)
   check('产物里全屏桥接生效', sidebar.calls, [['fullscreen', { paneId: 'p1' }]])
+  // 页面关闭桥:焦点在输入框里也关掉活动 dock pane 的当前页。
+  const closePress = keydown(PAGE_CLOSE_PRESS, shortcutContext({ target: domComposer }))
+  shortcuts.emit(closePress.input)
+  check('产物里页面关闭桥接生效', sidebar.calls, [['fullscreen', { paneId: 'p1' }], ['close', { paneId: 'p1' }]])
+  check('产物里页面关闭键被消费', closePress.consumed.count, 1)
   shortcuts.emit(keydown(gesture('Escape'), shortcutContext({ target: domBody })).input)
   shortcuts.emit(keydown(gesture('Escape'), shortcutContext({ target: domBody })).input)
   check('产物里停止桥接生效', cancelled, 1)

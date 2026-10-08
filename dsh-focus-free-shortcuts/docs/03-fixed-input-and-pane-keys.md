@@ -13,6 +13,7 @@
 | 按键组 | 归属判定来源 | 执行 |
 |---|---|---|
 | 面板键（全屏 / 分屏） | `sidebarRight.commandTarget()` 的"活动 dock pane"回退 | `toggleFullscreen(target)` / `split(target.paneId)` |
+| 页面关闭键（`page.close`） | 同一条"活动 dock pane"回退（`commandTarget()`），再加 `canCloseTarget()` | `closeTarget(target)`（与内置 `page.close` 的 `run()` 同一个动词；只关页面，不含 Desktop 的"关窗口"那一半） |
 | 停止（`Esc Esc`） | `sessions.list` 里"主视图正在持有的会话" | 该会话上的 `conversation.cancel()` |
 | 审批键 | 同一条"主视图持有的会话"当前发布的 `pendingInteraction`（`{ kind: 'approval', answerable, answer() }`） | `answer()`（面板按钮用的同一个方法） |
 | 提问卡片 | 同一条 `pendingInteraction`，收窄到提问域：`kind` 为 `question` / `plan-review`、`key` 是字符串、带 `dismiss()` | `dismiss()`（卡片关闭 / 取消按钮用的同一个方法，**从不**调 `answer()`） |
@@ -24,7 +25,7 @@
 
 页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；macOS 上同样的行是 `⌘⌥←/→`、`⌘⌥↑/↓` 与 `⌘↑/↓`，xterm 不为这些 `⌘` 系组合产出上述转义序列，但这只 window 捕获钩子照常运行），其余按键放行给通道；两路共用同一个判定。
 
-下面逐条展开：面板键见 [第 5 节](03-fixed-input-and-pane-keys.md)，停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键与提问卡片见 [第 5 册](05-approval-key-bridge.md)，聚焦输入框、页面循环与会话导航的逐行说明见 [第 6 册](06-boundaries-and-contracts.md)。
+下面逐条展开：面板键见 [第 5.3 节](03-fixed-input-and-pane-keys.md)，页面关闭键见 [第 5.5 节](03-fixed-input-and-pane-keys.md)，停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键与提问卡片见 [第 5 册](05-approval-key-bridge.md)，聚焦输入框、页面循环与会话导航的逐行说明见 [第 6 册](06-boundaries-and-contracts.md)。
 
 ---
 
@@ -183,3 +184,42 @@ else if (rect.right > bounds.right) box.scrollLeft += rect.right - bounds.right 
 第 3 步是本插件**唯一**一处复刻上游几何的地方（"最小可见" + 24px 边缘余量）：上游那条规则以 0 为起点，插件要的语义是"以旧窗口为起点"，只能自己算。若上游改了渐隐带宽度，最坏情形是目标芯片与边缘的间距观感不同，不误动作。
 
 这条补偿与按键归属完全无关：不消费按键、不改变让位条件，鼠标点页签同样受益（只是那一路没有"旧窗口"可记，走 kit 原规则）。
+
+### 5.5 页面关闭键桥接：`handlePageCloseInput` 逐行
+
+`page.close`（"关闭当前页面／窗口"）与面板键是同一族的可配置命令，也走同一条活动 dock pane 回退；差别只在行动词（`closeTarget` 而不是 `toggleFullscreen` / `split`）与两处额外的让位条件（模态与"关不掉"）。
+
+```ts
+function handlePageCloseInput(shortcuts, sidebar, input) {
+  const gesture = input.gesture
+  const context = input.context
+
+  if (gesture.composing || gesture.defaultPrevented) return   // ①
+  if (context.modal !== null) return                          // ②
+
+  if (!pageCloseFor(shortcuts.catalog.getSnapshot(), gesture)) return   // ③
+
+  const element = context.target ?? document.activeElement
+  if (sidebar.focusedTarget(element) !== undefined) return    // ④
+  if (!sidebar.isExpanded()) return                           // ⑤
+
+  const target = sidebar.commandTarget(element)               // ⑥
+  if (target === undefined) return
+
+  if (!sidebar.canCloseTarget(target)) return                 // ⑦
+
+  input.consume()                                             // ⑧
+  if (gesture.repeat) return                                  // ⑨
+  sidebar.closeTarget(target)                                 // ⑩
+}
+```
+
+逐行说明（①③④⑤⑥⑧⑨ 与 [第 5.3 节](03-fixed-input-and-pane-keys.md) 的面板键逐行同义，不再重复）：
+
+- **②** `context.modal !== null` → 返回。这里与面板键的动机不同：`page.close` 的 `modals` 是 `["settings", "shortcuts", "other"]`，**声明了模态** —— 弹窗打开时内置派发用同一条命令关掉最上面那层弹窗（`closeTopModal(document)`），所以这一按归弹窗，插件必须让位，否则会越过弹窗去关后台页面。
+- **③** `pageCloseFor` 经 `enabledBinding` 判定这一按是否**恰好**命中 `page.close` 当前生效的键位。Web 上是官方默认的 `primary+alt+W`（macOS `⌘⌥W` / Windows/Linux `Ctrl+Alt+W`），Desktop 上是 `primary+W`；用户改绑后跟随新键，解绑 / 被保留 / 冲突时不接管。
+- **⑤** `!sidebar.isExpanded()` → 返回。折叠时没有"当前显示的页面"，且内置的 `focusedTarget` 对**停靠**面板同样解析不到（`sidebarTargetFromElement` 对 `host === 'dock' && !layout.expanded` 返回 `undefined`）——两者同向。唯一在折叠时仍被绘制的是浮动面板，而那种情形焦点本来就落在浮动面板内、由 ④ 让位给内置命令。
+- **⑦** `canCloseTarget(target)` 是官方"这个目标现在能不能关"的判定（`isTargetCurrent(target) && target.tabId !== undefined`），内置 `resolve()` 也用同一个词。为假（活动面板是空的、或身份已变）时不消费：这一按仍由内置命令收场（Web 上解析为 `blocked / command.noFocus` 并自行消费），插件不抢归属，也不多关。
+- **⑩** `closeTarget(target)` 与内置 `run()` 调的是同一个动词：目标页可移除就移除（走它的资源清理处理器），活动面板只剩那块停靠 guide 时收成侧栏（`setExpanded(false)`）。插件**不调** `closeWindow()` —— 那是 Desktop 分支的语义；本桥只在 Web 安装，所以 Web 上永远只关页面、不关窗口。这一动词也不搬键盘：官方 host 的 `closeWithPaneFocus` 只在"关之前焦点就在这个 pane 里"时才把焦点交给存活的面板（`retain`），焦点在 composer / 别处时它提交完变更就返回 —— 免聚焦关页之后键盘仍在原处，不会因为关掉一页而被吸进右侧栏。
+
+**为什么只装 Web**：`page.close` 在 Desktop 上是 `primary+W`，未聚焦面板时内置 `resolve()` 直接走 `closeWindow()`，**本来就免聚焦**（见 [第 1 册](01-behavior-difference.md) 第 1 节）。而 Desktop 的可配置键位由 Electron 原生键盘桥派发，DOM 侧 `consume()` 压不住那一次派发，两边都动作会关两次。所以本桥与面板键桥同一条边界：只在 `shortcuts.runtime === 'web'` 时安装，Desktop 记一行 warn 后退出。

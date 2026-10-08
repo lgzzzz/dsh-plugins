@@ -15,6 +15,16 @@
 | 内置键位被改绑 | 跟随新键 | 同样跟随新键（读生效绑定） |
 | 内置键位被解绑 / 被系统保留 / 冲突中 | 不响应 | 不响应（`enabledBinding` 返回 `undefined`） |
 | 模态弹窗打开，按面板键 | 消费并 `blocked`（modal） | 让位，不动作、不消费 |
+| 焦点在输入框，按 `⌘⌥W`（Windows/Linux 为 `Ctrl+Alt+W`） | `noFocus`（提示「请先聚焦右侧面板」），消费但不动作 | 取活动 dock pane，关掉它的当前页（与内置 `run()` 同一个 `closeTarget()`） |
+| 焦点已在面板内，按 `⌘⌥W` / `Ctrl+Alt+W` | 正常关页 | 让位，不动作、不消费 |
+| 面板折叠，按 `⌘⌥W` / `Ctrl+Alt+W` | 无动作 | 无动作（没有"当前显示的页面"；停靠面板在折叠时本来也解析不到目标） |
+| 焦点在侧栏容器内、但不在 pane 内（如侧栏边距），按 `⌘⌥W` / `Ctrl+Alt+W` | `blocked / command.stale` | `commandTarget` 对陈旧标记返回 `undefined`，同样无动作 |
+| 活动面板是空的（没有页面可关） | `noFocus`，消费但不动作 | 不动作、不消费（`canCloseTarget` 为假），这一按仍由内置命令收场 |
+| 只挂着那块停靠 guide，按 `⌘⌥W` / `Ctrl+Alt+W` | 焦点在面板内时收成侧栏（`closeTarget` 自己的语义） | 焦点不在面板内时同样收成侧栏（同一个动词，行为一致） |
+| 模态弹窗打开，按 `⌘⌥W` / `Ctrl+Alt+W` | 关闭最上面那层弹窗（`page.close` 声明了模态） | 让位，不动作、不消费：仍由内置命令关弹窗 |
+| `page.close` 键位被改绑 / 解绑 / 冲突 | 跟随新键 / 不响应 | 同样跟随 / 不响应（读生效绑定，与面板键同一套 `enabledBinding`） |
+| 桌面端（Desktop）按 `⌘W` | 焦点在面板内则关页，否则关窗口 | **不安装页面关闭桥**；Desktop 上这条命令本来就免聚焦 |
+| 桌面端（Desktop）按 `⌘⌥W` | 无此绑定（Desktop 的 `page.close` 是 `⌘W`） | 无动作（本桥在 Desktop 不安装） |
 | 焦点在 composer，`Esc Esc` | 正常停止 | 让位，不动作、不消费 |
 | 焦点在 `<body>`（点过空白处），`Esc Esc` | 第一下 Esc 就被丢弃，无动作 | 主视图会话停止 |
 | 存在待答交互（审批/提问） | 不停止 | 不停止 |
@@ -69,15 +79,21 @@
 
 | 情况 | 行为 | 机制与失败表现 |
 |---|---|---|
-| Desktop 运行时 | 面板桥不安装并告警一次；停止桥、审批桥与提问桥照常安装（提问桥在桌面端为 no-op） | 桌面端 macOS/Windows 的可配置键位由 Electron 原生键盘桥派发，DOM 侧的 `consume()` 压不住那一次派发，两边都动作会来回抵消（全屏两次）。而停止序列、审批键与提问卡片取消在两端都由 DOM 固定通道驱动（`installKeyboard` 的 `fixed?.()` 在 native 分支 `return` **之前**执行），并且都不是可配置绑定。提问卡片本身是 **Web 独有**的客户端特性（`@deepseek-ai/dsh-client-ui-user-questions` 声明 `dsh.client.platform: "web"`）：桌面端没有人发布提问域的 `pendingInteraction`。 |
-| `sidebarRight` 服务缺席 | 面板桥不安装，插件整体仍 no-op，不抛 | 面板桥通过 `ctx.inject(['shortcuts', 'sidebarRight'], ...)` 依赖侧栏服务，服务不存在时注入不解析、这段逻辑根本不跑；停止桥独立，不受影响。 |
-| `shortcuts.observeFixedInput` 缺席 | 各告警一次，不安装 | 各桥都挂在固定输入通道上，没有这个 API 就没有可挂的点。提问桥的告警原文是 `shortcuts service exposes no observeFixedInput; question bridge not installed`，各桥各留一行、互不冒充。 |
+| Desktop 运行时 | 面板桥与页面关闭桥都不安装并各告警一次；停止桥、审批桥与提问桥照常安装（提问桥在桌面端为 no-op） | 桌面端 macOS/Windows 的可配置键位由 Electron 原生键盘桥派发，DOM 侧的 `consume()` 压不住那一次派发，两边都动作会来回抵消（全屏两次 / 关两次）。页面关闭桥在桌面端还多一条理由：`page.close` 在 Desktop 上未聚焦面板时走 `closeWindow()`，本来就免聚焦，不需要桥。而停止序列、审批键与提问卡片取消在两端都由 DOM 固定通道驱动（`installKeyboard` 的 `fixed?.()` 在 native 分支 `return` **之前**执行），并且都不是可配置绑定。提问卡片本身是 **Web 独有**的客户端特性（`@deepseek-ai/dsh-client-ui-user-questions` 声明 `dsh.client.platform: "web"`）：桌面端没有人发布提问域的 `pendingInteraction`。 |
+| `sidebarRight` 服务缺席 | 面板桥与页面关闭桥都不安装，插件整体仍 no-op，不抛 | 两条桥都通过 `ctx.inject(['shortcuts', 'sidebarRight'], ...)` 依赖侧栏服务，服务不存在时注入不解析、这两段逻辑根本不跑；停止桥独立，不受影响。 |
+| `shortcuts.observeFixedInput` 缺席 | 各告警一次，不安装 | 各桥都挂在固定输入通道上，没有这个 API 就没有可挂的点。提问桥的告警原文是 `shortcuts service exposes no observeFixedInput; question bridge not installed`，页面关闭桥是 `... page close bridge not installed`，各桥各留一行、互不冒充。 |
 | 主视图持有会话数 ≠ 1（正在切换） | 不停止 | `mainViewSessionId` 要求恰好一个会话被主视图 retain。切换过程中可能出现两个会话同时被 retain 的瞬间，此时"当前会话"有歧义，这一下不响应。 |
 | 会话无 `running` / 已 `removed` / 子代理不可续 / 有待答交互 | 不停止 | 这些是内置 `currentTurn` 的同一批门槛。 |
 | 某会话 scope 上没有 `conversation` | 告警一次，不发停止 | `conversation.cancel()` 是停止的唯一入口；服务缺失时无法停，只能告警。 |
 | `cancel()` 拒绝（返回 rejected Promise） | 捕获并告警，不冒泡 | 避免未处理的 Promise 拒绝污染控制台/运行时。 |
 | 两按之间轮次恰好结束并立刻开启新轮次 | 500ms 窗口内仍会停到新轮次 | 内置序列要求两按的 `(sessionId, turn, generation, region)` 全同，其中 `turn` 能区分"轮次 A"和"轮次 B"；插件只用 `(sessionId, generation)`，轮次身份不是公开事实。所以"第一下在轮次 A 结束前、第二下落在刚开的新轮次 B"这种窗口内，插件仍会停 B，内置则会因 `turn` 变化而复位。 |
-| 焦点在侧栏容器内、但不在 pane 内 | `commandTarget` 返回 `undefined`，无动作 | 官方 `commandTarget` 对"target 在 `[data-sidebar-right-session]` 内但不在 pane 内"的陈旧标记**不回退**（防止误回退到另一面板），此时与内置一样不动作。 |
+| 焦点在侧栏容器内、但不在 pane 内 | `commandTarget` 返回 `undefined`，无动作 | 官方 `commandTarget` 对"target 在 `[data-sidebar-right-session]` 内但不在 pane 内"的陈旧标记**不回退**（防止误回退到另一面板），此时与内置一样不动作。面板键与页面关闭键共用这一条。 |
+| 右侧栏折叠，按 `⌘⌥W` / `Ctrl+Alt+W` | 不动作、不消费 | 折叠时没有"当前显示的页面"。内置 `focusedTarget` 对**停靠**面板同样解析不到（`sidebarTargetFromElement` 对 `host === 'dock' && !layout.expanded` 返回 `undefined`），插件再补一条同向的 `isExpanded()` 守卫。折叠时仍被绘制的只有浮动面板，而那种情形焦点本就落在浮动面板内、让位给内置命令。 |
+| 活动面板是空的（没有页面可关），按 `⌘⌥W` / `Ctrl+Alt+W` | 不动作、不消费 | `canCloseTarget(target)` 是官方"这个目标现在能不能关"的判定（`isTargetCurrent(target) && target.tabId !== undefined`），为假时插件不消费 —— 这一按仍由内置命令收场（Web 上 `blocked / command.noFocus` 并自行消费），归属不回退、也不多关一页。 |
+| 只挂着那块停靠 guide，按 `⌘⌥W` / `Ctrl+Alt+W` | 收成侧栏（收起右栏），不是"无动作" | 这是 `closeTarget()` 自己的语义（`canCloseTab` 为假时 `setExpanded(false)`），与焦点在面板内时按同一键完全一致；插件只调同一个动词，不额外决定。 |
+| 模态弹窗打开，按 `⌘⌥W` / `Ctrl+Alt+W` | 让位，不动作、不消费（弹窗仍由内置命令关掉） | 与面板键不同：`page.close` **声明了模态**（`modals: ["settings", "shortcuts", "other"]`），弹窗下这一按的内置语义是 `closeTopModal(document)`。插件若不设这条守卫，就会越过弹窗去关后台页面。 |
+| 焦点在终端内，按 `⌘⌥W` / `Ctrl+Alt+W` | 若该组合被 xterm 消费，事件到不了固定通道 | 与面板键同一条限制：本桥没有终端捕获钩子（只有页面循环与会话导航两桥有）。macOS 的 `⌘⌥W` 不产出转义序列、照常落地；Windows/Linux 上 `Ctrl+Alt` 常被当作 AltGr，个别布局 / 终端会把它吞掉，此时不落地、也不误动作。 |
+| 免聚焦关页之后的键盘位置 | 键盘不动 | 官方 host 的 `closeWithPaneFocus` 只在"关之前焦点就在这个 pane 里"时才把焦点交给存活面板；焦点在 composer / 别处时它提交完变更就返回。所以"焦点在输入框按 `⌘⌥W` 关页"不会把键盘吸进右侧栏。 |
 | 主视图持有会话数 ≠ 1（正在切换），有待答审批 | 不代答 | `presentedApproval` 只认被主视图唯一保留的那个会话；歧义时这一下不响应。 |
 | 待答审批属于别的会话（如后台子代理） | 不代答 | composer 顶替面板只渲染"当前会话"的待答交互；别的会话的审批在这条路上没有可见面板。 |
 | 待答交互不是审批（如提问） | 不代答 | `pendingInteraction` 这个槽位是复用域；`asAnswerableApproval` 要求 `kind === 'approval'`，别的域留给它自己的 UI（提问域由第 6 组的提问桥接手，见第 5 册第 5.6.3、5.7.1 节）。 |
@@ -133,7 +149,7 @@
 
 下面列的则是**不是正式对外契约**的事实，都与官方代码同源，但官方没有承诺"永不变名"。若上游改名，本插件会**退化成 no-op（什么都不做，但绝不误动作）**，并在诊断里说明。这份清单同时被 `check-css.mjs` 在构建后逐条 grep 上游构建产物（`css-contract.json`，见第 7 册第 9.1 节）：改名 / 搬走会在构建期显式失败并打印"哪条契约退化成什么"，而不是等到运行时静默退化。
 
-1. 命令 id `pane.fullscreen.toggle` / `pane.split`（与官方 `shortcuts.register` 处同源）；
+1. 命令 id `pane.fullscreen.toggle` / `pane.split` / `page.close`（与官方 `shortcuts.register` 处同源）与它们"声明了哪些模态"的事实（`page.close` 的 `modals` 非空，弹窗下内置语义是关掉最上面那层弹窗）；
 2. DOM 标记 `[data-conversation-session]` / `[data-conversation-region]`（与官方 stop guard 同源）；
 3. `retainedBy.mainView` 的语义（与 `UiSession.isMain` 同源）；
 4. 固定快捷键 id `approval.allow` / `approval.reject`（与官方 `shortcuts.registerFixed` 处同源）与其"预约的物理组合就是审批决定键"的语义；

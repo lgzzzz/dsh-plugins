@@ -6,6 +6,8 @@
  * 运行且可消费按键，所以每个桥接各自打开固定观察者，不依赖 DOM 焦点解析归属：
  *
  *   - pane 命令（`⌘⌥Enter` / `⌘\`）→ `pane-keys.ts`；
+ *   - page close（`page.close`，Web/macOS 为 `⌘⌥W`、Web/Windows/Linux 为 `Ctrl+Alt+W`）→
+ *     `page-close.ts`：同一条活动 dock pane 回退，只关页面、不关窗口；
  *   - stop（`Esc` `Esc`）→ `stop-sequence.ts`；
  *   - approval（`Enter` / `Esc`）→ `approval-keys.ts`：额外挂 window 捕获阶段监听，
  *     在卡片自身的 React 处理器 `preventDefault()` 之前取走按键；
@@ -26,6 +28,7 @@
  */
 import { installApprovalBridge } from './approval-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
+import { installPageCloseBridge } from './page-close.ts'
 import { installPageCycleBridge } from './page-cycle.ts'
 import { installPaneBridge } from './pane-keys.ts'
 import { installQuestionBridge } from './question-keys.ts'
@@ -42,6 +45,7 @@ export const inject = ['shortcuts']
 /** 客户端插件主体：依次安装各分组的桥接。 */
 export function apply(ctx: Context): void {
   installPaneBridge(ctx)
+  installPageCloseBridge(ctx)
   installStopBridge(ctx)
   installApprovalBridge(ctx)
   installQuestionBridge(ctx)
