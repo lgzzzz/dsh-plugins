@@ -226,3 +226,37 @@ function handlePageCloseInput(shortcuts, sidebar, input) {
 - **⑩** `closeTarget(target)` 与内置 `run()` 调的是同一个动词：目标页可移除就移除（走它的资源清理处理器），活动面板只剩那块停靠 guide 时收成侧栏（`setExpanded(false)`）。插件**不调** `closeWindow()` —— 那是 Desktop 分支的语义；本桥只在 Web 安装，所以 Web 上永远只关页面、不关窗口。这一动词也不搬键盘：官方 host 的 `closeWithPaneFocus` 只在"关之前焦点就在这个 pane 里"时才把焦点交给存活的面板（`retain`），焦点在 composer / 别处时它提交完变更就返回 —— 免聚焦关页之后键盘仍在原处，不会因为关掉一页而被吸进右侧栏。
 
 **为什么只装 Web**：`page.close` 在 Desktop 上是 `primary+W`，未聚焦面板时内置 `resolve()` 直接走 `closeWindow()`，**本来就免聚焦**（见 [第 1 册](01-behavior-difference.md) 第 1 节）。而 Desktop 的可配置键位由 Electron 原生键盘桥派发，DOM 侧 `consume()` 压不住那一次派发，两边都动作会关两次。所以本桥与面板键桥同一条边界：只在 `shortcuts.runtime === 'web'` 时安装，Desktop 记一行 warn 后退出。
+
+### 5.6 聚焦右栏页面键桥接：`handleFocusPageInput` 逐行
+
+`⌘⌥K`（macOS）/ `Ctrl+Alt+K`（Windows/Linux）是插件自己挂的固定行（`dsh-focus-free-shortcuts.focus-page`，group `application`），动作只有一个：把键盘交给右栏**此刻显示**的那一页 —— 通常是终端，于是不必先点一下 `.xterm` 才能打字。它与页面循环键（[第 5.4 节](03-fixed-input-and-pane-keys.md) 之外那对 `⌘⌥←/→`）共用同一条交棒判定：`page-cycle.ts` 导出的 `focusShownPage(sessionId)`（定位该会话的右栏根节点 → 选出可见 pane → 页面自持键盘就不抢，否则聚焦 pane 并下探到页面自己的输入面，例如终端的 `.xterm-helper-textarea`）。差别只在"换不换页"：页面循环键先切页再交棒，本键不切页。
+
+```ts
+function handleFocusPageInput(shortcuts, sidebar, input) {
+  const target = focusPageTarget(shortcuts, sidebar, input.gesture, input.context)
+  if (target === undefined) return     // ①
+  input.consume()                      // ②
+  focusPage(target.sessionId)          // ③
+}
+
+function focusPageTarget(shortcuts, sidebar, gesture, context) {
+  if (!focusPageEligible(gesture, context)) return undefined       // ④
+  if (!fixedRowOwns(shortcuts.fixedCatalog.getSnapshot(), FOCUS_PAGE_ID, gesture)) return undefined  // ⑤
+  if (!sidebar.isExpanded()) return undefined                     // ⑥
+  const sessionId = sidebar.mounted.getSnapshot()
+  if (sessionId === undefined) return undefined                   // ⑦
+  return { sessionId }
+}
+```
+
+- **①** 判定不通过时**不消费**：这一按留给别的 owner（折叠态下它落在内置 `session.search` 的冲突条目上，由快捷键服务吞掉、不弹错）。
+- **②** 先消费再动作 —— 与其余固定行桥同一条纪律：这一按归本桥，不再进输入控件，也不触发同一个键位上那条冲突的内置命令。
+- **③** `focusPage()` 就是 `focusShownPage()`：交棒是**幂等**的。键盘本来就在那一页里（终端自聚焦）时不重复聚焦，但仍然消费 —— 否则这一按会被 xterm 当成终端输入送进 shell。要补位的情形是"pane 容器自己持有焦点、而页面有输入面"（例如展开右栏之后键盘停在 pane 上），这一步会继续下探到 `.xterm-helper-textarea`；`readOnly` 的终端视为页面自己拒绝键盘，不再下探。
+- **④** 准入与页面循环键**完全一致**：页面 / 文本控件 / 终端都放行，已被消费（`defaultPrevented`）的照常处理，只排除组字中、自动重复与模态层。捕获路径与固定通道共用这一个函数。
+- **⑤** `fixedRowOwns` 只认本插件自己挂的那一条行：行不存在（插件整体没装 / 已卸载）就不动作。固定行的存在本身就是占用，被重绑 / 摘除以行本身为准。
+- **⑥** 右栏折叠 → 不动作、不消费：折叠态没有"当前显示的页"，这与面板键、页面关闭键、页面切换键同一条边界（折叠时仍被绘制的只有浮动面板，本键不把它当作"右栏显示的页"）。
+- **⑦** 屏幕上没有会话（全局面板占着主列，或会话正在切换）→ 不动作。
+
+终端那一半与另外两条桥同形：落在 `.xterm` 内的 keydown 到不了 window 上的 fixed-input 监听（终端在自己的 textarea 处理器里 `stopPropagation()`），所以本桥另装 window **捕获阶段**的 keydown，在事件进入终端前判定。命中即 `preventDefault() + stopPropagation()`：交棒此时是无操作（键盘本来就在终端里），但这一按不再被 xterm 翻译成终端输入送进 shell。未命中就放行，事件原样交给 xterm。
+
+**这条键位是有意"挤掉"内置会话搜索的**：Web 上 `session.search` 的默认键位就是 `primary+alt+K`（Desktop 上是 `primary+K`），固定行一挂上，那一行在快捷键目录里就变成冲突（`effectiveShortcuts` 把固定行算进 `conflicts`），按键不再打开搜索、设置里会给搜索项亮红，需要用户自行给搜索改绑。之所以仍然选它：固定行是唯一够得着终端那一格的通道（见 [第 5.1 节](03-fixed-input-and-pane-keys.md)），而"聚焦右栏页面"的主要用场正是终端。

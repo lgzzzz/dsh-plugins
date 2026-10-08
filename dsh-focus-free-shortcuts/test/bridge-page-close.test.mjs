@@ -151,9 +151,9 @@ console.log('--- T④ 跟随生效绑定:改绑 / 解绑 / 冲突 / 平台形态
 console.log('--- T⑤ 失败模式:desktop 让位、服务缺席即 no-op、缺 observeFixedInput 告警 ---')
 {
   // Desktop 上 `⌘W`(primary+W)本来就免聚焦(未聚焦时关窗口),本桥不装;
-  // 停止、审批、提问、聚焦、页面循环与会话循环桥照常安装。
+  // 停止、审批、提问、聚焦输入框、聚焦右栏页面、页面循环与会话循环桥照常安装。
   const desktop = harness({ runtime: 'desktop' })
-  check('desktop 不装页面关闭桥(其余六条仍在)', desktop.shortcuts.listenerCount(), 6)
+  check('desktop 不装页面关闭桥(其余七条仍在)', desktop.shortcuts.listenerCount(), 7)
   checkTrue('desktop 记一条 warn', desktop.warnings.some((line) => line.includes('native keyboard bridge')))
   desktop.sidebar.command = { paneId: 'p1', tabId: 't7' }
   const press = keydown(PAGE_CLOSE_PRESS, shortcutContext({ target: domComposer }))
@@ -162,7 +162,7 @@ console.log('--- T⑤ 失败模式:desktop 让位、服务缺席即 no-op、缺 
   check('desktop 页面键不消费', press.consumed.count, 0)
 
   const noSidebar = harness({ withSidebar: false })
-  check('无 sidebarRight 不装页面关闭桥(停止 + 审批 + 提问 + 聚焦 + 会话循环)', noSidebar.shortcuts.listenerCount(), 5)
+  check('无 sidebarRight 不装页面关闭桥(停止 + 审批 + 提问 + 聚焦输入框 + 会话循环)', noSidebar.shortcuts.listenerCount(), 5)
   check('无 sidebarRight 不抛', noSidebar.warnings.length, 0)
   const orphan = keydown(PAGE_CLOSE_PRESS, shortcutContext({ target: domComposer }))
   noSidebar.shortcuts.emit(orphan.input)

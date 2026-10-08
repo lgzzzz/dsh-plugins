@@ -114,12 +114,12 @@ console.log('--- O⑥ 失败模式:服务缺失即不装 ---')
 {
   // 没有 uiSession 就没有待答事实可读,提问桥与审批桥都不安装。
   const noUi = harness({ withUiSession: false })
-  check('缺 uiSession 不装提问桥', noUi.shortcuts.listenerCount(), 5)
+  check('缺 uiSession 不装提问桥', noUi.shortcuts.listenerCount(), 6)
   check('缺 uiSession 不告警', noUi.warnings.length, 0)
 
   // 没有 sessions 同样不装。
   const noSessions = harness({ withSessions: false })
-  check('缺 sessions 不装提问桥', noSessions.shortcuts.listenerCount(), 3)
+  check('缺 sessions 不装提问桥', noSessions.shortcuts.listenerCount(), 4)
 
   // 假 shortcuts 缺 observeFixedInput:各桥各告警一次,提问桥也不装。
   const bare = new FakeCtx({
@@ -155,7 +155,7 @@ console.log('--- O⑧ 卸载:固定监听全部释放 ---')
 {
   const pending = questionPending()
   const { ctx, shortcuts } = withPending(pending)
-  check('注册了八个固定监听', shortcuts.listenerCount(), 8)
+  check('注册了九个固定监听', shortcuts.listenerCount(), 9)
   for (const effect of ctx.effects) {
     if (typeof effect.dispose === 'function') effect.dispose()
   }

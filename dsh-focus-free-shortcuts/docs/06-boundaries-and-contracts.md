@@ -77,6 +77,15 @@
 | `session.new` 被改绑 / 解绑 / 有 issue / 存在冲突，焦点在终端里按原键位 | — | 不动作、不吞事件：键位读**生效目录**（`enabledBinding`），改绑后跟随新键，解绑 / 冲突后让位（与页面关闭桥跟随 `page.close` 同一条约定） |
 | `uiWorkspace` 服务缺席 | — | `session.new` 桥停在注入等待里（不告警、不安装）：`ctx.inject(['shortcuts', 'uiWorkspace'])` 等到服务真正可用才跑，形状不符（没有 `startSession`）时告警一次并整体不安装 |
 | 模态层打开，按 `⌘⌥N` / `Ctrl+Alt+N` | 模态层掌权 | 让位，不动作、不吞事件 |
+| 任意焦点位置按 `⌘⌥K` / `Ctrl+Alt+K` | Web 上这是内置 `session.search`（会话搜索）的默认键位：焦点在页面 / 文本控件时打开搜索框；终端里 xterm 会把它当输入吞掉 | 本插件的固定行占用这一按：把键盘交给右栏**当前显示**的那一页（终端落到 `.xterm-helper-textarea`）。内置搜索键因此被挤成「冲突」——设置里给 `session.search` 亮红、按键不再打开搜索，需自行给搜索改绑（见第 7 节） |
+| 焦点在文本控件里按 `⌘⌥K` / `Ctrl+Alt+K` | 控件自己处理（本组合在控件里无动作） | 照常交棒并消费（不看 `defaultPrevented`、不限制 region） |
+| 焦点在终端里按 `⌘⌥K` / `Ctrl+Alt+K` | 终端把它当输入处理 | 捕获阶段在 `.xterm` 之前拦下并吞掉；交棒此时是无操作（键盘本来就在终端里），顺带不让这一按进 shell |
+| 页面已自持键盘（终端自聚焦），按 `⌘⌥K` / `Ctrl+Alt+K` | — | 交棒幂等：不抢焦点，但这一按仍被消费（否则会被当作终端输入送进 shell） |
+| 右侧栏折叠，按 `⌘⌥K` / `Ctrl+Alt+K` | 无动作 | 不动作、不消费（折叠时没有"当前显示的页"；与面板键 / 页面切换键同一条边界） |
+| 屏幕上没有会话（全局面板 / 切换中），按 `⌘⌥K` / `Ctrl+Alt+K` | — | 不动作、不消费（没有可交棒的右栏） |
+| 面板已展开、可见 pane 尚未渲染，按 `⌘⌥K` / `Ctrl+Alt+K` | — | 消费但不动焦点（"先消费再动作"；下一次按即可交棒） |
+| 模态层打开，按 `⌘⌥K` / `Ctrl+Alt+K` | 模态层掌权 | 让位，不动作、不消费 |
+| 桌面端（Desktop）按 `⌘⌥K` | Desktop 的 `session.search` 是 `primary+K`（`⌘K` / `Ctrl+K`），`⌘⌥K` 没有占用 | 本桥同样安装（固定行是插件自己的，不经原生派发）；与 `⌘K` 搜索互不相干 |
 
 ---
 
@@ -85,8 +94,8 @@
 | 情况 | 行为 | 机制与失败表现 |
 |---|---|---|
 | Desktop 运行时 | 面板桥与页面关闭桥都不安装并各告警一次；停止桥、审批桥与提问桥照常安装（提问桥在桌面端为 no-op） | 桌面端 macOS/Windows 的可配置键位由 Electron 原生键盘桥派发，DOM 侧的 `consume()` 压不住那一次派发，两边都动作会来回抵消（全屏两次 / 关两次）。页面关闭桥在桌面端还多一条理由：`page.close` 在 Desktop 上未聚焦面板时走 `closeWindow()`，本来就免聚焦，不需要桥。而停止序列、审批键与提问卡片取消在两端都由 DOM 固定通道驱动（`installKeyboard` 的 `fixed?.()` 在 native 分支 `return` **之前**执行），并且都不是可配置绑定。提问卡片本身是 **Web 独有**的客户端特性（`@deepseek-ai/dsh-client-ui-user-questions` 声明 `dsh.client.platform: "web"`）：桌面端没有人发布提问域的 `pendingInteraction`。 |
-| `sidebarRight` 服务缺席 | 面板桥与页面关闭桥都不安装，插件整体仍 no-op，不抛 | 两条桥都通过 `ctx.inject(['shortcuts', 'sidebarRight'], ...)` 依赖侧栏服务，服务不存在时注入不解析、这两段逻辑根本不跑；停止桥独立，不受影响。 |
-| `shortcuts.observeFixedInput` 缺席 | 各告警一次，不安装 | 各桥都挂在固定输入通道上，没有这个 API 就没有可挂的点。提问桥的告警原文是 `shortcuts service exposes no observeFixedInput; question bridge not installed`，页面关闭桥是 `... page close bridge not installed`，各桥各留一行、互不冒充。 |
+| `sidebarRight` 服务缺席 | 面板桥、页面关闭桥与聚焦右栏页面桥都不安装，插件整体仍 no-op，不抛 | 三条桥都通过 `ctx.inject(['shortcuts', 'sidebarRight'], ...)` 依赖侧栏服务，服务不存在时注入不解析、这几段逻辑根本不跑；停止桥独立，不受影响。 |
+| `shortcuts.observeFixedInput` 缺席 | 各告警一次，不安装 | 各桥都挂在固定输入通道上，没有这个 API 就没有可挂的点。提问桥的告警原文是 `shortcuts service exposes no observeFixedInput; question bridge not installed`，页面关闭桥是 `... page close bridge not installed`，聚焦右栏页面桥是 `... focus-page key not installed`，各桥各留一行、互不冒充。 |
 | 主视图持有会话数 ≠ 1（正在切换） | 不停止 | `mainViewSessionId` 要求恰好一个会话被主视图 retain。切换过程中可能出现两个会话同时被 retain 的瞬间，此时"当前会话"有歧义，这一下不响应。 |
 | 会话无 `running` / 已 `removed` / 子代理不可续 / 有待答交互 | 不停止 | 这些是内置 `currentTurn` 的同一批门槛。 |
 | 某会话 scope 上没有 `conversation` | 告警一次，不发停止 | `conversation.cancel()` 是停止的唯一入口；服务缺失时无法停，只能告警。 |
@@ -125,6 +134,11 @@
 | 按 `⌘⌥J` / `Ctrl+Alt+J` 时 `conversation.input` 不存在或 `for()` 抛错 | 告警一次，不消费 | 聚焦只有 `conversation.input.for(scope).focus()` 一条公开入口；scope 不是被保留的会话代际（切换中）时 `for()` 会抛，此时不动，也不聚焦错会话。 |
 | Windows/Linux 布局把 `Ctrl+Alt`（AltGr）留给输入字符 | 若该组合被系统/布局吞掉，`Ctrl+Alt+J` 到不了 page | 固定行声明的是逻辑 `primary+alt`：macOS 上落成 `⌘⌥`，`⌘⌥` 系组合不被浏览器保留给字符输入，所以 AltGr 之忧不存在于 macOS；Windows/Linux 上仍是 `Ctrl+Alt`，个别布局会把 `Ctrl+Alt` 当 AltGr 用并吞掉这一按，此时该按不落地、也不误动作。 |
 | 右侧栏折叠 / 只有一张页面 / 没有活动页 / 没有会话，按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 不动作、不消费 | 折叠时没有"当前显示的页面"可切换；页面数少于两张、当前页不在列表、或没有 on-screen 会话时没有可切的目标。这与面板键的"折叠即让位"同一条边界。 |
+| 按 `⌘⌥K` / `Ctrl+Alt+K` 与内置 `session.search` 撞键 | **有意为之**：Web 上 `session.search` 的默认键位就是 `primary+alt+K`，本固定行一挂上，它在快捷键目录里就变成冲突（`effectiveShortcuts` 把固定行算进 `conflicts`） | 插件在 `shortcuts.registerFixed` 处占用这一按；设置里 `session.search` 显示「已被『聚焦右栏页面』占用」、按键不再打开搜索（搜索项本身仍可从左侧栏入口打开）。**连带副作用**：上游把"恢复全部默认"的校验也建立在这份冲突表上（`edit({type:'reset-all'})` 只要有任何一行带冲突就返回 `conflict`），所以在用户改动过快捷键、按钮可用的状态下点「恢复全部默认」会以冲突失败 —— 这是"固定行占住某个内置默认键位"必然的代价，删掉本条固定行（或上游把搜索挪到别的键位）后立即恢复。之所以仍选这个键：固定行是唯一够得着终端那一格的通道，而"聚焦右栏页面"的主要用场正是终端。 |
+| 按 `⌘⌥K` / `Ctrl+Alt+K` 时右栏已展开、但可见 pane 尚未渲染 | 消费但不动焦点 | `focusPageTarget` 只要求"行在 + 右栏展开 + 有会话"，随后 `focusShownPage` 在 DOM 里找不到可见 pane 就返回 `false`。与页面切换键同一条纪律：**先消费再动作**，避免这一按落到输入控件或那条冲突的内置命令上；下一次按即可交棒。 |
+| 右栏折叠、屏幕上只有一块**浮动**面板，按 `⌘⌥K` / `Ctrl+Alt+K` | 不动作、不消费 | 本键的"当前显示的页"与面板键 / 页面切换键同一口径：折叠态没有"右栏显示的页"，浮动面板不在范围内（即便它在屏幕上可见）。焦点在浮动面板内时，`⌘⌥K` 仍会被 xterm 吞掉（终端内那一格照常由捕获路吞下、不让它进 shell）。 |
+| 显示器上那一页没有自己的输入面（如 diff / 文件预览），按 `⌘⌥K` / `Ctrl+Alt+K` | 消费，键盘交给 pane 容器 | `focusShownPage` 只对终端的 `.xterm-helper-textarea` 下探；其它页交棒到 pane 元素本身（dockkit 的 pane 容器可聚焦），与点一下面板同效。`readOnly` 的终端视为页面自己拒绝键盘，只聚焦 pane 容器。 |
+| macOS 上按 `⌘⌥K` 是否会被 IME / 死键让位 | 不让位：`K` 在美式 / ABC 布局里**不是** dead key | 键盘适配器把 `event.key === 'Dead'` 读成 `composing`，本桥的准入会让位。实测（`UCKeyTranslate` 对当前布局）：Option+K 返回 `dead_key_state=0`、字符 `U+02DA`；Option+N / Option+E 才是 dead key（`dead_key_state≠0`，分别是 `˜` / `´`）。这也是上游只为 `KeyN` 写 `commandDeadKey` 特例、而 `session.search` 的 `⌘⌥K` 一直正常的原因。若用户的输入源把 Option+K 定义成 dead key（某些非美式布局），该平台上这一键会退化成不动作（不误动作）—— 与其它固定键同一条边界。 |
 | 页面循环顺序 | 按 `tabsIn()`（`layout.tabs` 的记录顺序，≈ 打开顺序）循环，跨分屏 / 浮动 pane 一起循环 | 切页走公开服务面（`tabsIn` / `active` / `focus`），没有可读的 DOM 条带顺序；拖拽改序后循环顺序保持记录顺序不变。 |
 | 终端里按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 照常切页并消费 | Windows/Linux 上 xterm 对"方向键 + 修饰"产出 `\x1b[1;7D` / `\x1b[1;7C` 转义序列并 `preventDefault()+stopPropagation()`——事件到不了 window 冒泡上的固定通道，观察者收不到、也就没法动作（macOS 上同一行是 `⌘⌥←/→`，xterm 不为它产出该序列，但事件同样要靠捕获阶段先看到）。所以本桥在 window **捕获阶段**另挂一个 keydown 监听（早于一切目标 / 冒泡处理器），**只**对会落进 `.xterm` 的按键拦下：判定与通道共用 `pageCycleTarget`，命中即 `preventDefault()+stopPropagation` 吞掉、顺带不让转义序列进 shell，未命中就放行。文本控件不吞箭头键，仍走通道；两条路共用同一判定、互斥不双触发。 |
 | 其它也会 `stopPropagation` / `preventDefault` 的本地控件（若有） | 该按到不了通道，或到了也已读成"被消费" | 页面循环桥的捕获钩子**只认 `.xterm`**：它抢的是 `⌘⌥←/→` / `Ctrl+Alt+←/→`，那是终端唯一会为它停掉事件的组合，若将来出现别的会吞这对方向键的控件，需在同一钩子里补上它的范围。审批桥的捕获钩子则是**全 page 区域抢 `Enter` / `Esc`**（准入与让位同固定通道），所以"自己消费 `Enter` 的过程卡片"这一类已经由它兜住。 |
@@ -181,3 +195,4 @@
 23. DOM 标记 `[data-dockkit-strip-tabs]`（dockkit 放在页签行 chip box 上的稳定标记）、`[data-dockkit-tab]`（每个页面芯片，取值即 tab id）与它们的右侧栏会话根 `[data-sidebar-right-session]`：`src/strip-scroll.ts` 靠这三项标记把 `scroll-behavior: auto` 只作用在右侧栏的 chip box 上，并做切页前后的"窗口保持"（记 / 还 `scrollLeft`，目标不在窗口里时按"最小可见 + 24px 边缘余量"推移）。芯片查找与 `page-cycle.ts` 的 `sidebarRoot` 同一条纪律：**不把 id 拼进选择器**，取回候选后按属性值比较，并要求芯片的最近会话根就是本次会话（页面 id 由各面自己铸造，不跨面比较）。样式刻意不写 dockkit 的哈希类名、不用 `!important`（两个属性选择器的特异性已高于类规则）。第 3 步的"最小可见 + 24px"是本插件唯一一处复刻上游几何的地方——上游那条规则以 0 为起点，插件要的语义是"以旧窗口为起点"，只能自己算；若上游改了渐隐带宽度，最坏是目标芯片与边缘的间距观感不同、不误动作。若上游改了任一标记，规则匹配不到、窗口也记不下，整体退化成 kit 原来的行为（重置 + 滑动 + 目标贴最右），同样不误动作。样式标签按持有者计数共享一个 `<style>`（`data-plugin-css="dsh-focus-free-shortcuts/strip-scroll"`），复用到已有标签时不由本实例摘除，本实例插入的标签在最后一个持有者卸载时移除。
 24. 命令 id `session.new`（与官方 `shortcuts.register` 处同源）、它 Web 上的默认绑定 `primary+alt+KeyN`（macOS `⌘⌥N`、Windows/Linux `Ctrl+Alt+N`；桌面端是 `primary+KeyN`）与它的 `regions` 只有 `page` / `editable` 这一事实：`src/session-new.ts` 只在**捕获阶段**、且目标落在 `.xterm` 内时按**生效目录**里那一行当前的绑定出手（`enabledBinding` + `bindingMatches`，所以改绑 / 解绑 / 有 issue / 冲突都立刻跟随），其余位置一概让位。若上游改了这个命令 id，本桥读不到行、退化为 no-op（不误动作）；若上游把 `terminal` 加进 `regions` 并让适配器在终端里也能收到这一按，本桥会与内置命令同时动作 —— 那时应当整条删掉（它的存在理由只是补内置够不着的那一格）。
 25. `uiWorkspace.startSession(workspaceId?)` 的语义（上游 `UiWorkspace` 的公开面：走一次"新建会话"流程并导航到那个会话，不带参数 = 沿用当前 / 最近的工作区；就是内置 `session.new` 的 `run()` 调的那一个动词）。与第 21 条同一条纪律：把 `uiWorkspace` 写进注入依赖列表、等服务**激活**后再按结构读 `scope.get('uiWorkspace')` 的 `startSession`（`ctx.get` 默认只认已激活的服务，采样一次会把「还没激活」误判成「缺席」）。服务缺席时 Cordis 不跑桥的回调，整条桥不安装、也不告警；服务在而形状不符（上游改了这个方法名）时告警一次 `uiWorkspace service unavailable; session.new key not bridged into the terminal`、整条桥同样不安装。
+26. 固定键 id `dsh-focus-free-shortcuts.focus-page` 与它声明的逻辑组合 `primary+alt+KeyK`（`registerFixed` 按设备平台规范化成生效的物理绑定：macOS 落成 `meta+alt+KeyK`（`⌘⌥K`），Windows/Linux 落成 `control+alt+KeyK`（`Ctrl+Alt+K`）；本插件自己在 `shortcuts.registerFixed` 处声明，约定同第 7 / 9 / 22 条：存在即预约、跟随挂载行）。交棒本身**不引入新的 DOM 锚点**：它复用第 10 条（`[data-sidebar-right-session]` / `[data-dockkit-pane]`（含 `-active`）/ `data-sidebar-right-open`）、第 11 条（`.xterm`）与页面切换桥的 `.xterm-helper-textarea` 下探，判定函数就是 `page-cycle.ts` 导出的 `focusShownPage`（同一份实现，两条键共用）。另有一条**与上游命令目录相撞**的非正式事实：Web 上 `session.search` 的默认绑定是 `primary+alt+KeyK`，本固定行会让它变成冲突行（见第 6 / 7 节）。若上游把 `session.search` 挪到别的键位，冲突消失、本键不受影响；若上游改了 pane / 会话根 / 终端标记，交棒退化为 no-op（最坏是只消费、不动键盘），不误动作。

@@ -15,6 +15,9 @@
  *     卡片自己的 `dismiss()`；
  *   - focus composer（`⌘⌥J`，Windows/Linux 为 `Ctrl+Alt+J`）→ `focus-composer.ts`：自挂固定行，
  *     另含终端内的捕获拦截；
+ *   - focus page（`⌘⌥K`，Windows/Linux 为 `Ctrl+Alt+K`）→ `focus-page.ts`：自挂固定行，把键盘交给
+ *     右栏**当前显示**的那一页（通常是终端，落到 `.xterm-helper-textarea`），另含终端内的捕获拦截；
+ *     该键在 Web 上本属内置 `session.search`，本桥有意把它挤成冲突（理由见该模块的说明）；
  *   - page cycle（`⌘⌥←` / `⌘⌥→`，Windows/Linux 为 `Ctrl+Alt+←/→`）→ `page-cycle.ts`：自挂固定行，另含
  *     展开侧栏后的焦点交接，以及右栏页签行的滚动（`strip-scroll.ts`：注入一条作用域限定在右侧栏的
  *     `scroll-behavior: auto` 规则消掉换页签时的动画，并在切页前后记住 / 还原观察窗口 —— 相邻来回切
@@ -32,6 +35,7 @@
  */
 import { installApprovalBridge } from './approval-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
+import { installFocusPageBridge } from './focus-page.ts'
 import { installPageCloseBridge } from './page-close.ts'
 import { installPageCycleBridge } from './page-cycle.ts'
 import { installPaneBridge } from './pane-keys.ts'
@@ -55,6 +59,7 @@ export function apply(ctx: Context): void {
   installApprovalBridge(ctx)
   installQuestionBridge(ctx)
   installFocusComposerBridge(ctx)
+  installFocusPageBridge(ctx)
   installPageCycleBridge(ctx)
   installSessionCycleBridge(ctx)
   installSessionNewBridge(ctx)
