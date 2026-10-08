@@ -4,8 +4,8 @@
   "type": "module",
   "description": "dsh-plugins 仓库的开发期 workspace 根：只为把各插件 devDependencies（typescript / tsdown / @deepseek-ai/*）提升到根 node_modules，不是可安装的集合包。",
   "scripts": {
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck"
+    "build": "pnpm -r typecheck && pnpm -r build",
+    "check": "pnpm -r check && pnpm -r check:css"
   },
   "devDependencies": {
     "tsdown": "^0.22.2",

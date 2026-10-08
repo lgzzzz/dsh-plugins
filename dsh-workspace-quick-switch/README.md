@@ -43,8 +43,13 @@ dsh plugin --profile web add C:\Users\LGZ\dsh-plugins\dsh-workspace-quick-switch
 ```bash
 cd dsh-workspace-quick-switch
 pnpm typecheck                 # tsc --noEmit
+pnpm check:css                 # 上游槽位 / 主题令牌契约校验(--dsh-root / $DSH_ROOT 可指定 DSH 根)
 node test/run-all.mjs          # 五个测试文件(spawn 被沙箱拒时逐个跑,见下)
 ```
+
+`pnpm build` 是 `tsdown && node check-css.mjs`：浮层注册进的 `shell.overlay` 槽、注入样式
+消费的 `--dsw-*` / `--dsh-*` 令牌逐条登记在 [`css-contract.json`](css-contract.json)，上游
+改名 / 删 token 时**构建即失败**，不会让浮层静默不显示或掉到兜底色。
 
 | 测试文件 | 覆盖 |
 | --- | --- |
