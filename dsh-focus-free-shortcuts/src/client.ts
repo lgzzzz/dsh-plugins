@@ -13,7 +13,9 @@
  *     卡片自己的 `dismiss()`；
  *   - focus composer（`⌘⌥J`，Windows/Linux 为 `Ctrl+Alt+J`）→ `focus-composer.ts`：自挂固定行；
  *   - page cycle（`⌘⌥←` / `⌘⌥→`，Windows/Linux 为 `Ctrl+Alt+←/→`）→ `page-cycle.ts`：自挂固定行，另含
- *     展开侧栏后的焦点交接；
+ *     展开侧栏后的焦点交接，以及右栏页签行的滚动（`strip-scroll.ts`：注入一条作用域限定在右侧栏的
+ *     `scroll-behavior: auto` 规则消掉换页签时的动画，并在切页前后记住 / 还原观察窗口 —— 相邻来回切
+ *     时整行完全不动，只有目标芯片不在窗口里时才最小推移）；
  *   - session cycle（`⌘↑` / `⌘↓`，Windows/Linux 为 `Ctrl+↑/↓`）与 session active cycle（`⌘⌥↑` /
  *     `⌘⌥↓`，Windows/Linux 为 `Ctrl+Alt+↑/↓`）→ `session-cycle.ts`：自挂两条固定行，候选取左侧栏前三个工作区当前
  *     渲染出来的会话行，前者在全部候选里环状走、后者只走活跃会话，另有终端内的捕获拦截。

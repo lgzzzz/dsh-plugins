@@ -17,7 +17,7 @@
 | 审批键 | 同一条"主视图持有的会话"当前发布的 `pendingInteraction`（`{ kind: 'approval', answerable, answer() }`） | `answer()`（面板按钮用的同一个方法） |
 | 提问卡片 | 同一条 `pendingInteraction`，收窄到提问域：`kind` 为 `question` / `plan-review`、`key` 是字符串、带 `dismiss()` | `dismiss()`（卡片关闭 / 取消按钮用的同一个方法，**从不**调 `answer()`） |
 | 聚焦输入框 | 同一条"主视图持有的会话"的 scope，经 `conversation.input.for(scope)` 取到 composer 输入面 | 该输入面的 `focus()`（光标位置一并还原） |
-| 页面切换 | `sidebar.mounted`（右侧栏正在画的会话）的页面列表 `tabsIn` 与当前页 `active()` | `focus(tabId)` 切页（与点击芯片同一操作，记入布局历史）；切页后在**下一帧**执行 `focusShownPage` 把键盘交给新显示的页面，页面自聚焦（如终端）则不抢 |
+| 页面切换 | `sidebar.mounted`（右侧栏正在画的会话）的页面列表 `tabsIn` 与当前页 `active()` | `focus(tabId)` 切页（与点击芯片同一操作，记入布局历史）；切页后在**下一帧**执行 `focusShownPage` 把键盘交给新显示的页面，页面自聚焦（如终端）则不抢。页签行另有两处补偿：注入一条作用域限定在右侧栏的样式规则消掉"先回到最左、再迅速滑过去"的动画，并在切页前后保持观察窗口（切页前记下 chip box 的位置，下一帧先还回去、只有目标不在窗口里时才最小推移）（见第 5.4 节） |
 | 会话导航 | 左侧栏此刻渲染出来的会话行：`[data-row-key="workspace:…"]` / `session:…` 两类行里取前三个工作区的会话行；当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出，活跃与否读 `uiSession.sessionStatus` | `uiWorkspace.openSession(id)`（与点击侧栏那一行同一操作）；`⌘↑/↓`（macOS）/ `Ctrl+↑/↓`（Windows/Linux）（`session-cycle`）在全部候选里环状走，`⌘⌥↑/↓`（macOS）/ `Ctrl+Alt+↑/↓`（Windows/Linux）（`session-active-cycle`）只走候选里带状态点的活跃会话（运行中 / 待交互 / 已完成未读） |
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
@@ -125,3 +125,61 @@ function handlePaneInput(shortcuts, sidebar, input) {
 - **⑧** `gesture.repeat`（长按自动重复）→ 消费但不执行；与内置 `dispatch` 的语义一致：`consume()` 后 `if (!gesture.repeat) run()`。
 - **⑨** `isTargetCurrent(target)` 校验"当前屏会话、pane、tab、导航版本"是否仍与捕获时一致，不一致就放弃。`toggleFullscreen` / `split` 内部还会各自再校验一次。
 - **⑩** 全屏 → `toggleFullscreen(target)`；分屏 → `split(target.paneId)`。两个方法内部各自做预算 / 宽度 / 可见性校验，不满足就静默不做。
+
+### 5.4 页签行的滚动：`strip-scroll.ts`（瞬时到位 + 跨切换保持观察窗口）
+
+**现象**（换页签与鼠标点芯片同路，两步都在上游，插件只收拾可见的部分）：
+
+1. 页签行先回到最左端，然后迅速滑到新的活动页签；
+2. 目标页签一定落在**视野最右缘**：来源页签（上一次的目标，本来也在最右）被挤出视野，"我从哪儿切过来"看不见了。
+
+**机制**：
+
+1. dockkit 的 `TabLayout` 给**每个 tab 一个 host**，而页签行（`TabStrip`）只在**当前选中**那条 tab 的 host 里渲染 —— 所以每次选中变化都是旧 chip box 卸载、新 chip box 挂载，新元素的 `scrollLeft` 天然是 `0`（滚动位置不跨重挂载保留，也没有任何地方保存它）；
+2. kit 自己的 `useActiveChipInView` 在挂载 commit 的 layout 阶段做一次"**从 0 出发**的最小可见"修正：`scrollLeft = 0` 时左分支不可能成立，于是它总是把目标芯片的右缘推倒盒内 24px 处（`STRIP_FADE`）—— 现象 2 就是这一步的必然结果；
+3. 而 `.stripTabs` 声明了 `scroll-behavior: smooth`，于是第 2 步从"首帧前的一次瞬时写入"变成"从 0 开始的一段动画" —— 现象 1。
+
+**补偿**：插件做两件事（`src/strip-scroll.ts`），都落在首帧绘制之前，中间态永远不会被画出来。
+
+**其一，注入一条规则把缓动关掉**（`STRIP_SCROLL_CSS`）：
+
+```css
+/* dsh-focus-free-shortcuts:右栏页签行的滚动瞬时到位(不缓动)。 */
+[data-sidebar-right-session] [data-dockkit-strip-tabs] { scroll-behavior: auto; }
+```
+
+- 只作用于**右侧栏**（`[data-sidebar-right-session]`）：对话区那套同样由 dockkit 渲染的条带不受影响；
+- 用属性选择器而不是 dockkit 的哈希类名；两个属性选择器的特异性（0,2,0）高于类规则（0,1,0），与样式表顺序无关，所以不需要 `!important`；
+- 标签按持有者计数共享一个 `<style>`：同一文档里已有同一份规则（dev / HMR 下旧实例留下的标签）就复用它且不由本实例摘除；本实例插入的标签在最后一个持有者卸载时移除。没有 `document`、或 document 承载不了标签（极简 / 假 DOM）时整段是 no-op；
+- 代价：kit 在"开 / 关 / 移动页签"时的滑动过渡也一并变成瞬时 —— 纯装饰差异，换来的是滚动位置永远不需要"先回到起点、再修正"。
+
+**其二，切页前后保持观察窗口**（`captureStripScroll` / `restoreStripScroll`，在页面切换桥的 `switchPage` 里接线）：
+
+1. **切页前**（`sidebar.focus()` 之前，那之后当前页就换人了）找到当前活动芯片所在的 chip box，记下 `{ boxId, scrollLeft }`；浮动 pane 没有条带、页面尚未挂载、没有 document 时记不下，切页照常；
+2. **切页后**（页面切换桥本来就有的那次 `requestAnimationFrame`，`focusShownPage` 之前）找到新活动芯片的 chip box；`boxId` 相同（还是同一条条带）时先把记下的 `scrollLeft` 放回去；
+3. 再做一次**以旧窗口为起点**的最小可见修正：目标芯片不在窗口里时才推移，并留 24px 边缘余量 ——
+
+```ts
+box.scrollLeft = position.left
+const bounds = box.getBoundingClientRect(), rect = chip.getBoundingClientRect()
+if (rect.left < bounds.left) box.scrollLeft += rect.left - bounds.left - 24
+else if (rect.right > bounds.right) box.scrollLeft += rect.right - bounds.right + 24
+```
+
+以 1..10 十颗、盒里容三颗、旧窗口 `scrollLeft = 400`（看见 t5/t6/t7）为例：
+
+| 切到 | kit 单独（从 0 出发） | 本插件（从旧窗口出发） |
+|---|---|---|
+| t6（左邻，在旧窗口内） | 324：t6 落到最右缘，来源 t7 只剩 24px | 400：**行完全不动**，来源 t7 仍在视野里 |
+| t5（旧窗口最左） | 224 | 400：零位移 |
+| t7（原来那颗） | 424 | 400：零位移 |
+| t2（旧窗口左侧） | 0 | 76：最小左移，目标贴左缘留 24px（kit 那个 0 是"顺手也对"，但它把整个窗口甩到了最左） |
+| t9（旧窗口右侧） | 624 | 624：与 kit 同值 |
+
+两侧规则的差异其实只有两类：目标**已在旧窗口内**时本插件不动（kit 会把它推到最右缘，就是本文开头那个现象 2），目标在旧窗口**左侧**时 kit 从 0 出发没有左分支可用、本插件做最小左移。目标在旧窗口**右侧**时两者恒等 —— 最小推移量都等于"芯片右缘 − 盒宽 + 24"，与起点无关。
+
+页面循环一次只改选中、不改页签集合，所以同一条条带的内容宽度不变，旧位置可以直接复用；跨 `boxId`（跳到另一个 pane，或目标落在浮动 pane 的标题上）、目标芯片尚未渲染、没记下窗口时都不动作，交给 kit 原来的规则 —— 只覆盖插件自己驱动的切换（鼠标点芯片、别处命令切页仍走 kit 原规则，它们此前也是如此）。
+
+第 3 步是本插件**唯一**一处复刻上游几何的地方（"最小可见" + 24px 边缘余量）：上游那条规则以 0 为起点，插件要的语义是"以旧窗口为起点"，只能自己算。若上游改了渐隐带宽度，最坏情形是目标芯片与边缘的间距观感不同，不误动作。
+
+这条补偿与按键归属完全无关：不消费按键、不改变让位条件，鼠标点页签同样受益（只是那一路没有"旧窗口"可记，走 kit 原规则）。

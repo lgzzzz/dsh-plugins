@@ -10,6 +10,8 @@
 
 `⌘⌥J` / `Ctrl+Alt+J`、`⌘⌥←/→` / `Ctrl+Alt+←/→`、`⌘↑/↓` / `Ctrl+↑/↓` 与 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` 是官方没有任何命令占用的键,插件各挂一条固定键(`dsh-focus-free-shortcuts.focus-composer` / `dsh-focus-free-shortcuts.page-cycle` / `dsh-focus-free-shortcuts.session-cycle` / `dsh-focus-free-shortcuts.session-active-cycle`),走同一条固定输入通道把键盘交还给 composer、把右侧栏切到下一张页面、或在左侧栏前三个工作区当前显示出来的会话之间切换。
 
+页面切换键还顺带修掉两个上游的视觉抖动。其一:右栏页签行只在**当前选中**那条页面所在的 host 里渲染,所以每次换页签都是新的 chip box,`scrollLeft` 从 0 开始;kit 自己那次"把活动芯片滚进视野"本应在首帧之前完成,却被页签行的 `scroll-behavior: smooth` 变成"先回到最左、再迅速滑过去"的动画。其二:kit 那次修正以 **0** 为起点,于是目标芯片一定落在视野最右缘、把来源顶出去,"我从哪儿切过来"就看不见了。插件注入一条只作用于右侧栏的 `scroll-behavior: auto` 规则把它瞬时化,并在切页前后**保持观察窗口**(切页前记下页签行滚到的位置,新 chip box 挂载后先放回去,只有目标芯片不在窗口里时才最小推移)——于是相邻来回切时整行**完全不动**,来源页签仍在视野里(纯视图补偿,不消费按键、不改任何归属判定,鼠标点页签同样受益;细节见 [第 3 册第 5.4 节](docs/03-fixed-input-and-pane-keys.md))。
+
 两条会话键共用同一份候选,差别只在池子:`⌘↑` / `Ctrl+↑` 与 `⌘↓` / `Ctrl+↓` 在候选里环状步进;`⌘⌥↑` / `Ctrl+Alt+↑` 与 `⌘⌥↓` / `Ctrl+Alt+↓` 只走候选里的**活跃会话** —— 活跃 = 行上有状态点的会话(运行中 / 待交互 / 已完成未读那一颗绿点;回合以出错收场时运行状态同样由 true 变 false 并亮起同一颗绿点,所以这类会话也在池里,DSH 的会话状态面没有独立的「出错」状态)。没有活跃会话、或活跃池里只剩当前会话时,这对键不动作、也不消费,常规导航交给 `⌘↑` / `Ctrl+↑` 与 `⌘↓` / `Ctrl+↓`。
 
 会话切换的候选**不从服务面推导**,而是直接读左侧栏此刻渲染出来的会话行(`[data-row-key="session:…"]`):折叠的工作区、被每分组 5 行上限挡在「展开更多」之后的会话、归档行、「未分组」桶、搜索过滤与窄侧栏下的列表都不算候选 —— 也就是说,能按快捷键走到的,恰好是眼睛能看到、点一下就能打开的那批行(详见 [第 6 册](docs/06-boundaries-and-contracts.md) 第 8 节)。
@@ -20,7 +22,7 @@
 |---|---|
 | [1. 行为差异与影响面](docs/01-behavior-difference.md) | 五条「按下去没反应」的快捷键:前四条要先聚焦,最后一条(提问卡片 `Esc`)是既有键在那个状态下没有主人;DOM / 焦点 / `keydown` / `closest()` / `preventDefault()` 预备知识 |
 | [2. 归属判定](docs/02-ownership-resolution.md) | 键盘事件的完整链路;面板命令、停止序列与审批面板各自的归属判定;提问卡片的判定 |
-| [3. 固定输入通道与面板键桥接](docs/03-fixed-input-and-pane-keys.md) | 机制总览;固定输入通道与「消费即让位」;`enabledBinding`;`handlePaneInput` |
+| [3. 固定输入通道与面板键桥接](docs/03-fixed-input-and-pane-keys.md) | 机制总览;固定输入通道与「消费即让位」;`enabledBinding`;`handlePaneInput`;右栏页签行的滚动补偿 |
 | [4. 停止桥接(`Esc Esc`)](docs/04-stop-sequence-bridge.md) | `handleStopInput`;轮次身份(turn identity);双按序列;归属不重叠 |
 | [5. 审批键桥接(`Enter` / `Esc`)](docs/05-approval-key-bridge.md) | `handleApprovalInput`;面板 / 审批桥 / 提问桥 / 停止序列的归属不重叠;提问卡片取消桥的 `editable` 放宽与 `dismiss()` |
 | [6. 边界与依赖契约](docs/06-boundaries-and-contracts.md) | 与内置命令的对照表;已知边界与失败模式;依赖的非正式契约 |
