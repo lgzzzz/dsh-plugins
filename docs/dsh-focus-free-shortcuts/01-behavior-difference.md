@@ -1,6 +1,6 @@
 # 行为差异与影响面
 
-> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 1 册：六条「焦点不在目标区域内就没有反应」的快捷键，以及后文反复用到的 DOM / 焦点 / 事件术语。
+> 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 1 册：六条「焦点不在目标区域内就没有反应」的快捷键，以及后文反复用到的 DOM / 焦点 / 事件术语。
 
 ---
 

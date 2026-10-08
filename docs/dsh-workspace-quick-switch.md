@@ -50,7 +50,7 @@ node test/run-all.mjs          # 五个测试文件(spawn 被沙箱拒时逐个�
 ```
 
 `pnpm build` 是 `tsdown && node check-css.mjs`：浮层注册进的 `shell.overlay` 槽、注入样式
-消费的 `--dsw-*` / `--dsh-*` 令牌逐条登记在 [`css-contract.json`](css-contract.json)，上游
+消费的 `--dsw-*` / `--dsh-*` 令牌逐条登记在 [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json)，上游
 改名 / 删 token 时**构建即失败**，不会让浮层静默不显示或掉到兜底色。
 
 | 测试文件 | 覆盖 |

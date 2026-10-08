@@ -1,6 +1,6 @@
 # 审批键桥接（`Enter` / `Esc`）
 
-> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 5 册：审批面板「允许一次 / 拒绝」的焦点无关桥接，以及它与面板自身、停止序列、提问卡片取消桥之间的归属判定。
+> 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 5 册：审批面板「允许一次 / 拒绝」的焦点无关桥接，以及它与面板自身、停止序列、提问卡片取消桥之间的归属判定。
 
 ---
 

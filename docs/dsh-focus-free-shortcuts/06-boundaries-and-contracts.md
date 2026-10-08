@@ -1,6 +1,6 @@
 # 边界与依赖契约
 
-> 本文件是 [dsh-focus-free-shortcuts 说明](../README.md) 的第 6 册：与内置命令的对照表、已知边界与失败模式、依赖的非正式契约。
+> 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 6 册：与内置命令的对照表、已知边界与失败模式、依赖的非正式契约。
 
 ---
 
