@@ -15,10 +15,18 @@
  *
  * 同一观察者还带一项非消费任务：按键为 `sidebar.right.toggle` 的生效绑定时，
  * 在有界窗口内轮询右栏展开，展开后把键盘交给当前显示页。
+ *
+ * 本桥还负责右栏页签行的滚动（`strip-scroll.ts`）：dockkit 只为当前选中的 tab 渲染 chip
+ * box，换页签必然是新元素、`scrollLeft` 从 0 开始，而 kit 的挂载修正以 0 为起点，会把目标
+ * 顶到视野最右缘、把来源挤出视野（`scroll-behavior: smooth` 时还表现为"先回到最左、再迅速
+ * 滑过去"）。补偿是一条作用域限定在右侧栏的样式规则，加上切页前后的"窗口保持"（切页前记下
+ * 当前 chip box 的位置，下一帧先还回去、只有目标不在窗口里时才最小推移），随本桥的注入
+ * 作用域安装 / 卸载。
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
 import { bindingKeycaps, bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
+import { captureStripScroll, installInstantStripScroll, restoreStripScroll } from './strip-scroll.ts'
 import type {
   ShortcutCatalogEntry,
   ShortcutContext,
@@ -258,6 +266,9 @@ export function installPageCycleBridge(ctx: Context): void {
       warn('shortcuts service exposes no observeFixedInput; page-cycle keys not installed')
       return
     }
+    // 页签行的滚动补偿是纯视图规则、与按键无关（见 strip-scroll.ts），所以装在键位之前、
+    // 随本作用域卸载；不消费按键、不影响归属。
+    installInstantStripScroll(scope)
     // 行必须先挂载，观察者才能读到它；两者同在本 scope，按同序销毁。
     scope.effect(() => shortcuts.registerFixed(pageCycleCommand(shortcuts.platform)), `${name}: page cycle fixed row`)
     scope.effect(() => shortcuts.observeFixedInput((input) => {
@@ -305,11 +316,15 @@ function handlePageCycleInput(shortcuts: Shortcuts, sidebar: Sidebar, input: Key
  * 执行一次已解析的切换：聚焦目标页，再在显示该页的 commit 之后把键盘交给它。
  *
  * `sidebar.focus(nextId)` 与点击页签是同一操作，其 commit 由渲染器异步绘制，因此
- * pane 在下一动画帧才定位。
+ * pane 在下一动画帧才定位。换页签会把 chip box 连同它的滚动位置一起重建（dockkit 只为
+ * 当前选中的 tab 渲染页签行），且 kit 的修正以 0 为起点、会把目标顶到视野最右缘，所以这里
+ * 在 `focus` 之前记下旧窗口、在下一帧里先把它还回去（`strip-scroll.ts` 的窗口保持）。
  */
 function switchPage(sidebar: Sidebar, target: PageStepTarget): void {
+  const strip = captureStripScroll(target.sessionId, sidebar.active()?.id)
   sidebar.focus(target.nextId)
   whenShown(() => {
+    restoreStripScroll(strip, target.sessionId, target.nextId)
     focusShownPage(target.sessionId)
   })
 }

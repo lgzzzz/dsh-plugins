@@ -24,6 +24,7 @@ const ORDER = [
   'bridge-focus-composer.test.mjs',
   'bridge-page-cycle.test.mjs',
   'bridge-session-cycle.test.mjs',
+  'strip-scroll.test.mjs',
   'artifact-client.test.mjs',
 ]
 

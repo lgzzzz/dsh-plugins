@@ -24,6 +24,7 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | `src/approval-keys.ts` | 第 3 组：审批键 `Enter` 允许一次 / `Esc` 拒绝 |
 | `src/focus-composer.ts` | 第 4 组：聚焦输入框 `primary+alt+J`（macOS `⌘⌥J` / Windows/Linux `Ctrl+Alt+J`；官方没有的键，插件自己挂固定键） |
 | `src/page-cycle.ts` | 第 5 组：页面循环 `primary+alt+←` / `primary+alt+→`（macOS `⌘⌥←` / `⌘⌥→` / Windows/Linux `Ctrl+Alt+←` / `Ctrl+Alt+→`；官方没有的键对，插件自己挂固定键；切页后自动聚焦新页面） |
+| `src/strip-scroll.ts` | 第 5 组附带：右栏页签行的滚动 —— 注入一条作用域限定在右侧栏的 `scroll-behavior: auto` 规则（消掉"先回到最左、再迅速滑过去"的动画），并在切页前后保持观察窗口（`captureStripScroll` / `restoreStripScroll`：先还回旧位置，只有目标芯片不在窗口里时才按最小可见 + 24px 边缘余量推移）。纯视图补偿，不消费按键、不参与归属；由页面切换桥的注入作用域安装 / 卸载 |
 | `src/session-cycle.ts` | 第 7 组：会话导航 `primary+↑` / `primary+↓`（macOS `⌘↑` / `⌘↓` / Windows/Linux `Ctrl+↑` / `Ctrl+↓`，全部候选）与 `primary+alt+↑` / `primary+alt+↓`（macOS `⌘⌥↑` / `⌘⌥↓` / Windows/Linux `Ctrl+Alt+↑` / `Ctrl+Alt+↓`，只走活跃会话）（官方没有的键对，插件自己挂两条固定键；候选只取左侧栏前三个工作区当前渲染出来的会话行，活跃 = 行上有状态点者，终端内另走捕获拦截） |
 | `src/question-keys.ts` | 第 6 组：提问卡片 `Esc` 取消 / 关闭（同一个 `pendingInteraction` 槽位的提问域，调面板自己的 `dismiss()`） |
 | `src/binding.ts` | 七组共用：上游手势 / 绑定 / 两类快捷键目录行的匹配（纯函数，无 DOM、无 Cordis） |
@@ -34,7 +35,7 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 
 > 这些文件不自行重述上游类型：所有手势 / 绑定 / 目录行 / 待答审批 / 待答提问 / 会话与服务面都是 `import type` 自上游声明（清单见第 6 册第 8 节），打包时被擦除，客户端纯度门看不到它们。
 
-`test/` 下按主题分散（A–Q 十七组，外加「平台键端到端」R 一组，共十八组；共享装置在 `test/helpers.mjs`，runner 是 `test/run-all.mjs`）：
+`test/` 下按主题分散（A–Q 十七组，外加「平台键端到端」R 与「页签行瞬时滚动」S 两组，共十九组；共享装置在 `test/helpers.mjs`，runner 是 `test/run-all.mjs`）：
 
 - **A 绑定判定**（`test/decide-binding.test.mjs`）：`bindingMatches`（修饰键顺序无关、双键和弦拒绝）、`enabledBinding`（解绑 / 保留 / 冲突 / 缺席）
 - **B Escape 准入**（`test/decide-escape.test.mjs`）：`escapeEligible` 逐项否决
@@ -54,8 +55,9 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 - **Q 会话导航桥接**（`test/bridge-session-cycle.test.mjs`）：`⌘↓` / `Ctrl+↓` 与 `⌘↑` / `Ctrl+↑` 无焦点时在全部候选里环状走并消费按键（本组跑的是 Windows/Linux 那组物理键，macOS 的 `⌘` 系组合端到端见下面「平台键端到端」一条；当前会话由 `retainedBy.mainView` 给出，切换后跟随新的主视图会话继续走）、当前会话不在候选里时 ↓ 落候选首 / ↑ 落候选尾；`⌘⌥↓` / `Ctrl+Alt+↓` 与 `⌘⌥↑` / `Ctrl+Alt+↑` 只在活跃会话之间走（两个活跃只在它们之间走、跳过非活跃行、唯一活跃一键抵达、待答交互也算活跃、已完成未读也算活跃）、活跃池空或只剩当前会话时不动作、不消费（同一时刻 `⌘↓` / `Ctrl+↓` 照常在全部候选里往下走）；让位（侧栏没有任何行 / 只有一行且已是当前会话 / 没有 document / 别的键 / 右栏页面循环的键只切页不动会话）、文本框内与已被消费照常切换、模态层之上让位、终端内**捕获阶段拦截**（两对键都吞事件并切换、只切一次，活跃池只剩当前会话时同样放行不吞）、捕获路径让位（非终端目标 / 长按 / 模态 / 没有候选都不吞）、失败模式（缺 `uiWorkspace` 时停在注入等待里、不装也不告警，服务晚到后补装两条固定行并照常切换，`uiWorkspace` 形状不符时告警且不挂固定行，缺 `observeFixedInput` 告警）、卸载（两条固定行与捕获监听一起释放）
 - **G 产物**（`test/artifact-client.test.mjs`）：`lib/client.js` 的模块 id / 插件名 / `inject` 声明与端到端装配（产物零 `require`，不依赖任何 external）
 - **R 平台键端到端**（`test/bridge-platform-keys.test.mjs`，文件内分组标号 R①–R④）：经假注册表实装四条自挂固定行，验证 `primary` 按设备平台规范化成生效的物理绑定与键帽标签 —— macOS 上是 `meta` 系（`⌘⌥J` / `⌘⌥←` / `⌘⌥→` / `⌘↑` / `⌘↓` / `⌘⌥↑` / `⌘⌥↓`），Windows 上是 `control` 系（`Ctrl+Alt+J` / `Ctrl+Alt+←` / `Ctrl+Alt+→` / `Ctrl+↑` / `Ctrl+↓` / `Ctrl+Alt+↑` / `Ctrl+Alt+↓`），且各平台只认自己那一组物理组合（另一平台的组合不动作、不消费）
+- **S 页签行滚动**（`test/strip-scroll.test.mjs`，文件内分组标号 S①–S⑫）：规则文本与作用面（锚在 `[data-sidebar-right-session] [data-dockkit-strip-tabs]`、`scroll-behavior: auto`、不用 `!important`、不按哈希类名定位）、注入一个带认领标记的标签、多个持有者共用一个标签且最后一个卸载时才摘除、同一文档已有同一份规则时复用且不由本实例摘除、没有 `document` / document 承载不了标签时退化为 no-op，经插件装配时装上与释放全部 effect 后摘掉；**观察窗口保持**：采集（所属条带 + `scrollLeft`，页签未渲染 / 没有活动页 / 别的会话的同名芯片 / 浮动 pane / 没有 document 都不记）、还原 + 最小推移（以旧窗口为起点：原来那颗、左邻、窗口最左都是零位移；左外侧 / 右外侧的最小推移含 24px 边缘余量）、让位（跨 pane / 目标未渲染 / 没有窗口 / 浮动 pane / 没有 document 都不动作不抛），以及经页面循环桥的接线（切页前记窗口 → `focus` 重建 chip box → 下一帧还回去；折叠时不采也不还）
 
-> `test/run-all.mjs` 的 `ORDER`：A、B、C、D、H、N、J、L、P、E、F、I、O、K、M、Q、G；不在 `ORDER` 里的文件（如平台键端到端）按文件名补在最后跑。
+> `test/run-all.mjs` 的 `ORDER`：A、B、C、D、H、N、J、L、P、E、F、I、O、K、M、Q、S、G；不在 `ORDER` 里的文件（如平台键端到端）按文件名补在最后跑。
 
 ---
 
@@ -78,6 +80,7 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 - 焦点放哪儿都行（消息区、侧栏、甚至别的文本控件里），按 `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux） → 应直接聚焦底部输入框，光标回到上次位置，可以立刻开始输入；
 - 右侧栏开着并至少有两张页面时，任意焦点位置按 `⌘⌥→` / `⌘⌥←`（macOS）/ `Ctrl+Alt+→` / `Ctrl+Alt+←`（Windows/Linux） → 应切成下一页 / 上一页（环状），且键盘落到新页面：切到终端可直接打字，切到文件页方向键可直接滚动；焦点已经在终端里按这对键 → 依然能切页；
 - 只有一张页面或右侧栏折叠时按这对键 → 无动作（折叠时先用展开键展开，展开会顺手聚焦活动 pane）。
+- 页签行放不下所有页面（出现横向溢出）时来回切页 → 页签行**不应**"先回到最左、再滑到新的活动页签"：新活动页签直接出现在它该在的位置；连续往一个方向走、又切回相邻的那一颗时，**页签行完全不动**（来源页签仍在视野里，一眼能看出从哪儿切过来），只有目标页签不在当前窗口里时才最小幅度滚动（插件把 kit 那次"从 0 出发"的修正换成"以旧窗口为起点"，见第 3 册第 5.4 节；这条补偿与鼠标点页签共享前半段 —— 点页签同样不再滑动）。
 - 先在左侧栏展开若干工作区（默认只有当前会话所在的那一组会展开，且每组默认最多列出 5 行，多出来的藏在「展开更多」之后），然后任意焦点位置按 `⌘↓` / `⌘↑`（macOS）/ `Ctrl+↓` / `Ctrl+↑`（Windows/Linux） → 应在**前三个工作区当前显示出来**的会话行之间环状切换，顺序与侧栏一致，当前会话随之高亮；走一趟的顺序与眼睛看到的顺序相同；
 - 另一条键对 `⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` **只走活跃会话**：有会话正在运行、停在审批 / 提问卡片上等人回答、或刚跑完还没被看（行上那颗绿点）时，按这对键只在这些会话之间环状走，中间的普通会话会被跳过；
 - 这时按 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑` 仍走全部候选 —— 两条键各守各的池子；如果没有任何活跃会话（所有行都是空闲点），或活跃池里只剩当前这一个会话，`⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` 不动作、也不消费（想继续往下走就用 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑`）；
