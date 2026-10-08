@@ -13,7 +13,10 @@
  * 三条通路:
  *
  *   - **固定行**注册在快捷键服务里(group `application`),占据 `primary+alt+M`,存在
- *     本身就是占用;按键经 `observeFixedInput` 的固定通道送达,只认这一条物理组合。
+ *     本身就是占用;按键经 `observeFixedInput` 的固定通道送达,只认这一条物理组合,命中时
+ *     立刻 `consume()`(适配器就是 `preventDefault`)。**消费是必须的**:固定行只是「占住」
+ *     组合键,上游不会替它消费(见 `consumeFixedInput`),不消费的话平台会把同一次 `⌘⌥M`
+ *     再当一次自己的快捷键 —— macOS 上顺手最小化窗口就是这么来的。
  *   - **浮层**注册进 `shell.overlay`(加法式列表槽)。候选由本插件直接订阅工作区快照
  *     得来(槽只给框架标准 props,容器与其注入面在 `ctx.inject` 的 scope 里造好),
  *     所以工作区一变就重渲。
@@ -578,6 +581,9 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
     scope.effect(
       () => shortcuts.observeFixedInput((input) => {
         if (!opensPalette(shortcuts, platform, input)) return
+        // 先把这次按键收归本插件,再开浮层:consume() 一调用,平台就不会把同一次 ⌘⌥M 再执行
+        // 一遍自己的快捷键,排在后面的固定行观察者也会看到已消费输入。
+        consumeFixedInput(input)
         openPalette(store, readNavigation(scope))
       }),
       `${name}: quick switch key`,
@@ -659,6 +665,21 @@ function opensPalette(shortcuts: ShortcutsFace, platform: QuickSwitchPlatform, i
   if (gesture.composing === true || gesture.repeat === true || gesture.defaultPrevented === true) return false
   const rows = shortcuts.fixedCatalog?.getSnapshot()
   return rows === undefined || rows.some((row) => row.id === QUICK_SWITCH_ID)
+}
+
+/**
+ * 把这次固定输入收归本插件:调用适配器交出来的 `consume`(它就是 `event.preventDefault()`)。
+ *
+ * 固定行只「占住」组合键,上游**不会**替它消费:`effectiveShortcuts` 把带 `fixed` 的行排除在
+ * 可配置行之外,于是 `dispatch` 里那条「处理成功就 `consume()`」永远轮不到固定行。所以不主动
+ * 消费的话,这次按键会被平台再执行一遍自己的快捷键 —— macOS 上 `⌘⌥M` 顺手最小化窗口正是
+ * 这一条。消费必须发生在按键派发的同一拍里,而固定通道本来就是同步回调。
+ * @param input - 固定输入读数;没有 `consume` 的替身输入(测试夹具)直接跳过。
+ */
+function consumeFixedInput(input: unknown): void {
+  if (typeof input !== 'object' || input === null) return
+  const face = input as { readonly consume?: unknown }
+  if (typeof face.consume === 'function') (face.consume as () => void)()
 }
 
 /** 从注入面读槽位表。 */

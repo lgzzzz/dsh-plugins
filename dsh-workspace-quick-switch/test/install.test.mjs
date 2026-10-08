@@ -1,7 +1,8 @@
 /**
  * 装配:把 `src/client.ts` 装进假 Cordis 上下文后 —— 固定行注册、浮层挂进 `shell.overlay`、
- * 候选随快照更新、`Ctrl+Alt+M` 打开、`Esc` / `Enter` / `↑` / `↓` 的动作,以及上游服务
- * 缺席时的降级。浮层用真的 React(react-dom/server)渲染成 HTML 再断言。
+ * 候选随快照更新、`Ctrl+Alt+M` 打开、命中时把这次按键消费掉(`consume`,否则平台会再把同一
+ * 组合键当一次自己的快捷键)、`Esc` / `Enter` / `↑` / `↓` 的动作,以及上游服务缺席时的降级。
+ * 浮层用真的 React(react-dom/server)渲染成 HTML 再断言。
  *
  * 运行:`node test/install.test.mjs`(或 pnpm test 跑全部)。
  */
@@ -325,6 +326,51 @@ console.log('--- C⑨ 卸载时清干净 ---')
   check('工作区订阅撤掉', list.listenerCount(), 0)
   check('会话订阅撤掉', sessions.list.listenerCount(), 0)
   check('浮层注册项撤掉', slots.registered, [])
+}
+
+console.log('--- C⑪ 命中本插件组合键时消费掉这次按键(否则平台会再执行一遍)---')
+{
+  // 命中就消费:这是「⌘⌥M 不再同时把窗口最小化」的那一步 —— 消费即适配器的 preventDefault。
+  const mac = setup({ current: 'ws-2', platform: 'macos' })
+  check('命中 ⌘⌥M 时被消费', mac.shortcuts.fire(fixedMacKeydown()), true)
+  check('只消费了一次', mac.shortcuts.consumeCalls(), 1)
+  check('消费不影响浮层打开', mac.peek().open, true)
+
+  // 不是本插件那条组合键的输入一个都不消费:平台自己的快捷键必须照旧生效。
+  const other = setup({ current: undefined })
+  for (const input of [
+    fixedKeydown({ alt: false }),
+    fixedKeydown({ control: false }),
+    fixedKeydown({ shift: true }),
+    fixedKeydown({ repeat: true }),
+    { type: 'keydown', gesture: { code: 'KeyJ', control: true, alt: true } },
+    { type: 'keydown' },
+    { type: 'reset' },
+  ]) {
+    other.shortcuts.fire(input)
+  }
+  check('非本插件的输入不被消费', other.shortcuts.consumeCalls(), 0)
+
+  // 已经在别处被消费的输入:浮层不开,也不会再消费一次。
+  const taken = setup({ current: undefined })
+  taken.shortcuts.fire(fixedKeydown({ defaultPrevented: true }))
+  check('已消费输入不开浮层也不重复消费', [taken.peek().open, taken.shortcuts.consumeCalls()], [false, 0])
+
+  // 固定行被别的注册者挤掉(目录里没有本插件这一行):这一按不再算本插件的,也不消费。
+  const orphan = setup({ current: undefined })
+  orphan.shortcuts.dropFixed('dsh-workspace-quick-switch.quick-switch')
+  check('固定行不在目录里时不消费', [orphan.shortcuts.fire(fixedKeydown()), orphan.shortcuts.consumeCalls()], [false, 0])
+
+  // uiWorkspace 缺席:浮层开不了,但组合键仍然归本插件 —— 否则平台照样会拿它去做自己的事。
+  const slots = fakeSlots()
+  const shortcuts = fakeShortcuts({ platform: 'macos' })
+  const ctx = fakeCtx({ slots, shortcuts, workspaces: { list: fakeWorkspaces([workspace('ws-1', 'Alpha')]) } })
+  const warnings = captureWarnings(() => {
+    apply(ctx)
+    shortcuts.fire(fixedMacKeydown())
+  })
+  check('uiWorkspace 缺席时只告警一次', warnings.filter((line) => line.includes('uiWorkspace')).length, 1)
+  check('uiWorkspace 缺席也照样消费这次按键', shortcuts.consumeCalls(), 1)
 }
 
 finish()
