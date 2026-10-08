@@ -6,7 +6,7 @@
 
 上游 `@deepseek-ai/dsh-client-ui-deliverables` 让每个完成轮次以「改动文件卡片」收尾。指针在卡片里的文件行(单文件时是卡片标题行)上停留 **500ms** 后,会在 `<body>` 上弹出一个可滚动的单列改动浮层:
 
-- 触发器:[`lib/client.js` 1394-1428](../../AppData/Roaming/npm/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-deliverables/lib/client.js),两处 `HoverCard` + `openDelayMs: 500`;
+- 触发器:`lib/client.js` 1394-1428,即 `$DSH_ROOT/node_modules/@deepseek-ai/dsh-client-ui-deliverables/lib/client.js`(`$DSH_ROOT` = DSH 安装根,解析顺序见各插件的 `check-css.mjs`),两处 `HoverCard` + `openDelayMs: 500`;
 - 浮层内容:`ChangedFilePreview`,带 `data-changes-hover-preview`,**只在打开时挂载**——即「读取该文件对比」这个动作也只在打开时发生;
 - 上游没有暴露任何开关(`lib/` 里没有 Schema/Config),`HoverCard` 自带的 `disabled` 也没有被传。
 
