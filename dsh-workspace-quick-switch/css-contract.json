@@ -1,0 +1,18 @@
+{
+  "description": "dsh-workspace-quick-switch 依赖的 DSH 前端稳定契约：浮层注册用的槽位，以及注入样式表消费的主题令牌（CSS 变量）。浮层样式用的是自己的类名（.dsh-workspace-quick-switch-*），选择器不会失效；真正会静默退化的上游事实是槽位不再渲染（整层浮层不显示）与令牌改名（对应声明整条失效，多数写有回退值所以只掉到浅色/深色不合适的兜底色）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中。",
+  "checks": [
+    {"id":"overlay-slot","plugin":"dsh-workspace-quick-switch","pattern":"renderSlot\\(\\s*\"shell\\.overlay\"","paths":["dsh-client-ui-layout/lib"],"hint":"外壳不再渲染 shell.overlay 槽：⌘⌥M / Ctrl+Alt+M 仍占住按键，但浮层整层不显示（按键看起来没反应）"},
+    {"id":"font-family-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-font-family","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-font-family 变量消失（本条没有回退值），浮层字体退回浏览器默认，与应用字体不一致"},
+    {"id":"frame-overlay-top-var","plugin":"dsh-workspace-quick-switch","token":"--dsh-frame-overlay-top","paths":["dsh-client-ui-layout/lib"],"hint":"--dsh-frame-overlay-top 变量消失，浮层退到兜底 24px 顶距，应用自定义顶栏高度时可能被遮挡"},
+    {"id":"alias-bg-layer-2-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-alias-bg-layer-2","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-bg-layer-2 变量消失，浮层面板底色掉到兜底的 #ffffff，深色主题下会刺眼"},
+    {"id":"alias-bg-mask-1-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-alias-bg-mask-1","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-bg-mask-1 变量消失，遮罩掉到兜底的淡黑，深色主题下压暗不足"},
+    {"id":"alias-border-l2-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-alias-border-l2","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-border-l2 变量消失，浮层底栏上边框掉到兜底色，深色主题下分隔线偏亮"},
+    {"id":"alias-interactive-bg-hover-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-alias-interactive-bg-hover","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-interactive-bg-hover 变量消失，选中行 / 悬停高亮与「当前」角标掉到兜底灰，深色主题下对比不足"},
+    {"id":"alias-label-primary-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-alias-label-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-primary 变量消失，浮层标题 / 候选名主文字色掉到兜底黑，深色主题下不可读"},
+    {"id":"alias-label-tertiary-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-alias-label-tertiary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-tertiary 变量消失，序号 / 路径 / 快捷键等次要文字掉到兜底灰，深色主题下对比不足"},
+    {"id":"elevation-prominent-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-elevation-prominent","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-elevation-prominent 变量消失，浮层阴影掉到兜底值，浅色主题下浮层与页面糊在一起"},
+    {"id":"mask-blur-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-mask-blur","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-mask-blur 变量消失，遮罩失去背景模糊（掉到 none）"},
+    {"id":"radius-lg-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-radius-lg","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-radius-lg 变量消失，浮层面板圆角掉到兜底 16px，与应用圆角尺度不一致"},
+    {"id":"radius-sm-var","plugin":"dsh-workspace-quick-switch","token":"--dsw-radius-sm","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-radius-sm 变量消失，候选项圆角掉到兜底 8px，与应用圆角尺度不一致"}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "description": "dsh-desktop-notify 依赖的 DSH 前端稳定契约：设置行注册用的槽位，以及它注入的样式表消费的设计令牌（CSS 变量）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中——令牌被改名 / 删除时 CSS 会静默失效（本插件的令牌引用都没写回退值），槽位不再渲染时设置行会静默消失。",
+  "checks": [
+    {"id":"settings-slot","plugin":"dsh-desktop-notify","pattern":"renderSlot\\(\\s*\"settings\\.general\\.item\"","paths":["dsh-client-ui-settings-general/lib"],"hint":"设置页不再渲染 settings.general.item 槽：桌面通知开关注册进去也不显示，设置里整行静默消失"},
+    {"id":"border-l2-var","plugin":"dsh-desktop-notify","token":"--dsw-alias-border-l2","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-border-l2 变量消失，设置行底部分隔线（border-bottom:.5px solid）失效、行与行之间不再分隔"},
+    {"id":"border-l3-var","plugin":"dsh-desktop-notify","token":"--dsw-alias-border-l3","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-border-l3 变量消失，开关轨道背景变透明，关闭态看不出开关形状"},
+    {"id":"brand-primary-var","plugin":"dsh-desktop-notify","token":"--dsw-alias-brand-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-brand-primary 变量消失，开关开启态失去品牌色、键盘焦点环也一并消失"},
+    {"id":"label-primary-var","plugin":"dsh-desktop-notify","token":"--dsw-alias-label-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-primary 变量消失，设置项标题（桌面通知）颜色失效"},
+    {"id":"label-primary-foreground-var","plugin":"dsh-desktop-notify","token":"--dsw-alias-label-primary-foreground","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-primary-foreground 变量消失，开关圆点背景变透明、只剩滑动位移"},
+    {"id":"label-tertiary-var","plugin":"dsh-desktop-notify","token":"--dsw-alias-label-tertiary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-tertiary 变量消失，设置项说明文字颜色失效"}
+  ]
+}

@@ -23,8 +23,9 @@
     }
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node check-css.mjs",
     "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
     "test": "node test/run-all.mjs",
     "check": "node --check lib/client.js && node --check index.ts"
   },
