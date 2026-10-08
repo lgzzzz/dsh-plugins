@@ -16,7 +16,7 @@ import { check, checkTrue, fakePageSidebar, finish, gesture, shortcutContext, FO
 /** 只读固定行目录的假面:`focusPageTarget` 只读这一个读数。 */
 const catalog = (rows) => ({ fixedCatalog: { getSnapshot: () => rows } })
 
-console.log('--- N① 固定行本身:声明 primary+alt+K,键帽按平台落成,归 application 组 ---')
+console.log('--- W① 固定行本身:声明 primary+alt+K,键帽按平台落成,归 application 组 ---')
 {
   const macos = focusPageCommand('macos')
   const windows = focusPageCommand('windows')
@@ -27,7 +27,7 @@ console.log('--- N① 固定行本身:声明 primary+alt+K,键帽按平台落成
   check('固定行分组', macos.group, 'application')
 }
 
-console.log('--- N② 固定行归属:各平台只认自己的那一组物理键 ---')
+console.log('--- W② 固定行归属:各平台只认自己的那一组物理键 ---')
 {
   checkTrue('Windows:Ctrl+Alt+K 命中', fixedRowOwns(FOCUS_PAGE_FIXED_ROWS, FOCUS_PAGE_ID, FOCUS_PAGE_PRESS))
   checkTrue('macOS:⌘⌥K 命中', fixedRowOwns(FOCUS_PAGE_MAC_FIXED_ROWS, FOCUS_PAGE_ID, FOCUS_PAGE_MAC_PRESS))
@@ -42,7 +42,7 @@ console.log('--- N② 固定行归属:各平台只认自己的那一组物理键
   check('行未挂载不命中', fixedRowOwns([], FOCUS_PAGE_ID, FOCUS_PAGE_PRESS), false)
 }
 
-console.log('--- N③ 准入:page / 文本控件 / 终端 / 已被消费都准入,模态 / repeat / 组字否决 ---')
+console.log('--- W③ 准入:page / 文本控件 / 终端 / 已被消费都准入,模态 / repeat / 组字否决 ---')
 {
   checkTrue('page 上准入', focusPageEligible(FOCUS_PAGE_PRESS, shortcutContext()))
   checkTrue('文本控件内准入(要离开的正是 composer)', focusPageEligible(FOCUS_PAGE_PRESS, shortcutContext({ region: 'editable' })))
@@ -58,7 +58,7 @@ console.log('--- N③ 准入:page / 文本控件 / 终端 / 已被消费都准�
   check('别的键同样准入(是否动作由固定行决定)', focusPageEligible(gesture('Enter'), shortcutContext()), true)
 }
 
-console.log('--- N④ 交棒目标:行在 + 右栏展开 + 有会话才出手 ---')
+console.log('--- W④ 交棒目标:行在 + 右栏展开 + 有会话才出手 ---')
 {
   const rows = FOCUS_PAGE_FIXED_ROWS
   const windows = fakePageSidebar({ mounted: 's1' })
@@ -71,7 +71,7 @@ console.log('--- N④ 交棒目标:行在 + 右栏展开 + 有会话才出手 --
   check('终端内同样交棒', focusPageTarget(catalog(rows), windows, FOCUS_PAGE_PRESS, shortcutContext({ region: 'terminal' })), { sessionId: 's1' })
 }
 
-console.log('--- N⑤ 让位:右栏折叠 / 没有会话 / 行未挂载 / 别的键 / 模态 ---')
+console.log('--- W⑤ 让位:右栏折叠 / 没有会话 / 行未挂载 / 别的键 / 模态 ---')
 {
   const rows = FOCUS_PAGE_FIXED_ROWS
   check('右栏折叠(没有当前显示的页)', focusPageTarget(catalog(rows), fakePageSidebar({ expanded: false }), FOCUS_PAGE_PRESS, shortcutContext()), undefined)
