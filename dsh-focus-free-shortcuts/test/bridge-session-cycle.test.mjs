@@ -4,7 +4,7 @@
  * 待交互 / 已完成未读)之间切换,活跃池空或只剩当前会话时让位(不动作、不消费)。
  * 目标就是当前会话、没有候选、缺服务时让位;终端内(`.xterm`)的按键在 window 捕获阶段拦下。
  */
-import { captureWarnings, check, checkTrue, fakeDocument, fakeKeyEvent, fakePageSidebar, fakeSessionNavigation, fakeShortcuts, fakeSessions, fakeUiSession, fakeWindow, FakeCtx, FakeElement, finish, gesture, harness, keydown, session, shortcutContext, sidebarTree, statusTable, applyPlugin, SESSION_ACTIVE_CYCLE_ID, SESSION_ACTIVE_NEXT_PRESS, SESSION_ACTIVE_PREVIOUS_PRESS, SESSION_CYCLE_ID, SESSION_NEXT_PRESS, SESSION_PREVIOUS_PRESS } from './helpers.mjs'
+import { captureWarnings, check, checkTrue, fakeDocument, fakeKeyEvent, fakePageSidebar, fakeSessionNavigation, fakeShortcuts, fakeSessions, fakeUiSession, fakeWindow, FakeCtx, FakeElement, finish, gesture, harness, keydown, session, shortcutContext, sidebarTree, statusTable, applyPlugin, SESSION_ACTIVE_CYCLE_ID, SESSION_ACTIVE_NEXT_PRESS, SESSION_ACTIVE_PREVIOUS_PRESS, SESSION_CYCLE_ID, SESSION_NEXT_PRESS, SESSION_PREVIOUS_PRESS, UNUSED_PRESS } from './helpers.mjs'
 
 /** 装假 document(侧栏树)与假 window(捕获监听就装在上面),用完还原。 */
 function withSidebarDom({ app, activeElement = null, window = fakeWindow() } = {}) {
@@ -250,7 +250,7 @@ console.log('--- Q④ 让位:没有候选 / 只有一个候选且已是当前会
   const dom = withSidebarDom({ app: tree })
   const { shortcuts, navigation } = harness({ sidebar, summary })
   try {
-    const other = keydown(gesture('KeyK', { control: true, alt: true }), shortcutContext({ target: null }))
+    const other = keydown(UNUSED_PRESS, shortcutContext({ target: null }))
     shortcuts.emit(other.input)
     check('别的键不切会话', navigation.opened, [])
     check('别的键不消费', other.consumed.count, 0)

@@ -198,6 +198,27 @@ export const SESSION_NEW_ROWS = [row(SESSION_NEW_ID, SESSION_NEW_BINDING)]
 /** 同一行的 macOS 口径。 */
 export const SESSION_NEW_MAC_ROWS = [row(SESSION_NEW_ID, SESSION_NEW_MAC_BINDING)]
 
+/** 本插件挂载的"聚焦右栏页面"固定行 id。 */
+export const FOCUS_PAGE_ID = 'dsh-focus-free-shortcuts.focus-page'
+/** 插件声明的逻辑组合(`primary+alt+K`):macOS 落成 `⌘⌥K`,Windows 落成 `Ctrl+Alt+K`。 */
+export const FOCUS_PAGE_BINDING = { code: 'KeyK', modifiers: ['primary', 'alt'] }
+/** 本插件自己挂载的固定行(Windows/Linux 口径)。 */
+export const FOCUS_PAGE_FIXED_ROWS = [
+  physicalRow(FOCUS_PAGE_ID, [FOCUS_PAGE_BINDING], 'windows', { group: 'application' }),
+]
+/** 同一行的 macOS 口径:注册表把 `primary` 落成 `meta`,即 `⌘⌥K`。 */
+export const FOCUS_PAGE_MAC_FIXED_ROWS = [
+  physicalRow(FOCUS_PAGE_ID, [FOCUS_PAGE_BINDING], 'macos', { group: 'application' }),
+]
+export const FOCUS_PAGE_PRESS = gesture('KeyK', { control: true, alt: true })
+export const FOCUS_PAGE_MAC_PRESS = gesture('KeyK', { meta: true, alt: true })
+
+/**
+ * 一个真正空闲的组合(`Ctrl+Alt+Y` / `⌘⌥Y`):本插件与内置命令都没有占用。
+ * 让位类用例改用它,以免与"聚焦右栏页面"的 `primary+alt+K` 撞车。
+ */
+export const UNUSED_PRESS = gesture('KeyY', { control: true, alt: true })
+
 export class FakeNode {
   constructor(tag = 'div', attrs = []) {
     this.tag = tag
@@ -494,6 +515,8 @@ export function fakeSidebar() {
     current: true,
     closeable: true,
     calls: [],
+    // "聚焦右栏页面"桥要读的屏幕会话;没有会话的默认面 —— 该键在缺会话时不动作。
+    mounted: { getSnapshot: () => undefined },
     focusedTarget: () => sidebar.focused,
     // 复刻官方 `commandTarget`:焦点已在面板内直接返回;焦点在侧栏容器内(陈旧标记)时不回退
     // 到活动 pane;其余情形回退到活动 dock pane。

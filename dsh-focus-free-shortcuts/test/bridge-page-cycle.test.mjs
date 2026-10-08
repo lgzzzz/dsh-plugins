@@ -5,7 +5,7 @@
  * 是否展开,展开后把键盘交给活动页的终端输入面(自聚焦 / 只读 / 非终端 / 已展开 /
  * 卸载后让位,且不消费这一按)。
  */
-import { applyPlugin, captureWarnings, check, checkTrue, fakeDocument, FakeElement, fakeKeyEvent, fakePageSidebar, fakeShortcuts, fakeWindow, FakeCtx, finish, gesture, harness, keydown, row, shortcutContext, PAGE_CYCLE_ID, PAGE_NEXT_PRESS, PAGE_PREVIOUS_PRESS, SIDEBAR_TOGGLE_BINDING, SIDEBAR_TOGGLE_PRESS } from './helpers.mjs'
+import { applyPlugin, captureWarnings, check, checkTrue, fakeDocument, FakeElement, fakeKeyEvent, fakePageSidebar, fakeShortcuts, fakeWindow, FakeCtx, finish, gesture, harness, keydown, row, shortcutContext, PAGE_CYCLE_ID, PAGE_NEXT_PRESS, PAGE_PREVIOUS_PRESS, SIDEBAR_TOGGLE_BINDING, SIDEBAR_TOGGLE_PRESS, UNUSED_PRESS } from './helpers.mjs'
 
 /**
  * 置入假 document / 假 window(捕获监听就装在上面)/ 可选的 rAF 队列与定时器队列,
@@ -139,7 +139,7 @@ console.log('--- M④ 让位:折叠 / 单页 / 无活动页 / 无会话 / 别的
 
   const sidebar = fakePageSidebar({ list: ['t1', 't2', 't3'], active: 't1' })
   const { shortcuts } = harness({ sidebar })
-  const other = keydown(gesture('KeyK', { control: true, alt: true }), shortcutContext({ target: null }))
+  const other = keydown(UNUSED_PRESS, shortcutContext({ target: null }))
   shortcuts.emit(other.input)
   check('别的键不切页', sidebar.focusCalls, [])
   check('别的键不消费', other.consumed.count, 0)

@@ -3,7 +3,7 @@
  * 各类否决与失败模式(缺 sessions / 缺 observeFixedInput 即不装),以及终端内的捕获
  * 拦截与卸载复位。
  */
-import { applyPlugin, captureWarnings, check, checkTrue, domBody, domComposer, FakeElement, fakeKeyEvent, fakeSessions, fakeShortcuts, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, withWindowDom, FOCUS_COMPOSER_ID, FOCUS_COMPOSER_PRESS } from './helpers.mjs'
+import { applyPlugin, captureWarnings, check, checkTrue, domBody, domComposer, FakeElement, fakeKeyEvent, fakeSessions, fakeShortcuts, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, withWindowDom, FOCUS_COMPOSER_ID, FOCUS_COMPOSER_PRESS, UNUSED_PRESS } from './helpers.mjs'
 
 /** 一个可聚焦的假 facade:`conversation.input.for()` 返回它,focus() 计数。 */
 function focusingFacade() {
@@ -40,7 +40,7 @@ console.log('--- K① 无焦点聚焦:page 与文本控件内都抢到键盘 ---
 console.log('--- K② 让位:不是本键 / 主视图缺失 / 歧义 ---')
 {
   const { facade, shortcuts } = focusHarness()
-  const other = keydown(gesture('KeyK', { control: true, alt: true }), shortcutContext({ target: domBody }))
+  const other = keydown(UNUSED_PRESS, shortcutContext({ target: domBody }))
   shortcuts.emit(other.input)
   check('别的键不聚焦', facade.calls, 0)
   check('别的键不消费', other.consumed.count, 0)
@@ -107,7 +107,7 @@ console.log('--- K④ 失败模式:无 scope / 缺 conversation.input / for 抛�
 console.log('--- K⑤ 失败模式:缺 sessions / 缺 observeFixedInput 即不装 ---')
 {
   const noSessions = harness({ withSessions: false })
-  check('缺 sessions 只装面板桥、页面关闭桥与页面循环桥', noSessions.shortcuts.listenerCount(), 3)
+  check('缺 sessions 只装面板桥、页面关闭桥、聚焦右栏页面桥与页面循环桥', noSessions.shortcuts.listenerCount(), 4)
 
   const bare = new FakeCtx({
     shortcuts: { ...fakeShortcuts(), observeFixedInput: undefined },
@@ -189,7 +189,7 @@ console.log('--- K⑧ 捕获路径让位:非终端目标 / 模态 / 长按 / 组
       ['文本控件里(仍归冒泡通道)', [editor, app], {}],
       ['长按重复', path, { repeat: true }],
       ['组字中', path, { isComposing: true }],
-      ['别的键', path, { code: 'KeyK' }],
+      ['别的键', path, { code: 'KeyY' }],
       ['缺 Alt', path, { altKey: false }],
       ['多了 Shift', path, { shiftKey: true }],
     ]
