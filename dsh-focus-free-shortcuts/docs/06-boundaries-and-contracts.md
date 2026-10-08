@@ -53,7 +53,7 @@
 | 桌面端 `Esc Esc` / 审批键 / 提问卡片 `Esc` | DOM 固定通道驱动，正常；提问卡片是 Web 独有特性，桌面端根本没有这张卡片 | 停止桥、审批桥与提问桥照常安装，正常；提问桥在桌面端是 no-op——没有卡片就没有提问域的 `pendingInteraction`，也没有会重复处理的那一按 |
 | 按 `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux）（任意焦点位置） | 没有任何命令占用，浏览器默认无动作 | 主视图会话的 composer 输入面 `focus()`：键盘回到输入框，光标还原 |
 | 焦点已在输入框，按 `⌘⌥J` / `Ctrl+Alt+J` | 无动作 | 重新聚焦（幂等，光标不动） |
-| 焦点在文本控件 / 终端内的 `⌘⌥J` / `Ctrl+Alt+J` | 控件自己处理 | 文本控件内接管；终端内让位 |
+| 焦点在文本控件 / 终端内的 `⌘⌥J` / `Ctrl+Alt+J` | 控件自己处理 | 文本控件内接管；终端内由 window 捕获阶段的钩子接管（在事件进入终端前 `preventDefault()+stopPropagation()`），冒泡通道仍对终端让位 |
 | 模态层打开，按 `⌘⌥J` / `Ctrl+Alt+J` | 模态层掌权 | 让位，不动作、不消费 |
 | 主视图会话数 ≠ 1 或没有会话，按 `⌘⌥J` / `Ctrl+Alt+J` | — | 不动作、不消费（没有可聚焦的 composer） |
 | 任意焦点位置按 `⌘⌥→` / `⌘⌥←`（macOS）/ `Ctrl+Alt+→` / `Ctrl+Alt+←`（Windows/Linux） | 没有任何命令占用，浏览器默认无动作 | 右侧栏切成当前页的下一页 / 上一页（环状）；切完把键盘交给新显示的页面（页面自聚焦如终端时则不抢，只补位） |
@@ -72,6 +72,11 @@
 | 工作区折叠 / 会话藏在「展开更多」之后 / 列表带搜索词 / 侧栏收起成窄栏 / 分组方式为「单列表」，按这两对键 | 无动作（那时也没有会话行可点） | 不动作、不消费：候选就是「此刻渲染出来的会话行」，这些情况下没有候选 |
 | 会话已归档，按这两对键 | 点那一行只弹「已归档，不可打开」的提示，不切换 | 不动作、不消费：归档行不进候选（按 `aria-description` 标记识别） |
 | 模态层打开，按这两对键 | 模态层掌权 | 让位，不动作、不消费 |
+| 焦点在终端里按 `⌘⌥N` / `Ctrl+Alt+N`（内置 `session.new`） | 终端把按键当普通输入处理并 `preventDefault()+stopPropagation()`（事件到不了 DOM 通道），内置命令的 `regions` 也不含 `terminal` | 捕获阶段在 `.xterm` 之前拦下并调用与内置 `run()` 同一个 `uiWorkspace.startSession()`（不带参数 = 沿用当前 / 最近的工作区），顺带不让 Windows/Linux 上的 AltGr 把这一按变成字符送进 shell |
+| 焦点在页面 / 文本控件里按 `⌘⌥N` / `Ctrl+Alt+N` | 内置 `session.new` 自己处理（`regions` 含 `page` 与 `editable`） | 让位：本桥的捕获钩子只认 `.xterm`，不注册固定键也不开观察者，页面 / 文本控件里的这一按完全归内置命令 |
+| `session.new` 被改绑 / 解绑 / 有 issue / 存在冲突，焦点在终端里按原键位 | — | 不动作、不吞事件：键位读**生效目录**（`enabledBinding`），改绑后跟随新键，解绑 / 冲突后让位（与页面关闭桥跟随 `page.close` 同一条约定） |
+| `uiWorkspace` 服务缺席 | — | `session.new` 桥停在注入等待里（不告警、不安装）：`ctx.inject(['shortcuts', 'uiWorkspace'])` 等到服务真正可用才跑，形状不符（没有 `startSession`）时告警一次并整体不安装 |
+| 模态层打开，按 `⌘⌥N` / `Ctrl+Alt+N` | 模态层掌权 | 让位，不动作、不吞事件 |
 
 ---
 
@@ -159,7 +164,7 @@
 8. `conversation.input`（`SessionInputResolver.for(scope)`）与它返回的 `SessionInput.focus()` 语义——与应用在遮罩结束后把键盘还给 composer 用的是同一个操作，光标还原；若上游改了这个入口，聚焦键退化为 no-op 并告警；
 9. 固定键 id `dsh-focus-free-shortcuts.page-cycle` 与它声明的两个逻辑组合 `primary+alt+ArrowLeft` / `primary+alt+ArrowRight`（`registerFixed` 按平台落成 `meta+alt`（macOS `⌘⌥←/→`）或 `control+alt`（Windows/Linux `Ctrl+Alt+←/→`）；本插件自己在 `shortcuts.registerFixed` 处声明；同一行两个绑定 = 上一页 / 下一页两个方向，约定同第 7 条）；
 10. DOM 标记 `[data-sidebar-right-session]` / `[data-dockkit-pane]` / `[data-dockkit-float]`（含 `-active` 后缀与 `data-sidebar-right-open`）——自动聚焦步的 pane 选择与官方 `visibleSidebarPane` 同源；该函数不在包 `/client` 的公开导出里，所以按同一份标记重写"活动标记优先、否则第一块可见 pane"的三选逻辑。`[data-sidebar-right-session]` 同时出现在**会话包装 div 与内层面板 div** 上（同 id、嵌套）：会话根按"取带 `data-sidebar-right-open` 者、否则取最深者"复刻 `closest()` 的"最内层 owner"语义（内层面板才带 `data-sidebar-right-open` 并持有 panes）。若上游改了标记，聚焦退化为只切页不聚焦（no-op），不误动作。
-11. 终端的 `.xterm` 类——与官方键盘适配器判定 `terminal` 区域用的是同一个类（同为 `dsh-client-ui-sidebar-terminal` 的 xterm 根）。捕获阶段拦截**只**认 `closest('.xterm')` 命中的按键，其余按键一律放行给固定通道，两路共用 `pageCycleTarget`，互斥不双触发。若上游改了终端根类名，终端内切页会退化（该按到不了通道、捕获钩子也不再认它），但不会误动作。
+11. 终端的 `.xterm` 类——与官方键盘适配器判定 `terminal` 区域用的是同一个类（同为 `dsh-client-ui-sidebar-terminal` 的 xterm 根）。捕获阶段拦截**只**认 `closest('.xterm')` 命中的按键，其余按键一律放行给固定通道；每条桥的两路共用同一个判定（`pageCycleTarget` / `sessionCyclePlan` / `focusComposerTarget` / `sessionNewPress`），互斥不双触发。若上游改了终端根类名，终端内这些键会退化（该按到不了通道、捕获钩子也不再认它），但不会误动作。
 12. 模态选择器 `[role="dialog"][aria-modal="true"], [role="menu"]`——与 `@deepseek-ai/dsh-client-ui-primitives` 的 `modalSelector` 同源。捕获阶段跑在键盘适配器算出 `context.modal` **之前**，桥自行按这份选择器复推"当前是否有模态层"，再交给共享判定，使两路的模态否决一致。若上游改了选择器，最坏情形是捕获路径在模态层打开时仍切页（与通道路径的否决不一致），不误动作。
 13. `pendingInteraction` 槽位的**提问域运行时形状**：类型就是 `@deepseek-ai/dsh-client-ui-user-questions/client` 的 `PendingQuestion`，但该槽位是复用的，所以 `asDismissableQuestion` 仍在运行时确认 `kind` 为 `'question'` 或 `'plan-review'`、`key` 为字符串、`dismiss` 为函数之后才代关（第 6 条是审批侧的同一条约定；两侧共用同一个槽位、靠 `kind` 分工，谁都不越界）。
 14. DOM 标记 `[data-question-key]` / `[data-plan-review-key]`（提问卡片两处根节点携带请求 key 的属性名）：`questionCardOwnsTarget` 先用 `closest('[data-question-key], [data-plan-review-key]')` 找到卡片，再要求**该元素自身的属性值恰好等于本次待答提问的 `key`**——因此过期卡片、另一次调用的 review 卡片、以及没有 `getAttribute` 的裸节点都匹配不上。若上游改了标记名、或把 key 挪到子节点上，`editable` 区域内的 `Esc` 会退化成"不再取消"（不误动作），而卡片之外的文本控件本来就保留自己的 `Esc`。
@@ -174,3 +179,5 @@
 21. `uiWorkspace.openSession(sessionId)` 的语义（上游 `UiWorkspace` 的公开面里本插件唯一要用的动词：选中一个会话并把它的 Conversation 显示出来，与点击侧栏那一行完全同路，只换主视图、不聚焦任何人）。本插件不为它多拉一个类型依赖，但把 `uiWorkspace` 写进会话导航桥的注入依赖列表，等服务**激活**后再按结构读 `scope.get('uiWorkspace')` 的 `openSession`（`ctx.get` 默认只认已激活的服务；Workspace browser 的客户端包激活可能晚于本插件，采样一次会把「还没激活」误判成「缺席」而永不安装）。服务缺席（没有 Workspace browser 的客户端）时 Cordis 不跑桥的回调，整条桥不安装、也不告警；服务在而形状不符（上游改了这个方法名）时告警一次 `uiWorkspace service unavailable; session-cycle keys not installed`、整条桥同样不安装。
 22. 固定键 id `dsh-focus-free-shortcuts.session-cycle` 与它声明的两个逻辑组合 `primary+ArrowUp` / `primary+ArrowDown`（走全部候选，macOS 落成 `⌘↑` / `⌘↓`、Windows/Linux 落成 `Ctrl+↑` / `Ctrl+↓`），以及 `dsh-focus-free-shortcuts.session-active-cycle` 与它声明的 `primary+alt+ArrowUp` / `primary+alt+ArrowDown`（只走活跃池，macOS 落成 `⌘⌥↑` / `⌘⌥↓`、Windows/Linux 落成 `Ctrl+Alt+↑` / `Ctrl+Alt+↓`）：两条行都由本插件自己在 `shortcuts.registerFixed` 处声明，约定同第 7 / 9 条（存在即预约、跟随挂载行；同一行两个绑定 = 两个方向）。两条行的归属靠修饰键集合互斥（有没有 `Alt`），所以同一按至多命中一条。活跃池的三项状态事实（`pendingInteraction` / `running` / `completionUnread`）取自官方 `SessionStatus` 类型，是有类型保证的公开读数——本插件只做「任一成立即活跃」的并集，不引入自己的状态表。
 23. DOM 标记 `[data-dockkit-strip-tabs]`（dockkit 放在页签行 chip box 上的稳定标记）、`[data-dockkit-tab]`（每个页面芯片，取值即 tab id）与它们的右侧栏会话根 `[data-sidebar-right-session]`：`src/strip-scroll.ts` 靠这三项标记把 `scroll-behavior: auto` 只作用在右侧栏的 chip box 上，并做切页前后的"窗口保持"（记 / 还 `scrollLeft`，目标不在窗口里时按"最小可见 + 24px 边缘余量"推移）。芯片查找与 `page-cycle.ts` 的 `sidebarRoot` 同一条纪律：**不把 id 拼进选择器**，取回候选后按属性值比较，并要求芯片的最近会话根就是本次会话（页面 id 由各面自己铸造，不跨面比较）。样式刻意不写 dockkit 的哈希类名、不用 `!important`（两个属性选择器的特异性已高于类规则）。第 3 步的"最小可见 + 24px"是本插件唯一一处复刻上游几何的地方——上游那条规则以 0 为起点，插件要的语义是"以旧窗口为起点"，只能自己算；若上游改了渐隐带宽度，最坏是目标芯片与边缘的间距观感不同、不误动作。若上游改了任一标记，规则匹配不到、窗口也记不下，整体退化成 kit 原来的行为（重置 + 滑动 + 目标贴最右），同样不误动作。样式标签按持有者计数共享一个 `<style>`（`data-plugin-css="dsh-focus-free-shortcuts/strip-scroll"`），复用到已有标签时不由本实例摘除，本实例插入的标签在最后一个持有者卸载时移除。
+24. 命令 id `session.new`（与官方 `shortcuts.register` 处同源）、它 Web 上的默认绑定 `primary+alt+KeyN`（macOS `⌘⌥N`、Windows/Linux `Ctrl+Alt+N`；桌面端是 `primary+KeyN`）与它的 `regions` 只有 `page` / `editable` 这一事实：`src/session-new.ts` 只在**捕获阶段**、且目标落在 `.xterm` 内时按**生效目录**里那一行当前的绑定出手（`enabledBinding` + `bindingMatches`，所以改绑 / 解绑 / 有 issue / 冲突都立刻跟随），其余位置一概让位。若上游改了这个命令 id，本桥读不到行、退化为 no-op（不误动作）；若上游把 `terminal` 加进 `regions` 并让适配器在终端里也能收到这一按，本桥会与内置命令同时动作 —— 那时应当整条删掉（它的存在理由只是补内置够不着的那一格）。
+25. `uiWorkspace.startSession(workspaceId?)` 的语义（上游 `UiWorkspace` 的公开面：走一次"新建会话"流程并导航到那个会话，不带参数 = 沿用当前 / 最近的工作区；就是内置 `session.new` 的 `run()` 调的那一个动词）。与第 21 条同一条纪律：把 `uiWorkspace` 写进注入依赖列表、等服务**激活**后再按结构读 `scope.get('uiWorkspace')` 的 `startSession`（`ctx.get` 默认只认已激活的服务，采样一次会把「还没激活」误判成「缺席」）。服务缺席时 Cordis 不跑桥的回调，整条桥不安装、也不告警；服务在而形状不符（上游改了这个方法名）时告警一次 `uiWorkspace service unavailable; session.new key not bridged into the terminal`、整条桥同样不安装。

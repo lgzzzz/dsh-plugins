@@ -10,7 +10,7 @@
  * 删了,列表跟着变),选中行尽量停在原来那个工作区上。会话目录能读到主视图会话时,
  * 它所属的工作区会标上「当前」,并作为打开时的初始选中行。
  *
- * 三条通路:
+ * 四条通路:
  *
  *   - **固定行**注册在快捷键服务里(group `application`),占据 `primary+alt+M`,存在
  *     本身就是占用;按键经 `observeFixedInput` 的固定通道送达,只认这一条物理组合,命中时
@@ -22,8 +22,11 @@
  *     所以工作区一变就重渲。
  *   - **浮层内的按键**由本插件在 document 捕获阶段取走(`Escape` / `Enter` /
  *     `↑` / `↓`):浮层一开它就先于任何本地控件看到按键,关掉后立即放行。
+ *   - **终端内的打开键**由本插件在 window 捕获阶段取走:落在 `.xterm` 里的 keydown 到不了
+ *     固定通道(终端在自己的 textarea 处理器里 `stopPropagation()`),所以另挂一个捕获监听,
+ *     早于事件进入终端判定,命中即吞掉这一按并开同一张浮层(判定与固定通道共用 `quickSwitchOwns`)。
  *
- * 两条通路都**不**写进本插件的 `inject`:固定行与浮层只等 `slots` / `shortcuts`,所以
+ * 前两条通路都**不**写进本插件的 `inject`:固定行与浮层只等 `slots` / `shortcuts`,所以
  * `primary+alt+M` 从一开始就占着、浮层也随时能开。候选与「当前」标记要用的 `workspaces` /
  * `sessions` 是另一回事 —— 它们经 gateway + WebSocket 的远程链路提供,通常比本插件激活
  * 晚得多,所以各挂一个**等待子 fiber**(`scope.inject`),服务到位后再接上订阅;服务缺席
@@ -588,6 +591,25 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
       }),
       `${name}: quick switch key`,
     )
+    // 终端那一半:落在 `.xterm` 内的 keydown 到不了上面的固定通道(终端在自己的 textarea
+    // 处理器里 `stopPropagation()`),本捕获监听早一个阶段看到它,在事件进入终端前判定并
+    // 吞掉这一按,再开同一张浮层。判定与固定通道共用 `quickSwitchOwns`,两条路径互斥。
+    scope.effect(() => {
+      if (typeof window === 'undefined') return () => {}
+      const onKeydown = (event: KeyboardEvent): void => {
+        if (event.type !== 'keydown') return
+        const element = composedElement(event)
+        if (element === null || element.closest('.xterm') === null) return
+        if (!quickSwitchOwns(shortcuts, platform, keyGesture(event))) return
+        // 在终端自身处理器之前拦截:事件到此为止,xterm 既收不到这一按,也不会把
+        // `Ctrl+Alt+M` 当成 AltGr 字符送进 shell。
+        event.preventDefault()
+        event.stopPropagation()
+        openPalette(store, readNavigation(scope))
+      }
+      window.addEventListener('keydown', onKeydown, true)
+      return () => window.removeEventListener('keydown', onKeydown, true)
+    }, `${name}: quick switch terminal capture`)
     scope.effect(() => {
       let disposeSlot: undefined | (() => void)
       // `slots.inject` / `slots.register` 都以槽位服务对象本身为接收者调用:它们是上游使用
@@ -661,10 +683,52 @@ function opensPalette(shortcuts: ShortcutsFace, platform: QuickSwitchPlatform, i
   if (candidate.type !== 'keydown') return false
   const gesture = candidate.gesture as Partial<Record<string, unknown>> | undefined
   if (gesture === undefined || gesture === null) return false
+  return quickSwitchOwns(shortcuts, platform, gesture)
+}
+
+/**
+ * 一次按键事实是否就是本插件那条固定组合。
+ *
+ * 两条投递路径(固定通道的观察者与终端前的捕获拦截)共用本判定:平台物理组合完全匹配
+ * (`quickSwitchPress`)、不是组字 / 长按 / 已被消费的输入,且固定行真的还挂在目录里
+ * (被别的注册者挤掉时这一按就"无主")。
+ * @param shortcuts - 快捷键目录面。
+ * @param platform - 接收输入的设备平台。
+ * @param gesture - 按键事实(KeyboardEvent 或固定通道读数结构上都满足)。
+ */
+function quickSwitchOwns(
+  shortcuts: ShortcutsFace,
+  platform: QuickSwitchPlatform,
+  gesture: Partial<Record<string, unknown>>,
+): boolean {
   if (!quickSwitchPress(platform, gesture)) return false
   if (gesture.composing === true || gesture.repeat === true || gesture.defaultPrevented === true) return false
   const rows = shortcuts.fixedCatalog?.getSnapshot()
   return rows === undefined || rows.some((row) => row.id === QUICK_SWITCH_ID)
+}
+
+/** 从一次原生 keydown 里取出本插件要读的手势事实(捕获阶段 `defaultPrevented` 恒为 false)。 */
+function keyGesture(event: KeyboardEvent): Record<string, unknown> {
+  return {
+    code: event.code,
+    control: event.ctrlKey,
+    alt: event.altKey,
+    shift: event.shiftKey,
+    meta: event.metaKey,
+    repeat: event.repeat,
+    composing: event.isComposing,
+    defaultPrevented: false,
+  }
+}
+
+/**
+ * 事件组合路径上的第一个 Element(按 `closest` 这一项能力做鸭子类型判断,测试可以传普通假元素)。
+ */
+function composedElement(event: KeyboardEvent): Element | null {
+  for (const value of event.composedPath()) {
+    if (typeof value === 'object' && value !== null && 'closest' in value) return value as Element
+  }
+  return null
 }
 
 /**

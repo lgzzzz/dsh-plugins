@@ -1,6 +1,8 @@
 # dsh-focus-free-shortcuts
 
-让「全屏 / 分屏」「关闭当前页面」「连按两下 `Esc` 停止」「审批面板 `Enter` 允许一次 / `Esc` 拒绝」「提问卡片 `Esc` 取消 / 关闭」这些快捷键**不再需要先点一下**目标区域;另外新增 `⌘⌥J`(macOS) / `Ctrl+Alt+J`(Windows/Linux)(把键盘拉回输入框)、`⌘⌥←` / `Ctrl+Alt+←`、`⌘⌥→` / `Ctrl+Alt+→`(切换右侧栏当前显示的页面,并把键盘落到新页面)、`⌘↑` / `Ctrl+↑`、`⌘↓` / `Ctrl+↓`(在左侧栏前三个工作区**当前显示出来**的会话行之间导航)与 `⌘⌥↑` / `Ctrl+Alt+↑`、`⌘⌥↓` / `Ctrl+Alt+↓`(**只在活跃会话之间**切换)。
+让「全屏 / 分屏」「关闭当前页面」「连按两下 `Esc` 停止」「审批面板 `Enter` 允许一次 / `Esc` 拒绝」「提问卡片 `Esc` 取消 / 关闭」这些快捷键**不再需要先点一下**目标区域;另外新增 `⌘⌥J`(macOS) / `Ctrl+Alt+J`(Windows/Linux)(把键盘拉回输入框)、`⌘⌥←` / `Ctrl+Alt+←`、`⌘⌥→` / `Ctrl+Alt+→`(切换右侧栏当前显示的页面,并把键盘落到新页面)、`⌘↑` / `Ctrl+↑`、`⌘↓` / `Ctrl+↓`(在左侧栏前三个工作区**当前显示出来**的会话行之间导航)与 `⌘⌥↑` / `Ctrl+Alt+↑`、`⌘⌥↓` / `Ctrl+Alt+↓`(**只在活跃会话之间**切换),并给内置的「新建会话」`⌘⌥N` / `Ctrl+Alt+N` 补上终端那一格。
+
+**焦点在终端里时也能用**:`⌘⌥J` / `Ctrl+Alt+J`、`⌘⌥N` / `Ctrl+Alt+N`(内置 `session.new`)与 `⌘⌥M` / `Ctrl+Alt+M`(见 [dsh-workspace-quick-switch](../dsh-workspace-quick-switch/))在 `.xterm` 内同样生效 —— 终端在自己的 textarea 处理器里对经手的按键 `stopPropagation()`,事件到不了 window 上的键盘通道,所以这三条各自在 window **捕获阶段**另挂一个 `keydown` 监听,在事件进入终端前判定,命中即吞掉这一按(`preventDefault()+stopPropagation()`),既不误动作也不把它当成终端输入送进 shell。
 
 免掉的聚焦动作:把焦点点进右侧栏 dock pane(`⌘⌥Enter` 全屏、`⌘\` 分屏、Web 上的 `⌘⌥W` / `Ctrl+Alt+W` 关闭当前页面)、点进输入框(`Esc` `Esc` 停止)、点进审批详情区(`Enter` 允许一次、`Esc` 拒绝)。
 
@@ -11,6 +13,8 @@
 提问卡片是这几类里唯一的例外:它自己没绑 `Esc`,唯一出口是面板上的关闭 / 取消按钮(调 `PendingQuestion.dismiss()`);有待答提问时这一按本来没有主人(内置停止序列与本插件的停止桥都以「有待答交互」为门槛拒绝,且都不消费)。插件把这一按接过来,按面板按钮自己的语义取消:没有工具调用线索的阻塞式提问 → 以 `ASK_CANCELLED` 结束整组等待;带工具调用线索的提问 → 只收起面板,问题仍可从它的工具调用行重新打开。
 
 `⌘⌥J` / `Ctrl+Alt+J`、`⌘⌥←/→` / `Ctrl+Alt+←/→`、`⌘↑/↓` / `Ctrl+↑/↓` 与 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` 是官方没有任何命令占用的键,插件各挂一条固定键(`dsh-focus-free-shortcuts.focus-composer` / `dsh-focus-free-shortcuts.page-cycle` / `dsh-focus-free-shortcuts.session-cycle` / `dsh-focus-free-shortcuts.session-active-cycle`),走同一条固定输入通道把键盘交还给 composer、把右侧栏切到下一张页面、或在左侧栏前三个工作区当前显示出来的会话之间切换。
+
+`⌘⌥N` / `Ctrl+Alt+N` 不一样:它是官方**可配置命令** `session.new`(Web 上的默认键位,桌面端是 `⌘N` / `Ctrl+N`)的键,插件不注册固定行、也不开固定输入观察者,只补内置命令够不着的终端那一格 —— 捕获阶段拦下 `.xterm` 内的这一按,调用与内置 `run()` 同一个 `uiWorkspace.startSession()`(不带参数 = 沿用当前 / 最近的工作区)。键位读**生效目录**,所以改绑 / 解绑 / 冲突都立刻跟随(与页面关闭桥跟随 `page.close` 同一条约定)。
 
 页面切换键还顺带修掉两个上游的视觉抖动。其一:右栏页签行只在**当前选中**那条页面所在的 host 里渲染,所以每次换页签都是新的 chip box,`scrollLeft` 从 0 开始;kit 自己那次"把活动芯片滚进视野"本应在首帧之前完成,却被页签行的 `scroll-behavior: smooth` 变成"先回到最左、再迅速滑过去"的动画。其二:kit 那次修正以 **0** 为起点,于是目标芯片一定落在视野最右缘、把来源顶出去,"我从哪儿切过来"就看不见了。插件注入一条只作用于右侧栏的 `scroll-behavior: auto` 规则把它瞬时化,并在切页前后**保持观察窗口**(切页前记下页签行滚到的位置,新 chip box 挂载后先放回去,只有目标芯片不在窗口里时才最小推移)——于是相邻来回切时整行**完全不动**,来源页签仍在视野里(纯视图补偿,不消费按键、不改任何归属判定,鼠标点页签同样受益;细节见 [第 3 册第 5.4 节](docs/03-fixed-input-and-pane-keys.md))。
 

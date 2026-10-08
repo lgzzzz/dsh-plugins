@@ -13,14 +13,18 @@
  *     在卡片自身的 React 处理器 `preventDefault()` 之前取走按键；
  *   - question 取消（`Esc`）→ `question-keys.ts`：读 `pendingInteraction` 槽并调用
  *     卡片自己的 `dismiss()`；
- *   - focus composer（`⌘⌥J`，Windows/Linux 为 `Ctrl+Alt+J`）→ `focus-composer.ts`：自挂固定行；
+ *   - focus composer（`⌘⌥J`，Windows/Linux 为 `Ctrl+Alt+J`）→ `focus-composer.ts`：自挂固定行，
+ *     另含终端内的捕获拦截；
  *   - page cycle（`⌘⌥←` / `⌘⌥→`，Windows/Linux 为 `Ctrl+Alt+←/→`）→ `page-cycle.ts`：自挂固定行，另含
  *     展开侧栏后的焦点交接，以及右栏页签行的滚动（`strip-scroll.ts`：注入一条作用域限定在右侧栏的
  *     `scroll-behavior: auto` 规则消掉换页签时的动画，并在切页前后记住 / 还原观察窗口 —— 相邻来回切
  *     时整行完全不动，只有目标芯片不在窗口里时才最小推移）；
  *   - session cycle（`⌘↑` / `⌘↓`，Windows/Linux 为 `Ctrl+↑/↓`）与 session active cycle（`⌘⌥↑` /
  *     `⌘⌥↓`，Windows/Linux 为 `Ctrl+Alt+↑/↓`）→ `session-cycle.ts`：自挂两条固定行，候选取左侧栏前三个工作区当前
- *     渲染出来的会话行，前者在全部候选里环状走、后者只走活跃会话，另有终端内的捕获拦截。
+ *     渲染出来的会话行，前者在全部候选里环状走、后者只走活跃会话，另有终端内的捕获拦截；
+ *   - session new（内置 `session.new`，Web/macOS 为 `⌘⌥N`、Web/Windows·Linux 为 `Ctrl+Alt+N`）→
+ *     `session-new.ts`：不注册固定行、也不开观察者，只补内置命令够不着的终端那一格 —— 捕获阶段
+ *     拦下 `.xterm` 内的这一按并调用同一个 `uiWorkspace.startSession()`。
  *
  * `binding.ts` 提供两个快捷键目录共用的手势/绑定匹配，`capture.ts` 提供捕获阶段读数，
  * `focus-ring.ts` 提供 outline 抑制，`runtime.ts` 提供插件名、固定输入收窄与主视图
@@ -33,6 +37,7 @@ import { installPageCycleBridge } from './page-cycle.ts'
 import { installPaneBridge } from './pane-keys.ts'
 import { installQuestionBridge } from './question-keys.ts'
 import { installSessionCycleBridge } from './session-cycle.ts'
+import { installSessionNewBridge } from './session-new.ts'
 import { installStopBridge } from './stop-sequence.ts'
 import { name } from './runtime.ts'
 import type {Context} from '@deepseek-ai/cordis'
@@ -52,4 +57,5 @@ export function apply(ctx: Context): void {
   installFocusComposerBridge(ctx)
   installPageCycleBridge(ctx)
   installSessionCycleBridge(ctx)
+  installSessionNewBridge(ctx)
 }

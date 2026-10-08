@@ -145,5 +145,50 @@ console.log('--- D④ 产物在 macOS 平台上占 ⌘⌥M,并只认这一组 --
   check('产物只消费命中的那一次按键', shortcuts.consumeCalls(), 1)
 }
 
+console.log('--- D⑤ 产物里的终端捕获:`.xterm` 内的 ⌘⌥M 也开浮层 ---')
+{
+  /** 一段最小的终端 DOM:`.xterm` 容器 + 它里面的 helper textarea(按真实 closest 上溯)。 */
+  function terminalPath() {
+    const pane = { parent: null, xterm: false }
+    const screen = { parent: pane, xterm: true }
+    const textarea = { parent: screen, xterm: false }
+    const closestOn = (node) => (selector) => {
+      if (selector !== '.xterm') return null
+      for (let current = node; current !== null; current = current.parent) {
+        if (current.xterm) return current
+      }
+      return null
+    }
+    textarea.closest = closestOn(textarea)
+    screen.closest = closestOn(screen)
+    pane.closest = closestOn(pane)
+    return [textarea, screen, pane]
+  }
+
+  const terminalDom = installDom()
+  try {
+    const slots = fakeSlots()
+    const shortcuts = fakeShortcuts()
+    const ctx = fakeCtx({
+      slots,
+      shortcuts,
+      workspaces: {
+        list: fakeWorkspaces([workspace('ws-1', 'Alpha'), workspace('ws-2', 'Beta')]),
+      },
+      sessions: fakeSessions({ current: 'ws-2' }),
+      uiWorkspace: { startSession() {} },
+    })
+    plugin.apply(ctx)
+    check('产物挂上了终端捕获监听', terminalDom.windowListenerCount(), 1)
+    const event = terminalDom.pressWindowKey({ code: 'KeyM', key: 'm', ctrlKey: true, altKey: true, path: terminalPath() })
+    check('产物里终端内 Ctrl+Alt+M 打开浮层', parseRows(slots).map((row) => row.title), ['Alpha', 'Beta'])
+    check('产物里终端内这一按被吞', [event.defaultPrevented, event.stopped], [true, true])
+    ctx.dispose()
+    check('卸载后捕获监听撤掉', terminalDom.windowListenerCount(), 0)
+  } finally {
+    terminalDom.uninstall()
+  }
+}
+
 finish()
 dom.uninstall()

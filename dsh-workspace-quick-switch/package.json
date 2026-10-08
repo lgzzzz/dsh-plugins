@@ -2,7 +2,7 @@
   "name": "dsh-workspace-quick-switch",
   "version": "1.0.0",
   "private": true,
-  "description": "快捷键 ⌘⌥M(macOS)/Ctrl+Alt+M(Windows/Linux) 弹出浮层,按左侧栏当前的工作区顺序列出前 10 个工作区,↑/↓ 导航、Enter 在该工作区新建会话。",
+  "description": "快捷键 ⌘⌥M(macOS)/Ctrl+Alt+M(Windows/Linux) 弹出浮层,按左侧栏当前的工作区顺序列出前 10 个工作区,↑/↓ 导航、Enter 在该工作区新建会话;焦点在终端(.xterm)里时同样生效(window 捕获阶段拦下)。",
   "type": "module",
   "exports": {
     ".": {

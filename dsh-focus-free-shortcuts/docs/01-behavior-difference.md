@@ -25,6 +25,8 @@
 
 > 本插件另有四条官方没有任何命令占用的固定键（声明为逻辑组合，按平台落成）：`primary+alt+J` = `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux）（`dsh-focus-free-shortcuts.focus-composer`，把键盘交还 composer）、`primary+alt+←/→` = `⌘⌥←` / `⌘⌥→`（macOS）/ `Ctrl+Alt+←` / `Ctrl+Alt+→`（Windows/Linux）（`dsh-focus-free-shortcuts.page-cycle`，把右侧栏切到下一张页面并把键盘交给新页面）、`primary+↑/↓` = `⌘↑` / `⌘↓`（macOS）/ `Ctrl+↑` / `Ctrl+↓`（Windows/Linux）（`dsh-focus-free-shortcuts.session-cycle`，在左侧栏前三个工作区当前显示出来的会话行之间导航）与 `primary+alt+↑/↓` = `⌘⌥↑` / `⌘⌥↓`（macOS）/ `Ctrl+Alt+↑` / `Ctrl+Alt+↓`（Windows/Linux）（`dsh-focus-free-shortcuts.session-active-cycle`，只在其中带状态点的活跃会话之间切换）。四者都走固定输入通道，实现分别在 `src/focus-composer.ts`、`src/page-cycle.ts` 与 `src/session-cycle.ts`；对照表见 [第 6 册](06-boundaries-and-contracts.md)，构建与启用见 [第 7 册](07-build-test-and-enable.md)。
 
+> 焦点落在**终端**（`.xterm`）里时，上面四条里的 `primary+alt+J`、`primary+alt+←/→` 与 `primary+alt+↑/↓` / `primary+↑/↓` 依然生效：终端在自己的 textarea 处理器里对经手的按键 `preventDefault()+stopPropagation()`，事件到不了 window 上的固定通道，所以这些桥各自在 window **捕获阶段**另挂一个 `keydown` 监听，在事件进入终端前判定并吞掉这一按（见 [第 3 册](03-fixed-input-and-pane-keys.md) 第 4 节）。同一机制还补上了内置「新建会话」`session.new` 的 `primary+alt+N` = `⌘⌥N`（macOS）/ `Ctrl+Alt+N`（Windows/Linux）：它不是本插件的固定键，所以桥只跟随**生效目录**里那一行当前的绑定，动作调同一个 `uiWorkspace.startSession()`（`src/session-new.ts`）。
+
 ---
 
 ## 2. 预备知识

@@ -317,8 +317,8 @@ console.log('--- C⑩ macOS:固定行占 ⌘⌥M,键帽与按键归属都按平�
 console.log('--- C⑨ 卸载时清干净 ---')
 {
   const { ctx, slots, shortcuts, list, sessions } = setup({ current: 'ws-1' })
-  check('四个 scope effect 都登记了', ctx.effects.length, 4)
-  check('effect 各自交了清理函数', ctx.effects.filter((effect) => typeof effect.cleanup === 'function').length, 4)
+  check('五个 scope effect 都登记了', ctx.effects.length, 5)
+  check('effect 各自交了清理函数', ctx.effects.filter((effect) => typeof effect.cleanup === 'function').length, 5)
   check('两个等待子 fiber 都挂上了', ctx.children.map((child) => child.running), [true, true])
   ctx.dispose()
   check('固定行撤掉', shortcuts.commands, [])
@@ -371,6 +371,103 @@ console.log('--- C⑪ 命中本插件组合键时消费掉这次按键(否则平
   })
   check('uiWorkspace 缺席时只告警一次', warnings.filter((line) => line.includes('uiWorkspace')).length, 1)
   check('uiWorkspace 缺席也照样消费这次按键', shortcuts.consumeCalls(), 1)
+}
+
+console.log('--- C⑫ 终端内按 ⌘⌥M / Ctrl+Alt+M:捕获阶段拦下并开同一张浮层 ---')
+{
+  /**
+   * 一段最小的终端 DOM:`.xterm` 容器 + 它里面的 helper textarea。
+   *
+   * `composedPath` 的第一个元素是 textarea,而 `terminalTarget` 要的正是"最近的
+   * `.xterm` 祖先",所以这里按真实 `closest` 上溯建模,而不是只看第一个元素。
+   */
+  function terminalPath() {
+    const pane = { parent: null, xterm: false }
+    const screen = { parent: pane, xterm: true }
+    const textarea = { parent: screen, xterm: false }
+    const closestOn = (node) => (selector) => {
+      if (selector !== '.xterm') return null
+      for (let current = node; current !== null; current = current.parent) {
+        if (current.xterm) return current
+      }
+      return null
+    }
+    textarea.closest = closestOn(textarea)
+    screen.closest = closestOn(screen)
+    pane.closest = closestOn(pane)
+    return { textarea, screen, pane, path: [textarea, screen, pane] }
+  }
+
+  // 每次都用新的 installDom():捕获监听是挂在 window 上的,同一个 window 上叠多个
+  // setup 时先注册的那条会先看到按键。
+  const terminalDom = installDom()
+  const { shortcuts, peek } = setup({ current: 'ws-2' })
+  const { path } = terminalPath()
+  const event = terminalDom.pressWindowKey({ code: 'KeyM', key: 'm', ctrlKey: true, altKey: true, path })
+  check('终端内打开浮层', peek().open, true)
+  check('事件在捕获阶段被吞', [event.defaultPrevented, event.stopped], [true, true])
+  check('浮层候选照常列出', peek().rows.map((row) => row.title), ['Alpha', 'Beta'])
+  check('捕获监听与固定输入观察者各一条', [terminalDom.windowListenerCount(), shortcuts.observerCount()], [1, 1])
+  terminalDom.uninstall()
+
+  // macOS:同一个窗口里只认 ⌘⌥M。
+  const macDom = installDom()
+  const mac = setup({ current: undefined, platform: 'macos' })
+  const macPath = terminalPath().path
+  const ctrl = macDom.pressWindowKey({ code: 'KeyM', key: 'm', ctrlKey: true, altKey: true, path: macPath })
+  check('macOS 上 Ctrl+Alt+M 不打开', mac.peek().open, false)
+  check('macOS 上 Ctrl+Alt+M 不吞事件', [ctrl.defaultPrevented, ctrl.stopped], [false, false])
+  const meta = macDom.pressWindowKey({ code: 'KeyM', key: 'm', metaKey: true, altKey: true, path: macPath })
+  check('macOS 上 ⌘⌥M 打开', mac.peek().open, true)
+  check('macOS 上 ⌘⌥M 被吞', [meta.defaultPrevented, meta.stopped], [true, true])
+  macDom.uninstall()
+
+  // 让位:非 `.xterm` 目标、别的键、多按修饰键、长按 / 组字、固定行被挤掉。
+  const passthroughDom = installDom()
+  const pass = setup({ current: undefined })
+  const editorPath = [{ closest: () => null }]
+  const cases = [
+    ['文本控件里', { path: editorPath }],
+    ['别的键', { code: 'KeyN', key: 'n', path }],
+    ['缺 Alt', { altKey: false, path }],
+    ['多了 Shift', { shiftKey: true, path }],
+    ['长按重复', { repeat: true, path }],
+    ['组字中', { isComposing: true, path }],
+  ]
+  for (const [label, overrides] of cases) {
+    const wrong = passthroughDom.pressWindowKey({ code: 'KeyM', key: 'm', ctrlKey: true, altKey: true, path: terminalPath().path, ...overrides })
+    check(`${label}不打开`, pass.peek().open, false)
+    check(`${label}不吞事件`, [wrong.defaultPrevented, wrong.stopped], [false, false])
+  }
+  pass.shortcuts.dropFixed('dsh-workspace-quick-switch.quick-switch')
+  const orphan = passthroughDom.pressWindowKey({ code: 'KeyM', key: 'm', ctrlKey: true, altKey: true, path: terminalPath().path })
+  check('固定行不在目录里时不打开', pass.peek().open, false)
+  check('固定行不在目录里时不吞事件', [orphan.defaultPrevented, orphan.stopped], [false, false])
+  passthroughDom.uninstall()
+
+  // 没有 window(无 DOM 的装配走查):不抛,固定通道照常工作。
+  const noWindowDom = installDom()
+  delete globalThis.window
+  try {
+    const bare = setup({ current: undefined })
+    check('没有 window 时照常注册固定行', bare.shortcuts.commands.length, 1)
+    openViaShortcut(bare.shortcuts)
+    check('没有 window 时固定通道照常打开', bare.peek().open, true)
+    check('没有 window 时也登记了那个 effect', bare.ctx.effects.length, 5)
+  } finally {
+    globalThis.window = noWindowDom.window
+  }
+  noWindowDom.uninstall()
+
+  // 卸载:window 上的捕获监听一起撤掉。
+  const unmountDom = installDom()
+  const unmount = setup({ current: undefined })
+  check('卸载前捕获监听在册', unmountDom.windowListenerCount(), 1)
+  unmount.ctx.dispose()
+  check('卸载后捕获监听撤掉', unmountDom.windowListenerCount(), 0)
+  const after = unmountDom.pressWindowKey({ code: 'KeyM', key: 'm', ctrlKey: true, altKey: true, path: terminalPath().path })
+  check('卸载后不再打开也不吞事件', [unmount.peek().open, after.defaultPrevented, after.stopped], [false, false, false])
+  unmountDom.uninstall()
 }
 
 finish()
