@@ -2,7 +2,7 @@
 
 > 本文件是 [`dsh.client.inject` 完整说明](../dsh-client-inject.md) 的第 4 册:术语表。
 
----
+-----
 
 ## 8. 术语速查表
 

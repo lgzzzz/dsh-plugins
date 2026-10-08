@@ -3,6 +3,7 @@
 # api-session/activity 与新建会话的归属，用 workspace 注册表自己的 insertBefore
 # 把最近活跃的工作区提到持久显示顺序的最前；浏览器侧通过 workspace 控制器的
 # follow() 增量跟随，没有客户端代码。
+# 包名 / patch id / patch name / 导出 name / 服务名五者的分工见 docs/plugin-naming.md。
 - insert:
     - id: dsh-workspace-activity-sort
       name: dsh-workspace-activity-sort

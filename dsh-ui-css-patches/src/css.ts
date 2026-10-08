@@ -1,3 +1,10 @@
+/**
+ * `dsh-ui-css-patches` 的全部补丁规则,由 `client.ts` 挂成一条 `<style>`。
+ *
+ * 同特异性规则的覆盖顺序由本文件的源码顺序唯一确定(后写者胜);规则只用稳定的 `data-*` /
+ * `role` / `aria-label` 锚点,不依赖上游的哈希类名。锚点与令牌清单、以及构建后校验见
+ * docs/dsh-css-architecture/04-css-patches-relationship.md。
+ */
 export const CSS = `
 /* 对话正文撑满可用宽度 */
 [data-slot='main.conversation'] [data-conversation-content] {
@@ -107,6 +114,7 @@ export const CSS = `
   --dsw-font-xxs-12: var(--dsh-content-font-size, 14px)/calc(var(--dsh-content-font-size, 14px) + 7px) var(--dsw-font-family);
 }
 
+/* 会话标题栏(动作图标那一行)整行 14px */
 [data-slot="conversation.session.header"] * {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }

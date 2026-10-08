@@ -2,11 +2,11 @@
 
 > 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 3 册：固定输入通道、归属判定来源与让位条件，以及面板键（全屏 / 分屏）的桥接实现。
 
----
+-----
 
 ## 4. 机制总览
 
-插件不往 shortcut catalog 里注册可配置命令，因此没有默认键位、没有键位冲突、不需要改设置。例外是聚焦输入框、页面循环与会话导航的**四**把固定键：官方目录里不存在这些命令，插件各为它们挂一条**只读预约、不可改绑**的固定键（会话导航占两条——全部候选一条、只走活跃会话一条）。固定键与可配置命令是两套目录。
+插件不往 shortcut catalog 里注册可配置命令，因此没有默认键位、没有键位冲突、不需要改设置。例外是插件自己挂的五条固定键：其中四条（聚焦输入框、页面循环与会话导航）在官方目录里不存在对应命令，插件各为它们挂一条**只读预约、不可改绑**的固定键（会话导航占两条——全部候选一条、只走活跃会话一条）；第五条 `dsh-focus-free-shortcuts.focus-page`（`⌘⌥K` / `Ctrl+Alt+K`）**有意占用** Web 上内置 `session.search` 的默认键位，因此在 Web 上会制造一处冲突（见 [第 5.6 节](03-fixed-input-and-pane-keys.md)）。固定键与可配置命令是两套目录。
 
 插件挂在固定输入通道上先于内置命令观察每一次按键，确定该自己接管时调用 `consume()`；归属判定只读不依赖焦点的来源。各按键组的判定来源与执行的操作：
 
@@ -19,18 +19,19 @@
 | 提问卡片 | 同一条 `pendingInteraction`，收窄到提问域：`kind` 为 `question` / `plan-review`、`key` 是字符串、带 `dismiss()` | `dismiss()`（卡片关闭 / 取消按钮用的同一个方法，**从不**调 `answer()`） |
 | 聚焦输入框 | 同一条"主视图持有的会话"的 scope，经 `conversation.input.for(scope)` 取到 composer 输入面 | 该输入面的 `focus()`（光标位置一并还原）；焦点在终端里时由捕获钩子投递同一判定（见第 4 节） |
 | 页面切换 | `sidebar.mounted`（右侧栏正在画的会话）的页面列表 `tabsIn` 与当前页 `active()` | `focus(tabId)` 切页（与点击芯片同一操作，记入布局历史）；切页后在**下一帧**执行 `focusShownPage` 把键盘交给新显示的页面，页面自聚焦（如终端）则不抢。页签行另有两处补偿：注入一条作用域限定在右侧栏的样式规则消掉"先回到最左、再迅速滑过去"的动画，并在切页前后保持观察窗口（切页前记下 chip box 的位置，下一帧先还回去、只有目标不在窗口里时才最小推移）（见第 5.4 节） |
+| 聚焦右栏页面（`⌘⌥K` / `Ctrl+Alt+K`） | 插件自己的固定行 `dsh-focus-free-shortcuts.focus-page` 占用这一按（`fixedRowOwns`），且右栏展开、`sidebar.mounted` 有会话 | `focusShownPage(sessionId)`：与页面切换键共用同一条交棒判定（页面自持键盘就不抢，否则聚焦可见 pane 并下探页面自己的输入面，终端即 `.xterm-helper-textarea`）；不换页 |
 | 会话导航 | 左侧栏此刻渲染出来的会话行：`[data-row-key="workspace:…"]` / `session:…` 两类行里取前三个工作区的会话行；当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出，活跃与否读 `uiSession.sessionStatus` | `uiWorkspace.openSession(id)`（与点击侧栏那一行同一操作）；`⌘↑/↓`（macOS）/ `Ctrl+↑/↓`（Windows/Linux）（`session-cycle`）在全部候选里环状走，`⌘⌥↑/↓`（macOS）/ `Ctrl+Alt+↑/↓`（Windows/Linux）（`session-active-cycle`）只走候选里带状态点的活跃会话（运行中 / 待交互 / 已完成未读） |
 | 新建会话（内置 `session.new`） | **生效目录**里 `session.new` 当前那一行（`enabledBinding`，改绑 / 解绑 / 冲突即刻跟随）；不注册固定键 | `uiWorkspace.startSession()`（与内置 `run()` 同一个动词，不带参数 = 沿用当前 / 最近的工作区）；只在终端内投递，页面 / 文本控件里仍归内置命令 |
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
 
-聚焦输入框、页面切换、会话导航与新建会话另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。
+聚焦输入框、聚焦右栏页面、页面切换、会话导航与新建会话另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。
 
-> 四条自挂固定键的捕获路径只在 `.xterm` 内出手，所以它们与冒泡通道互斥、一次按键最多只被处理一次：命中即 `stopPropagation()`，window 冒泡上的固定通道再也看不到这一按。聚焦输入框那条的冒泡准入（`focusComposerEligible`）仍对 `terminal` 区域让位 —— 终端那一半只由捕获路径负责。`session.new` 没有固定通道那一半（插件不为内置命令注册固定键、也不开观察者），页面 / 文本控件里的同一按照旧由内置命令自己处理。
+> 五条自挂固定键的捕获路径只在 `.xterm` 内出手，所以它们与冒泡通道互斥、一次按键最多只被处理一次：命中即 `stopPropagation()`，window 冒泡上的固定通道再也看不到这一按。聚焦输入框那条的冒泡准入（`focusComposerEligible`）仍对 `terminal` 区域让位 —— 终端那一半只由捕获路径负责。`session.new` 没有固定通道那一半（插件不为内置命令注册固定键、也不开观察者），页面 / 文本控件里的这一按仍由内置命令自己处理。
 
-下面逐条展开：面板键见 [第 5.3 节](03-fixed-input-and-pane-keys.md)，页面关闭键见 [第 5.5 节](03-fixed-input-and-pane-keys.md)，停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键与提问卡片见 [第 5 册](05-approval-key-bridge.md)，聚焦输入框、页面循环、会话导航与新建会话的逐行说明见 [第 6 册](06-boundaries-and-contracts.md)。
+下面逐条展开：面板键见 [第 5.3 节](03-fixed-input-and-pane-keys.md)，页签行的滚动补偿见 [第 5.4 节](03-fixed-input-and-pane-keys.md)，页面关闭键见 [第 5.5 节](03-fixed-input-and-pane-keys.md)，聚焦右栏页面键见 [第 5.6 节](03-fixed-input-and-pane-keys.md)；停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键与提问卡片见 [第 5 册](05-approval-key-bridge.md)；聚焦输入框、页面切换、会话导航与新建会话的行为对照与边界见 [第 6 册](06-boundaries-and-contracts.md)。
 
----
+-----
 
 ## 5. 实现细节（逐条展开）
 
@@ -182,7 +183,7 @@ else if (rect.right > bounds.right) box.scrollLeft += rect.right - bounds.right 
 
 两侧规则的差异其实只有两类：目标**已在旧窗口内**时本插件不动（kit 会把它推到最右缘，就是本文开头那个现象 2），目标在旧窗口**左侧**时 kit 从 0 出发没有左分支可用、本插件做最小左移。目标在旧窗口**右侧**时两者恒等 —— 最小推移量都等于"芯片右缘 − 盒宽 + 24"，与起点无关。
 
-页面循环一次只改选中、不改页签集合，所以同一条条带的内容宽度不变，旧位置可以直接复用；跨 `boxId`（跳到另一个 pane，或目标落在浮动 pane 的标题上）、目标芯片尚未渲染、没记下窗口时都不动作，交给 kit 原来的规则 —— 只覆盖插件自己驱动的切换（鼠标点芯片、别处命令切页仍走 kit 原规则，它们此前也是如此）。
+页面循环一次只改选中、不改页签集合，所以同一条条带的内容宽度不变，旧位置可以直接复用；跨 `boxId`（跳到另一个 pane，或目标落在浮动 pane 的标题上）、目标芯片尚未渲染、没记下窗口时都不动作，交给 kit 原来的规则 —— 只覆盖插件自己驱动的切换（鼠标点芯片、别处命令切页仍走 kit 原规则）。
 
 第 3 步是本插件**唯一**一处复刻上游几何的地方（"最小可见" + 24px 边缘余量）：上游那条规则以 0 为起点，插件要的语义是"以旧窗口为起点"，只能自己算。若上游改了渐隐带宽度，最坏情形是目标芯片与边缘的间距观感不同，不误动作。
 
@@ -229,7 +230,7 @@ function handlePageCloseInput(shortcuts, sidebar, input) {
 
 ### 5.6 聚焦右栏页面键桥接：`handleFocusPageInput` 逐行
 
-`⌘⌥K`（macOS）/ `Ctrl+Alt+K`（Windows/Linux）是插件自己挂的固定行（`dsh-focus-free-shortcuts.focus-page`，group `application`），动作只有一个：把键盘交给右栏**此刻显示**的那一页 —— 通常是终端，于是不必先点一下 `.xterm` 才能打字。它与页面循环键（[第 5.4 节](03-fixed-input-and-pane-keys.md) 之外那对 `⌘⌥←/→`）共用同一条交棒判定：`page-cycle.ts` 导出的 `focusShownPage(sessionId)`（定位该会话的右栏根节点 → 选出可见 pane → 页面自持键盘就不抢，否则聚焦 pane 并下探到页面自己的输入面，例如终端的 `.xterm-helper-textarea`）。差别只在"换不换页"：页面循环键先切页再交棒，本键不切页。
+`⌘⌥K`（macOS）/ `Ctrl+Alt+K`（Windows/Linux）是插件自己挂的固定行（`dsh-focus-free-shortcuts.focus-page`，group `application`），动作只有一个：把键盘交给右栏**此刻显示**的那一页 —— 通常是终端，于是不必先点一下 `.xterm` 才能打字。它与页面切换键（`page-cycle.ts` 的 `⌘⌥←/→`）共用同一条交棒判定：`page-cycle.ts` 导出的 `focusShownPage(sessionId)`（定位该会话的右栏根节点 → 选出可见 pane → 页面自持键盘就不抢，否则聚焦 pane 并下探到页面自己的输入面，例如终端的 `.xterm-helper-textarea`）。差别只在"换不换页"：页面循环键先切页再交棒，本键不切页。
 
 ```ts
 function handleFocusPageInput(shortcuts, sidebar, input) {
@@ -259,4 +260,4 @@ function focusPageTarget(shortcuts, sidebar, gesture, context) {
 
 终端那一半与另外两条桥同形：落在 `.xterm` 内的 keydown 到不了 window 上的 fixed-input 监听（终端在自己的 textarea 处理器里 `stopPropagation()`），所以本桥另装 window **捕获阶段**的 keydown，在事件进入终端前判定。命中即 `preventDefault() + stopPropagation()`：交棒此时是无操作（键盘本来就在终端里），但这一按不再被 xterm 翻译成终端输入送进 shell。未命中就放行，事件原样交给 xterm。
 
-**这条键位是有意"挤掉"内置会话搜索的**：Web 上 `session.search` 的默认键位就是 `primary+alt+K`（Desktop 上是 `primary+K`），固定行一挂上，那一行在快捷键目录里就变成冲突（`effectiveShortcuts` 把固定行算进 `conflicts`），按键不再打开搜索、设置里会给搜索项亮红，需要用户自行给搜索改绑。之所以仍然选它：固定行是唯一够得着终端那一格的通道（见 [第 5.1 节](03-fixed-input-and-pane-keys.md)），而"聚焦右栏页面"的主要用场正是终端。
+**这条键位是有意"挤掉"内置会话搜索的**：Web 上 `session.search` 的默认键位就是 `primary+alt+K`（Desktop 上是 `primary+K`），固定行一挂上，那一行在快捷键目录里就变成冲突（`effectiveShortcuts` 把固定行算进 `conflicts`），按键不再打开搜索、设置里会给搜索项亮红，需要用户自行给搜索改绑。之所以仍然选它：固定行是唯一够得着终端那一格的通道（机制见 [第 4 节](03-fixed-input-and-pane-keys.md)），而"聚焦右栏页面"的主要用场正是终端。

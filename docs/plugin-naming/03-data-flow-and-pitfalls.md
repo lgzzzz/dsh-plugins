@@ -2,7 +2,7 @@
 
 > 本文件是 [DSH 插件五种「名字」完整说明](../plugin-naming.md) 的第 3 册：从 patch 文件到名字落地的数据流、三个易混点、客户端半部的名字。
 
----
+-----
 
 ## 4. 完整数据流：从 patch 文件到「名字」落地
 
@@ -24,10 +24,10 @@ Plugin.Runtime { name: plugin.name, callback, fibers, Config }   ← 导出 name
 Service（若提供服务）
    │  super(ctx, name) / static provide / ctx.provide('x')
    ▼
-ReflectService.store[x] = { name: 'x', value, fiber, … }        ← 服务名在这里变成注入键
+ReflectService.store[<隔离符号>] = { name: 'x', value, fiber, check }  ← 服务名在这里登记为可注入的键
 ```
 
----
+-----
 
 ## 5. 三个易混点
 
@@ -53,11 +53,11 @@ ReflectService.store[x] = { name: 'x', value, fiber, … }        ← 服务名�
   - `fiber.name`（`Fiber` getter）是**插件名**（`runtime.name`）。
 - 二者唯一碰面处是重复注册的报错文本：`service "x" has been registered at <fiber.name>`（`reflect.ts` 的 `provide()`，`<…>` 里填的是**插件名**）。
 
----
+-----
 
 ## 6. 客户端半部的名字
 
-客户端模块表见 `dsh-client-inject.md`；与「名字」相关的规则：
+客户端模块表见 [`dsh.client.inject` 完整说明](../dsh-client-inject.md)；与「名字」相关的规则：
 
 - **浏览器模块 id 来自「包名」**，不是来自 `src/client.ts` 里的 `export const name`。
 - 本仓库 `tsdown.client.mjs` 的 `clientBundle(id, …)` 里，`id` 就是包名；bundle 的 banner 是 `window.__ModuleLoader__.load({ id: "<包名>", factory: (require) => { … } })`，构建配置名是 `<包名>/client`。

@@ -1,14 +1,17 @@
 /**
  * 审批面板的 Enter / Escape 决策：焦点不在面板内时也能作答。
  *
- * 面板只在焦点位于 `[data-approval-key]` 内时处理自己的 keydown，而面板展示期间输入区
- * 被隐藏、焦点退到 `<body>`，两种键都成了无主按键。本模块用两条路径处理同一个按键：
+ * 面板只在焦点位于 `[data-approval-key]` 内时处理自己的 keydown；面板展示期间输入区
+ * 被隐藏、焦点退回 `<body>`，两种键都成了无主按键。本模块用两条路径处理同一个按键：
  * 固定输入通道（每个 keydown 都早于可配置派发运行，可消费该按键）的冒泡观察者，以及
  * window 上的捕获阶段监听器（早于目标与冒泡处理器，用于焦点停在会自行处理该键的卡片上
  * 的情况）。两条路径共用同一归属判定，按键只生效一次，并经 `PendingApproval.answer()`
  * 作答；面板自身拥有按键（目标在 `[data-approval-key]` 内）时让位。作答会把键盘交回
  * 输入区，因此还要撤掉被取走按键的控件上的 `data-dsh-automatic-focus` 焦点环。
  * 这些动作在所有运行时都是固定行，Web 与 Desktop 都安装。
+ *
+ * 面板顶替 composer、焦点退回 `<body>` 的机制见
+ * docs/dsh-focus-free-shortcuts/05-approval-key-bridge.md。
  */
 import { captureContext, captureGesture, pressElement } from './capture.ts'
 import { suppressFocusRing } from './focus-ring.ts'
@@ -75,8 +78,8 @@ export function approvalCaptureOutcome(
   gesture: ShortcutGesture,
   element: Element | null,
 ): ApprovalDecision | undefined {
-  // 先用已挂载的固定目录行做廉价判断与预留：非 Enter / Escape 的按键不必再构建
-  // 需要读取文档模态层的 context。
+  // 先用已挂载的固定目录行筛选：非 Enter / Escape 的按键不必再构建需要读文档模态层的
+  // context。
   const outcome: ApprovalDecision | undefined = approvalOutcomeFor(rows, gesture, APPROVAL_COMMAND_IDS)
   if (outcome === undefined) return undefined
   const context: ShortcutContext = captureContext(element)
@@ -177,7 +180,7 @@ function installApprovalCapture(
   return () => window.removeEventListener('keydown', onKeydown, true)
 }
 
-/** 用已挂载的审批动作处理一次固定通道的 keydown。 */
+/** 处理固定通道投递的一次 keydown；只有解析出可作答的审批时才消费按键。 */
 function handleApprovalInput(
   shortcuts: Shortcuts,
   sessions: ISessions,

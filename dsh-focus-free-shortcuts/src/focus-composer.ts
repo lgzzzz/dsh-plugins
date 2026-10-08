@@ -1,17 +1,19 @@
 /**
- * 快捷键分组 4：`⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows、Linux）把键盘焦点跳回输入框。
+ * `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows、Linux）把键盘焦点跳回输入框。
  *
  * 固定行声明的是逻辑组合 `primary+alt`：注册表在 macOS 上展开成 `meta+alt`（⌘⌥）、
  * 在 Windows/Linux 上展开成 `control+alt`（Ctrl+Alt），所以同一份声明在两端各是各的键。
- * 本插件自己注册固定行 `dsh-focus-free-shortcuts.focus-composer`（group `input`），
- * 固定行的存在本身就是占用。按键能否路由由 `fixedRowOwns` 判断；有模态层或主视图
- * Session 不唯一时不做动作。动作经 `SessionInputResolver.for(actx)` 取到的 facade 的
+ * 本插件自己注册固定行 `dsh-focus-free-shortcuts.focus-composer`（group `input`）；
+ * 固定行的存在本身就是占用，按键能否路由由 `fixedRowOwns` 判断。有模态层或主视图
+ * Session 不唯一时不动作。动作经 `SessionInputResolver.for(actx)` 取到的 facade 的
  * `focus()` 完成，以恢复上次的选区。
  *
  * 落在 `.xterm` 内的按键到不了 window 上的 fixed-input 监听（终端在自己的 textarea
  * 处理器里 `stopPropagation()`），因此与页面循环 / 会话导航两桥一样另装捕获阶段的
- * window `keydown`，在事件进入终端前判定：这条路径**正是为终端准备的**，所以它放行
- * `terminal` 目标（冒泡通道仍按 `focusComposerEligible` 让位给终端，两条路径互斥）。
+ * window `keydown`，在事件进入终端前判定。这条路径正是为终端准备的，所以放行
+ * `terminal` 目标；冒泡通道仍按 `focusComposerEligible` 让位给终端，两条路径互斥。
+ *
+ * 契约与依赖见 docs/dsh-focus-free-shortcuts/06-boundaries-and-contracts.md。
  */
 import {
   captureContext,
@@ -118,8 +120,7 @@ export function installFocusComposerBridge(ctx: Context): void {
 }
 
 /**
- * 处理一次针对聚焦输入框固定行的 keydown：先确认按键合格、输入面可达，全部成立后才
- * 消费按键并执行 `focus()`。
+ * 处理固定通道投递的一次 keydown；只有解析出输入面 facade 时才消费按键。
  */
 function handleFocusComposerInput(shortcuts: Shortcuts, sessions: ISessions, input: KeydownInput): void {
   if (!focusComposerEligible(input.gesture, input.context)) return

@@ -1,3 +1,14 @@
+/**
+ * 通知策略:比较两次会话状态快照,产出「这一拍该弹哪些通知」。
+ *
+ * 第一次 `observe` 只建立基线、不产出任何通知 —— 它看到的都是「本来就如此」的状态,没有可比较
+ * 的前值。之后每条判定都要求状态发生了具体变化:运行中转运行结束(`turn-complete`),或待处理
+ * 交互的 `key` 变了(审批 / 提问 / 计划确认,同一条交互只报一次)。`origin === 'subagent'` 的
+ * 会话不报:子智能体不面向用户。
+ *
+ * `tag` 按会话与原因区分,投递方配 `renotify: true` 使用:同一 tag 的后一条通知替换前一条;
+ * 正文统一裁到 `BODY_LIMIT`。
+ */
 import type { SessionPendingInteraction, SessionStatus } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 

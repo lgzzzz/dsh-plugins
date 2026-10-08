@@ -2,7 +2,7 @@
 
 > 本文件是 [`dsh.client.inject` 完整说明](../dsh-client-inject.md) 的第 2 册:宿主半部 → 线上传输 → 浏览器半部,以及 `inject` 实际「得到什么 / 失去什么」。
 
----
+-----
 
 ## 4. 完整数据流
 
@@ -54,7 +54,7 @@
 
    排序只在 `external` 上产生环检测、自依赖检测和先后顺序;`inject` 在这里被完全无视。
 
-4. **`compose()` 生成最终图**:`{ rev, entries(已排序), batches(bootstrap/application 两个批次) }`。
+4. **`compose()` 生成最终图**:`{ rev, entries(已排序), batches }`;每个 batch 的 `phase` 只有 `bootstrap` / `application` 两种,同一 phase 因 combo URL 有 3 KB 上限可拆成多条描述符。
 5. **`bootInjections(graph)` 把图写进 HTML 注入表**,产出四类注入:内联的注册队列脚本、application 批次预取、bootstrap 批次脚本、以及 `window.__DSH_BOOT__ = graph` 这个全局。
 
 宿主半部对 `inject` 的处理到此为止:只把它搬运进 `__DSH_BOOT__`,不排序、不环检测、不校验目标是否存在(`graphRow` 原样带上,`orderByModuleGraph` 根本不看它)。
@@ -67,7 +67,7 @@
 interface WebBootEntry {
   id: string            // entry 名 == 包名(浏览器模块 id)
   url: string           // 单资源 combo URL(文档相对路径,HMR 用它做缓存失效)
-  rev: string           // 内容寻址修订号
+  rev: string           // 不透明的产物修订号(宿主按文件系统元数据推导,HMR 用它做缓存失效)
   inject?: string[]     // 包名依赖边(用于「工厂到达」与「插件组合」)
   immediately?: boolean // 第一阶段预取标记
   external?: string[]   // 本行请求的非基线模块 specifier
@@ -76,7 +76,7 @@ interface WebBootEntry {
 interface WebBootGraph {
   rev: string
   entries: WebBootEntry[]   // 已按模块图顺序排好
-  batches: WebBootBatch[]   // 初始 combo 脚本描述(bootstrap / application)
+  batches: WebBootBatch[]   // 初始 combo 脚本描述(phase 为 bootstrap / application;同一 phase 可有多条)
 }
 ```
 
@@ -101,6 +101,11 @@ interface WebBootGraph {
 
 ```js
 async arriveGraphRow(row, open = [], visited = new Set()) {
+  // 0) open 栈上已有这一行 = 环;visited 里已有这一行 = 直接跳过
+  const cycleStart = open.indexOf(row.id)
+  if (cycleStart !== -1) throw new Error(`client-modules: module arrival cycle … (the host must reject this graph before serving it)`)
+  if (visited.has(row.id)) return
+  visited.add(row.id)
   // 1) external 依赖:带环检测、带传递
   const next = [...open, row.id]
   for (const request of row.external) {
@@ -123,19 +128,19 @@ async arriveGraphRow(row, open = [], visited = new Set()) {
 
 - **在 `arrive(row)`(加载自己)之前执行**,先取回并注册被注入的包,再加载声明方自己。
 - **`graphRows.get(packageName)` 查不到 → 静默跳过**(`if (dependency !== void 0)`),所以 `inject` 指向一个不存在 / 被禁用的包不会报错。
-- **传入空的 `open` 栈**(第二个参数是 `[]`),所以 `inject` 边**不参与环检测**;`external` 边传的是 `next`,会做环检测。
+- **传入空的 `open` 栈**(第二个参数是 `[]`):`arriveGraphRow` 入口会用 `open.indexOf(row.id)` 查环,而空栈里永远不含被注入包,所以 `inject` 边**不参与环检测**(环只能靠共享的 `visited` 短路);`external` 边传的是含自身的 `next`,会做环检测。
 - **共享 `visited`**,同一个被注入包不会被重复到达两次。
 - `arriveDependency()` 只是给错误信息加上「consumer → dependency」的因果链,实际就是递归 `arriveGraphRow`。
 
 `arrive(row)` 里再往下就是「取回 bundle 脚本」(批次 combo URL,失败时回退到单资源 URL)、执行脚本(脚本顶部 `window.__ModuleLoader__.load({ id, factory })` 完成注册)。`materialize(id)` 在真正 `import` 时同步执行 `factory(require)` 并记忆化。
 
----
+-----
 
 ## 5. `inject` 到底「得到什么 / 失去什么」
 
 | 场景 | 结果 |
 |---|---|
 | **有 `inject: ["B", "C"]` 的包 A** | 浏览器在「加载 A」之前,先把 B、C 的 bundle 取回并注册工厂(且在 A 之前)。之后若真要用到 B/C,它们的工厂已经在 `factories` 表里,`materialize` 直接同步执行,省掉一次「用到时才取回」的往返和首屏延迟。 |
-| **去掉 `inject`** | A 本身照常加载、照常 `apply()`,可运行性**不变**。损失的只是这份预热:B、C 不再随 A 一起被取回注册,而是在真正被 import 时才按需加载。 |
+| **去掉 `inject`** | A 本身照常加载、照常 `apply()`,可运行性**不变**。损失的只是这份预热:B、C 不随 A 一起被取回注册,而是在真正被 import 时才按需加载。 |
 
 `inject` 只「预热」,不「保证」。需要「必须先加载谁 / 必须能同步 `require` 谁」,用 `external`;只想「顺带取回、让后续更快命中」,用 `inject`。

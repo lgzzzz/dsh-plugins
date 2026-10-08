@@ -10,6 +10,8 @@
  *
  * 仅以 `import type` 引用上游；modal 与文本控件作用域按适配器和 primitives 包共用的
  * 字面量复述。
+ *
+ * 捕获路径与固定通道的分工见 docs/dsh-focus-free-shortcuts/03-fixed-input-and-pane-keys.md。
  */
 import type {
   ShortcutContext,

@@ -2,11 +2,11 @@
 
 > 本文件是 [dsh-ui-chat-verbose-fold 说明](../dsh-ui-chat-verbose-fold.md) 的第 1 册:需要改动的策略字段,以及它所在的位置。
 
----
+-----
 
 ## 目标差异
 
-需要的行为差异只有官方 `src/client/presentation-policy.ts` 里的一个字段:`POLICIES.verbose.foldCompletedTurns`(官方为 `false`)。
+需要的行为差异只有官方一个字段:`POLICIES.verbose.foldCompletedTurns`(官方为 `false`)。它定义在 `@deepseek-ai/dsh-client-ui-chat` 的 presentation policy 模块里(上游源码路径 `src/client/presentation-policy.ts`;安装产物里是 `lib/client.js` 的私有 `POLICIES` 表,类型契约见 `lib/types/client/presentation-policy.d.ts`)。
 
 该字段不在任何扩展面上,无法用配置覆盖:
 

@@ -1,3 +1,12 @@
+/**
+ * 通知开关与权限的客户端状态:权限取自浏览器,开关持久化在 localStorage。
+ *
+ * 开关默认打开(`readEnabled() !== false`),但只有权限为 `granted` 且开关打开时 `isActive()`
+ * 才为真。`activate()` 是设置行那个按钮的唯一入口:已授权时切换开关,未授权时先请求权限、请求
+ * 成功即顺手打开,权限为 `denied` 时只同步一次状态、不再触发授权框(浏览器不会再弹)。
+ *
+ * 状态只在真正变化时通知订阅者;单个订阅者抛错不影响其余订阅者。
+ */
 export type NotifyPermission = 'unsupported' | 'default' | 'granted' | 'denied'
 
 export interface NotifyStoreState {

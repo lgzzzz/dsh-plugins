@@ -2,11 +2,11 @@
 
 > 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 2 册：键盘事件链路，以及面板命令、页面关闭命令、停止序列、审批面板、提问卡片各自的归属判定与失败表现。
 
----
+-----
 
 ## 3. 归属判定：读本次按键的焦点元素
 
-按键事件都会送到应用（`dsh-client-shortcuts` 在 `window` 上挂 keydown 监听，焦点在哪都能看到每次按键）；决定「这一按属于谁」的是归属判定层，它唯一的依据是这次按键落在哪个 DOM 元素上。
+按键事件都会送到应用（`dsh-client-shortcuts` 在 `window` 上挂 keydown 监听，焦点在哪都能看到每次按键）；决定「这一按属于谁」的是归属判定层，它的起点是这次按键落在哪个 DOM 元素上，各条命令再各自补充模态层、事件来源等上下文。
 
 ### 3.1 键盘事件的链路
 
@@ -55,7 +55,7 @@ shortcuts.dispatch({ ...gesture, defaultPrevented: event.defaultPrevented }, con
 - **可配置命令（configurable commands）**：处理可在「设置 → 快捷键」里改键位的命令，例如 `⌘⌥Enter` 全屏、`⌘\` 分屏、`⌘⌥W` 关闭当前页面。
 - 桌面端（Desktop）macOS/Windows 上，可配置键位不走这段 DOM 监听，而由 Electron 的原生键盘桥派发，因此那段代码在 `if (native) return` 提前返回（对插件的影响见 [第 3 册](03-fixed-input-and-pane-keys.md)）。
 
-链路里只有 `target`（当前聚焦元素），没有「鼠标悬停在哪」「上次点过哪」的信息；焦点为空时 `target` 就是 `<body>`，靠 target 做的判定随之落空。
+链路只从这一次事件里取值（`target` 与由它派生的 `region`，以及当下的模态层 `modal`），没有「鼠标悬停在哪」「上次点过哪」的信息；焦点为空时 `target` 就是 `<body>`，靠 target 做的判定随之落空。
 
 ### 3.2 面板命令的归属判定（`⌘⌥Enter` / `⌘\`）
 
@@ -88,7 +88,7 @@ resolve: ({ target: element }) => {
 | 右侧栏 dock pane 内 | pane 元素（或 pane 内部的子元素） | 全部检查通过 → 返回该 pane | 正常全屏 / 分屏 |
 | 消息列表空白处（无焦点） | `<body>` | 第 2 步 `body.closest("[data-sidebar-right-session]")` 为 `null` → `undefined` | `noFocus`，无反应 |
 
-### 3.2.1 页面关闭命令的归属判定（`page.close`）
+#### 3.2.1 页面关闭命令的归属判定（`page.close`）
 
 「关闭当前页面／窗口」（`page.close`）与面板命令同族：同一条 `focusedTarget(element)` 前置判定，但它的 `resolve()` 多两级分支（精简）：
 
@@ -210,6 +210,6 @@ return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallba
 
 - 卡片根节点带 `[data-question-key]`（plan-review 卡片换成 `[data-plan-review-key]`），组件里只有两处 `keydown`：聚焦选项上的 `Enter`（尝试提交整组答案）与自定义答案文本域上的 `Enter`（继续 / 提交，`Shift+Enter` 换行），没有任何一处读 `Escape`。
 - 卡片唯一的出口是头部那个关闭 / 取消按钮，它调 `PendingQuestion.dismiss()`。
-- 「停止」这条路也不接管：内置 `currentTurn()` 与本插件的 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛（[第 4 册](04-stop-sequence-bridge.md) 第 5.4.3、5.5 节），有待答交互时不停止、也不消费。
+- 「停止」这条路也不接管：内置 `currentTurn()` 与本插件的 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛（[第 4 册](04-stop-sequence-bridge.md) 第 5.7.3、5.8 节），有待答交互时不停止、也不消费。
 
-因此焦点落在卡片里时这一按仍然没有 owner（自由文本问题还会自动把焦点放进它的答案文本域）。唯一可行的接法是走固定输入通道，把这一按接到面板关闭 / 取消按钮调用的同一个操作上：即 [第 5 册](05-approval-key-bridge.md) 第 5.6.3、5.7 节讲的提问桥；与内置命令的对照见 [第 6 册](06-boundaries-and-contracts.md)。
+因此焦点落在卡片里时这一按仍然没有 owner（自由文本问题还会自动把焦点放进它的答案文本域）。唯一可行的接法是走固定输入通道，把这一按接到面板关闭 / 取消按钮调用的同一个操作上：即 [第 5 册](05-approval-key-bridge.md) 第 5.9.3、5.10 节讲的提问桥；与内置命令的对照见 [第 6 册](06-boundaries-and-contracts.md)。

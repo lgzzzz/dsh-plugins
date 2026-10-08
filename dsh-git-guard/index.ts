@@ -1,3 +1,15 @@
+/**
+ * git 操作保护:在 shell 工具真正执行前拦下敏感的 git 子命令,并用一段系统提示词声明同一条策略。
+ *
+ * 两条通路各管一半:
+ *   - `systemPrompt` 区段(`git-guard:push-policy`,与 TEAM_POLICY 同序)要求模型在 commit /
+ *     push 与破坏性历史改写之前取得用户许可;
+ *   - `tools/pre-execute` 钩子解析命令里的 git 子命令,命中即返回 `kind: 'ask'`。
+ *
+ * 命令判定是保守的启发式解析:只认能静态解析出 git 子命令的形态。解析不出(自定义包装器、
+ * 嵌套的命令替换、超过 `MAX_DEPTH`)就不介入 —— 这类漏判由上面那段提示词兜底,而不是在解析器
+ * 里猜。会话生效沙箱模式为 `danger-full-access` 时,两条通路都不介入。
+ */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
@@ -22,6 +34,7 @@ const PUSH_POLICY_TEXT =
 
 const FULL_ACCESS_MODE: SandboxMode = 'danger-full-access'
 
+/** 会话当前生效的沙箱模式;读不到(服务缺席、`resolve` 抛错)时返回 undefined,按「非完全访问」处理。 */
 function effectiveSandboxMode(
   ctx: Context,
   session: SessionRef | undefined,
@@ -40,6 +53,10 @@ function isFullAccess(ctx: Context, session: SessionRef | undefined): boolean {
   return effectiveSandboxMode(ctx, session) === FULL_ACCESS_MODE
 }
 
+/**
+ * 按 `;`、换行、`&&`、`||`、`|` 切段。
+ * 引号内与反斜杠转义后的分隔符不算分隔符,切出的每段保留原文(不去引号)。
+ */
 function splitSegments(command: string): string[] {
   const segments: string[] = []
   let current = ''
@@ -96,6 +113,7 @@ function splitSegments(command: string): string[] {
   return segments
 }
 
+/** 按 shell 词法切 token:引号只做分组、不进 token;反斜杠转义保留被转义的那个字符。 */
 function tokenize(command: string): string[] {
   const tokens: string[] = []
   let current = ''
@@ -172,6 +190,7 @@ function isGitCommand(token: string): boolean {
 
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 
+/** 前缀包装词:出现在真正的命令之前,跳过它们才能把 `sudo git push` 判成 git push。 */
 const WRAPPER_WORDS = new Set([
   'sudo',
   'doas',
@@ -187,6 +206,7 @@ const WRAPPER_WORDS = new Set([
   '&',
 ])
 
+/** 带取值的包装词选项(`sudo -u root`):跳过选项本身和它的值。 */
 const PREFIX_FLAGS_WITH_VALUE = new Set([
   '-u',
   '--user',
@@ -196,6 +216,7 @@ const PREFIX_FLAGS_WITH_VALUE = new Set([
   '--prompt',
 ])
 
+/** 跳过环境变量赋值与前缀包装词 / 选项,返回真正要执行的命令所在的下标。 */
 function findMainCommandIndex(tokens: string[]): number {
   let i = 0
   while (i < tokens.length && ENV_ASSIGNMENT.test(tokens[i]!)) i += 1
@@ -215,6 +236,7 @@ function findMainCommandIndex(tokens: string[]): number {
   return i
 }
 
+/** git 自身的取值选项:跳过它们,下一个非选项 token 才是子命令。 */
 const GIT_FLAGS_WITH_VALUE = new Set([
   '-C',
   '--git-dir',
@@ -244,6 +266,7 @@ function gitSubcommandOf(
   return { subcommand: tokens[subIdx]!, args: tokens.slice(subIdx + 1) }
 }
 
+/** 去掉整段最外层成对的圆括号或花括号(`(git push)`)。 */
 function stripBalancedWrap(segment: string): string {
   let s = segment
   while (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1).trim()
@@ -251,6 +274,10 @@ function stripBalancedWrap(segment: string): string {
   return s
 }
 
+/**
+ * 取 `bash -c` / `cmd /c` / `pwsh -Command` 这类 shell 载荷,继续按命令解析。
+ * 没有载荷时返回 undefined(该段不介入)。
+ */
 function shellPayload(tokens: string[], mainIdx: number): string | undefined {
   for (let i = mainIdx + 1; i < tokens.length; i += 1) {
     const flag = tokens[i]!
@@ -263,6 +290,10 @@ function shellPayload(tokens: string[], mainIdx: number): string | undefined {
   return undefined
 }
 
+/**
+ * 取出 `$(...)` 与反引号命令替换里的内容,交给 `decide` 递归判定。
+ * 两种形态都只匹配不含嵌套的最内层写法,外层的普通文本不再单独解析。
+ */
 function extractSubstitutions(command: string): string[] {
   const out: string[] = []
   const dollarParen = /\$\(([^()]*)\)/g
@@ -295,6 +326,7 @@ interface AskDecision {
   readonly destructive: boolean
 }
 
+/** 同时命中多条判定时优先保留 `destructive: true` 的那条:强推送 / 破坏性重置的告警文案更具体。 */
 function preferAsk(current: AskDecision | undefined, candidate: AskDecision | undefined): AskDecision | undefined {
   if (candidate === undefined) return current
   if (current === undefined) return candidate
@@ -331,6 +363,7 @@ function decideGit(subcommand: string, args: string[]): AskDecision | undefined 
   return undefined
 }
 
+/** 递归解析的深度上限:命令替换与 shell 载荷可以互相嵌套,这里兜底防爆栈。 */
 const MAX_DEPTH = 5
 
 function decideSegment(segment: string, depth: number): AskDecision | undefined {
@@ -356,6 +389,7 @@ function decideSegment(segment: string, depth: number): AskDecision | undefined 
   return decideGit(found.subcommand, found.args)
 }
 
+/** 判定一条命令行:先看命令替换,再逐段判定,取其中后果最强的一条。 */
 function decide(command: string, depth = 0): AskDecision | undefined {
   if (depth > MAX_DEPTH) return undefined
   let best: AskDecision | undefined
@@ -371,6 +405,7 @@ function decide(command: string, depth = 0): AskDecision | undefined {
 export const name = 'dsh-git-guard'
 
 export function apply(ctx: Context): void {
+  // 区段与 TEAM_POLICY 同序;完全访问模式下文本为空 —— 区段仍注册,但不向模型提出授权要求。
   ctx.inject(['systemPrompt'], promptCtx => {
     promptCtx.systemPrompt.section({
       name: 'git-guard:push-policy',
@@ -380,6 +415,7 @@ export function apply(ctx: Context): void {
     })
   })
 
+  // 解析不出 git 子命令、或会话处于完全访问模式时原样放行(见文件头)。
   ctx.on('tools/pre-execute', async (exec, next) => {
     const args = exec.arguments as ShellArguments | undefined
     const command = typeof args?.command === 'string' ? args.command : undefined

@@ -14,6 +14,7 @@ export const HEADER_ACTION_ORDER: readonly string[] = [
   'job-list',
 ]
 
+/** 未列出的注册项接在这些序号之后,并保持它们彼此当前的相对顺序。 */
 export const UNLISTED_ORDER_BASE = 1000
 
 export interface OrderWrite {
@@ -22,6 +23,10 @@ export interface OrderWrite {
   id: string
 }
 
+/**
+ * 算出需要改写的 order:列出的项按 `preferred` 的次序拿 0..n,未列出的项接在
+ * `UNLISTED_ORDER_BASE` 之后、保持现有相对顺序;`order` 已等于目标值的项不产出写入。
+ */
 export function planOrderWrites(
   entries: readonly StoredEntry[],
   preferred: readonly string[] = HEADER_ACTION_ORDER,

@@ -132,7 +132,7 @@ console.log('--- B⑧ 启动期误报回归:chat 注册项晚到(窗口内)照�
   const slots = new FakeSlots([])
   const warnings = []
   const original = console.warn
-  // 整段窗口都替换 console.warn:自检如果说错了话,这里必须收到,而不是漏到真控制台。
+  // 整个窗口都替换 console.warn:断言要覆盖窗口内的全部时段,期间发出的告警一条都不能漏到真控制台。
   console.warn = (...args) => warnings.push(args[0])
   try {
     applyPlugin({ get: (name) => (name === 'slots' ? slots : undefined) })

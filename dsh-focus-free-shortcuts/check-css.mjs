@@ -3,18 +3,19 @@
 // 验证 dsh-focus-free-shortcuts 依赖的 DOM 锚点是否仍存在于 DSH 客户端构建产物中。
 // 无需运行时、无需浏览器。
 //
-// 本插件的几处桥接读的是上游**没有对外承诺**的事实（清单与其含义见第 6 册第 8 节）：
-// 审批面板根、会话根 / 输入区、提问卡片根、模态选择器、"无环聚焦"标记与其样式规则、
-// 终端根与输入面、右栏会话根、dockkit 的 pane / chip box / 页面芯片标记、左侧栏行标记
-// 与归档标记，以及 dockkit 页签行的 scroll-behavior。锚点被改名 / 搬走时桥会退化成
-// no-op（不误动作），但"退化"在现场是静默的；这里在构建后把清单逐条对上游产物 grep
-// 一遍，缺一条就显式失败，并在提示里写明这条契约对应的功能会怎样退化。
+// 本插件的几处桥接读的是上游没有对外承诺的事实（清单与其含义见
+// docs/dsh-focus-free-shortcuts/06-boundaries-and-contracts.md）：审批面板根、会话根 /
+// 输入区、提问卡片根、模态选择器、「无环聚焦」标记与其样式规则、终端根与输入面、右栏会话根、
+// dockkit 的 pane / chip box / 页面芯片标记、左侧栏行标记与归档标记，以及 dockkit 页签行的
+// scroll-behavior。锚点被改名 / 搬走时桥会退化成 no-op（不误动作），但退化在现场是静默的。
+// 本脚本在构建后把清单逐条对上游产物 grep 一遍：缺一条就显式失败，并在提示里写明这条契约
+// 对应的功能会怎样退化。
 //
-// 用法(本脚本与 css-contract.json 同目录):
+// 用法（本脚本与 css-contract.json 同目录）：
 //   node dsh-focus-free-shortcuts/check-css.mjs [--dsh-root <path>] [--manifest <json>]
-// DSH 根目录解析顺序: --dsh-root > $DSH_ROOT > `npm root -g` > 常见全局安装路径
+// DSH 根目录解析顺序：--dsh-root > $DSH_ROOT > `npm root -g` > 常见全局安装路径。
 //
-// 退出码: 0 = 全部通过(或无法定位 DSH 根目录时仅告警), 1 = 存在契约缺失, 2 = 配置错误
+// 退出码：0 = 全部通过（或无法定位 DSH 根目录时仅告警），1 = 存在契约缺失，2 = 配置错误。
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
@@ -45,7 +46,7 @@ function resolveDshRoot(opt) {
     if (g) candidates.push(g)
   } catch { /* spawn 被拒(受限环境下为 EPERM)时,继续走下面的纯路径回退 */ }
 
-  // 纯路径回退:不 spawn 任何子进程。
+  // 纯路径回退：不 spawn 任何子进程。
   if (process.env.APPDATA) candidates.push(join(process.env.APPDATA, 'npm', 'node_modules'))
   const execDir = dirname(process.execPath) // <prefix>/bin/node
   candidates.push(join(execDir, '..', 'lib', 'node_modules'))

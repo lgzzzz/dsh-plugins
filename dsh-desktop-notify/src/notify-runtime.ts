@@ -1,3 +1,9 @@
+/**
+ * 把 uiSession 的状态变化接到通知策略上。
+ *
+ * 三个条件同时成立才投递:策略产出了通知、开关处于激活状态(`store.isActive()`)、页面不在前台。
+ * uiSession 或其 `sessionStatus` 不可用时返回空卸载函数 —— 本插件静默降级,不影响插件激活。
+ */
 import { createNotifyPolicy, type PlannedNotification, type PolicySnapshot } from './notify-policy.ts'
 import type { NotifyStore } from './notify-store.ts'
 import type { NotifyServices } from './types.ts'

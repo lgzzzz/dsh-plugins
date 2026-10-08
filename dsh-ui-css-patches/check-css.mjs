@@ -3,6 +3,15 @@
 // 验证 dsh-ui-css-patches 依赖的 data-* 属性与 CSS 变量是否仍存在于 DSH Web
 // 前端构建产物中。无需运行时、无需浏览器。
 //
+// 本插件选择器用的都是稳定的 data-* 锚点与 CSS 变量;会**静默**退化的是两处上游事实:
+//   1. 锚点属性被改名 / 移除——对应规则整条落空,页面上只表现为「补丁没生效」,不报错;
+//   2. 规则引用的 --dsw-* / --dsh-* 令牌被改名——声明整条失效,对应规则退回兜底值或上游默认值
+//      (清单里逐条写明实际后果)。
+// 这里在构建后把清单逐条对上游产物 grep 一遍,缺一条就显式失败,提示里写明后果。
+//
+// 本文件同时是 dsh-changes-hover-off 的校验器:它以 `--manifest contract.json` 复用这份脚本,
+// 所以下面的参数、DSH 根解析顺序与退出码对所有调用方一致。
+//
 // 用法(本脚本与 css-contract.json 同目录):
 //   node dsh-ui-css-patches/check-css.mjs [--dsh-root <path>] [--manifest <json>]
 // DSH 根目录解析顺序: --dsh-root > $DSH_ROOT > `npm root -g` > 常见全局安装路径

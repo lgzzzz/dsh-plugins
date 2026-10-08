@@ -8,6 +8,8 @@
  * 等),它注册 `conversation.view` 的时刻可能比本插件看到槽声明晚好几个任务;所以
  * 「账本上还没有 chat 注册项」在启动期是常态,只有过了有界自检窗口仍为空才算真缺席 ——
  * 否则会在补丁其实已经(或马上)生效时误报。
+ *
+ * 行为差异、机制与失败模式见 docs/dsh-ui-chat-verbose-fold.md。
  */
 import {
   CHAT_VIEW_ID, CHAT_VIEW_SLOT, createFoldPatchState, patchChatView,

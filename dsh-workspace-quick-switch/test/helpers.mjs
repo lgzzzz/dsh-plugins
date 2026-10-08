@@ -66,7 +66,7 @@ export function finish() {
   process.exitCode = failures === 0 ? 0 : 1
 }
 
-//#region vdom 走查(真 React 元素)
+//#region vdom 元素读数(真 React 元素)
 
 /** 深度优先找出满足条件的第一个节点。 */
 export function findNode(node, predicate) {
@@ -439,7 +439,7 @@ export function workspace(id, title, extra = {}) {
 
 /**
  * 装一个最小的 document 与 window:document 上的捕获阶段 keydown 监听(浮层内的按键)、
- * window 上的捕获阶段 keydown 监听(终端内的打开键)、样式表注入与焦点目标查询。
+ * window 上的捕获阶段 keydown 监听(终端内的打开键),以及样式表注入。
  * @returns 派发按键的 `pressKey` / `pressWindowKey`、监听者集合、注入过的样式表与卸载函数。
  */
 export function installDom() {

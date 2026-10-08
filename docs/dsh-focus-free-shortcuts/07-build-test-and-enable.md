@@ -2,7 +2,7 @@
 
 > 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 7 册：怎么构建、怎么跑测试、怎么启用与撤销。
 
----
+-----
 
 ## 9. 构建与测试
 
@@ -28,10 +28,10 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | `src/focus-page.ts` | 第 4 组附带：聚焦右栏当前显示的页面 `primary+alt+K`（macOS `⌘⌥K` / Windows/Linux `Ctrl+Alt+K`；把键盘交给右栏此刻显示的那一页，终端落到 `.xterm-helper-textarea`；复用页面切换桥的 `focusShownPage`，终端内另走捕获拦截。该键在 Web 上本是内置 `session.search` 的默认键位，本固定行有意把它挤成冲突 —— 见第 6 册第 6 / 7 节） |
 | `src/page-cycle.ts` | 第 5 组：页面循环 `primary+alt+←` / `primary+alt+→`（macOS `⌘⌥←` / `⌘⌥→` / Windows/Linux `Ctrl+Alt+←` / `Ctrl+Alt+→`；官方没有的键对，插件自己挂固定键；切页后自动聚焦新页面） |
 | `src/strip-scroll.ts` | 第 5 组附带：右栏页签行的滚动 —— 注入一条作用域限定在右侧栏的 `scroll-behavior: auto` 规则（消掉"先回到最左、再迅速滑过去"的动画），并在切页前后保持观察窗口（`captureStripScroll` / `restoreStripScroll`：先还回旧位置，只有目标芯片不在窗口里时才按最小可见 + 24px 边缘余量推移）。纯视图补偿，不消费按键、不参与归属；由页面切换桥的注入作用域安装 / 卸载 |
+| `src/question-keys.ts` | 第 6 组：提问卡片 `Esc` 取消 / 关闭（同一个 `pendingInteraction` 槽位的提问域，调面板自己的 `dismiss()`） |
 | `src/session-cycle.ts` | 第 7 组：会话导航 `primary+↑` / `primary+↓`（macOS `⌘↑` / `⌘↓` / Windows/Linux `Ctrl+↑` / `Ctrl+↓`，全部候选）与 `primary+alt+↑` / `primary+alt+↓`（macOS `⌘⌥↑` / `⌘⌥↓` / Windows/Linux `Ctrl+Alt+↑` / `Ctrl+Alt+↓`，只走活跃会话）（官方没有的键对，插件自己挂两条固定键；候选只取左侧栏前三个工作区当前渲染出来的会话行，活跃 = 行上有状态点者，终端内另走捕获拦截） |
 | `src/session-new.ts` | 第 8 组：内置「新建会话」`session.new`（Web/macOS `⌘⌥N` / Web/Windows·Linux `Ctrl+Alt+N`）的终端那一格 —— 不注册固定键、不开观察者，只跟随**生效目录**里那一行当前的绑定，在捕获阶段拦下 `.xterm` 内的这一按并调用同一个 `uiWorkspace.startSession()`；页面 / 文本控件里仍归内置命令 |
-| `src/question-keys.ts` | 第 6 组：提问卡片 `Esc` 取消 / 关闭（同一个 `pendingInteraction` 槽位的提问域，调面板自己的 `dismiss()`） |
-| `src/binding.ts` | 十组共用：上游手势 / 绑定 / 两类快捷键目录行的匹配（纯函数，无 DOM、无 Cordis） |
+| `src/binding.ts` | 多数桥共用：上游手势 / 绑定 / 两类快捷键目录行的匹配（纯函数，无 DOM、无 Cordis）；停止桥与提问桥各有自己的判定，不读目录行 |
 | `src/capture.ts` | 捕获阶段共用：按键落点（`composedElement` / `pressElement`）、原始手势（`captureGesture`）、归属上下文（`captureContext`：区域 + 模态）与终端落点判定（`terminalTarget`），由页面循环桥、会话导航桥、聚焦输入框桥、聚焦右栏页面桥与新建会话桥（终端）以及审批桥（过程卡片）的捕获钩子共用 |
 | `src/focus-ring.ts` | 审批桥用：拿走某个控件的按键之后，给它打上官方的"无环聚焦"标记（`data-dsh-automatic-focus`）——焦点不动，那圈 `:focus-visible` 边框不显形；标记在 blur 或 Tab / 方向键导航时按官方同一套规则摘除 |
 | `src/runtime.ts` | 十组共用：插件名与诊断、固定输入 keydown 窄化、主视图会话判定 |
@@ -84,7 +84,7 @@ node check-css.mjs --manifest <清单>      # 换一份清单（默认同目录�
 - 退出码：`0` 全部通过（定位不到 DSH 根目录时只告警也算通过 —— 在别的机器上不会误报）；`1` 有锚点缺失（**升级 DSH 之后先看这里**）；`2` 清单路径或 JSON 有问题。
 - 它只证明"**有东西可选**"：不解析选择器、不跑 CSS 引擎，所以证明不了"后代组合子真的命中""特异性真的赢过 dockkit 的类规则"。那两件事只能看运行时，见第 10 节的手测项。
 
----
+-----
 
 ## 10. 启用
 
@@ -113,11 +113,11 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 - 在终端里按 `⌘⌥M` / `Ctrl+Alt+M` → 「工作区快速切换」浮层照常弹出（那一半在 [dsh-workspace-quick-switch](../dsh-workspace-quick-switch.md) 里），这一按同样不会进 shell；
 - 右侧栏开着并至少有两张页面时，任意焦点位置按 `⌘⌥→` / `⌘⌥←`（macOS）/ `Ctrl+Alt+→` / `Ctrl+Alt+←`（Windows/Linux） → 应切成下一页 / 上一页（环状），且键盘落到新页面：切到终端可直接打字，切到文件页方向键可直接滚动；焦点已经在终端里按这对键 → 依然能切页；
 - 只有一张页面或右侧栏折叠时按这对键 → 无动作（折叠时先用展开键展开，展开会顺手聚焦活动 pane）。
-- 页签行放不下所有页面（出现横向溢出）时来回切页 → 页签行**不应**"先回到最左、再滑到新的活动页签"：新活动页签直接出现在它该在的位置；连续往一个方向走、又切回相邻的那一颗时，**页签行完全不动**（来源页签仍在视野里，一眼能看出从哪儿切过来），只有目标页签不在当前窗口里时才最小幅度滚动（插件把 kit 那次"从 0 出发"的修正换成"以旧窗口为起点"，见第 3 册第 5.4 节；这条补偿与鼠标点页签共享前半段 —— 点页签同样不再滑动）。升级 DSH 之后想确认这层覆盖仍生效，可在 DevTools 里看 `getComputedStyle(document.querySelector('[data-sidebar-right-session] [data-dockkit-strip-tabs]')).scrollBehavior` 是否为 `auto`。
+- 页签行放不下所有页面（出现横向溢出）时来回切页 → 页签行**不应**"先回到最左、再滑到新的活动页签"：新活动页签直接出现在它该在的位置；连续往一个方向走、又切回相邻的那一颗时，**页签行完全不动**（来源页签仍在视野里，一眼能看出从哪儿切过来），只有目标页签不在当前窗口里时才最小幅度滚动（插件把 kit 那次"从 0 出发"的修正换成"以旧窗口为起点"，见第 3 册第 5.4 节；注入的 `scroll-behavior: auto` 规则与按键无关，鼠标点页签同样瞬时到位，只是那一路没有"旧窗口"可记、仍走 kit 原规则）。升级 DSH 之后想确认这层覆盖仍生效，可在 DevTools 里看 `getComputedStyle(document.querySelector('[data-sidebar-right-session] [data-dockkit-strip-tabs]')).scrollBehavior` 是否为 `auto`。
 - 先在左侧栏展开若干工作区（默认只有当前会话所在的那一组会展开，且每组默认最多列出 5 行，多出来的藏在「展开更多」之后），然后任意焦点位置按 `⌘↓` / `⌘↑`（macOS）/ `Ctrl+↓` / `Ctrl+↑`（Windows/Linux） → 应在**前三个工作区当前显示出来**的会话行之间环状切换，顺序与侧栏一致，当前会话随之高亮；走一趟的顺序与眼睛看到的顺序相同；
 - 另一条键对 `⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` **只走活跃会话**：有会话正在运行、停在审批 / 提问卡片上等人回答、或刚跑完还没被看（行上那颗绿点）时，按这对键只在这些会话之间环状走，中间的普通会话会被跳过；
 - 这时按 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑` 仍走全部候选 —— 两条键各守各的池子；如果没有任何活跃会话（所有行都是空闲点），或活跃池里只剩当前这一个会话，`⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` 不动作、也不消费（想继续往下走就用 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑`）；
-- 折叠掉某个工作区、或把某些会话留在「展开更多」之后，再按这两对键 → 这些会话行不在候选里（看不到就走不到）；归档行也不在候选里，所以不会弹出「已归档，不可打开」的提示；「未分组」桶不是工作区，既不占前三个名额也不贡献候选；
+- 折叠掉某个工作区、或把某些会话留在「展开更多」之后，再按这两对键 → 这些会话行不在候选里（看不到就走不到）；归档行也不在候选里，所以不会弹出归档行的提示（`toast.archivedNotOpenable`）；「未分组」桶不是工作区，既不占前三个名额也不贡献候选；
 - 侧栏搜索框里有搜索词（列表区换成搜索结果）、侧栏收起成窄栏、或分组方式切成「单列表」时按这两对键 → 无动作、不消费（那时没有工作区分组行可读）；
 - 焦点在终端里按这两对键 → 依然能切会话，且这些键不会被当成终端输入送进 shell（终端内按 `⌘↑/↓` / `Ctrl+↑/↓` 或 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` 都会先被捕获路拦下）；模态弹窗打开时 → 让位给弹窗，不动作、不消费。
 

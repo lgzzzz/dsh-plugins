@@ -90,9 +90,8 @@ export function fixedRow(id, bindings, extra = {}) {
   return { id, keys: [], bindings, group: 'approval', ...extra }
 }
 /**
- * 一条已挂载的固定行,绑定按平台规范化 —— 与注册表 `registerFixed` 一致(把逻辑
- * `primary` 展开成 macOS 的 `meta` / 其它平台的 `control`)。测试装置拿它复刻
- * 「插件声明逻辑键位、注册表按平台落成物理键位」这一步。
+ * 一条已挂载的固定行,绑定按平台规范化 —— 复刻注册表 `registerFixed`:插件声明逻辑
+ * `primary`,注册表按平台把它落成 macOS 的 `meta` / 其它平台的 `control`。
  */
 export function physicalRow(id, bindings, platform, extra = {}) {
   return fixedRow(id, bindings.map((binding) => normalizeBinding(binding, platform)), extra)

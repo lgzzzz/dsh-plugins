@@ -34,10 +34,11 @@
 
 ## 上游契约校验
 
-依赖上游 CSS 选择器 / 槽位 / DOM 锚点的插件，`build` 里都跟一段**构建后静态校验**：把清单
+依赖上游 CSS 选择器 / 槽位 / DOM 锚点的插件，在 `build` 里跟一段**构建后静态校验**：把清单
 逐条对 DSH 安装产物 grep 一遍，上游改名 / 删 token 时构建失败，而不是让补丁在页面上静默
-失效（选择器落空不报错）。校验器为 `check-css.mjs`（与本插件的 `css-contract.json` 同目录），
-`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
+失效（选择器落空不报错）。校验器是各插件目录下的 `check-css.mjs`（与它的清单同目录）；
+`dsh-changes-hover-off` 复用 `dsh-ui-css-patches/check-css.mjs`，用 `--manifest contract.json`
+指向自己的清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |

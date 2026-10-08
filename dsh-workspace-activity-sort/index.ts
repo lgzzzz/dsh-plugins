@@ -12,6 +12,8 @@
  *
  * 其余情况不动顺序：手动拖拽、改名、新建/删除工作区都不会被覆盖。每一轮都跳过「已经在最前」
  * 的请求；插件只写全局顺序单例（`table` 为 `''`），只听工作区表。
+ *
+ * 触发条件、上浮规则与已知边界见 docs/dsh-workspace-activity-sort.md。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { WorkspaceId, WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'

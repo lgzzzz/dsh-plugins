@@ -2,6 +2,8 @@
 # （两个 in-box 包，由安装锚点解析）。
 # ui-deliverables 必须保持启用：turn-tail 产物面（回合改动文件卡片、present 交付卡片、
 # 收尾正文文件链接、changes-review tab、`ui:deliverable-file-references` 提示词段）由它提供。
+# 本文件是「patch id 与 patch name 不同」的例子：id 是本地标识，name 才是被 import 的包名；
+# 五者的分工见 docs/plugin-naming.md。
 - id: directory-picker
   disabled: true
 

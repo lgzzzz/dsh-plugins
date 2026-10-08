@@ -2,7 +2,7 @@
 
 > 本文件是 [dsh-ui-chat-verbose-fold 说明](../dsh-ui-chat-verbose-fold.md) 的第 3 册:构建 / 测试命令、`test/` 分组与启用方式。
 
----
+-----
 
 ## 构建与测试
 
@@ -13,6 +13,8 @@ node test/run-all.mjs                # 跑测试(或 pnpm test)
 node test/inject-wrap.test.mjs       # 只跑某一组
 ../node_modules/.bin/tsc --noEmit    # 或 pnpm typecheck
 ```
+
+`test/run-all.mjs` 用 `spawnSync` 逐个跑 `test/` 下的文件;沙箱拒绝子进程捕获输出(EPERM)时 runner 起不来,改为逐个 `node test/<file>.test.mjs`。
 
 `test/` 下按主题分散(共享装置在 `test/helpers.mjs`,runner 是 `test/run-all.mjs`):
 
@@ -28,6 +30,6 @@ node test/inject-wrap.test.mjs       # 只跑某一组
 dsh plugin --profile web add <本仓库路径>/dsh-ui-chat-verbose-fold
 ```
 
-之后重启 / 刷新 GUI 验证:Verbose 模式下已完成的轮次应折叠。
+之后刷新 GUI 页面,在设置里把「工作步骤展示」(设置项 `transcriptView`)切到 Verbose(`完全展开`):已完成的轮次应折叠。页面没拿到本插件时(客户端 roster 在页面加载时由 Host 注入),重启 `dsh web` 再刷新。
 
 `add-plugins.sh` / `add-plugins.ps1` 已包含本插件。
