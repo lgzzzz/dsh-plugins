@@ -1,6 +1,7 @@
 /**
  * 挂载 fixed 行 `dsh-focus-free-shortcuts.page-cycle`(group `application`)，由
- * `Ctrl+Alt+←` / `Ctrl+Alt+→` 循环切换右栏当前页，并把键盘交给切换后的页面。
+ * `⌘⌥←` / `⌘⌥→`(macOS)或 `Ctrl+Alt+←` / `Ctrl+Alt+→`(Windows、Linux)循环切换右栏
+ * 当前页，并把键盘交给切换后的页面。声明的是逻辑组合 `primary+alt`，注册表按平台展开。
  *
  * 页面列表与切换取自 Right-Sidebar 公开面：`tabsIn(sessionId)` 按记录顺序列出页，
  * `active()` 给出当前页，`focus(tabId)` 与点击页签执行同一操作；方向为循环。
@@ -16,7 +17,7 @@
  * 在有界窗口内轮询右栏展开，展开后把键盘交给当前显示页。
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
-import { bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
+import { bindingKeycaps, bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
 import type {
   ShortcutCatalogEntry,
@@ -26,7 +27,7 @@ import type {
   ShortcutGesture,
   Shortcuts,
 } from '@deepseek-ai/dsh-client-shortcuts/client'
-import type {ShortcutCommandId} from '@deepseek-ai/dsh-client-shortcuts/protocol'
+import type {ShortcutCommandId, ShortcutPlatform} from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type {Context} from '@deepseek-ai/cordis'
 // 空导入：让 TS 加载本包对 `@deepseek-ai/cordis` 的模块增强，`ctx.sidebarRight`
 // 由它声明；`Context['sidebarRight']` 是取到该面的公开途径。
@@ -41,25 +42,27 @@ export type PageStep = 'previous' | 'next'
 /** 本桥挂载并跟随的 fixed 页面切换行 id。 */
 export const PAGE_CYCLE_ID: ShortcutCommandId = 'dsh-focus-free-shortcuts.page-cycle' as ShortcutCommandId
 
-/** `Ctrl+Alt+←`：向循环起点方向翻一页。 */
+/** `primary+alt+←`：向循环起点方向翻一页（macOS `⌘⌥←`，Windows `Ctrl+Alt+←`）。 */
 export const PAGE_PREVIOUS_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'ArrowLeft',
-  modifiers: ['control', 'alt'],
+  modifiers: ['primary', 'alt'],
 }
 
-/** `Ctrl+Alt+→`：向循环终点方向翻一页。 */
+/** `primary+alt+→`：向循环终点方向翻一页（macOS `⌘⌥→`，Windows `Ctrl+Alt+→`）。 */
 export const PAGE_NEXT_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'ArrowRight',
-  modifiers: ['control', 'alt'],
+  modifiers: ['primary', 'alt'],
 }
 
-/** 本插件挂载的 fixed 行：占用两个方向键并声明该操作。 */
-export const PAGE_CYCLE_COMMAND: ShortcutFixedCommand = {
-  id: PAGE_CYCLE_ID,
-  label: () => '切换右栏页面',
-  keys: ['Ctrl', 'Alt', '←/→'],
-  bindings: [PAGE_PREVIOUS_BINDING, PAGE_NEXT_BINDING],
-  group: 'application',
+/** 本插件挂载的 fixed 行：占用两个方向键并声明该操作；键帽按平台格式化。 */
+export function pageCycleCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
+  return {
+    id: PAGE_CYCLE_ID,
+    label: () => '切换右栏页面',
+    keys: bindingKeycaps(PAGE_PREVIOUS_BINDING, platform, '←/→'),
+    bindings: [PAGE_PREVIOUS_BINDING, PAGE_NEXT_BINDING],
+    group: 'application',
+  }
 }
 
 /**
@@ -256,7 +259,7 @@ export function installPageCycleBridge(ctx: Context): void {
       return
     }
     // 行必须先挂载，观察者才能读到它；两者同在本 scope，按同序销毁。
-    scope.effect(() => shortcuts.registerFixed(PAGE_CYCLE_COMMAND), `${name}: page cycle fixed row`)
+    scope.effect(() => shortcuts.registerFixed(pageCycleCommand(shortcuts.platform)), `${name}: page cycle fixed row`)
     scope.effect(() => shortcuts.observeFixedInput((input) => {
       if (!isKeydown(input)) return
       handlePageCycleInput(shortcuts, sidebar, input)

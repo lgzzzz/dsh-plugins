@@ -19,6 +19,7 @@ import {
   fakeWorkspaces,
   finish,
   fixedKeydown,
+  fixedMacKeydown,
   installDom,
   pluginRoot,
   renderSlotEntry,
@@ -120,6 +121,26 @@ console.log('--- D③ 依赖缺失时产物只是不安装,不抛 ---')
   check('缺 shortcuts 时注入回调不跑', warnings, [])
   check('没有注册任何槽位', slots.registered, [])
   check('ctx.inject 报出缺失项', ctx.missing, ['shortcuts'])
+}
+
+console.log('--- D④ 产物在 macOS 平台上占 ⌘⌥M,并只认这一组 ---')
+{
+  const slots = fakeSlots()
+  const shortcuts = fakeShortcuts({ platform: 'macos' })
+  const ctx = fakeCtx({
+    slots,
+    shortcuts,
+    workspaces: { list: fakeWorkspaces([workspace('ws-1', 'Alpha')]) },
+    sessions: fakeSessions({}),
+    uiWorkspace: { startSession() {} },
+  })
+  plugin.apply(ctx)
+  check('macOS 固定行键帽', shortcuts.commands[0].keys, ['⌘', '⌥', 'M'])
+  check('macOS 固定行落成 ⌘⌥M', shortcuts.fixedCatalog.getSnapshot()[0].bindings, [{ code: 'KeyM', modifiers: ['alt', 'meta'] }])
+  shortcuts.fire(fixedKeydown())
+  check('macOS 上 Ctrl+Alt+M 不打开', parseRows(slots).length, 0)
+  shortcuts.fire(fixedMacKeydown())
+  check('macOS 上 ⌘⌥M 打开', parseRows(slots).map((row) => row.title), ['Alpha'])
 }
 
 finish()

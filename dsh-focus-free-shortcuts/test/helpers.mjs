@@ -4,6 +4,7 @@
  */
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { normalizeBinding } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 
 import { apply as applyPlugin } from '../src/client.ts'
 
@@ -88,6 +89,14 @@ export function row(id, binding, extra = {}) {
 export function fixedRow(id, bindings, extra = {}) {
   return { id, keys: [], bindings, group: 'approval', ...extra }
 }
+/**
+ * 一条已挂载的固定行,绑定按平台规范化 —— 与注册表 `registerFixed` 一致(把逻辑
+ * `primary` 展开成 macOS 的 `meta` / 其它平台的 `control`)。测试装置拿它复刻
+ * 「插件声明逻辑键位、注册表按平台落成物理键位」这一步。
+ */
+export function physicalRow(id, bindings, platform, extra = {}) {
+  return fixedRow(id, bindings.map((binding) => normalizeBinding(binding, platform)), extra)
+}
 
 export const FULLSCREEN_BINDING = { code: 'Enter', modifiers: ['alt', 'meta'] }
 export const SPLIT_BINDING = { code: 'Backslash', modifiers: ['meta'] }
@@ -105,38 +114,62 @@ export const APPROVAL_FIXED_ROWS = [
 ]
 
 export const FOCUS_COMPOSER_ID = 'dsh-focus-free-shortcuts.focus-composer'
-export const FOCUS_COMPOSER_BINDING = { code: 'KeyJ', modifiers: ['control', 'alt'] }
-/** 本插件自己挂载的固定行:存在即预约 `Ctrl+Alt+J`。 */
+/** 插件声明的逻辑组合(`primary+alt+J`):macOS 落成 `⌘⌥J`,Windows 落成 `Ctrl+Alt+J`。 */
+export const FOCUS_COMPOSER_BINDING = { code: 'KeyJ', modifiers: ['primary', 'alt'] }
+/** 本插件自己挂载的固定行(Windows/Linux 口径):存在即预约 `Ctrl+Alt+J`。 */
 export const FOCUS_COMPOSER_FIXED_ROWS = [
-  fixedRow(FOCUS_COMPOSER_ID, [FOCUS_COMPOSER_BINDING], { group: 'input' }),
+  physicalRow(FOCUS_COMPOSER_ID, [FOCUS_COMPOSER_BINDING], 'windows', { group: 'input' }),
+]
+/** 同一行的 macOS 口径:注册表把 `primary` 落成 `meta`,即 `⌘⌥J`。 */
+export const FOCUS_COMPOSER_MAC_FIXED_ROWS = [
+  physicalRow(FOCUS_COMPOSER_ID, [FOCUS_COMPOSER_BINDING], 'macos', { group: 'input' }),
 ]
 export const FOCUS_COMPOSER_PRESS = gesture('KeyJ', { control: true, alt: true })
+export const FOCUS_COMPOSER_MAC_PRESS = gesture('KeyJ', { meta: true, alt: true })
 
 export const PAGE_CYCLE_ID = 'dsh-focus-free-shortcuts.page-cycle'
-export const PAGE_PREVIOUS_BINDING = { code: 'ArrowLeft', modifiers: ['control', 'alt'] }
-export const PAGE_NEXT_BINDING = { code: 'ArrowRight', modifiers: ['control', 'alt'] }
-/** 本插件自己挂载的固定行:一行同时预约 `Ctrl+Alt+←` 与 `Ctrl+Alt+→`。 */
+/** 插件声明的逻辑组合(`primary+alt+←/→`)。 */
+export const PAGE_PREVIOUS_BINDING = { code: 'ArrowLeft', modifiers: ['primary', 'alt'] }
+export const PAGE_NEXT_BINDING = { code: 'ArrowRight', modifiers: ['primary', 'alt'] }
+/** 本插件自己挂载的固定行(Windows/Linux 口径):一行同时预约 `Ctrl+Alt+←` 与 `Ctrl+Alt+→`。 */
 export const PAGE_CYCLE_FIXED_ROWS = [
-  fixedRow(PAGE_CYCLE_ID, [PAGE_PREVIOUS_BINDING, PAGE_NEXT_BINDING], { group: 'application' }),
+  physicalRow(PAGE_CYCLE_ID, [PAGE_PREVIOUS_BINDING, PAGE_NEXT_BINDING], 'windows', { group: 'application' }),
+]
+/** 同一行的 macOS 口径:`⌘⌥←` / `⌘⌥→`。 */
+export const PAGE_CYCLE_MAC_FIXED_ROWS = [
+  physicalRow(PAGE_CYCLE_ID, [PAGE_PREVIOUS_BINDING, PAGE_NEXT_BINDING], 'macos', { group: 'application' }),
 ]
 export const PAGE_PREVIOUS_PRESS = gesture('ArrowLeft', { control: true, alt: true })
 export const PAGE_NEXT_PRESS = gesture('ArrowRight', { control: true, alt: true })
+export const PAGE_PREVIOUS_MAC_PRESS = gesture('ArrowLeft', { meta: true, alt: true })
+export const PAGE_NEXT_MAC_PRESS = gesture('ArrowRight', { meta: true, alt: true })
 
 export const SESSION_CYCLE_ID = 'dsh-focus-free-shortcuts.session-cycle'
-export const SESSION_PREVIOUS_BINDING = { code: 'ArrowUp', modifiers: ['control'] }
-export const SESSION_NEXT_BINDING = { code: 'ArrowDown', modifiers: ['control'] }
+/** 插件声明的逻辑组合(`primary+↑/↓`)。 */
+export const SESSION_PREVIOUS_BINDING = { code: 'ArrowUp', modifiers: ['primary'] }
+export const SESSION_NEXT_BINDING = { code: 'ArrowDown', modifiers: ['primary'] }
 export const SESSION_ACTIVE_CYCLE_ID = 'dsh-focus-free-shortcuts.session-active-cycle'
-export const SESSION_ACTIVE_PREVIOUS_BINDING = { code: 'ArrowUp', modifiers: ['control', 'alt'] }
-export const SESSION_ACTIVE_NEXT_BINDING = { code: 'ArrowDown', modifiers: ['control', 'alt'] }
-/** 本插件自己挂载的两条固定行:`Ctrl+↑/↓` 走全部候选,`Ctrl+Alt+↑/↓` 只走活跃会话。 */
+/** 插件声明的逻辑组合(`primary+alt+↑/↓`)。 */
+export const SESSION_ACTIVE_PREVIOUS_BINDING = { code: 'ArrowUp', modifiers: ['primary', 'alt'] }
+export const SESSION_ACTIVE_NEXT_BINDING = { code: 'ArrowDown', modifiers: ['primary', 'alt'] }
+/** 本插件自己挂载的两条固定行(Windows/Linux 口径):`Ctrl+↑/↓` 走全部候选,`Ctrl+Alt+↑/↓` 只走活跃会话。 */
 export const SESSION_CYCLE_FIXED_ROWS = [
-  fixedRow(SESSION_CYCLE_ID, [SESSION_PREVIOUS_BINDING, SESSION_NEXT_BINDING], { group: 'application' }),
-  fixedRow(SESSION_ACTIVE_CYCLE_ID, [SESSION_ACTIVE_PREVIOUS_BINDING, SESSION_ACTIVE_NEXT_BINDING], { group: 'application' }),
+  physicalRow(SESSION_CYCLE_ID, [SESSION_PREVIOUS_BINDING, SESSION_NEXT_BINDING], 'windows', { group: 'application' }),
+  physicalRow(SESSION_ACTIVE_CYCLE_ID, [SESSION_ACTIVE_PREVIOUS_BINDING, SESSION_ACTIVE_NEXT_BINDING], 'windows', { group: 'application' }),
+]
+/** 同一对的 macOS 口径:`⌘↑/↓` 走全部候选,`⌘⌥↑/↓` 只走活跃会话。 */
+export const SESSION_CYCLE_MAC_FIXED_ROWS = [
+  physicalRow(SESSION_CYCLE_ID, [SESSION_PREVIOUS_BINDING, SESSION_NEXT_BINDING], 'macos', { group: 'application' }),
+  physicalRow(SESSION_ACTIVE_CYCLE_ID, [SESSION_ACTIVE_PREVIOUS_BINDING, SESSION_ACTIVE_NEXT_BINDING], 'macos', { group: 'application' }),
 ]
 export const SESSION_PREVIOUS_PRESS = gesture('ArrowUp', { control: true })
 export const SESSION_NEXT_PRESS = gesture('ArrowDown', { control: true })
 export const SESSION_ACTIVE_PREVIOUS_PRESS = gesture('ArrowUp', { control: true, alt: true })
 export const SESSION_ACTIVE_NEXT_PRESS = gesture('ArrowDown', { control: true, alt: true })
+export const SESSION_PREVIOUS_MAC_PRESS = gesture('ArrowUp', { meta: true })
+export const SESSION_NEXT_MAC_PRESS = gesture('ArrowDown', { meta: true })
+export const SESSION_ACTIVE_PREVIOUS_MAC_PRESS = gesture('ArrowUp', { meta: true, alt: true })
+export const SESSION_ACTIVE_NEXT_MAC_PRESS = gesture('ArrowDown', { meta: true, alt: true })
 
 /** 内置"展开/折叠右侧栏"命令 id,展开补位跟随它的有效行。 */
 export const SIDEBAR_TOGGLE_ID = 'sidebar.right.toggle'
@@ -364,10 +397,14 @@ export function fakeKeyEvent({
   return event
 }
 
-export function fakeShortcuts({ runtime = 'web', platform = 'macos', rows = [], fixedRows = [], stopSequenceMs = 500 } = {}) {
+export function fakeShortcuts({ runtime = 'web', platform = 'windows', rows = [], fixedRows = [], stopSequenceMs = 500 } = {}) {
   const listeners = new Set()
-  // 可变固定行表:registerFixed 会往里追加。
-  const fixed = [...fixedRows]
+  // 固定行表按平台规范化,与注册表 `registerFixed` 的读数一致。
+  const normalizeRow = (row) => ({
+    ...row,
+    bindings: row.bindings.map((binding) => normalizeBinding(binding, platform)),
+  })
+  const fixed = fixedRows.map(normalizeRow)
   const registrations = new Map()
   return {
     runtime,
@@ -386,11 +423,7 @@ export function fakeShortcuts({ runtime = 'web', platform = 'macos', rows = [], 
         label: command.label(),
         keys: command.keys,
         group: command.group,
-        bindings: command.bindings.map((binding) => ({
-          code: binding.code,
-          modifiers: [...binding.modifiers],
-          ...(binding.secondCode === void 0 ? {} : { secondCode: binding.secondCode }),
-        })),
+        bindings: command.bindings.map((binding) => normalizeBinding(binding, platform)),
       }
       registrations.set(command.id, entry)
       fixed.push(entry)
@@ -627,6 +660,7 @@ export class FakeCtx {
 /** 装配一次性完整场景,返回各部件与已注册的固定输入监听。 */
 export function harness({
   runtime = 'web',
+  platform = 'windows',
   rows = [row('pane.fullscreen.toggle', FULLSCREEN_BINDING), row('pane.split', SPLIT_BINDING)],
   fixedRows = APPROVAL_FIXED_ROWS,
   summary = { s1: session('s1') },
@@ -640,7 +674,7 @@ export function harness({
   withUiSession = true,
   withUiWorkspace = true,
 } = {}) {
-  const shortcuts = fakeShortcuts({ runtime, rows, fixedRows })
+  const shortcuts = fakeShortcuts({ runtime, platform, rows, fixedRows })
   const sessions = fakeSessions({ summary, bindingSnapshot, scope: () => ({ get: (name) => (name === 'conversation' ? conversation ?? undefined : undefined) }) })
   const services = { shortcuts }
   if (withSidebar) services.sidebarRight = sidebar

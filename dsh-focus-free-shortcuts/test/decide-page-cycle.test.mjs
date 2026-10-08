@@ -1,36 +1,44 @@
 /**
- * 页面循环纯决策:固定行同时预约 `Ctrl+Alt+←` / `Ctrl+Alt+→`、准入(放行终端与已被
- * 消费的按)、环状步进,以及展开补位对内置 `sidebar.right.toggle` 有效行的跟随。
+ * 页面循环纯决策:固定行同时预约逻辑组合 `primary+alt+←` / `primary+alt+→`(macOS 落成
+ * `⌘⌥←/→`,Windows/Linux 落成 `Ctrl+Alt+←/→`)、准入(放行终端与已被消费的按)、
+ * 环状步进,以及展开补位对内置 `sidebar.right.toggle` 有效行的跟随。
  */
 import {
-  PAGE_CYCLE_COMMAND,
   PAGE_CYCLE_ID,
   PAGE_NEXT_BINDING,
   PAGE_PREVIOUS_BINDING,
   expansionPress,
+  pageCycleCommand,
   pageCycleEligible,
   pageStepFor,
   steppedPageId,
 } from '../src/page-cycle.ts'
-import { check, checkTrue, finish, gesture, row, shortcutContext, PAGE_CYCLE_FIXED_ROWS, PAGE_NEXT_PRESS, PAGE_PREVIOUS_PRESS, SIDEBAR_TOGGLE_BINDING, SIDEBAR_TOGGLE_PRESS } from './helpers.mjs'
+import { check, checkTrue, finish, gesture, row, shortcutContext, PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_MAC_FIXED_ROWS, PAGE_NEXT_MAC_PRESS, PAGE_NEXT_PRESS, PAGE_PREVIOUS_MAC_PRESS, PAGE_PREVIOUS_PRESS, SIDEBAR_TOGGLE_BINDING, SIDEBAR_TOGGLE_PRESS } from './helpers.mjs'
 
-console.log('--- L① 固定行本身:一行预约两个方向,归 application 组 ---')
+console.log('--- L① 固定行本身:一行预约两个方向,键帽按平台落成,归 application 组 ---')
 {
-  check('固定行 id', PAGE_CYCLE_COMMAND.id, PAGE_CYCLE_ID)
-  check('← 绑定', PAGE_CYCLE_COMMAND.bindings[0], PAGE_PREVIOUS_BINDING)
-  check('→ 绑定', PAGE_CYCLE_COMMAND.bindings[1], PAGE_NEXT_BINDING)
-  check('固定行显示键', PAGE_CYCLE_COMMAND.keys, ['Ctrl', 'Alt', '←/→'])
-  check('固定行分组', PAGE_CYCLE_COMMAND.group, 'application')
+  const macos = pageCycleCommand('macos')
+  const windows = pageCycleCommand('windows')
+  check('固定行 id', macos.id, PAGE_CYCLE_ID)
+  check('← 绑定', macos.bindings[0], PAGE_PREVIOUS_BINDING)
+  check('→ 绑定', macos.bindings[1], PAGE_NEXT_BINDING)
+  check('macOS 显示键', macos.keys, ['⌘', '⌥', '←/→'])
+  check('Windows 显示键', windows.keys, ['Ctrl', 'Alt', '←/→'])
+  check('固定行分组', macos.group, 'application')
 }
 
-console.log('--- L② 固定行归属与方向:只有本键对命中,且方向由命中的 code 决定 ---')
+console.log('--- L② 固定行归属与方向:各平台只认自己那一对键,方向由命中的 code 决定 ---')
 {
-  check('← 命中为 previous', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, PAGE_PREVIOUS_PRESS), 'previous')
-  check('→ 命中为 next', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, PAGE_NEXT_PRESS), 'next')
+  check('Windows:← 命中为 previous', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, PAGE_PREVIOUS_PRESS), 'previous')
+  check('Windows:→ 命中为 next', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, PAGE_NEXT_PRESS), 'next')
+  check('macOS:← 命中为 previous', pageStepFor(PAGE_CYCLE_MAC_FIXED_ROWS, PAGE_CYCLE_ID, PAGE_PREVIOUS_MAC_PRESS), 'previous')
+  check('macOS:→ 命中为 next', pageStepFor(PAGE_CYCLE_MAC_FIXED_ROWS, PAGE_CYCLE_ID, PAGE_NEXT_MAC_PRESS), 'next')
+  check('macOS:Ctrl+Alt+← 不命中(那是 Windows 的键)', pageStepFor(PAGE_CYCLE_MAC_FIXED_ROWS, PAGE_CYCLE_ID, PAGE_PREVIOUS_PRESS), undefined)
   check('裸 ← 不命中', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, gesture('ArrowLeft')), undefined)
   check('Ctrl+← 不命中', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, gesture('ArrowLeft', { control: true })), undefined)
   check('Alt+← 不命中', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, gesture('ArrowLeft', { alt: true })), undefined)
   check('Ctrl+Alt+Shift+← 不命中', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, gesture('ArrowLeft', { control: true, alt: true, shift: true })), undefined)
+  check('⌘⌥⇧← 不命中', pageStepFor(PAGE_CYCLE_MAC_FIXED_ROWS, PAGE_CYCLE_ID, gesture('ArrowLeft', { meta: true, alt: true, shift: true })), undefined)
   check('别的键不命中', pageStepFor(PAGE_CYCLE_FIXED_ROWS, PAGE_CYCLE_ID, gesture('Enter')), undefined)
   check('行未挂载不命中', pageStepFor([], PAGE_CYCLE_ID, PAGE_NEXT_PRESS), undefined)
 }

@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, sidebarTree, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_ACTIVE_CYCLE_ID, SESSION_CYCLE_ID, SESSION_NEXT_PRESS } from './helpers.mjs'
+import { captureWarnings, check, checkTrue, domBody, domComposer, fakeDocument, fakeSessions, fakeSessionNavigation, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, FULLSCREEN_BINDING, FULLSCREEN_PRESS, gesture, keydown, pluginRoot, row, session, shortcutContext, sidebarTree, APPROVAL_FIXED_ROWS, approvalPending, questionPending, SESSION_ACTIVE_CYCLE_ID, SESSION_CYCLE_ID, SESSION_NEXT_MAC_PRESS, SESSION_NEXT_PRESS } from './helpers.mjs'
 
 console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
 {
@@ -79,6 +79,39 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
   } finally {
     if (previousDocument === undefined) delete globalThis.document
     else globalThis.document = previousDocument
+  }
+  console.log('--- G② 产物在 macOS 平台上把逻辑 primary 落成 ⌘ 系键位 ---')
+  {
+    const shortcuts = fakeShortcuts({ platform: 'macos', fixedRows: APPROVAL_FIXED_ROWS })
+    const navigation = fakeSessionNavigation()
+    const macCtx = new FakeCtx({
+      shortcuts,
+      sidebarRight: fakeSidebar(),
+      sessions: fakeSessions({ summary: { s1: session('s1'), s2: session('s2', { mainView: 0, running: false }) } }),
+      uiSession: fakeUiSession(),
+      uiWorkspace: navigation,
+    })
+    check('macOS 装配无告警', captureWarnings(() => plugin.apply(macCtx)), [])
+    const macRows = shortcuts.fixedCatalog.getSnapshot()
+    const bindingsOf = (id) => macRows.find((entry) => entry.id === id)?.bindings
+    const keysOf = (id) => macRows.find((entry) => entry.id === id)?.keys
+    check('macOS 聚焦输入框行落成 ⌘⌥J', bindingsOf('dsh-focus-free-shortcuts.focus-composer'), [{ code: 'KeyJ', modifiers: ['alt', 'meta'] }])
+    check('macOS 会话循环行落成 ⌘↑/↓', bindingsOf(SESSION_CYCLE_ID), [{ code: 'ArrowUp', modifiers: ['meta'] }, { code: 'ArrowDown', modifiers: ['meta'] }])
+    check('macOS 活跃会话行键帽', keysOf(SESSION_ACTIVE_CYCLE_ID), ['⌘', '⌥', '↑/↓'])
+
+    const macPreviousDocument = globalThis.document
+    globalThis.document = fakeDocument({ root: sidebarTree([{ key: 'w1', sessions: ['s1', 's2'] }]) })
+    try {
+      shortcuts.emit(keydown(SESSION_NEXT_MAC_PRESS, shortcutContext({ target: domBody })).input)
+      check('macOS ⌘↓ 走会话导航', navigation.opened, ['s2'])
+      const wrong = keydown(SESSION_NEXT_PRESS, shortcutContext({ target: domBody }))
+      shortcuts.emit(wrong.input)
+      check('macOS 上 Ctrl+↓ 不动产物', navigation.opened, ['s2'])
+      check('macOS 上 Ctrl+↓ 不消费', wrong.consumed.count, 0)
+    } finally {
+      if (macPreviousDocument === undefined) delete globalThis.document
+      else globalThis.document = macPreviousDocument
+    }
   }
 }
 

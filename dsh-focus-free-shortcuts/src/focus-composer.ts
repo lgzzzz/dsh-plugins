@@ -1,12 +1,14 @@
 /**
- * 快捷键分组 4：`Ctrl+Alt+J` 把键盘焦点跳回输入框。
+ * 快捷键分组 4：`⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows、Linux）把键盘焦点跳回输入框。
  *
+ * 固定行声明的是逻辑组合 `primary+alt`：注册表在 macOS 上展开成 `meta+alt`（⌘⌥）、
+ * 在 Windows/Linux 上展开成 `control+alt`（Ctrl+Alt），所以同一份声明在两端各是各的键。
  * 本插件自己注册固定行 `dsh-focus-free-shortcuts.focus-composer`（group `input`），
  * 固定行的存在本身就是占用。按键能否路由由 `fixedRowOwns` 判断；有模态层、目标在
  * 终端或主视图 Session 不唯一时不做动作。动作经 `SessionInputResolver.for(actx)`
  * 取到的 facade 的 `focus()` 完成，以恢复上次的选区。
  */
-import { fixedRowOwns } from './binding.ts'
+import { bindingKeycaps, fixedRowOwns } from './binding.ts'
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {
   ShortcutContext,
@@ -14,7 +16,7 @@ import type {
   ShortcutGesture,
   Shortcuts,
 } from '@deepseek-ai/dsh-client-shortcuts/client'
-import type {ShortcutCommandId} from '@deepseek-ai/dsh-client-shortcuts/protocol'
+import type {ShortcutCommandId, ShortcutPlatform} from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type {ISessions} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {IConversation, SessionInput} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {Context} from '@deepseek-ai/cordis'
@@ -34,19 +36,21 @@ export function focusComposerEligible(gesture: ShortcutGesture, context: Shortcu
 /** 本桥接跟随的聚焦输入框固定行 id。 */
 export const FOCUS_COMPOSER_ID: ShortcutCommandId = 'dsh-focus-free-shortcuts.focus-composer' as ShortcutCommandId
 
-/** 固定行占用的唯一物理组合：`Ctrl+Alt+J`。 */
+/** 固定行占用的逻辑物理组合：`primary+alt+J`（macOS 上即 `⌘⌥J`，Windows 上即 `Ctrl+Alt+J`）。 */
 export const FOCUS_COMPOSER_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'KeyJ',
-  modifiers: ['control', 'alt'],
+  modifiers: ['primary', 'alt'],
 }
 
-/** 本插件挂载的固定行：占用按键并声明动作名称与分组。 */
-export const FOCUS_COMPOSER_COMMAND: ShortcutFixedCommand = {
-  id: FOCUS_COMPOSER_ID,
-  label: () => '聚焦输入框',
-  keys: ['Ctrl', 'Alt', 'J'],
-  bindings: [FOCUS_COMPOSER_BINDING],
-  group: 'input',
+/** 本插件挂载的固定行：占用按键并声明动作名称与分组；键帽按平台格式化。 */
+export function focusComposerCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
+  return {
+    id: FOCUS_COMPOSER_ID,
+    label: () => '聚焦输入框',
+    keys: bindingKeycaps(FOCUS_COMPOSER_BINDING, platform, 'J'),
+    bindings: [FOCUS_COMPOSER_BINDING],
+    group: 'input',
+  }
 }
 
 /** 注册聚焦输入框按键：挂载固定行并监听固定按键输入；缺少 `observeFixedInput` 时告警并退出。 */
@@ -59,7 +63,7 @@ export function installFocusComposerBridge(ctx: Context): void {
       return
     }
     // 固定行要先挂载，观察者才读得到；两者同属一个 scope，按同样顺序销毁。
-    scope.effect(() => shortcuts.registerFixed(FOCUS_COMPOSER_COMMAND), `${name}: focus composer fixed row`)
+    scope.effect(() => shortcuts.registerFixed(focusComposerCommand(shortcuts.platform)), `${name}: focus composer fixed row`)
     scope.effect(() => shortcuts.observeFixedInput((input) => {
       if (!isKeydown(input)) return
       handleFocusComposerInput(shortcuts, sessions, input)

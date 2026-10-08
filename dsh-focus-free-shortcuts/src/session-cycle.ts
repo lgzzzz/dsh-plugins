@@ -1,11 +1,15 @@
 /**
  * 挂载两条 fixed 行(group `application`)，把左侧栏的会话导航拆成两档：
  *
- *   - `dsh-focus-free-shortcuts.session-cycle`(`Ctrl+↑` / `Ctrl+↓`)：在**前三个工作区当前
- *     显示出来的全部会话行**之间环状步进 —— 就是「在会话之间导航」本身；
- *   - `dsh-focus-free-shortcuts.session-active-cycle`(`Ctrl+Alt+↑` / `Ctrl+Alt+↓`)：**只在
- *     活跃会话之间**步进；没有活跃会话、或活跃池里只剩当前会话时这一按没有主人
- *     (不动作、不消费)——常规导航交给上面那一条。
+ *   - `dsh-focus-free-shortcuts.session-cycle`(`⌘↑` / `⌘↓`；Windows/Linux `Ctrl+↑` / `Ctrl+↓`)：
+ *     在**前三个工作区当前显示出来的全部会话行**之间环状步进 —— 就是「在会话之间导航」
+ *     本身；
+ *   - `dsh-focus-free-shortcuts.session-active-cycle`(`⌘⌥↑` / `⌘⌥↓`；Windows/Linux
+ *     `Ctrl+Alt+↑` / `Ctrl+Alt+↓`)：**只在活跃会话之间**步进；没有活跃会话、或活跃池里
+ *     只剩当前会话时这一按没有主人(不动作、不消费)——常规导航交给上面那一条。
+ *
+ * 两条行声明的都是逻辑组合(`primary` / `primary+alt`)，注册表在 macOS 上把 `primary`
+ * 展开成 `meta`(⌘)、在 Windows/Linux 上展开成 `control`(Ctrl)。
  *
  * 候选只取「左侧栏现在真的画出来的行」:前三个工作区分组里、没有被折叠、没有被每分组
  * 5 行上限挡在「展开更多」行之后、也没有被归档过滤隐藏的会话行，顺序就是侧栏显示顺序
@@ -27,7 +31,7 @@
  * 的客户端包,激活可能晚于本插件,直接 `ctx.get` 一次会把「还没激活」误判成「缺席」。
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
-import { bindingMatches } from './binding.ts'
+import { bindingKeycaps, bindingMatches } from './binding.ts'
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {
   ShortcutContext,
@@ -36,7 +40,7 @@ import type {
   ShortcutGesture,
   Shortcuts,
 } from '@deepseek-ai/dsh-client-shortcuts/client'
-import type {ShortcutCommandId} from '@deepseek-ai/dsh-client-shortcuts/protocol'
+import type {ShortcutCommandId, ShortcutPlatform} from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type {ISessions, SessionListState} from '@deepseek-ai/dsh-api-session-controller/client'
 // 空导入：让 TS 加载本包对 `@deepseek-ai/cordis` 的模块增强(`ctx.uiSession`)与
 // `SessionPendingInteractionMap` 的域声明;type-only 导入在打包前被擦除。
@@ -68,52 +72,56 @@ export type SessionStep = 'previous' | 'next'
 /** 一次按键要走的池子:全部候选,或只走活跃会话。 */
 export type SessionPool = 'all' | 'active'
 
-/** 本桥挂载并跟随的 fixed 会话导航行 id(`Ctrl+↑` / `Ctrl+↓`,走全部候选)。 */
+/** 本桥挂载并跟随的 fixed 会话导航行 id(`primary+↑/↓`,走全部候选)。 */
 export const SESSION_CYCLE_ID: ShortcutCommandId = 'dsh-focus-free-shortcuts.session-cycle' as ShortcutCommandId
 
-/** 本桥挂载的 fixed 活跃会话行 id(`Ctrl+Alt+↑` / `Ctrl+Alt+↓`,只走活跃池)。 */
+/** 本桥挂载的 fixed 活跃会话行 id(`primary+alt+↑/↓`,只走活跃池)。 */
 export const SESSION_ACTIVE_CYCLE_ID: ShortcutCommandId = 'dsh-focus-free-shortcuts.session-active-cycle' as ShortcutCommandId
 
-/** `Ctrl+↑`:向候选列表起点方向切换。 */
+/** `primary+↑`:向候选列表起点方向切换(macOS `⌘↑`,Windows/Linux `Ctrl+↑`)。 */
 export const SESSION_PREVIOUS_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'ArrowUp',
-  modifiers: ['control'],
+  modifiers: ['primary'],
 }
 
-/** `Ctrl+↓`:向候选列表终点方向切换。 */
+/** `primary+↓`:向候选列表终点方向切换(macOS `⌘↓`,Windows/Linux `Ctrl+↓`)。 */
 export const SESSION_NEXT_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'ArrowDown',
-  modifiers: ['control'],
+  modifiers: ['primary'],
 }
 
-/** `Ctrl+Alt+↑`:向活跃池起点方向切换。 */
+/** `primary+alt+↑`:向活跃池起点方向切换(macOS `⌘⌥↑`,Windows/Linux `Ctrl+Alt+↑`)。 */
 export const SESSION_ACTIVE_PREVIOUS_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'ArrowUp',
-  modifiers: ['control', 'alt'],
+  modifiers: ['primary', 'alt'],
 }
 
-/** `Ctrl+Alt+↓`:向活跃池终点方向切换。 */
+/** `primary+alt+↓`:向活跃池终点方向切换(macOS `⌘⌥↓`,Windows/Linux `Ctrl+Alt+↓`)。 */
 export const SESSION_ACTIVE_NEXT_BINDING: ShortcutFixedCommand['bindings'][number] = {
   code: 'ArrowDown',
-  modifiers: ['control', 'alt'],
+  modifiers: ['primary', 'alt'],
 }
 
-/** 全部候选那一条 fixed 行:占用两个方向键并声明该操作。 */
-export const SESSION_CYCLE_COMMAND: ShortcutFixedCommand = {
-  id: SESSION_CYCLE_ID,
-  label: () => '切换会话',
-  keys: ['Ctrl', '↑/↓'],
-  bindings: [SESSION_PREVIOUS_BINDING, SESSION_NEXT_BINDING],
-  group: 'application',
+/** 全部候选那一条 fixed 行:占用两个方向键并声明该操作;键帽按平台格式化。 */
+export function sessionCycleCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
+  return {
+    id: SESSION_CYCLE_ID,
+    label: () => '切换会话',
+    keys: bindingKeycaps(SESSION_PREVIOUS_BINDING, platform, '↑/↓'),
+    bindings: [SESSION_PREVIOUS_BINDING, SESSION_NEXT_BINDING],
+    group: 'application',
+  }
 }
 
-/** 活跃池那一条 fixed 行:占用带 `Alt` 的两个方向键并声明该操作。 */
-export const SESSION_ACTIVE_CYCLE_COMMAND: ShortcutFixedCommand = {
-  id: SESSION_ACTIVE_CYCLE_ID,
-  label: () => '切换到活跃会话',
-  keys: ['Ctrl', 'Alt', '↑/↓'],
-  bindings: [SESSION_ACTIVE_PREVIOUS_BINDING, SESSION_ACTIVE_NEXT_BINDING],
-  group: 'application',
+/** 活跃池那一条 fixed 行:占用带 `Alt` 的两个方向键并声明该操作;键帽按平台格式化。 */
+export function sessionActiveCycleCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
+  return {
+    id: SESSION_ACTIVE_CYCLE_ID,
+    label: () => '切换到活跃会话',
+    keys: bindingKeycaps(SESSION_ACTIVE_PREVIOUS_BINDING, platform, '↑/↓'),
+    bindings: [SESSION_ACTIVE_PREVIOUS_BINDING, SESSION_ACTIVE_NEXT_BINDING],
+    group: 'application',
+  }
 }
 
 /** 参与候选的工作区分组数量上限:只切换前三个工作区里显示出来的会话行。 */
@@ -185,7 +193,7 @@ export interface SessionCycleRequest {
  * 本次按键命中的是哪一条行、往哪个方向走。
  *
  * 两条行都按「行是否拥有该按键」判定;一条都没命中(键位不对、行未挂载)时返回 undefined。
- * 两条行的绑定修饰键集合互斥(`Ctrl` 对 `Ctrl+Alt`),所以至多命中一条。
+ * 两条行的绑定修饰键集合互斥(`primary` 对 `primary+alt`),所以至多命中一条。
  */
 export function sessionCycleRequest(
   rows: readonly ShortcutFixedCatalogEntry[],
@@ -365,8 +373,8 @@ export interface SessionCycleFacts {
 /**
  * 本次按键要循环的池子。
  *
- * `'all'` 是全部候选(`Ctrl+↑` / `Ctrl+↓` 那一条);`'active'` 只取活跃候选
- * (`Ctrl+Alt+↑` / `Ctrl+Alt+↓` 那一条),没有活跃候选时是空池 —— 空池不动作,不退回
+ * `'all'` 是全部候选(`primary+↑` / `primary+↓` 那一条);`'active'` 只取活跃候选
+ * (`primary+alt+↑` / `primary+alt+↓` 那一条),没有活跃候选时是空池 —— 空池不动作,不退回
  * 全部候选:常规导航本来就有自己的一条键。
  */
 export function sessionPool(facts: SessionCycleFacts, pool: SessionPool): readonly SessionId[] {
@@ -460,8 +468,8 @@ export function installSessionCycleBridge(ctx: Context): void {
     }
     // 行必须先挂载,观察者才能读到它们;三者在同 scope,按同序销毁。
     scope.effect(() => {
-      const offCycle = shortcuts.registerFixed(SESSION_CYCLE_COMMAND)
-      const offActive = shortcuts.registerFixed(SESSION_ACTIVE_CYCLE_COMMAND)
+      const offCycle = shortcuts.registerFixed(sessionCycleCommand(shortcuts.platform))
+      const offActive = shortcuts.registerFixed(sessionActiveCycleCommand(shortcuts.platform))
       return () => {
         offCycle()
         offActive()

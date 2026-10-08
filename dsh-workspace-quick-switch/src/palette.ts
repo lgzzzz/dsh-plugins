@@ -14,14 +14,67 @@
 /** 浮层最多列出的工作区数量。 */
 export const WORKSPACE_LIMIT = 10
 
-/** 本插件挂载的固定行 id(占用 `Ctrl+Alt+M`,并出现在快捷键目录里)。 */
+/** 本插件挂载的固定行 id(占用 `⌘⌥M` / `Ctrl+Alt+M`,并出现在快捷键目录里)。 */
 export const QUICK_SWITCH_ID = 'dsh-workspace-quick-switch.quick-switch'
 
-/** 固定行占用的唯一物理组合:`Ctrl+Alt+M`。 */
+/**
+ * 固定行占用的逻辑物理组合:`primary+alt+M`。
+ *
+ * `primary` 是注册表认的逻辑主修饰键:macOS 上展开成 `meta`(`⌘⌥M`),Windows/Linux 上
+ * 展开成 `control`(`Ctrl+Alt+M`)——同一份声明,两端各是各的键。
+ */
 export const QUICK_SWITCH_BINDING = {
   code: 'KeyM',
-  modifiers: ['control', 'alt'],
+  modifiers: ['primary', 'alt'],
 } as const
+
+/** 接收输入的设备平台;只管 `primary` 往哪边展开。 */
+export type QuickSwitchPlatform = 'macos' | 'windows' | 'linux'
+
+/** `primary` 在给定平台上展开成的物理修饰键。 */
+export function primaryModifier(platform: QuickSwitchPlatform): 'meta' | 'control' {
+  return platform === 'macos' ? 'meta' : 'control'
+}
+
+/**
+ * 固定行在给定平台上显示的键帽。
+ *
+ * 固定行目录的 `keys` 是直接给 UI 用的标签(注册表只规范化 `bindings`、不动 `keys`),
+ * 所以要自己按平台把 `primary` 落成 `⌘`(macOS)或 `Ctrl`(其它平台)。
+ * @param platform - 接收输入的设备平台。
+ * @returns 固定行的三个键帽。
+ */
+export function quickSwitchKeys(platform: QuickSwitchPlatform): string[] {
+  return platform === 'macos' ? ['⌘', '⌥', 'M'] : ['Ctrl', 'Alt', 'M']
+}
+
+/** 一次按键里本插件要读的修饰键事实(KeyboardEvent 结构上满足它)。 */
+export interface QuickSwitchGesture {
+  readonly code?: string
+  readonly control?: boolean
+  readonly alt?: boolean
+  readonly shift?: boolean
+  readonly meta?: boolean
+}
+
+/**
+ * 这次按键是否就是本插件固定行在给定平台上占用的物理组合。
+ *
+ * macOS 上要 `meta+alt`、且不许同时按下另一侧的主修饰键(`control`);Windows/Linux 上
+ * 要 `control+alt`、且不许 `meta`;两边都拒绝 `shift` 与别的键。
+ * @param platform - 接收输入的设备平台。
+ * @param gesture - 按键事实。
+ * @returns 完全匹配时为 true。
+ */
+export function quickSwitchPress(platform: QuickSwitchPlatform, gesture: QuickSwitchGesture): boolean {
+  const primary = primaryModifier(platform)
+  const other = primary === 'meta' ? 'control' : 'meta'
+  return gesture.code === QUICK_SWITCH_BINDING.code
+    && gesture[primary] === true
+    && gesture.alt === true
+    && gesture[other] !== true
+    && gesture.shift !== true
+}
 
 /** 宿主侧的一个工作区(本插件只读这几个字段;形状沿用 Workspace 控制器的 `items` 元素)。 */
 export interface HostWorkspace {

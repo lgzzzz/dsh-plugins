@@ -18,11 +18,11 @@
 | 提问卡片 | 同一条 `pendingInteraction`，收窄到提问域：`kind` 为 `question` / `plan-review`、`key` 是字符串、带 `dismiss()` | `dismiss()`（卡片关闭 / 取消按钮用的同一个方法，**从不**调 `answer()`） |
 | 聚焦输入框 | 同一条"主视图持有的会话"的 scope，经 `conversation.input.for(scope)` 取到 composer 输入面 | 该输入面的 `focus()`（光标位置一并还原） |
 | 页面切换 | `sidebar.mounted`（右侧栏正在画的会话）的页面列表 `tabsIn` 与当前页 `active()` | `focus(tabId)` 切页（与点击芯片同一操作，记入布局历史）；切页后在**下一帧**执行 `focusShownPage` 把键盘交给新显示的页面，页面自聚焦（如终端）则不抢 |
-| 会话导航 | 左侧栏此刻渲染出来的会话行：`[data-row-key="workspace:…"]` / `session:…` 两类行里取前三个工作区的会话行；当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出，活跃与否读 `uiSession.sessionStatus` | `uiWorkspace.openSession(id)`（与点击侧栏那一行同一操作）；`Ctrl+↑/↓`（`session-cycle`）在全部候选里环状走，`Ctrl+Alt+↑/↓`（`session-active-cycle`）只走候选里带状态点的活跃会话（运行中 / 待交互 / 已完成未读） |
+| 会话导航 | 左侧栏此刻渲染出来的会话行：`[data-row-key="workspace:…"]` / `session:…` 两类行里取前三个工作区的会话行；当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出，活跃与否读 `uiSession.sessionStatus` | `uiWorkspace.openSession(id)`（与点击侧栏那一行同一操作）；`⌘↑/↓`（macOS）/ `Ctrl+↑/↓`（Windows/Linux）（`session-cycle`）在全部候选里环状走，`⌘⌥↑/↓`（macOS）/ `Ctrl+Alt+↑/↓`（Windows/Linux）（`session-active-cycle`）只走候选里带状态点的活跃会话（运行中 / 待交互 / 已完成未读） |
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
 
-页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（`Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（`Ctrl+方向键`）这类转义序列塞给 shell），其余按键放行给通道；两路共用同一个判定。
+页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；macOS 上同样的行是 `⌘⌥←/→`、`⌘⌥↑/↓` 与 `⌘↑/↓`，xterm 不为这些 `⌘` 系组合产出上述转义序列，但这只 window 捕获钩子照常运行），其余按键放行给通道；两路共用同一个判定。
 
 下面逐条展开：面板键见 [第 5 节](03-fixed-input-and-pane-keys.md)，停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键与提问卡片见 [第 5 册](05-approval-key-bridge.md)，聚焦输入框、页面循环与会话导航的逐行说明见 [第 6 册](06-boundaries-and-contracts.md)。
 

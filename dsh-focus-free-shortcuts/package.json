@@ -2,7 +2,7 @@
   "name": "dsh-focus-free-shortcuts",
   "version": "1.0.0",
   "private": true,
-  "description": "在未先点击目标区域时也能触发右侧边栏 pane 命令、双击 Esc 停止回合、审批面板与提问卡片的 Enter/Esc 决策，以及 Ctrl+Alt+J 聚焦输入框、Ctrl+Alt+←/→ 切换右侧边栏页面和 Ctrl+↑/↓ 在前三个工作区显示出来的会话行之间导航、Ctrl+Alt+↑/↓ 只在活跃会话之间切换（行上有状态点者）的快捷键。",
+  "description": "在未先点击目标区域时也能触发右侧边栏 pane 命令、双击 Esc 停止回合、审批面板与提问卡片的 Enter/Esc 决策，以及 ⌘⌥J（macOS）/Ctrl+Alt+J（Windows/Linux）聚焦输入框、⌘⌥←/→（macOS）/Ctrl+Alt+←/→（Windows/Linux）切换右侧边栏页面和 ⌘↑/↓（macOS）/Ctrl+↑/↓（Windows/Linux）在前三个工作区显示出来的会话行之间导航、⌘⌥↑/↓（macOS）/Ctrl+Alt+↑/↓（Windows/Linux）只在活跃会话之间切换（行上有状态点者）的快捷键。",
   "type": "module",
   "exports": {
     ".": {
