@@ -131,7 +131,7 @@
 
 本插件**不重述上游已有的类型**：物理按键手势 / 绑定 / 两类快捷键目录行取自 `@deepseek-ai/dsh-client-shortcuts`（`NormalizedBinding` 走 `/protocol` 入口），会话目录、会话绑定与列表快照取自 `@deepseek-ai/dsh-api-session-controller/client`，会话 UI 状态与 `pendingInteraction` 槽位取自 `@deepseek-ai/dsh-client-ui-session/client`，待答审批取自 `@deepseek-ai/dsh-client-ui-approval/client` 的 `PendingApproval` / `ApprovalDecision`，待答提问取自 `@deepseek-ai/dsh-client-ui-user-questions/client` 的 `PendingQuestion`，会话级 `cancel()` 与 composer 输入面 `conversation.input`（`SessionInputResolver` / `SessionInput`）取自 `@deepseek-ai/dsh-client-ui-conversation/client` 的 `IConversation`，Sidebar 面取自 Cordis 上的 `Context['sidebarRight']`。会话导航面则把 `uiWorkspace` 声明为 Cordis 注入依赖、再按结构读 `scope.get('uiWorkspace')`（上游 `UiWorkspace` 的公开面，本插件不为它多拉一个类型依赖，见下面第 21 条）。全部类型都是 `import type`，打包时被擦除（客户端纯度门看不到它们）。
 
-下面列的则是**不是正式对外契约**的事实，都与官方代码同源，但官方没有承诺"永不变名"。若上游改名，本插件会**退化成 no-op（什么都不做，但绝不误动作）**，并在诊断里说明。
+下面列的则是**不是正式对外契约**的事实，都与官方代码同源，但官方没有承诺"永不变名"。若上游改名，本插件会**退化成 no-op（什么都不做，但绝不误动作）**，并在诊断里说明。这份清单同时被 `check-css.mjs` 在构建后逐条 grep 上游构建产物（`css-contract.json`，见第 7 册第 9.1 节）：改名 / 搬走会在构建期显式失败并打印"哪条契约退化成什么"，而不是等到运行时静默退化。
 
 1. 命令 id `pane.fullscreen.toggle` / `pane.split`（与官方 `shortcuts.register` 处同源）；
 2. DOM 标记 `[data-conversation-session]` / `[data-conversation-region]`（与官方 stop guard 同源）；
