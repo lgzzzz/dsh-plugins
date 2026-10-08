@@ -21,7 +21,7 @@ function column({ sessionId = 's1', open = true, terminal = true } = {}) {
   return { app, root, pane, textarea }
 }
 
-console.log('--- P① 从别处抢键盘:先聚焦活动 pane,再落到终端输入面 ---')
+console.log('--- X① 从别处抢键盘:先聚焦活动 pane,再落到终端输入面 ---')
 {
   const sidebar = fakePageSidebar({ mounted: 's1' })
   const { app, pane, textarea } = column()
@@ -41,7 +41,7 @@ console.log('--- P① 从别处抢键盘:先聚焦活动 pane,再落到终端输
   }
 }
 
-console.log('--- P② 页面已自持键盘(如终端里)时不抢,但这一按仍归本桥 ---')
+console.log('--- X② 页面已自持键盘(如终端里)时不抢,但这一按仍归本桥 ---')
 {
   const sidebar = fakePageSidebar({ mounted: 's1' })
   const { app, pane, textarea } = column()
@@ -58,7 +58,7 @@ console.log('--- P② 页面已自持键盘(如终端里)时不抢,但这一按�
   }
 }
 
-console.log('--- P③ 显示页不是终端:只把键盘交给 pane 本身 ---')
+console.log('--- X③ 显示页不是终端:只把键盘交给 pane 本身 ---')
 {
   const sidebar = fakePageSidebar({ mounted: 's1' })
   const { app, pane } = column({ terminal: false })
@@ -74,7 +74,7 @@ console.log('--- P③ 显示页不是终端:只把键盘交给 pane 本身 ---')
   }
 }
 
-console.log('--- P④ 边界:面板展开但没有可见 pane 时只消费、不动作 ---')
+console.log('--- X④ 边界:面板展开但没有可见 pane 时只消费、不动作 ---')
 {
   const sidebar = fakePageSidebar({ mounted: 's1' })
   const app = new FakeElement('div', { 'data-app': '' })
@@ -89,7 +89,7 @@ console.log('--- P④ 边界:面板展开但没有可见 pane 时只消费、不
   }
 }
 
-console.log('--- P⑤ 让位:折叠 / 没有会话 / 别的键 / 模态 / repeat ---')
+console.log('--- X⑤ 让位:折叠 / 没有会话 / 别的键 / 模态 / repeat ---')
 {
   const cases = [
     ['右栏折叠', { sidebar: fakePageSidebar({ mounted: 's1', expanded: false }), press: FOCUS_PAGE_PRESS, context: {} }],
@@ -114,7 +114,7 @@ console.log('--- P⑤ 让位:折叠 / 没有会话 / 别的键 / 模态 / repeat
   }
 }
 
-console.log('--- P⑥ 失败模式:缺 sidebarRight / 缺 observeFixedInput 即不装 ---')
+console.log('--- X⑥ 失败模式:缺 sidebarRight / 缺 observeFixedInput 即不装 ---')
 {
   const noSidebar = harness({ withSidebar: false })
   check('缺 sidebarRight 时聚焦右栏页面固定行未挂载', noSidebar.shortcuts.fixedCatalog.getSnapshot().some((entry) => entry.id === FOCUS_PAGE_ID), false)
@@ -130,7 +130,7 @@ console.log('--- P⑥ 失败模式:缺 sidebarRight / 缺 observeFixedInput 即�
   check('缺 observeFixedInput 时未装监听', bare.effects.length, 0)
 }
 
-console.log('--- P⑦ 卸载:固定行与监听一起释放 ---')
+console.log('--- X⑦ 卸载:固定行与监听一起释放 ---')
 {
   const sidebar = fakePageSidebar({ mounted: 's1' })
   const { app, textarea } = column()
@@ -154,7 +154,7 @@ console.log('--- P⑦ 卸载:固定行与监听一起释放 ---')
   }
 }
 
-console.log('--- P⑧ 终端内:捕获阶段在 xterm 之前拦下,不让它落进 shell ---')
+console.log('--- X⑧ 终端内:捕获阶段在 xterm 之前拦下,不让它落进 shell ---')
 {
   const sidebar = fakePageSidebar({ mounted: 's1' })
   const { app, root, pane, textarea } = column()
@@ -171,7 +171,7 @@ console.log('--- P⑧ 终端内:捕获阶段在 xterm 之前拦下,不让它落�
   }
 }
 
-console.log('--- P⑨ 捕获路径让位:不吞事件,原样交给 xterm ---')
+console.log('--- X⑨ 捕获路径让位:不吞事件,原样交给 xterm ---')
 {
   const cases = [
     { label: '右栏折叠', sidebar: fakePageSidebar({ mounted: 's1', expanded: false }), open: true },
@@ -215,7 +215,7 @@ console.log('--- P⑨ 捕获路径让位:不吞事件,原样交给 xterm ---')
   }
 }
 
-console.log('--- P⑩ 卸载:捕获监听随观察者一起释放 ---')
+console.log('--- X⑩ 卸载:捕获监听随观察者一起释放 ---')
 {
   const sidebar = fakePageSidebar({ mounted: 's1' })
   const { app, root, pane, textarea } = column()
