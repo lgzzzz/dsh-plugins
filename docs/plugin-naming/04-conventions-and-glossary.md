@@ -2,7 +2,7 @@
 
 > 本文件是 [DSH 插件五种「名字」完整说明](../plugin-naming.md) 的第 4 册：本仓库的命名约定与术语速查表。
 
----
+-----
 
 ## 7. 本仓库约定
 
@@ -10,13 +10,13 @@
    - 例：`dsh-git-guard` 的包名、patch `id`、patch `name`、`export const name` 都是 `dsh-git-guard`。
    - 例外：`dsh-directory-picker-browse` 这类「纯补丁 bundle」里 patch `id`（本地标识）与 patch `name`（要加载的官方包名）不同。
 2. 宿主半部只用两种写法，**不要混用**：
-   - `export function apply`（+ 可选 `export const name` / `export const inject` / `export const Config`）；
+   - `export function apply`（+ 可选 `export const name` / `export const inject` / `export const Config`）；需要 default 导出时写 `export default { name, apply }`（带服务依赖时连 `inject` 一起写）；
    - 或 `export default class X extends Service`。
-   - 本仓库现状：`dsh-git-guard` 用了 `export const name + export function apply + export default { name, apply }`；其余宿主半部都是 `export const name + export function apply`。
-3. 客户端半部（`src/client.ts`）的 `export const name` 同样只是标签：浏览器模块 id 来自**包名**，构建脚本里的 `loaderId`（`clientBundle(id)` 的第一个参数）必须等于包名。
+   - 本仓库现状：`dsh-git-guard` 用 `export const name + export function apply + export default { name, apply }`；`dsh-workspace-activity-sort` 用 `export const name + export function apply + export default { name, inject, apply }`；其余宿主半部只导出 `export const name + export function apply`。
+3. 客户端半部（`src/client.ts`）的 `export const name` 同样只是标签：浏览器模块 id 来自**包名**，构建脚本传给 `clientBundle(id)` 的第一个参数（`id`）必须等于包名。
 4. 提供服务用 `static provide`（或 `super(ctx, 'x')`）显式声明；导出 `name` 不充当服务名。
 
----
+-----
 
 ## 8. 术语速查表
 

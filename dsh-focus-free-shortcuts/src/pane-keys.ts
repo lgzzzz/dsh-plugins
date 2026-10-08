@@ -8,6 +8,8 @@
  * 已聚焦的面板仍然优先，并且只跟随生效的目录行（被重绑、禁用或不存在的内置命令不动）。
  * 不向快捷键目录注册任何条目。仅 Web 运行时：Desktop 上这些可配置绑定由原生键盘桥接派发，
  * 本 DOM 观察者无法抑制。
+ *
+ * 逐行机制见 docs/dsh-focus-free-shortcuts/03-fixed-input-and-pane-keys.md。
  */
 import { bindingMatches, enabledBinding } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
@@ -80,7 +82,7 @@ export function installPaneBridge(ctx: Context): void {
   })
 }
 
-/** 用内置面板命令处理一次固定通道的 keydown。 */
+/** 处理固定通道投递的一次 keydown；只有解析出面板目标时才消费按键。 */
 function handlePaneInput(shortcuts: Shortcuts, sidebar: Sidebar, input: KeydownInput): void {
   const gesture: ShortcutGesture = input.gesture
   const context = input.context

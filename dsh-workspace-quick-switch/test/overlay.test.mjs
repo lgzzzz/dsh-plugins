@@ -45,10 +45,11 @@ function parseOptions(html) {
 }
 
 /**
- * 渲染浮层并跑它登记的 effect。
+ * 渲染浮层,并收下组件登记的 effect(服务端渲染不跑它们)。
  *
- * 生产环境里 React 提交后跑这些 effect(聚焦面板、在 `document` 上挂按键捕获监听);
- * 服务端渲染不跑,所以这里自己拿登记去跑,返回的 `cleanup` 就是组件卸载时会发生的事。
+ * 生产环境里 React 提交后跑这些 effect:聚焦面板、在 `document` 上挂按键捕获监听。
+ * 这里把它们登记下来,`runEffects()` 负责跑,`cleanup()` 按逆序跑返回的清理函数,
+ * 也就是组件卸载时会发生的事。
  */
 function render(store) {
   const effects = []
@@ -131,7 +132,7 @@ console.log('--- E② 渲染候选:顺序、标题、路径、当前标记与选
 console.log('--- E③ 组件登记的 effect:聚焦 + 捕获监听 ---')
 {
   // 服务端渲染不跑 effect,而且 React 会在渲染期间换掉分派器,所以这里直接把生产环境里
-  // 组件 effect 调用的那个安装函数驱动起来;组件内部对它的调用由 E④② 的渲染路径覆盖。
+  // 组件 effect 调用的那个安装函数驱动起来,不走组件的挂载流程。
   const store = makeStore({ active: 'ws-1', selected: 0 })
   const cleanups = installPaletteKeys(store, dom.document)
   check('安装函数挂上捕获监听', dom.document.listenerCount(), 1)

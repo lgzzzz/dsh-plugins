@@ -2,9 +2,9 @@
 
 > 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 5 册：审批面板「允许一次 / 拒绝」的焦点无关桥接，以及它与面板自身、停止序列、提问卡片取消桥之间的归属判定。
 
----
+-----
 
-### 5.6 审批桥接：安装与 `handleApprovalInput`
+## 5.9 审批桥接：安装与 `handleApprovalInput`
 
 审批面板（`@deepseek-ai/dsh-client-ui-approval`）不是"可配置命令"，而是自己监听 `keydown` 的 React 组件：它渲染一个 `[data-approval-key]` 根节点，在上面挂 `onKeyDown`，并用 `uiSession.registerPendingInteraction` 把这条待答请求发布给会话状态。面板的处理器只在焦点位于 `[data-approval-key]` 子树内时才作答：
 
@@ -18,12 +18,13 @@ if (event.key === 'Enter' && element.closest('button, a[href], [role="button"]')
 if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
 event.preventDefault()
 event.stopPropagation()
+if (event.repeat || composing.current || compositionEnded.current || event.nativeEvent.isComposing || event.keyCode === 229) return
 answer(event.key === 'Enter' ? 'allowed-once' : 'rejected')
 ```
 
 它同时用 `registerFixed()` 把 `approval.allow`（`Enter`）与 `approval.reject`（`Esc`）两行只读快捷键登记进固定目录。这两行只承担声明与冲突检查，实际按键处理由本桥接完成。
 
-#### 5.6.1 焦点与事件目标
+### 5.9.1 焦点与事件目标
 
 审批面板以一个 overlay 条目注册在 `conversation.composer` 链上：`conversation` 用 `renderSlotChain(..., { overlay: true })` 把它叠在默认 composer 之上，而 overlay 机制会给未被选中的 fallback 加上 `style="display: none"`（`dsh-client-ui-renderer/lib/client.js` 的 `renderChainResult`）。composer 输入框被隐藏后浏览器把焦点退回 `<body>`，于是审批出现期间的按键事实是：
 
@@ -31,9 +32,9 @@ answer(event.key === 'Enter' ? 'allowed-once' : 'rejected')
 - 事件不经过审批面板（面板不是 `<body>` 的祖先），面板的 React `onKeyDown` 收不到；
 - 面板自己的守卫 `event.currentTarget.contains(document.activeElement)` 也不成立。
 
-此时固定通道给出的 `region` 是 `page`（见 5.6.2 ③）。焦点停在过程卡片上的情形由 5.6.4 的捕获路径处理。
+此时固定通道给出的 `region` 是 `page`（见 5.9.2 ③）。焦点停在过程卡片上的情形由 5.9.4 的捕获路径处理。
 
-#### 5.6.2 `handleApprovalInput` 的判定步骤
+### 5.9.2 `handleApprovalInput` 的判定步骤
 
 ```ts
 function installApprovalBridge(ctx) {
@@ -85,7 +86,7 @@ function handleApprovalInput(shortcuts, sessions, uiSession, input) {
   - `context.modal === null`：模态层（设置等）打开时不动作；
   - `context.region === 'page'`：`region` 是官方固定通道给出的焦点分类，取值为 `terminal` / `editable` / `page`。审批出现时 composer 已被隐藏、焦点退回 `<body>`，正常路径就是 `page`；`editable`（侧栏搜索框、重命名输入框等）与 `terminal` 里的 `Enter` / `Esc` 属于那些控件自己，一律让开。
 
-  修饰键由 `bindingMatches`（第 5.2 节）判定：修饰键集合须完全相等，`Shift+Enter` 之类的组合不会命中 `{ code: 'Enter', modifiers: [] }` 这条固定行。
+  修饰键由 `bindingMatches`（第 7 册第 9 节的 A 组判定）判定：修饰键集合须完全相等（顺序无关）、双键和弦一律不匹配，所以 `Shift+Enter` 之类的组合不会命中 `{ code: 'Enter', modifiers: [] }` 这条固定行。
 - **④ 读已挂载的固定行 `approvalOutcomeFor`：** `shortcuts.fixedCatalog.getSnapshot()` 里存在 `approval.allow` / `approval.reject`，且物理组合正好是这一按，才判定为 `allowed-once` / `rejected`；审批插件未装载时没有这两行，桥为 no-op。
 - **⑤ 面板掌权就让位 `approvalPanelOwnsTarget`：** 目标落在 `[data-approval-key]` 内时不动作，交给面板的 `onKeyDown`。面板有两条不消费的路径会漏到 `window`——目标在输入控件内、`Enter` 落在被聚焦的按钮 / 链接上（保留按钮原生动作）；不判这条让位，`Tab` 到「拒绝」按钮再按 `Enter` 会变成「允许一次」。
 - **⑥ 无焦点解析目标 `mainViewSessionId`：** 读 `sessions.list.byId[id].retainedBy.mainView > 0`，即主视图保留的那个会话。持有数不为 1（切换瞬间）时返回 `undefined`，这一按不响应。
@@ -97,19 +98,19 @@ function handleApprovalInput(shortcuts, sessions, uiSession, input) {
 
   任何一条不满足都返回 `undefined`，这一按不消费、不动作。
 - **⑧ 先消费，再作答。** `input.consume()` 标记本桥是这一按的 owner：事件不再漏给浏览器（`Esc` 会停止页面加载之类），也不会被停止序列当成"第一下"记下来。
-- **⑨ 调用面板按钮的同一个操作。** `approval.answer('allowed-once' | 'rejected')` 正是"允许一次 / 拒绝"两个按钮 `onClick` 里调用的方法，返回给等待中的 Host waterfall。`PendingApproval.answer()` 内部自带一把锁（`waiting` / `answerable`），第二按到达也不会重复作答。失败被 `.catch` 捕获并告警 `approval <key> was not sent:`，不冒泡成未处理的 Promise 拒绝。
+- **⑨ 调用面板按钮的同一个操作。** `approval.answer('allowed-once' | 'rejected')` 正是"允许一次 / 拒绝"两个按钮 `onClick` 里调用的方法，返回给等待中的 Host waterfall。请求一旦定局，`PendingApproval.answerable` 即为假，再调 `answer()` 只会拿到一个 rejected Promise（`settlePendingComposer` 把内部"已定局"错误转成 rejected Promise）；本桥在更早一步的 `asAnswerableApproval` 里就要求 `answerable === true`，所以同一个审批不会收到第二次决定。失败被 `.catch` 捕获并告警 `approval <key> was not sent:`，不冒泡成未处理的 Promise 拒绝。
 
-#### 5.6.3 归属判定与让位
+### 5.9.3 归属判定与让位
 
 审批键与另外几条桥同处 `fixedListeners`，靠"显式让位 + 共享 `consumed` 标志"保证每按恰好一个 owner；审批键自己另有捕获路径，两条路互斥——捕获路命中即吞事件，固定通道根本收不到，未命中则原样放行、由固定通道决定：
 
 | 按下时的情形 | 归属 | 判定依据 |
 |---|---|---|
 | 焦点在审批面板内（`[data-approval-key]` 子树，含审批详情区、面板上的按钮） | 面板自己 | 面板 `preventDefault()` + `stopPropagation()` 后 window 级固定通道收不到；漏到 `window` 的输入控件 / 聚焦按钮两条路径由 ⑤ 让位 |
-| 焦点停在某张**过程卡片**上（工具卡 `div[role="button"][tabindex="0"]` / 轨迹行 `tr[tabindex="0"]`），有待答审批 | 审批桥（**捕获路径**） | 卡片的 React `keydown` 先 `preventDefault()` 再折叠 / 选中；捕获监听在它之前拦下并作答，卡片收不到这一按（见 5.6.4） |
+| 焦点停在某张**过程卡片**上（工具卡 `div[role="button"][tabindex="0"]` / 轨迹行 `tr[tabindex="0"]`），有待答审批 | 审批桥（**捕获路径**） | 卡片的 React `keydown` 先 `preventDefault()` 再折叠 / 选中；捕获监听在它之前拦下并作答，卡片收不到这一按（见 5.9.4） |
 | 焦点在 `<body>`、`page` 区域，有待答审批 | 审批桥（捕获路径先拦，未拦到则由固定通道接手） | 面板收不到（目标不在其子树里）；两路共用同一判定，先命中者作答并消费 |
 | 焦点在 `<body>`、`page` 区域，无待答审批 | 停止序列（`Esc`，内置固定序列 `response.stop`）或无人（`Enter`） | 审批桥在 ⑦ 返回 `undefined`，不消费；`Esc` 进入双按序列 |
-| 有待答审批时按 `Esc` | 审批桥（一下即拒绝） | 内置 `response.stop`（`currentTurn()`）与插件 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛返回"没有可停的轮次"，不消费 |
+| 有待答审批时按 `Esc` | 审批桥（一下即拒绝） | 内置停止监听器（`currentTurn()`）与插件 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛返回"没有可停的轮次"，不消费 |
 | 焦点在输入控件（`editable`）/ 终端（`terminal`）/ 模态层（`modal !== null`）之上 | 那个控件自己 | ③ 的 `region` 与 `modal` 门槛否决，审批桥不消费 |
 | 焦点在 `<body>`、`page` 区域，有待答提问 | 提问桥 | 提问卡片本身不绑 `Esc`；提问桥用同一条"主视图会话 + `pendingInteraction`"解析出可关闭卡片，先消费再调 `dismiss()` |
 | 有待答提问时按 `Esc` | 提问桥（一下即取消卡片） | 停止侧因同一门槛拒绝；审批桥的 `asAnswerableApproval` 要求 `kind === 'approval'`，不接手 |
@@ -121,7 +122,7 @@ function handleApprovalInput(shortcuts, sessions, uiSession, input) {
 
 > 有待答审批时 `Esc` 一下即拒绝，不进入停止序列的双按序列；有待答提问时 `Esc` 取消卡片，`Enter` 仍完全归卡片自己（`Enter` 只出现在卡片的选项 / 字段上，这条桥根本不碰它）。
 
-#### 5.6.4 捕获路径：焦点停在过程卡片上（`approvalCaptureOutcome` + `installApprovalCapture`）
+### 5.9.4 捕获路径：焦点停在过程卡片上（`approvalCaptureOutcome` + `installApprovalCapture`）
 
 固定通道的前提是这一按能冒泡到 `window` 且未被消费。官方通道按"本地控件先裁决，再到 window"的顺序派发（`installKeyboard`），而过程卡片自己就绑了 `Enter` 并且先 `preventDefault()`：
 
@@ -179,11 +180,11 @@ function installApprovalCapture(shortcuts, sessions, uiSession) {
 - **③④⑤ 复用同一套判定。** 捕获路不另立规则：固定行预约（④）、准入（③）、面板归属（⑤）全部复用。`captureGesture` 在捕获阶段构造的手势 `defaultPrevented` 恒为 `false`（此时还没有处理器运行），因此能通过 ③ 的"已被消费"门槛。
 - **⑥ 先吞，再答。** `stopPropagation()` 让事件到不了目标，卡片的 React 处理器不执行；`preventDefault()` 拦掉浏览器默认动作。只答不吞时，按一次 `Enter` 会既批准又折叠卡片。
 - **两路互斥，不会双答。** 捕获路命中并吞掉事件 → 固定通道收不到；捕获路放行 → 事件照常冒泡，固定通道再决定一次（判定相同）。无论焦点在 `<body>` 还是某张卡片上，每按恰好一个 owner。未命中捕获（例如捕获监听被卸载、或目标区域整体让位）时，固定通道仍是正常投递路径。
-- **`src/capture.ts` 提供共用的读数。** 按键落点（`composedElement` / `pressElement`）、原始手势（`captureGesture`）、归属上下文（`captureContext`，含区域与模态）与终端落点判定（`terminalTarget`）都由 `src/capture.ts` 导出，本桥与页面循环桥、会话导航桥（第 6 册）共用。
-- **`suppressFocusRing` 抑制焦点环。** 作答会把键盘交回 composer，应用随即切到键盘模态；`ui-theme` 的 `focus.css` 只在 `html[data-input-modality=pointer]` 下把焦点环设为透明，切到 `keyboard` 后仍处于 `:focus-visible` 的过程卡片会显出边框。两条路都在作答前调用 `suppressFocusRing`（`src/focus-ring.ts`）：给该控件打上官方的 `data-dsh-automatic-focus`（"无环聚焦"标记），焦点不动、边框不画，并在 blur 或 Tab / 方向键导航时按官方同一套规则摘除标记。模态判定仍归应用（测试 I⑫；第 6 册 §8 第 16、17 条）。
+- **`src/capture.ts` 提供共用的读数。** 按键落点（`composedElement` / `pressElement`）、原始手势（`captureGesture`）、归属上下文（`captureContext`，含区域与模态）与终端落点判定（`terminalTarget`）都由 `src/capture.ts` 导出；审批桥、页面循环桥、会话导航桥、聚焦输入框桥、聚焦右栏页面桥与新建会话桥（终端）的捕获钩子共用它（各桥的捕获钩子清单见第 7 册第 9 节的源码表）。
+- **`suppressFocusRing` 抑制焦点环。** 作答会把键盘交回 composer，应用随即切到键盘模态；`ui-theme` 的 `focus.css` 只在 `html[data-input-modality=pointer]` 下把焦点环设为透明，切到 `keyboard` 后仍处于 `:focus-visible` 的过程卡片会显出边框。两条路都在作答前调用 `suppressFocusRing`（`src/focus-ring.ts`）：给该控件打上官方的 `data-dsh-automatic-focus`（"无环聚焦"标记），焦点不动、边框不画，并在 blur 或 Tab / 方向键导航时按官方同一套规则摘除标记。模态判定仍归应用（测试 I⑫；第 6 册第 8 节第 16、17 条）。
 - **让位条件一条不少。** 目标落在 `[data-approval-key]` 内、落在 `input/textarea/select/contenteditable` 或 `.xterm` 内、模态层打开、长按、组字中、别的键、固定行缺席、审批已作答、主视图歧义、审批属于别的会话——都由同一套判定否决，捕获监听既不作答也不吞事件（测试 I⑨、I⑩）。
 
-### 5.7 审批键桥的归属事实与提问卡片取消桥
+## 5.10 审批键桥的归属事实与提问卡片取消桥
 
 | 维度 | 内容 |
 |---|---|
@@ -194,9 +195,9 @@ function installApprovalCapture(shortcuts, sessions, uiSession) {
 | 投递路径 | window **捕获阶段**监听（先于一切目标 / 冒泡处理器）+ 固定输入通道；两路共用同一判定、互斥不双触发 |
 | 运行时 | 固定行，Web 与 Desktop 都安装 |
 | 消费时机 | 解析出可作答审批之后（固定通道 `input.consume()`；捕获路 `preventDefault()` + `stopPropagation()`） |
-| 失败表现 | `answer()` 拒绝时告警 `approval <key> was not sent:`，不作为未处理的 Promise 拒绝冒泡；`observeFixedInput` 缺席时不安装（告警见 5.6.2 ①） |
+| 失败表现 | `answer()` 拒绝时告警 `approval <key> was not sent:`，不作为未处理的 Promise 拒绝冒泡；`observeFixedInput` 缺席时不安装（告警见 5.9.2 ①） |
 
-#### 5.7.1 提问卡片取消桥（第 6 组）：`editable` 的放行与 `dismiss()` 的三种落点
+### 5.10.1 提问卡片取消桥（第 6 组）：`editable` 的放行与 `dismiss()` 的三种落点
 
 提问桥与审批桥同走一条线：`ctx.inject(['shortcuts', 'sessions', 'uiSession'], ...)`；`shortcuts.observeFixedInput` 缺席时告警 `shortcuts service exposes no observeFixedInput; question bridge not installed` 并放弃安装；Web 与 Desktop 都安装（这里没有"可配置绑定"要交给原生键盘桥派发）。卡片本身是 **Web 独有**的客户端特性（`@deepseek-ai/dsh-client-ui-user-questions` 声明 `dsh.client.platform: "web"`）：桌面端没有人发布提问域的 `pendingInteraction`，这条桥在 Desktop 装上也是 no-op。处理顺序：
 

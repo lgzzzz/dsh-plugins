@@ -29,6 +29,7 @@ const STYLES = [
 ]
 
 function installThemeStyles(ctx) {
+  if (typeof document === "undefined") return
   for (const [name, css] of STYLES) ctx.effect(() => {
     const tag = document.createElement("style")
     tag.dataset.plugin = PLUGIN_ID
@@ -49,19 +50,19 @@ function installThemeStyles(ctx) {
 - **`scrollbar.css`**：`--dsh-scrollbar-*` 滚动条令牌。
 - **`gradient-shadow-text.css`**：`--dsw-shadow-*`、`--dsw-elevation-*` 阴影/层级令牌，以及 `--dsh-content-font-delta`、`--dsh-content-font-size-secondary`、`--dsw-font-markdown-*` 这些**正文排版令牌**（也是本仓库 CSS 补丁插件依赖的关键令牌）。
 - **`shiki.css`**：`--shiki-*` 代码高亮配色，含 `body[data-ds-dark-theme]` 暗色覆盖。
-- **`corner-shape.css`**：`@supports (corner-shape: superellipse(1.5))` 下的圆角形状开关。
+- **`corner-shape.css`**：`@supports (corner-shape:superellipse(1.5))` 下的圆角形状开关。
 
 theme 包的 CSS 注入合计 **2 个 CSS Module sheet（自注入）+ 8 个全局 inline sheet（`apply()` 里挂载）**；暗色覆盖 `body[data-ds-dark-theme]` 分散在 `design-platform.css`、`onboarding.css`、`gradient-shadow-text.css`、`shiki.css` 等多个 sheet 中。
 
 ### 4.2 除 theme 外，其它 `dsh-client-ui-*` 也各自内联自己的 CSS Module
 
-其它 UI 包（chat / conversation / tool / primitives / sidebar-* / …）的 `.module.css` 也走同一套 `\0dsh-css:` 虚拟模块，被内联进各自的 `lib/client.js`，在物化时自注入 `<style data-plugin-css>`。所以一个页面最终会有**很多条**带 `data-plugin-css` 的 `<style>`，每条归某个包所有。
+其它 UI 包（chat / conversation / tool / sidebar-* / settings-* / …）的 `.module.css` 也走同一套 `\0dsh-css:` 虚拟模块，被内联进各自的 `lib/client.js`，在物化时自注入 `<style data-plugin-css>`。所以一个页面最终会有**很多条**带 `data-plugin-css` 的 `<style>`，每条归某个包所有。`@deepseek-ai/dsh-client-ui-primitives` 与 `@deepseek-ai/dsh-client-ui-slots` 没有 `lib/client.js`：它们不是客户端插件，由外壳直接打包（primitives 随包发的是 `lib/` 下的独立 `.css` 文件），不在这条注入路径上。
 
 ### 4.3 模块系统如何回收这些 `<style>`
 
 `dsh-client-modules` 的浏览器半部有两个配套函数（`lib/client.js`）：
 
 - `claimStyles(id)`：物化一个工厂时，把「工厂执行期间注入的、还没打 `data-plugin` 标记的 `<style>`」认领到该插件名下（`el.setAttribute("data-plugin", id)`），并收集其 `data-plugin-css` 值。
-- `removeOwnedStyles(id)`：卸载 / 刷新某插件时，删除所有 `style[data-plugin="<id>"]`。
+- `removeOwnedStyles(id)`：卸载 / 刷新某插件时，删除所有 `style[data-plugin="<id>"]`；工厂物化抛错时也立刻调用它，清掉这次注入的样式。
 
 于是运行时注入的 CSS 拥有与插件生命周期一致的清理语义。

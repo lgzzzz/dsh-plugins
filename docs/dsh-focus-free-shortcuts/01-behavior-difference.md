@@ -2,7 +2,7 @@
 
 > 本文件是 [dsh-focus-free-shortcuts 说明](../dsh-focus-free-shortcuts.md) 的第 1 册：六条「焦点不在目标区域内就没有反应」的快捷键，以及后文反复用到的 DOM / 焦点 / 事件术语。
 
----
+-----
 
 ## 1. 需要先聚焦才生效的快捷键
 
@@ -17,17 +17,17 @@
 | 审批：允许一次 `Enter` / 拒绝 `Esc` | 审批面板自己的 `onKeyDown`；`registerFixed()` 另登记 `approval.allow` / `approval.reject`，仅用于声明键位与冲突检查 | 焦点落在审批详情区（`[data-approval-key]` 子树内，且 `currentTarget.contains(document.activeElement)` 成立） | 面板收不到这一按，`Enter` 与 `Esc` 都是无反应 |
 | 取消提问卡片 `Esc` | 无按键绑定；卡片唯一出口是头部关闭 / 取消按钮，调 `PendingQuestion.dismiss()` | 无（组件里只有两处 `keydown`，都只读 `Enter`，不读 `Escape`） | `Esc` 既不取消提问、也不停止回合 |
 
-> 术语：**composer** = 主界面底部的输入区；**dock pane** = 右侧栏里的面板；**审批详情区** = 审批卡片里那块可聚焦的说明区域。前两者的 DOM 标记见 [第 2.2 节](#22-本-gui-里的两个关键区域composer-与-dock-pane)，审批面板见 [第 5 册](05-approval-key-bridge.md)；提问卡片（`ask_user_question` 的 composer 顶替卡片）见同册第 5.6.3、5.7 节与 [第 6 册](06-boundaries-and-contracts.md) 第 7 节的边界表。
+> 术语：**composer** = 主界面底部的输入区；**dock pane** = 右侧栏里的面板；**审批详情区** = 审批卡片里那块可聚焦的说明区域。前两者的 DOM 标记见 [第 2.2 节](#22-本-gui-里的两个关键区域composer-与-dock-pane)，审批面板见 [第 5 册](05-approval-key-bridge.md)；提问卡片（`ask_user_question` 的 composer 顶替卡片）见同册第 5.9.3、5.10 节与 [第 6 册](06-boundaries-and-contracts.md) 第 7 节的边界表。
 
-> 键位写法：官方把主修饰键记作 `primary`，在 macOS 上映射成 `⌘`（`meta`），在 Windows/Linux 上映射成 `Ctrl`（`control`）。因此 `primary+alt+Enter` 是 `⌘⌥Enter` / `Ctrl+Alt+Enter`，`primary+Backslash` 是 `⌘\` / `Ctrl+\`。`page.close` 在 Desktop 上是 `primary+W`（`⌘W` / `Ctrl+W`），在 Web 上被官方改成 `primary+alt+W`（`⌘⌥W` / `Ctrl+Alt+W`）以免被浏览器当成关标签页的 `⌘W`。本插件自己挂的四条固定键同样声明逻辑组合、由 `registerFixed` 按设备平台规范化成生效的物理绑定：`primary+alt+J` 是 `⌘⌥J` / `Ctrl+Alt+J`，`primary+alt+←` / `primary+alt+→` 是 `⌘⌥←` / `⌘⌥→`（macOS）、`Ctrl+Alt+←` / `Ctrl+Alt+→`（Windows/Linux），`primary+↑` / `primary+↓` 是 `⌘↑` / `⌘↓`（macOS）、`Ctrl+↑` / `Ctrl+↓`（Windows/Linux），`primary+alt+↑` / `primary+alt+↓` 是 `⌘⌥↑` / `⌘⌥↓`（macOS）、`Ctrl+Alt+↑` / `Ctrl+Alt+↓`（Windows/Linux）。
+> 键位写法：官方把主修饰键记作 `primary`，在 macOS 上映射成 `⌘`（`meta`），在 Windows/Linux 上映射成 `Ctrl`（`control`）。因此 `primary+alt+Enter` 是 `⌘⌥Enter` / `Ctrl+Alt+Enter`，`primary+Backslash` 是 `⌘\` / `Ctrl+\`。`page.close` 在 Desktop 上是 `primary+W`（`⌘W` / `Ctrl+W`），在 Web 上是 `primary+alt+W`（`⌘⌥W` / `Ctrl+Alt+W`），避开浏览器用来关标签页的 `⌘W`。本插件自己挂的五条固定键同样声明逻辑组合、由 `registerFixed` 按设备平台规范化成生效的物理绑定：`primary+alt+J` 是 `⌘⌥J` / `Ctrl+Alt+J`，`primary+alt+K` 是 `⌘⌥K` / `Ctrl+Alt+K`，`primary+alt+←` / `primary+alt+→` 是 `⌘⌥←` / `⌘⌥→`（macOS）、`Ctrl+Alt+←` / `Ctrl+Alt+→`（Windows/Linux），`primary+↑` / `primary+↓` 是 `⌘↑` / `⌘↓`（macOS）、`Ctrl+↑` / `Ctrl+↓`（Windows/Linux），`primary+alt+↑` / `primary+alt+↓` 是 `⌘⌥↑` / `⌘⌥↓`（macOS）、`Ctrl+Alt+↑` / `Ctrl+Alt+↓`（Windows/Linux）。
 
-> 第 6 行的前提条件：有待答交互时，内置 `response.stop` 固定序列与本插件的停止桥都以 `pendingInteraction !== undefined` 为门槛拒绝这一按，且都不消费。插件把这一按接到卡片关闭 / 取消按钮调用的同一个 `PendingQuestion.dismiss()` 上（见 [第 5 册](05-approval-key-bridge.md) 第 5.6.3、5.7 节）。
+> 第 6 行的前提条件：有待答交互时，内置 `response.stop` 固定序列与本插件的停止桥都以 `pendingInteraction !== undefined` 为门槛拒绝这一按，且都不消费。插件把这一按接到卡片关闭 / 取消按钮调用的同一个 `PendingQuestion.dismiss()` 上（见 [第 5 册](05-approval-key-bridge.md) 第 5.9.3、5.10 节）。
 
-> 本插件另有四条官方没有任何命令占用的固定键（声明为逻辑组合，按平台落成）：`primary+alt+J` = `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux）（`dsh-focus-free-shortcuts.focus-composer`，把键盘交还 composer）、`primary+alt+←/→` = `⌘⌥←` / `⌘⌥→`（macOS）/ `Ctrl+Alt+←` / `Ctrl+Alt+→`（Windows/Linux）（`dsh-focus-free-shortcuts.page-cycle`，把右侧栏切到下一张页面并把键盘交给新页面）、`primary+↑/↓` = `⌘↑` / `⌘↓`（macOS）/ `Ctrl+↑` / `Ctrl+↓`（Windows/Linux）（`dsh-focus-free-shortcuts.session-cycle`，在左侧栏前三个工作区当前显示出来的会话行之间导航）与 `primary+alt+↑/↓` = `⌘⌥↑` / `⌘⌥↓`（macOS）/ `Ctrl+Alt+↑` / `Ctrl+Alt+↓`（Windows/Linux）（`dsh-focus-free-shortcuts.session-active-cycle`，只在其中带状态点的活跃会话之间切换）。四者都走固定输入通道，实现分别在 `src/focus-composer.ts`、`src/page-cycle.ts` 与 `src/session-cycle.ts`；对照表见 [第 6 册](06-boundaries-and-contracts.md)，构建与启用见 [第 7 册](07-build-test-and-enable.md)。
+> 本插件共挂五条固定键（都声明为逻辑组合，按平台落成）。其中四条官方没有任何命令占用：`primary+alt+J` = `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux）（`dsh-focus-free-shortcuts.focus-composer`，把键盘交还 composer）、`primary+alt+←/→` = `⌘⌥←` / `⌘⌥→`（macOS）/ `Ctrl+Alt+←` / `Ctrl+Alt+→`（Windows/Linux）（`dsh-focus-free-shortcuts.page-cycle`，把右侧栏切到下一张页面并把键盘交给新页面）、`primary+↑/↓` = `⌘↑` / `⌘↓`（macOS）/ `Ctrl+↑` / `Ctrl+↓`（Windows/Linux）（`dsh-focus-free-shortcuts.session-cycle`，在左侧栏前三个工作区当前显示出来的会话行之间导航）与 `primary+alt+↑/↓` = `⌘⌥↑` / `⌘⌥↓`（macOS）/ `Ctrl+Alt+↑` / `Ctrl+Alt+↓`（Windows/Linux）（`dsh-focus-free-shortcuts.session-active-cycle`，只在其中带状态点的活跃会话之间切换）。第五条 `primary+alt+K` = `⌘⌥K`（macOS）/ `Ctrl+Alt+K`（Windows/Linux）（`dsh-focus-free-shortcuts.focus-page`，把键盘交给右侧栏当前显示的那一页）**有意占用** Web 上内置 `session.search` 的默认键位，代价见 [第 3 册第 5.6 节](03-fixed-input-and-pane-keys.md) 与 [第 6 册](06-boundaries-and-contracts.md) 第 7 节。五条都走固定输入通道，实现分别在 `src/focus-composer.ts`、`src/focus-page.ts`、`src/page-cycle.ts` 与 `src/session-cycle.ts`；对照表见 [第 6 册](06-boundaries-and-contracts.md)，构建与启用见 [第 7 册](07-build-test-and-enable.md)。
 
-> 焦点落在**终端**（`.xterm`）里时，上面四条里的 `primary+alt+J`、`primary+alt+←/→` 与 `primary+alt+↑/↓` / `primary+↑/↓` 依然生效：终端在自己的 textarea 处理器里对经手的按键 `preventDefault()+stopPropagation()`，事件到不了 window 上的固定通道，所以这些桥各自在 window **捕获阶段**另挂一个 `keydown` 监听，在事件进入终端前判定并吞掉这一按（见 [第 3 册](03-fixed-input-and-pane-keys.md) 第 4 节）。同一机制还补上了内置「新建会话」`session.new` 的 `primary+alt+N` = `⌘⌥N`（macOS）/ `Ctrl+Alt+N`（Windows/Linux）：它不是本插件的固定键，所以桥只跟随**生效目录**里那一行当前的绑定，动作调同一个 `uiWorkspace.startSession()`（`src/session-new.ts`）。
+> 焦点落在**终端**（`.xterm`）里时，上面五条里的 `primary+alt+J`、`primary+alt+K`、`primary+alt+←/→` 与 `primary+alt+↑/↓` / `primary+↑/↓` 依然生效：终端在自己的 textarea 处理器里对经手的按键 `preventDefault()+stopPropagation()`，事件到不了 window 上的固定通道，所以这些桥各自在 window **捕获阶段**另挂一个 `keydown` 监听，在事件进入终端前判定并吞掉这一按（见 [第 3 册](03-fixed-input-and-pane-keys.md) 第 4 节）。同一机制还补上了内置「新建会话」`session.new` 的 `primary+alt+N` = `⌘⌥N`（macOS）/ `Ctrl+Alt+N`（Windows/Linux）：它不是本插件的固定键，所以桥只跟随**生效目录**里那一行当前的绑定，动作调同一个 `uiWorkspace.startSession()`（`src/session-new.ts`）。
 
----
+-----
 
 ## 2. 预备知识
 

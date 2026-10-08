@@ -9,6 +9,9 @@
  *     全局 `*.css` 同样注入,`*.css?inline` 只导出编译后的文本;
  *   - 宿主半部是普通 ESM 库 bundle,生产依赖保持 external。
  *
+ * 三个 CSS 虚拟模块的触发条件、产物与注入方式见 docs/dsh-css-architecture/02-build-time-css-pipeline.md;
+ * 纯度门与同步 `require` 的边界见 docs/dsh-client-inject/03-require-and-failure-modes.md。
+ *
  * 用 `.mjs` 而非 `.ts`,避免 tsdown 加载配置时走 Node 原生 TypeScript 擦除。
  */
 import { readFileSync } from 'node:fs'

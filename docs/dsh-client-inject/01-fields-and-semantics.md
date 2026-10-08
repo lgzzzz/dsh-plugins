@@ -2,7 +2,7 @@
 
 > 本文件是 [`dsh.client.inject` 完整说明](../dsh-client-inject.md) 的第 1 册:字段定义、三个同名 `inject` 的区别、`dsh.client` 四个字段各自的作用。
 
----
+-----
 
 ## 1. 它写在哪里、长什么样
 
@@ -13,7 +13,7 @@ interface DshClientManifest {
   platform: string        // 客户端平台标识;Web 端取 "web"
   inject?: string[]       // 信息性包名依赖(不是 Cordis 服务注入)
   immediately?: boolean   // 启动第一阶段注册屏障;缺省 = 共享的 application 批次
-  external?: string[]     // 超出隐式基线的「精确模块表请求」,可含 <pkg>/client 子路径;缺省 = 只有基线外部依赖
+  external?: string[]     // 超出隐式基线的「精确模块表请求」,可含 <pkg>/client 子路径;缺省 = 只有基线外部依赖。类型导入会被擦除,不产生模块请求
 }
 ```
 
@@ -56,7 +56,7 @@ interface DshClientManifest {
 }
 ```
 
-**校验规则**(`dsh-client-modules` 的 `parseDshClient`,宿主半部与浏览器半部共用同一个校验器):
+**校验规则**(`dsh-client-modules` 的 `parseDshClient`;宿主半部的 Loader 扫描与 roster 生成器共用同一个校验器,浏览器半部也把它作为契约面导出):
 
 - `dsh.client` 缺失 → 等价于「不是客户端包」,跳过;
 - `dsh.client` 不是对象 → 抛错 `… has a non-object dsh.client declaration`;
@@ -67,7 +67,7 @@ interface DshClientManifest {
 
 `inject` 是可选字段:缺了它等于空数组,包照常加载、照常 `apply()`,只是少了「连带预取」这一份优化(见 [第 3 册](03-require-and-failure-modes.md))。
 
----
+-----
 
 ## 2. 三个都叫「inject」的东西
 
@@ -83,7 +83,7 @@ DSH 里有三个互不相干、同名不同义的 `inject`:
 
 一个包可以**同时**有两个 `inject` 并且含义完全不同。例如 `dsh-header-action-order/src/client.ts` 里 `export const inject = ['slots']` 表示「等我 `apply` 时 `slots` 服务必须已就绪」;而这个包如果在 `package.json` 里写了 `dsh.client.inject: ["@deepseek-ai/dsh-client-ui-conversation"]`,那表示「加载我这份 bundle 之前,先把 conversation 的 bundle 也注册好」。两者互不替代、互不影响。
 
----
+-----
 
 ## 3. `dsh.client` 的四个字段各自干什么
 
@@ -107,7 +107,7 @@ DSH 里有三个互不相干、同名不同义的 `inject`:
   2. **构建期纯度门**:`purityGatePlugin` 据此判断一个 `@deepseek-ai/` 的值导入是否合法(在名单里→合法,否则→构建失败,见 [第 3 册](03-require-and-failure-modes.md));
   3. **宿主半部**:`orderByModuleGraph()` 按它构图排序、做环检测、做自依赖检测;
   4. **浏览器半部**:`arriveGraphRow()` 按它在加载自身之前递归取回依赖(带环检测)。
-- 特性:**参与排序、做环检测、做自依赖检测、目标缺失时宿主构图直接 `throw`**(客户端无法启动)。
+- 特性:**参与排序、做环检测、做自依赖检测**。目标缺失时宿主构图**不报错**——该边被静默跳过;失败推迟到浏览器:消费方工厂里的同步 `require` 在 seed / loadCache / factories 三层都不命中时抛 `missed the module table`(见 [第 3 册](03-require-and-failure-modes.md))。
 
 ### 3.4 `immediately`(可选,布尔)
 

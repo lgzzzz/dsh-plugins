@@ -1,5 +1,6 @@
 # dsh-git-guard 的 web bundle 挂载行:随 dsh.profile.bundles 自动挂载。
 # 宿主半部(index.ts,Node Type Stripping 直载)挂钩 tools/pre-execute。
+# 包名 / patch id / patch name / 导出 name / 服务名五者的分工见 docs/plugin-naming.md。
 - insert:
     - id: dsh-git-guard
       name: dsh-git-guard

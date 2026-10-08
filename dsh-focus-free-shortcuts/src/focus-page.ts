@@ -22,6 +22,9 @@
  *     textarea 处理器里 `stopPropagation()`），因此与页面循环 / 会话导航两桥一样另装捕获
  *     阶段的 window `keydown`，在事件进入终端前判定：命中即吞掉这一按（此时交棒是
  *     无操作——键盘本来就在终端里），既不误动作也不把它当终端输入送进 shell。
+ *
+ * 逐行机制见 docs/dsh-focus-free-shortcuts/03-fixed-input-and-pane-keys.md；
+ * 与内置命令的冲突与代价见 docs/dsh-focus-free-shortcuts/06-boundaries-and-contracts.md。
  */
 import {
   captureContext,
@@ -159,8 +162,7 @@ export function installFocusPageBridge(ctx: Context): void {
 }
 
 /**
- * 处理一次针对聚焦右栏页面固定行的 keydown：先确认按键合格、右栏可达，全部成立后才
- * 消费按键并交棒。
+ * 处理固定通道投递的一次 keydown；只有解析出交棒目标时才消费按键。
  */
 function handleFocusPageInput(shortcuts: Shortcuts, sidebar: Sidebar, input: KeydownInput): void {
   const target = focusPageTarget(shortcuts, sidebar, input.gesture, input.context)

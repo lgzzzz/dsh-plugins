@@ -35,6 +35,8 @@
  * 动作只有一条:在选中工作区**新建会话** —— `uiWorkspace.startSession(workspaceId)`,
  * 与左侧栏工作区分组上那个「新建会话」按钮是同一个动词(复用该工作区已有的空白会话,
  * 没有才真创建)。
+ *
+ * 键位冲突、启用方式与已知边界见 docs/dsh-workspace-quick-switch.md。
  */
 import * as React from 'react'
 import { name } from './runtime.ts'

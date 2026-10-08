@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 下面的插件清单与 add-plugins.ps1 各存一份,增删插件时两个文件都要改。
 set -u
 
 if [ -n "$0" ] && [ -d "$(dirname "$0")" ]; then

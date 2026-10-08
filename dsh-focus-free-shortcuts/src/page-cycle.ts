@@ -16,12 +16,14 @@
  * 同一观察者还带一项非消费任务：按键为 `sidebar.right.toggle` 的生效绑定时，
  * 在有界窗口内轮询右栏展开，展开后把键盘交给当前显示页。
  *
- * 本桥还负责右栏页签行的滚动（`strip-scroll.ts`）：dockkit 只为当前选中的 tab 渲染 chip
- * box，换页签必然是新元素、`scrollLeft` 从 0 开始，而 kit 的挂载修正以 0 为起点，会把目标
- * 顶到视野最右缘、把来源挤出视野（`scroll-behavior: smooth` 时还表现为"先回到最左、再迅速
- * 滑过去"）。补偿是一条作用域限定在右侧栏的样式规则，加上切页前后的"窗口保持"（切页前记下
- * 当前 chip box 的位置，下一帧先还回去、只有目标不在窗口里时才最小推移），随本桥的注入
- * 作用域安装 / 卸载。
+ * 本桥还负责右栏页签行的滚动补偿（`strip-scroll.ts`）：dockkit 只为当前选中的 tab 渲染
+ * chip box，换页签必然是新元素、`scrollLeft` 从 0 开始，kit 的挂载修正又以 0 为起点，
+ * 于是目标被顶到视野最右缘、来源被挤出视野（`scroll-behavior: smooth` 时还表现为先回到
+ * 最左、再迅速滑过去）。补偿是一条作用域限定在右侧栏的样式规则，加上切页前后的窗口保持。
+ * 补偿随本桥的注入作用域安装 / 卸载，不消费按键、不参与归属判定。
+ *
+ * 机制推导、逐行判定与上游锚点见
+ * docs/dsh-focus-free-shortcuts/03-fixed-input-and-pane-keys.md。
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
 import { bindingKeycaps, bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
@@ -238,7 +240,7 @@ export function pageCycleTarget(
   const currentId = sidebar.active()?.id
   const nextId = steppedPageId(pages, currentId, step)
   // `nextId === undefined` 覆盖只有一页、无 active 页签、Session 未接管等情形；
-  // `nextId === currentId` 作为兜底判断保留。
+  // `nextId === currentId` 表示没有可切的目标。
   if (nextId === undefined || nextId === currentId) return undefined
   return { sessionId, nextId }
 }
@@ -302,7 +304,7 @@ export function installPageCycleBridge(ctx: Context): void {
 }
 
 /**
- * 处理 DOM 通道投递的一次 keydown：解析全部条件后消费该按键并执行切换。
+ * 处理固定通道投递的一次 keydown；只有解析出切换目标时才消费按键。
  */
 function handlePageCycleInput(shortcuts: Shortcuts, sidebar: Sidebar, input: KeydownInput): void {
   const target = pageCycleTarget(shortcuts, sidebar, input.gesture, input.context)

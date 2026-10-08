@@ -2,7 +2,7 @@
 
 > 本文件是 [DSH 插件五种「名字」完整说明](../plugin-naming.md) 的第 2 册：包名、patch `id`、patch `name`、导出 `name`、服务名分别展开。
 
----
+-----
 
 ## 3. 每个名字逐个展开
 
@@ -26,7 +26,7 @@
   - 非 insert 补丁的定位（如 `- id: directory-picker, disabled: true`）：按 id 找到目标行再应用覆盖；
   - 嵌套 id 用 `:` 分隔（`EntryTree.sep = ':'`）。
 - **可省略**：`EntryGroup.create()` 会调用 `EntryTree.ensureId()`，缺失时自动生成 `Math.random().toString(16).slice(2, 10)`（8 位随机 hex）。
-- **注意**：定位行全靠 `id`；把已发布的 `id` 改掉等于多出一个新行——`remove`/`update`/`disabled` 定位不到原行，补丁会 warn「entry %C not found」并被跳过。
+- **注意**：定位行全靠 `id`；把 `id` 改掉就等于换了一行——仍指向旧 `id` 的 `remove`/`update`/`disabled` 补丁定位不到原行，会 warn「entry %C not found」并被跳过。
 
 ### 3.3 patch `name`（`cordis.patch.yml` 行的 `name`）
 
@@ -41,16 +41,17 @@
     }
     // …
     if (this.ctx.loader.internal) {
-      return await this.ctx.loader.internal.import(name, this.ctx.baseUrl!, {})
+      return await this.ctx.loader.internal.import(name, this.ctx.baseUrl, {})
     } else if (name.startsWith('.')) {
-      return await import(new URL(name, this.ctx.baseUrl).href)   // ② 相对路径 → 按 baseUrl 解析成文件
+      return await import(__rewriteRelativeImportExtension(     // ② 相对路径 → 按 baseUrl 解析成文件
+        new URL(name, this.ctx.baseUrl).href))
     } else {
-      return await import(name)                                  // ③ 裸说明符 → 按包名解析
+      return await import(__rewriteRelativeImportExtension(name))  // ③ 裸说明符 → 按包名解析
     }
   }
   ```
 
-  所以 `name` 可以是三种东西：
+  两条 `import()` 都先过 `__rewriteRelativeImportExtension`，把 `.ts` 之类的相对扩展名改写成运行时能加载的形式。所以 `name` 可以是三种东西：
   - **裸包名**（如 `dsh-git-guard`、`@deepseek-ai/dsh-host-directory-picker-browse`）→ 加载那个包；
   - **相对路径**（如 `./local.ts`）→ 相对 `baseUrl` 加载本地文件；
   - **`cordis:` 内建**（如 `cordis:group`）→ 取 loader 注册的内建对象（不是包）。

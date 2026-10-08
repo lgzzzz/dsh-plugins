@@ -1,5 +1,6 @@
 # dsh-ui-css-patches 的 web bundle 挂载行:随 dsh.profile.bundles 自动挂载。
 # 宿主半部按 <name>/package.json 解析;客户端半部由 dsh.client.platform=web + immediately 注册进浏览器 roster。
+# 包名 / patch id / patch name / 导出 name / 服务名五者的分工见 docs/plugin-naming.md。
 - insert:
     - id: dsh-ui-css-patches
       name: dsh-ui-css-patches

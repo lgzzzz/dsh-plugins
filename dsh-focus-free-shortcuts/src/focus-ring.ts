@@ -9,6 +9,8 @@
  * 本模块给元素加上 `data-dsh-automatic-focus`：主题在该标记存在期间把 outline 设为
  * none，标记在 blur 或导航键时释放，恢复正常键盘样式。释放规则在此复刻而不导入，
  * 因此打包产物对 primitives 包没有运行时依赖。
+ *
+ * 两块拼图的同源事实见 docs/dsh-focus-free-shortcuts/06-boundaries-and-contracts.md。
  */
 
 /** `focusWithoutRing` 发布的标记；存在期间主题抑制 outline。 */

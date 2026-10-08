@@ -7,6 +7,8 @@
  *
  * 目标位于 `[data-conversation-session]` / `[data-conversation-region]` 内的按键归
  * 官方 fixed 序列所有，本桥不动作。不在快捷键目录中注册任何条目。
+ *
+ * 机制与边界见 docs/dsh-focus-free-shortcuts/04-stop-sequence-bridge.md。
  */
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -52,7 +54,7 @@ export interface StopSequenceOptions {
   same?: (left: StopToken, right: StopToken) => boolean
 }
 
-/** 一次短命的首次按键。 */
+/** 一次待配对的首次按键。 */
 export interface StopSequence {
   /** 记录一次符合条件的按键；返回该次按键是否完成序列。 */
   press(token: StopToken): boolean

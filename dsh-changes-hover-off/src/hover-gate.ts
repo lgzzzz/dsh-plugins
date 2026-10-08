@@ -23,6 +23,8 @@
  *
  * 装卸都在 `document.documentElement` 上留一个 `data-dsh-changes-hover-off` 标记,便于在
  * Elements 面板或 Console 一行确认本插件是否真的加载并生效。
+ *
+ * 上游锚点、已知边界与验证方式见 docs/dsh-changes-hover-off.md。
  */
 
 /** 改动文件卡片根元素上的稳定锚点;只有这张卡片用它。 */

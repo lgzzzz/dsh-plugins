@@ -1,3 +1,10 @@
+/**
+ * 浏览器环境适配:Notification 权限的读取与请求,以及开关在 localStorage 里的持久化。
+ *
+ * `requestPermission` 两种签名都支持:带回调参数的实现走 Promise 包装,返回 Promise 的实现直接
+ * await;取不到结果时统一按 `'default'` 处理。localStorage 读不出或写不进去(隐私模式、被禁用)
+ * 时静默降级成「没有存过」与「没写成功」,不把异常抛给调用方。
+ */
 import { ENABLED_STORAGE_KEY, type NotifyStoreEnv } from './notify-store.ts'
 
 interface NotificationCtorLike {

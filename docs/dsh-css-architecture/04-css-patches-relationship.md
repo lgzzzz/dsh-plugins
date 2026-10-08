@@ -9,7 +9,7 @@
 | **DSH 上游** | 哈希类 + CSS 变量 + `data-*` 状态开关 | 组件局部 + 令牌全局 | 组件自身样式、主题、状态 |
 | **插件 dsh-ui-css-patches** | `[data-dockkit-tab][role="tab"]` 复合属性选择器 | 全局属性选择器（受属性限定） | 跨构建稳定锚定 dockkit tab 并覆盖上游 |
 
-`dsh-ui-css-patches` 是一个 CSS 补丁插件，规则覆盖四组：全宽对话正文、dockkit tab 固定宽度、右栏预览与变更审查字号、对话卡片标题 / 摘要 / 正文 / 代码 / 表格字号。关键实现：
+`dsh-ui-css-patches` 是一个 CSS 补丁插件，规则覆盖：全宽对话正文、dockkit tab 固定宽度、右栏预览与变更审查的字号 / 行高、对话卡片（披露行 / 样例卡 / 压缩卡 / 工具卡 / 表格 / 代码块）字号、会话头部与子智能体会话树字号。关键实现：
 
 1. **只注入一条 `<style data-plugin="dsh-ui-css-patches">`**：规则全部写在一个字符串 `CSS` 里（[`../../dsh-ui-css-patches/src/css.ts`](../../dsh-ui-css-patches/src/css.ts)），`installStyles` 一次挂载（[`../../dsh-ui-css-patches/src/client.ts`](../../dsh-ui-css-patches/src/client.ts)）：
 
@@ -34,4 +34,4 @@
 
 3. **复合属性选择器的覆盖条件**：上游类名带构建哈希（`_tab_6nhg2_134` 每版构建都变），无法可靠命中；而 `data-dockkit-tab` + `role="tab"` 是稳定的语义锚点，且特异性 `(0,2,0)` 大于上游 `.tab` 的 `(0,1,0)`，因此**无需 `!important` 即可覆盖**（`css.ts` 里的 `[data-dockkit-tab][role="tab"] { box-sizing; min-width: 100px; max-width: 100px }` 即如此）。
 
-4. **其它规则同样只用稳定锚点**：`[data-slot='main.conversation'] [data-conversation-content]`、`[data-textpreview-body]`、`[data-changes-review]`、`[data-document-markdown]`、`[data-chat-flow-kind]`、`[data-turn-trigger]` 等，全部是 `data-*` 属性 + CSS 变量，**不使用** `:nth-child` / `:has()` 这类位置猜测。
+4. **其它规则同样只用稳定锚点**：`[data-slot='main.conversation'] [data-conversation-content]`、`[data-textpreview-body]`、`[data-changes-review]`、`[data-document-markdown]`、`[data-chat-flow-kind]`、`[data-turn-trigger]` 等，都是 `data-*` 属性 + CSS 变量；子智能体会话树改用 `div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"])` 的 role + `aria-label` 双锚点（中英文界面各一个取值）。所有规则**不使用** `:nth-child` / `:has()` 这类位置猜测。

@@ -21,6 +21,8 @@
  * 只关页面，不关窗口：窗口那一半是 Desktop 的语义（`⌘W` 在 Desktop 上本来就免聚焦，
  * 未聚焦时走 `closeWindow()`），而 Desktop 的可配置绑定由原生键盘桥派发、本 DOM 观察者
  * 压不住，所以本桥只在 Web 安装。
+ *
+ * 逐行机制与让位对照见 docs/dsh-focus-free-shortcuts/03-fixed-input-and-pane-keys.md。
  */
 import { bindingMatches, enabledBinding } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
@@ -71,7 +73,7 @@ export function installPageCloseBridge(ctx: Context): void {
   })
 }
 
-/** 用内置 `page.close` 处理一次固定通道的 keydown。 */
+/** 处理固定通道投递的一次 keydown；只有解析出可关的目标时才消费按键。 */
 function handlePageCloseInput(shortcuts: Shortcuts, sidebar: Sidebar, input: KeydownInput): void {
   const gesture: ShortcutGesture = input.gesture
   const context = input.context

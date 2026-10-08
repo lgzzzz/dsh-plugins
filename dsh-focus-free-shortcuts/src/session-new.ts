@@ -1,5 +1,5 @@
 /**
- * 快捷键分组 8：内置命令 `session.new`（新建会话）的终端那一半。
+ * 内置命令 `session.new`（新建会话）的终端那一半。
  *
  * `session.new` 是 Workspace browser 贡献的**可配置命令**，Web 上的默认键位是
  * `primary+alt+N`（macOS `⌘⌥N`、Windows/Linux `Ctrl+Alt+N`；桌面端仍是 `primary+N`），
@@ -15,6 +15,8 @@
  * 键位不硬编码：本桥读 **生效目录**里 `session.new` 的当前绑定，所以用户改绑 / 解绑 /
  * 冲突时立刻跟随（与 `page-close.ts` 跟随 `page.close` 同一条约定）。本桥不注册固定行、
  * 也不开固定输入观察者 —— 它只在终端这条内置命令够不着的缝上补一刀。
+ *
+ * 契约与依赖见 docs/dsh-focus-free-shortcuts/06-boundaries-and-contracts.md。
  */
 import {
   captureContext,

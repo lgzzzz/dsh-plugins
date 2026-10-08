@@ -12,6 +12,8 @@
  * 目标规则：终端保留自己的按键；`editable` 区默认保留，唯一例外是本面板自己的答题
  * 输入框（`[data-question-key]` / `[data-plan-review-key]` 卡片内），它的 keydown 只处理
  * `Enter`。
+ *
+ * 机制与 `dismiss()` 的三种落点见 docs/dsh-focus-free-shortcuts/05-approval-key-bridge.md。
  */
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -104,7 +106,7 @@ export function installQuestionBridge(ctx: Context): void {
   })
 }
 
-/** 用当前呈现的问题卡片处理一次固定通道的 keydown。 */
+/** 处理固定通道投递的一次 keydown；只有解析出待答问题时才消费按键。 */
 function handleQuestionInput(
   sessions: ISessions,
   uiSession: UiSession,

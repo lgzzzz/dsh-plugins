@@ -1,3 +1,8 @@
+/**
+ * 设置项那一行:提示文案随权限与开关状态变化,开关按钮的 `aria-label` 与 `title` 复用同一条提示。
+ *
+ * 样式挂在 `data-plugin-css="dsh-desktop-notify/settings.css"` 标记下,重复调用不会挂第二张表。
+ */
 import { createElement, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { NotifyStore, NotifyStoreState } from './notify-store.ts'

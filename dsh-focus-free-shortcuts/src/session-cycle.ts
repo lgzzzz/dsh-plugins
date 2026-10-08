@@ -2,33 +2,30 @@
  * 挂载两条 fixed 行(group `application`)，把左侧栏的会话导航拆成两档：
  *
  *   - `dsh-focus-free-shortcuts.session-cycle`(`⌘↑` / `⌘↓`；Windows/Linux `Ctrl+↑` / `Ctrl+↓`)：
- *     在**前三个工作区当前显示出来的全部会话行**之间环状步进 —— 就是「在会话之间导航」
- *     本身；
+ *     在**前三个工作区当前显示出来的全部会话行**之间环状步进，也就是「在会话之间导航」本身；
  *   - `dsh-focus-free-shortcuts.session-active-cycle`(`⌘⌥↑` / `⌘⌥↓`；Windows/Linux
- *     `Ctrl+Alt+↑` / `Ctrl+Alt+↓`)：**只在活跃会话之间**步进；没有活跃会话、或活跃池里
- *     只剩当前会话时这一按没有主人(不动作、不消费)——常规导航交给上面那一条。
+ *     `Ctrl+Alt+↑` / `Ctrl+Alt+↓`)：只在**活跃会话之间**步进。
  *
- * 两条行声明的都是逻辑组合(`primary` / `primary+alt`)，注册表在 macOS 上把 `primary`
- * 展开成 `meta`(⌘)、在 Windows/Linux 上展开成 `control`(Ctrl)。
+ * 两条行声明的都是逻辑组合(`primary` / `primary+alt`)。注册表在 macOS 上把 `primary`
+ * 展开成 `meta`(⌘)，在 Windows/Linux 上展开成 `control`(Ctrl)。
  *
- * 候选只取「左侧栏现在真的画出来的行」:前三个工作区分组里、没有被折叠、没有被每分组
- * 5 行上限挡在「展开更多」行之后、也没有被归档过滤隐藏的会话行，顺序就是侧栏显示顺序
- * (见 `displayedSidebar` / `displayedSessionIds`)。行由 Workspace browser 发布的
- * `[data-row-key]` 标记识别，所以候选与「点击某一行」是同一批对象;
- * `uiWorkspace.openSession(id)` 就是那一击。
+ * 候选只取左侧栏此刻真的画出来的会话行：前三个工作区分组内、未被折叠、未被每分组 5 行上限
+ * 挡在「展开更多」之后、也未被归档过滤隐藏的行，顺序即侧栏显示顺序(实现见 `displayedSidebar` /
+ * `displayedSessionIds`)。行由 Workspace browser 发布的 `[data-row-key]` 标记识别，所以候选与
+ * 「点击某一行」是同一批对象；`uiWorkspace.openSession(id)` 就是那一击。候选口径的边界见
+ * docs/dsh-focus-free-shortcuts/06-boundaries-and-contracts.md。
  *
- * 活跃 = **行上有状态点的会话**:待答交互(审批 / 计划 / 提问)、正在运行、以及「已完成未读」
- * 那一颗绿点(状态读 `uiSession.sessionStatus` 的 `pendingInteraction` / `running` /
- * `completionUnread`，运行读数缺席时退回会话目录的 `running`，与侧栏行的判定同源)。回合以
- * 出错收场时运行状态同样由 true 变 false 并亮起同一颗绿点，所以这类会话也在活跃池里——
- * DSH 的会话状态面没有独立的「出错」状态，本桥也不去猜。
+ * 活跃 = 行上有状态点的会话：待答交互(审批 / 计划 / 提问)、正在运行、或「已完成未读」的那
+ * 一颗绿点。三项状态事实的读数与退回规则见 `sessionActive`。活跃池里没有活跃会话、或只剩
+ * 当前会话时，第二条行不动作、也不消费，常规导航交给第一条行。
  *
  * 落在 `.xterm` 内的按键不会到达 window 上的 fixed-input 监听(终端在自己的 textarea
- * 处理器里 `stopPropagation()`)，因此与页面循环桥一样另装捕获阶段的 window `keydown`，
+ * 处理器里 `stopPropagation()`)，因此与页面循环桥一样另装捕获阶段的 window `keydown`。
  * 两条路径共用同一个判定函数(`sessionCyclePlan`)，一次按键只被处理一次。
  *
- * 切换动词 `uiWorkspace.openSession` 所在的服务声明为注入依赖:它来自 Workspace browser
- * 的客户端包,激活可能晚于本插件,直接 `ctx.get` 一次会把「还没激活」误判成「缺席」。
+ * 切换动词 `uiWorkspace.openSession` 所在的服务声明为注入依赖。该服务来自 Workspace browser
+ * 的客户端包，激活可能晚于本插件；直接 `ctx.get` 一次会把「还没激活」误判成「缺席」，整条桥
+ * 就不再安装。
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
 import { bindingKeycaps, bindingMatches } from './binding.ts'
@@ -140,9 +137,8 @@ const SESSION_ROW_PREFIX = 'session:'
 const ROW_SELECTOR = '[data-row-key]'
 
 /**
- * 归档行的标记:官方渲染器只对归档行写 `aria-description`(「已归档,不可打开」的提示
- * 文案),而那个提示正说明它不可打开 —— 官方 `guardedOpen` 打开归档行只弹提示、不切换,
- * 所以这类行不进候选,免得快捷键白按一下还弹个提示。
+ * 归档行的标记:官方渲染器只对归档行写 `aria-description`(「已归档,不可打开」的提示文案)。
+ * 官方 `guardedOpen` 打开归档行只弹提示、不切换,所以这类行不进候选。
  */
 const ARCHIVED_MARKER = 'aria-description'
 
@@ -503,7 +499,7 @@ export function installSessionCycleBridge(ctx: Context): void {
 }
 
 /**
- * 处理 DOM 通道投递的一次 keydown:解析全部条件后消费该按键并切换会话。
+ * 处理固定通道投递的一次 keydown;只有解析出切换目标时才消费按键。
  */
 function handleSessionCycleInput(
   shortcuts: Shortcuts,
