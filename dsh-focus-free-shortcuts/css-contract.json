@@ -1,0 +1,28 @@
+{
+  "description": "dsh-focus-free-shortcuts 依赖的 DSH 客户端 DOM 锚点（第 6 册第 8 节列的非正式契约）。check-css.mjs 逐条验证这些锚点仍存在于上游构建产物中：锚点被改名 / 搬走时，对应的桥会退化成 no-op 或改用别的读数，这里把那种静默退化提前变成一次显式失败，并在 hint 里写明会退化成什么。",
+  "checks": [
+    {"id":"approval-key","plugin":"dsh-focus-free-shortcuts","token":"data-approval-key","paths":["dsh-client-ui-approval/lib"],"hint":"审批面板根标记消失：审批桥的让位判定（以及停止桥的让位选择器）落空，焦点在面板内时插件会从面板手里抢答"},
+    {"id":"conversation-session","plugin":"dsh-focus-free-shortcuts","token":"data-conversation-session","paths":["dsh-client-ui-conversation/lib"],"hint":"会话根标记消失：停止桥的归属判定恒为假，连按两下 Esc 不再停止回合"},
+    {"id":"conversation-region","plugin":"dsh-focus-free-shortcuts","token":"data-conversation-region","paths":["dsh-client-ui-conversation/lib"],"hint":"会话输入区标记消失：停止桥取不到 region，连按两下 Esc 不再停止回合"},
+    {"id":"question-key","plugin":"dsh-focus-free-shortcuts","token":"data-question-key","paths":["dsh-client-ui-user-questions/lib"],"hint":"提问卡片根标记消失：Esc 不再能取消 / 关闭提问卡片"},
+    {"id":"plan-review-key","plugin":"dsh-focus-free-shortcuts","token":"data-plan-review-key","paths":["dsh-client-ui-user-questions/lib"],"hint":"plan-review 卡片根标记消失：Esc 不再能收起活着的 plan-review，也不再有只读回看的移除路径"},
+    {"id":"modal-selector","plugin":"dsh-focus-free-shortcuts","token":"[role=\"dialog\"][aria-modal=\"true\"], [role=\"menu\"]","paths":["dsh-web-frontend/dist/assets"],"hint":"模态选择器变了（本条锚在运行产物里那份字面量上）：捕获路（审批键、页面循环、会话导航）与固定通道对『模态下让位』的判定会不一致，模态层打开时捕获路可能仍然认领按键"},
+    {"id":"automatic-focus-mark","plugin":"dsh-focus-free-shortcuts","token":"data-dsh-automatic-focus","paths":["dsh-client-ui-primitives/lib"],"hint":"官方『无环聚焦』标记改名：插件打的标记不再被主题认领，作答后那张卡片会重新出现焦点边框（最坏是边框，不误动作）"},
+    {"id":"automatic-focus-rule","plugin":"dsh-focus-free-shortcuts","pattern":"data-dsh-automatic-focus[^}]{0,160}outline:none","paths":["dsh-client-ui-theme/lib"],"hint":"主题不再把该标记翻成 outline:none：同上，作答后卡片重新出现焦点边框"},
+    {"id":"xterm-root","plugin":"dsh-focus-free-shortcuts","pattern":"classList\\.add\\(\"xterm\"\\)","paths":["dsh-client-ui-sidebar-terminal/lib"],"hint":"终端根类不再是 xterm：捕获路认不出终端，终端内按页面切换 / 会话导航键到不了固定通道，那几对键在终端里失效"},
+    {"id":"xterm-helper-textarea","plugin":"dsh-focus-free-shortcuts","token":"xterm-helper-textarea","paths":["dsh-client-ui-sidebar-terminal/lib"],"hint":"终端输入面改名：切页 / 展开后的键盘交接下探不到终端输入框，只聚焦 pane 容器（要再点一下才能打字）"},
+    {"id":"sidebar-right-session","plugin":"dsh-focus-free-shortcuts","token":"data-sidebar-right-session","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏会话根标记消失：自动聚焦与页签行窗口保持都找不到会话根，切页后只切页、不交还键盘"},
+    {"id":"sidebar-right-open","plugin":"dsh-focus-free-shortcuts","token":"data-sidebar-right-open","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏『已展开』标记消失：取不到内层会话根、dock pane 查找落空，自动聚焦退化成 no-op"},
+    {"id":"dockkit-pane","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-pane","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit pane 标记消失：自动聚焦的 pane 选择与面板归属判定一并落空"},
+    {"id":"dockkit-pane-active","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-pane-active","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 活动 pane 标记消失：自动聚焦退化为『第一个可见 pane』，分屏时可能交还键盘给另一块面板"},
+    {"id":"dockkit-float","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-float","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 浮动 pane 标记消失：浮动面板的自动聚焦落空"},
+    {"id":"dockkit-float-active","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-float-active","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 活动浮动 pane 标记消失：浮动面板的自动聚焦退化为『第一个可见 pane』"},
+    {"id":"dockkit-strip-tabs","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-strip-tabs","paths":["dsh-web-frontend/dist/assets"],"hint":"页签行 chip box 标记消失：滚动补偿的规则失去锚点、窗口保持也找不到条带，页签行又变回『先回到最左 → 目标贴最右缘』"},
+    {"id":"dockkit-tab","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-tab","paths":["dsh-web-frontend/dist/assets"],"hint":"页面芯片标记消失：窗口保持找不到当前 / 目标芯片（不动作），只切页不保持观察窗口"},
+    {"id":"strip-smooth","plugin":"dsh-focus-free-shortcuts","pattern":"stripTabs[^{}]{0,200}\\{[^}]{0,400}scroll-behavior:smooth","paths":["dsh-web-frontend/dist/assets"],"hint":"页签行不再是平滑滚动（上游自己改了缓动）：本插件的 scroll-behavior:auto 覆盖变成冗余（无害），应复核第 3 册 5.4 与第 6 册第 23 条是否还留这条补偿"},
+    {"id":"row-key","plugin":"dsh-focus-free-shortcuts","token":"data-row-key","paths":["dsh-client-ui-workspace/lib"],"hint":"侧栏行标记消失：会话导航的候选恒为空，两对会话键不动作、不消费"},
+    {"id":"row-key-workspace","plugin":"dsh-focus-free-shortcuts","pattern":"\"data-row-key\":\\s*`workspace:","paths":["dsh-client-ui-workspace/lib"],"hint":"工作区分组行的 data-row-key 前缀变了：分组一个也认不出来，会话行归属归零，候选恒为空"},
+    {"id":"row-key-session","plugin":"dsh-focus-free-shortcuts","pattern":"\"data-row-key\":\\s*`session:","paths":["dsh-client-ui-workspace/lib"],"hint":"会话行的 data-row-key 前缀变了：一行会话也认不出来，两对会话键不动作"},
+    {"id":"archived-marker","plugin":"dsh-focus-free-shortcuts","pattern":"\"aria-description\":[\\s\\S]{0,80}archived","paths":["dsh-client-ui-workspace/lib"],"hint":"归档行的 aria-description 标记变了：归档行回到候选里（按下去只弹一次『已归档，不可打开』提示、不切换）"}
+  ]
+}

@@ -12,6 +12,7 @@ cd dsh-focus-free-shortcuts
 node test/run-all.mjs                                # 跑测试（或 pnpm test）
 node test/decide-escape.test.mjs                     # 只跑某一组
 ../node_modules/.bin/tsc --noEmit                    # 类型检查（或 pnpm typecheck）
+node check-css.mjs                                   # 上游 DOM 锚点契约校验（或 pnpm check:css）
 node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm check）
 ```
 
@@ -59,6 +60,22 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 
 > `test/run-all.mjs` 的 `ORDER`：A、B、C、D、H、N、J、L、P、E、F、I、O、K、M、Q、S、G；不在 `ORDER` 里的文件（如平台键端到端）按文件名补在最后跑。
 
+### 9.1 上游 DOM 锚点契约校验（`check-css.mjs` + `css-contract.json`）
+
+本插件的桥接读的是上游**没有对外承诺**的 DOM 锚点（清单与含义见第 6 册第 8 节）。锚点被改名 / 搬走时桥会退化成 no-op（不误动作），但"退化"在现场是静默的；`check-css.mjs` 在构建后把清单逐条对已安装的 DSH 客户端产物 grep 一遍，缺一条就显式失败，并在 `hint` 里写明这条契约对应的功能会退化成什么：
+
+```bash
+node check-css.mjs                        # 或 pnpm check:css；pnpm build 也会跑（tsdown && node check-css.mjs）
+node check-css.mjs --dsh-root <DSH 根>    # 指定 DSH 安装位置
+node check-css.mjs --manifest <清单>      # 换一份清单（默认同目录的 css-contract.json）
+```
+
+- DSH 根目录解析顺序：`--dsh-root` > `$DSH_ROOT` > `npm root -g` > 常见全局安装路径（纯路径回退，不依赖 spawn 成功）。
+- 每条 check 是 `{ id, plugin, token | pattern, paths, hint }`：`token` 按子串、`pattern` 按正则（带 `s` 标志）匹配；`paths` 是从 `<DSH>/node_modules/@deepseek-ai/` 起算的搜索目录（省略即全量扫，很慢）；任一文件命中即通过。
+- 覆盖 23 条锚点：审批面板根、会话根 / 输入区、提问卡片与 plan-review 根、模态选择器、`data-dsh-automatic-focus` 标记与主题那条 `outline:none` 规则、终端根类与 `xterm-helper-textarea`、右栏会话根与 `data-sidebar-right-open`、dockkit 的 pane / 浮动 pane / 活动标记 / chip box / 页面芯片、页签行的 `scroll-behavior:smooth`，以及左侧栏 `data-row-key` 的两个前缀与归档行标记。
+- 退出码：`0` 全部通过（定位不到 DSH 根目录时只告警也算通过 —— 在别的机器上不会误报）；`1` 有锚点缺失（**升级 DSH 之后先看这里**）；`2` 清单路径或 JSON 有问题。
+- 它只证明"**有东西可选**"：不解析选择器、不跑 CSS 引擎，所以证明不了"后代组合子真的命中""特异性真的赢过 dockkit 的类规则"。那两件事只能看运行时，见第 10 节的手测项。
+
 ---
 
 ## 10. 启用
@@ -80,7 +97,7 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 - 焦点放哪儿都行（消息区、侧栏、甚至别的文本控件里），按 `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux） → 应直接聚焦底部输入框，光标回到上次位置，可以立刻开始输入；
 - 右侧栏开着并至少有两张页面时，任意焦点位置按 `⌘⌥→` / `⌘⌥←`（macOS）/ `Ctrl+Alt+→` / `Ctrl+Alt+←`（Windows/Linux） → 应切成下一页 / 上一页（环状），且键盘落到新页面：切到终端可直接打字，切到文件页方向键可直接滚动；焦点已经在终端里按这对键 → 依然能切页；
 - 只有一张页面或右侧栏折叠时按这对键 → 无动作（折叠时先用展开键展开，展开会顺手聚焦活动 pane）。
-- 页签行放不下所有页面（出现横向溢出）时来回切页 → 页签行**不应**"先回到最左、再滑到新的活动页签"：新活动页签直接出现在它该在的位置；连续往一个方向走、又切回相邻的那一颗时，**页签行完全不动**（来源页签仍在视野里，一眼能看出从哪儿切过来），只有目标页签不在当前窗口里时才最小幅度滚动（插件把 kit 那次"从 0 出发"的修正换成"以旧窗口为起点"，见第 3 册第 5.4 节；这条补偿与鼠标点页签共享前半段 —— 点页签同样不再滑动）。
+- 页签行放不下所有页面（出现横向溢出）时来回切页 → 页签行**不应**"先回到最左、再滑到新的活动页签"：新活动页签直接出现在它该在的位置；连续往一个方向走、又切回相邻的那一颗时，**页签行完全不动**（来源页签仍在视野里，一眼能看出从哪儿切过来），只有目标页签不在当前窗口里时才最小幅度滚动（插件把 kit 那次"从 0 出发"的修正换成"以旧窗口为起点"，见第 3 册第 5.4 节；这条补偿与鼠标点页签共享前半段 —— 点页签同样不再滑动）。升级 DSH 之后想确认这层覆盖仍生效，可在 DevTools 里看 `getComputedStyle(document.querySelector('[data-sidebar-right-session] [data-dockkit-strip-tabs]')).scrollBehavior` 是否为 `auto`。
 - 先在左侧栏展开若干工作区（默认只有当前会话所在的那一组会展开，且每组默认最多列出 5 行，多出来的藏在「展开更多」之后），然后任意焦点位置按 `⌘↓` / `⌘↑`（macOS）/ `Ctrl+↓` / `Ctrl+↑`（Windows/Linux） → 应在**前三个工作区当前显示出来**的会话行之间环状切换，顺序与侧栏一致，当前会话随之高亮；走一趟的顺序与眼睛看到的顺序相同；
 - 另一条键对 `⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` **只走活跃会话**：有会话正在运行、停在审批 / 提问卡片上等人回答、或刚跑完还没被看（行上那颗绿点）时，按这对键只在这些会话之间环状走，中间的普通会话会被跳过；
 - 这时按 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑` 仍走全部候选 —— 两条键各守各的池子；如果没有任何活跃会话（所有行都是空闲点），或活跃池里只剩当前这一个会话，`⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` 不动作、也不消费（想继续往下走就用 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑`）；

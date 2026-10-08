@@ -26,4 +26,4 @@
 | [4. 停止桥接(`Esc Esc`)](docs/04-stop-sequence-bridge.md) | `handleStopInput`;轮次身份(turn identity);双按序列;归属不重叠 |
 | [5. 审批键桥接(`Enter` / `Esc`)](docs/05-approval-key-bridge.md) | `handleApprovalInput`;面板 / 审批桥 / 提问桥 / 停止序列的归属不重叠;提问卡片取消桥的 `editable` 放宽与 `dismiss()` |
 | [6. 边界与依赖契约](docs/06-boundaries-and-contracts.md) | 与内置命令的对照表;已知边界与失败模式;依赖的非正式契约 |
-| [7. 构建、测试与启用](docs/07-build-test-and-enable.md) | 构建 / 测试命令;`test/` 分组;启用与撤销 |
+| [7. 构建、测试与启用](docs/07-build-test-and-enable.md) | 构建 / 测试命令;`test/` 分组;上游 DOM 锚点契约校验(`check-css.mjs`);启用与撤销 |
