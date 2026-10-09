@@ -32,7 +32,7 @@
 
 - **写在哪**：`cordis.patch.yml` 每一行的 `name`。
 - **语义**：这一行要 **import 哪个模块**。它被 `EntryTree.import(name)` 当作「模块说明符」处理。
-- **谁用 / 解析规则**（`cordis-plugin-loader` 的 `tree.ts`）：
+- **谁用 / 解析规则**（`cordis-plugin-loader` 的运行期产物 `lib/index.js`；源码 `src/config/tree.ts` 里的两条 `import()` 还带 `/* @vite-ignore */`）：
 
   ```js
   import(name, getOuterStack) {
@@ -51,7 +51,7 @@
   }
   ```
 
-  两条 `import()` 都先过 `__rewriteRelativeImportExtension`，把 `.ts` 之类的相对扩展名改写成运行时能加载的形式。所以 `name` 可以是三种东西：
+  两条 `import()` 都先过 `__rewriteRelativeImportExtension`（编译器按 `rewriteRelativeImportExtensions` 注入的 helper）：它只改 `./` / `../` 开头、以 `.ts` / `.tsx` / `.d.ts` / `.mts` / `.cts` 结尾的路径（换成对应的 `.js` / `.jsx` / `.mjs` / `.cjs`），其它说明符原样返回。所以 `name` 可以是三种东西：
   - **裸包名**（如 `dsh-git-guard`、`@deepseek-ai/dsh-host-directory-picker-browse`）→ 加载那个包；
   - **相对路径**（如 `./local.ts`）→ 相对 `baseUrl` 加载本地文件；
   - **`cordis:` 内建**（如 `cordis:group`）→ 取 loader 注册的内建对象（不是包）。

@@ -1,3 +1,5 @@
+# 示例插件的挂载行:id 是本地标识,name 是要 import 的包名(本示例里两者同名)。
+# 本包的导出 name 是 greet-tool,与这两者互不派生;五者的分工见 docs/plugin-naming.md。
 - insert:
     - id: normal-plugin
       name: normal-plugin

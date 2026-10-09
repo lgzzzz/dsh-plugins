@@ -220,8 +220,8 @@ function cancelSession(sessions, sessionId) {
 
 - **面板键**：归属由"焦点"这一个事实唯一决定。焦点在 pane 内 → [5.3](03-fixed-input-and-pane-keys.md) 的 ④ 让位，内置 `dispatch` 独占；焦点不在 → 插件 ⑦ 先消费，内置 `dispatch` 在首行 `defaultPrevented` 处退出。
 - **停止**：插件与内置 `response.stop` 都在 `fixedListeners` 里，执行顺序取决于注册先后，靠两重机制保证互斥：
-  - **(a) 显式让位**：② `conversationOwnsTarget` 让插件在"target 落在会话区"时主动放弃（不消费）；
-  - **(b) 共享 `consumed` 标志**：即便顺序反了，谁先 `consume()`，另一个 listener 都会看到 `gesture.defaultPrevented === true` 而退出（① 资格检查里含 `!defaultPrevented`）。
+  - **（a） 显式让位**：② `conversationOwnsTarget` 让插件在"target 落在会话区"时主动放弃（不消费）；
+  - **（b） 共享 `consumed` 标志**：即便顺序反了，谁先 `consume()`，另一个 listener 都会看到 `gesture.defaultPrevented === true` 而退出（① 资格检查里含 `!defaultPrevented`）。
 
 > **审批键与停止序列的交叉点**：有待答审批时，`Esc` 不是"第一下停止"而是"一下拒绝"。内置 `currentTurn()` 与插件 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛拒绝停止，所以停止侧既不动作也不消费这一按。审批桥的实现与它自己的让位策略见 [第 5 册](05-approval-key-bridge.md)（第 5.9 节）。
 

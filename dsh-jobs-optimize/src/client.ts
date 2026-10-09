@@ -2,13 +2,15 @@
  * 浏览器入口：把会话标题栏的后台任务计数控件接上悬停开合。
  *
  * 上游 `@deepseek-ai/dsh-client-ui-jobs` 的 `job-list` 条目在槽位声明之后才注册（它的客户端包
- * 依赖 `jobs` / `locale` / `conversation` / `primitives` 一串服务），因此本插件不在启动时注册，
- * 而是等槽位声明：`slots.inject` 一到就扫一次账本，之后每次账本变化再由 `slots.subscribe` 重扫。
- * 上游先注册或后注册都能遮蔽到，也不需要与它的加载顺序约定。
+ * 声明 `jobs` / `slots` / `locale` 三个服务，并在该槽的 `ctx.slots.inject` 回调里才注册），所以
+ * 本插件不在启动时注册，而是等槽位声明：`slots.inject` 一到就扫一次账本，之后每次账本变化再由
+ * `slots.subscribe` 重扫。上游先注册或后注册都能遮蔽到，也不需要与它的加载顺序约定。
  *
  * 包装层是 `display: contents` 的 div：它只作为可寻址的宿主存在，不产生盒子，因此头部动作条
  * 的 `display: flex; gap: 8px` 仍只看到上游控件那一个 flex 子项（`display: contents` 的子元素
  * 直接参与父级 flex 布局）。调度细节见 `hover-open.ts`，账本遮蔽见 `shadow.ts`。
+ *
+ * 上游锚点、已知边界与验证方式见 docs/dsh-jobs-optimize.md。
  */
 import * as React from 'react'
 import { createHoverOpen } from './hover-open.ts'

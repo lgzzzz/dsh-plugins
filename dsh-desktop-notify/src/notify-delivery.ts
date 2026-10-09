@@ -1,8 +1,8 @@
 /**
  * 浏览器投递:用 `Notification` 发一条系统通知,点击时把窗口拉到前台并关闭该通知。
  *
- * 浏览器不支持 `Notification` 时 `deliver` 为空操作;构造通知与 `win.focus()` 抛错都被吞掉,
- * 结果只是发不出通知,不影响调用方。
+ * 浏览器不支持 `Notification` 时 `deliver` 为空操作;构造通知抛错被捕获并记一条 `console.warn`,
+ * `win.focus()` 抛错被静默忽略:两种情况都只是发不出通知,不影响调用方。
  */
 import type { PlannedNotification } from './notify-policy.ts'
 

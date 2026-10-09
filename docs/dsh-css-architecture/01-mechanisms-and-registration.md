@@ -2,6 +2,8 @@
 
 > 本文件是 [DSH 组件 CSS 架构](../dsh-css-architecture.md) 的第 1 册：上游三种样式机制，以及静态 `<link>` / 运行时 `<style>` 两条注册路径。
 
+-----
+
 ## 1. 上游控制组件样式的三种机制
 
 对当前构建产物 `dsh-web-frontend/dist/assets/index-BPHePDI_.css` 的量化统计（这是应用外壳自己打包的 CSS；数量是正则匹配的出现次数）：
@@ -17,6 +19,8 @@
 - **CSS Modules**：组件样式写在 `.module.css`，构建时编译成唯一哈希类名（如 `tab → _tab_6nhg2_134`）。JS 不写死类名字符串，而是导入编译产物里的「类名映射对象」（模块对象），通过 `styles.tab` 这样的成员引用哈希后的真实类名。
 - **CSS 变量（设计令牌）**：颜色 / 字号 / 间距 / 宽度等走 `--dsw-*`（design system 设计系统）与 `--dsh-*`（harness）令牌。组件消费 `var(...)`，不写死具体值；主题切换（浅色 / 深色）只替换令牌定义，组件样式不变。
 - **`data-*` 属性选择器**：主要当 **状态标志**（`[data-pinned]`、`[data-fullscreen]`、`[data-state]`、`[data-dockkit-drop-active]` 等）和 **JS 查询锚点**（`querySelectorAll("[data-dockkit-pane]")` 等），少数当结构锚点（`[data-code-block-banner]`、`[data-terminal]` 等）。
+
+-----
 
 ## 2. CSS 的注册位置（两条路径）
 

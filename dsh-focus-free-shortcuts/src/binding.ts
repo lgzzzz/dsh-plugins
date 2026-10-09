@@ -1,4 +1,8 @@
-/** 手势与绑定匹配：纯函数、不碰 DOM，两个快捷键目录都用这里的规则判断按键归属。 */
+/**
+ * 手势与绑定匹配：纯函数、不碰 DOM，两个快捷键目录都用这里的规则判断按键归属。
+ *
+ * 上游锚点、已知边界与验证方式见 docs/dsh-focus-free-shortcuts.md。
+ */
 import type {
   ShortcutCatalogEntry,
   ShortcutFixedCatalogEntry,

@@ -1,3 +1,6 @@
+# 示例插件的挂载行:id 是本地标识,name 是要 import 的包名(本示例里两者同名)。
+# 本包默认导出服务类,日志名取类名 MetricsService,与本行的 id / name 无关;五者的分工见
+# docs/plugin-naming.md。
 - insert:
     - id: service-plugin
       name: service-plugin

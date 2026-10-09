@@ -1,5 +1,5 @@
 {
-  // 仅类型检查(npm run typecheck)，不产出文件。
+  // 仅类型检查(pnpm typecheck)，不产出文件。
   "compilerOptions": {
     "target": "esnext",
     "module": "nodenext",

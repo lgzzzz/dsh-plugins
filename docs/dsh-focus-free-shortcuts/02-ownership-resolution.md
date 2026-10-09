@@ -194,7 +194,7 @@ onKeyDown: (event) => {
 return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallback}</div>, elected]
 ```
 
-于是审批一出现，composer 输入框被移除，不可渲染的元素不能持有焦点，浏览器把焦点退回 `<body>`。此时这次 `keydown` 的 target 是 `<body>`：面板不是 `<body>` 的祖先，React 的 `onKeyDown` 收不到，面板自己的 `contains(document.activeElement)` 也不成立，`Enter` 与 `Esc` 都没有 owner。
+于是审批一出现，composer 输入框被隐藏，不可渲染的元素不能持有焦点，浏览器把焦点退回 `<body>`。此时这次 `keydown` 的 target 是 `<body>`：面板不是 `<body>` 的祖先，React 的 `onKeyDown` 收不到，面板自己的 `contains(document.activeElement)` 也不成立，`Enter` 与 `Esc` 都没有 owner。
 
 | 焦点位置 | `keydown` 的 target | 面板自己的判定 | 表现 |
 |---|---|---|---|

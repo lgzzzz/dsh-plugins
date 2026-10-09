@@ -2,10 +2,10 @@
  * 悬停开合状态机：把指针进出与点击翻译成上游控件自己的开合动作。
  *
  * 上游控件的开合真值只存在于 DOM 上——触发器是 `button[aria-expanded]`，它的值就是组件私有的
- * `open` 状态；改变它的唯一路径是点击触发器（上游 `onClick` 做 `setOpen(current => !current)`，
- * 见 contract.json 的 trigger-toggle）。因此本状态机不镜像任何状态：每次开/合之前重读
- * `aria-expanded`，读到的值和目标一致就空操作。合成 click 会冒泡到 React 的委派根容器，
- * 因此等价于用户点了一下触发器。
+ * `open` 状态；本状态机改变它只有一条路径：点击触发器（上游 `onClick` 做
+ * `setOpen(current => !current)`，见 contract.json 的 trigger-toggle）。因此本状态机不镜像任何
+ * 状态：每次开/合之前重读 `aria-expanded`，读到的值和目标一致就空操作。合成 click 会冒泡到
+ * React 的委派根容器，因此等价于用户点了一下触发器。
  *
  * **三个行为与上游子代理控件逐一对齐**（`dsh-client-ui-subagent` 的头部计数控件）：
  *
@@ -29,6 +29,8 @@
  * 冒泡事件在 DOM 树上照常经过它，不依赖「无盒元素是否参与命中测试」这类浏览器细节。
  * 触发器与菜单之间那段视觉间隙会让指针短暂离开宿主（`mouseout` 排关闭），紧接着进入菜单时
  * `mouseover` 取消关闭，`HOVER_CLOSE_DELAY_MS` 的余量覆盖这段位移。
+ *
+ * 上游锚点、已知边界与验证方式见 docs/dsh-jobs-optimize.md。
  */
 
 /** 指针进入后延迟多久展开（与上游子代理控件同值，两枚 chip 的手感因此一致）。 */
@@ -37,7 +39,12 @@ export const HOVER_OPEN_DELAY_MS = 150
 /** 指针离开后延迟多久折叠（同上）。 */
 export const HOVER_CLOSE_DELAY_MS = 120
 
-/** 触发器选择器：上游控件里唯一带 `aria-expanded` 的按钮。 */
+/**
+ * 触发器选择器：上游控件里第一个带 `aria-expanded` 的按钮。
+ *
+ * 菜单里的行展开按钮与「已结束」分组开关也带同一属性，`querySelector` 按文档序取到的仍是
+ * 触发器（它排在菜单之前）。
+ */
 export const TRIGGER_SELECTOR = 'button[aria-expanded]'
 
 /** 承载开合真值的属性名。 */

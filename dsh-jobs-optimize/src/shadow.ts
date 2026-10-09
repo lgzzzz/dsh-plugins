@@ -23,6 +23,8 @@
  * 原样存成条目的 `component`，而包装组件在每次安装时都是新的闭包，因此它与上游的
  * JobListAction 永不相等。源项从账本消失后，剩下的唯一同 id 项就是我们的项，于是不会再被
  * 误认为源项。
+ *
+ * 上游锚点、已知边界与验证方式见 docs/dsh-jobs-optimize.md。
  */
 import type { LedgerEntry, ShadowSlots } from './types.ts'
 

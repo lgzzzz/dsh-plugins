@@ -9,10 +9,17 @@
  * 命令判定是保守的启发式解析:只认能静态解析出 git 子命令的形态。解析不出(自定义包装器、
  * 嵌套的命令替换、超过 `MAX_DEPTH`)就不介入 —— 这类漏判由上面那段提示词兜底,而不是在解析器
  * 里猜。会话生效沙箱模式为 `danger-full-access` 时,两条通路都不介入。
+ *
+ * 两条通路都只把决定交给用户:命中时返回 `kind: 'ask'`,否则原样交回 `next()`,从不 deny、
+ * 也不改写命令参数。插件不声明 `export const inject` —— 提示词服务在装配时用
+ * `ctx.inject(['systemPrompt'])` 现取,沙箱模式用 `ctx.get('sandboxPolicy')` 只读。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
+// 三个空导入(不引入任何名字):分别加载各包对 Context / AssembleContext 的模块扩展 ——
+// dsh-tools 给 ctx.on('tools/pre-execute') 的类型,dsh-system-prompt 给 ctx.systemPrompt,
+// dsh-agent 给组装上下文上的 agent。
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -306,6 +313,7 @@ function extractSubstitutions(command: string): string[] {
 
 const FORCE_FLAGS = new Set(['--force', '-f', '--force-with-lease', '--force-if-includes'])
 
+/** 破坏性重置的旗标:`--soft` / `--mixed` 只动 HEAD 与索引、不碰工作区,故不在此列。 */
 const RESET_DESTRUCTIVE = new Set(['--hard', '--merge', '--keep'])
 
 const ASK_SUFFIX = '需要你的许可。请审核后批准或拒绝.'
@@ -389,7 +397,12 @@ function decideSegment(segment: string, depth: number): AskDecision | undefined 
   return decideGit(found.subcommand, found.args)
 }
 
-/** 判定一条命令行:先看命令替换,再逐段判定,取其中后果最强的一条。 */
+/**
+ * 判定一条命令行:先看命令替换,再逐段判定,取其中后果最强的一条。
+ *
+ * 返回 undefined 表示不介入(`apply` 会原样 `next()`)。返回的决定里 `destructive` 只用于同时
+ * 命中多条时挑更具体的文案,交给工具调度前会被剥掉 —— 外面只看得到 `kind` 与 `reason`。
+ */
 function decide(command: string, depth = 0): AskDecision | undefined {
   if (depth > MAX_DEPTH) return undefined
   let best: AskDecision | undefined
@@ -404,6 +417,12 @@ function decide(command: string, depth = 0): AskDecision | undefined {
 
 export const name = 'dsh-git-guard'
 
+/**
+ * 装上两条通路:与 TEAM_POLICY 同序的 systemPrompt 区段,以及 tools/pre-execute 钩子。
+ *
+ * 钩子只把能静态解析出的 git 子命令拦成 `kind: 'ask'`;完全访问模式或解析不出时原样交回
+ * `next()`,所以本插件从不 deny、也不改写命令参数。
+ */
 export function apply(ctx: Context): void {
   // 区段与 TEAM_POLICY 同序;完全访问模式下文本为空 —— 区段仍注册,但不向模型提出授权要求。
   ctx.inject(['systemPrompt'], promptCtx => {

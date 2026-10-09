@@ -8,7 +8,7 @@
  * 各桥接与它们跟随的键位：
  *
  *   - pane 命令（`⌘⌥Enter` / `⌘\`）→ `pane-keys.ts`；
- *   - page close（`page.close`，Web/macOS 为 `⌘⌥W`、Web/Windows/Linux 为 `Ctrl+Alt+W`）→
+ *   - page close（`page.close`，Web/macOS 为 `⌘⌥W`、Web/Windows 为 `Ctrl+Alt+W`）→
  *     `page-close.ts`；
  *   - stop（`Esc` `Esc`）→ `stop-sequence.ts`；
  *   - approval（`Enter` / `Esc`）→ `approval-keys.ts`；
@@ -20,8 +20,12 @@
  *     含展开侧栏后的焦点交接与右栏页签行的滚动补偿（`strip-scroll.ts`）；
  *   - session cycle（`⌘↑` / `⌘↓`，Windows/Linux 为 `Ctrl+↑/↓`）与 session active cycle（`⌘⌥↑` /
  *     `⌘⌥↓`，Windows/Linux 为 `Ctrl+Alt+↑/↓`）→ `session-cycle.ts`；
- *   - session new（内置 `session.new`，Web/macOS 为 `⌘⌥N`、Web/Windows·Linux 为 `Ctrl+Alt+N`）→
+ *   - session new（内置 `session.new`，Web/macOS 为 `⌘⌥N`、Web/Windows 为 `Ctrl+Alt+N`）→
  *     `session-new.ts`：不注册固定行、也不开固定输入观察者，只补内置命令够不着的终端那一格。
+ *
+ * 上游只为 `web:macos` 与 `web:windows` 声明这些内置命令的默认键位：Web/Linux 上
+ * `page.close`、`session.new`、`session.search` 与两条 pane 命令都没有默认绑定，各桥只跟随
+ * 生效目录行，因此这几条在 Web/Linux 上不动作（本插件自己挂的固定行按平台规范化，不受此限）。
  *
  * `binding.ts` 提供两个快捷键目录共用的手势/绑定匹配，`capture.ts` 提供捕获阶段读数，
  * `focus-ring.ts` 提供 outline 抑制，`runtime.ts` 提供插件名、固定输入收窄与主视图
