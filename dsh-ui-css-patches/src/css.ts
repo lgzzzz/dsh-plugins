@@ -4,6 +4,12 @@
  * 同特异性规则的覆盖顺序由本文件的源码顺序唯一确定(后写者胜);规则只用稳定的 `data-*` /
  * `role` / `aria-label` 锚点,不依赖上游的哈希类名。锚点与令牌清单、以及构建后校验见
  * docs/dsh-css-architecture/04-css-patches-relationship.md。
+ *
+ * 后台任务菜单那两条额外用了元素类型 `ul`:菜单 `<ul>` 上没有任何 `data-*`,且它是
+ * `[data-slot="conversation.session.header.actions"]` 里唯一内联渲染的 `ul`(该槽其余注册项里,
+ * agent-preset 的标签只渲染 `span`,subagent-catalog 与 agent-team 的菜单 portal 到 `document.body`),
+ * 类型选择器是它唯一的稳定锚点。框(终端卡)的宽度钉在上游基线 478px 上并居中:父面板没有属性锚点,
+ * 所以这条约定放在框自身上(见该处注释)。
  */
 export const CSS = `
 /* 对话正文撑满可用宽度 */
@@ -117,6 +123,29 @@ export const CSS = `
 /* 会话标题栏(动作图标那一行)整行 14px */
 [data-slot="conversation.session.header"] * {
   font-size: var(--dsh-content-font-size, 14px) !important;
+}
+
+/* 后台任务菜单加宽 500px → 548px(= 框 478 + 两侧空隙 2×35,见下一条)。
+   上游是 width:500px + max-width:min(560px,100vw - 32px):max-width 也一并覆盖,菜单宽度才不跟着
+   上游那个上限走(上游调小它时,菜单会跟着缩、空隙静默变小)。
+   菜单是绝对定位元素,加宽不参与头部布局;上游按实测 offsetWidth 算的 left 仍会把菜单拉回视口内 */
+[data-slot="conversation.session.header.actions"] ul {
+  width: 548px;
+  max-width: min(548px, 100vw - 32px);
+}
+
+/* 命令 + 实时输出那个框保持上游基线宽度 478px(= 菜单 500 − 内边距 2×3 − 面板左右外边距 2×8),
+   菜单比它宽出来的 70px 全变成两侧空隙:548 菜单下 = 3 + 8 + 24 居中余量 = 35,由 margin:auto 对称。
+   上游 .…_block 是 content-box 且带 12px 左内边距,不写 box-sizing 会变成 490px,故显式声明 border-box;
+   max-width:100% 兜住窄窗口(菜单被 min(548px,100vw - 32px) 收窄时框跟着收窄,不溢出面板)。
+   478 / 548 / 35 互相推导,依赖上游的 500 菜单与 8px 面板外边距 —— css-contract.json 的 jobs-menu-width /
+   jobs-panel-margin 负责让构建失败。面板里的提示行(「已省略 N 行」/输出错误)没有属性锚点、不参与居中 */
+[data-slot="conversation.session.header.actions"] ul [data-terminal] {
+  box-sizing: border-box;
+  width: 478px;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* 子智能体会话树（role="tree" 精确锚点）自身与子元素 14px */

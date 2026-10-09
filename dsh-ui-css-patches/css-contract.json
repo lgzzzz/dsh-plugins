@@ -36,6 +36,10 @@
     {"id":"subagent-tree-aria-zh","token":"\"tree.aria\": \"子智能体会话\"","paths":["dsh-client-ui-subagent/lib"],"hint":"子智能体会话树的中文 aria-label 文案变更，div[role=\"tree\"][aria-label=\"子智能体会话\"] 落空（英文界面用的是 Subagent sessions）"},
     {"id":"tool-details-inspect-attr","pattern":"\"data-inspect\":\\s*hasInspect","paths":["dsh-client-ui-tool/lib"],"hint":"ToolDetails 根不再输出 data-inspect，[data-inspect] 落空：无说明行、仅靠它命中的工具详情卡退回上游 13px 正文 / 12px 说明行、副标题、徽标、状态文案（带说明行的卡片仍由 [data-caption] 命中）"},
     {"id":"tool-details-caption-attr","pattern":"\"data-caption\":\\s*model\\.caption","paths":["dsh-client-ui-tool/lib"],"hint":"ToolDetails 根不再输出 data-caption，[data-caption] 落空：无「查看」入口、仅靠它命中的工具详情卡退回上游 13px 正文 / 12px 说明行、副标题、徽标、状态文案（带查看入口的卡片仍由 [data-inspect] 命中）"},
-    {"id":"tool-details-status-role-img","pattern":"role:\\s*\"img\",[\\s\\S]{0,60}?\"aria-label\":\\s*item\\.change","paths":["dsh-client-ui-tool/lib"],"hint":"ToolDetails 行首状态标记不再带 role=\"img\"，:not([role=\"img\"]) 例外失效：+ / − 变更字形从上游 16px 变为 14px"}
+    {"id":"tool-details-status-role-img","pattern":"role:\\s*\"img\",[\\s\\S]{0,60}?\"aria-label\":\\s*item\\.change","paths":["dsh-client-ui-tool/lib"],"hint":"ToolDetails 行首状态标记不再带 role=\"img\"，:not([role=\"img\"]) 例外失效：+ / − 变更字形从上游 16px 变为 14px"},
+    {"id":"jobs-menu-element","pattern":"\"ul\",\\s*\\{\\s*ref: menuRef[\\s\\S]{0,120}?className: JobListAction_module_css_default\\.menu","paths":["dsh-client-ui-jobs/lib"],"hint":"后台任务菜单不再是 header.actions 里那个内联渲染的 <ul>（agent-preset 的标签只渲染 span，subagent-catalog 与 agent-team 的菜单 portal 到 body），[data-slot=\"conversation.session.header.actions\"] ul 宽度规则落空：菜单回到上游 500px，框两侧的空隙也不再被放大"},
+    {"id":"jobs-menu-width","pattern":"width:500px;\\s*max-width:min\\(560px,\\s*100vw - 32px\\)","paths":["dsh-client-ui-jobs/lib"],"hint":"后台任务菜单的 width/max-width 基线变了（上游自己调宽或收窄了），548px 这个取值需要复核；同时 478px 框宽与 35px 空隙都是按 500 菜单推导出来的，要跟着重算"},
+    {"id":"jobs-panel-margin","pattern":"margin:0 8px 8px\\}","paths":["dsh-client-ui-jobs/lib"],"hint":"命令行/实时输出面板的左右 8px 外边距变了，478 = 500 − 2×3 − 2×8 这条推导失效：钉住的框宽不再等于上游默认框宽（框会显得比上游窄或宽），548 = 478 + 2×35 与 35px 空隙也要重算"},
+    {"id":"jobs-terminal-attr","pattern":"\"data-terminal\":","paths":["dsh-client-ui-primitives/lib"],"hint":"TerminalBlock 根不再输出 data-terminal，钉宽 + 居中的那条规则整条落空：框回到面板的满宽（548 菜单里 526px 宽），两侧空隙缩回上游的 11px"}
   ]
 }
