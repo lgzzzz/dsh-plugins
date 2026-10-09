@@ -21,7 +21,7 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | 文件 | 内容 |
 |---|---|
 | `src/pane-keys.ts` | 第 1 组：面板键 `⌘⌥Enter` 全屏 / `⌘\` 分屏 |
-| `src/page-close.ts` | 第 1 组附带：关闭当前页面 `page.close`（Web/macOS `⌘⌥W` / Web/Windows·Linux `Ctrl+Alt+W`）—— 与面板键同一条活动 dock pane 回退，只关页面、不关窗口；Web 独有（Desktop 的 `⌘W` 本来就免聚焦） |
+| `src/page-close.ts` | 第 1 组附带：关闭当前页面 `page.close`（Web/macOS `⌘⌥W` / Web/Windows `Ctrl+Alt+W`；上游没有声明 `web:linux` 的默认值，见第 6 册第 7 节）—— 与面板键同一条活动 dock pane 回退，只关页面、不关窗口；Web 独有（Desktop 的 `⌘W` 本来就免聚焦） |
 | `src/stop-sequence.ts` | 第 2 组：停止序列 `Esc` `Esc` |
 | `src/approval-keys.ts` | 第 3 组：审批键 `Enter` 允许一次 / `Esc` 拒绝 |
 | `src/focus-composer.ts` | 第 4 组：聚焦输入框 `primary+alt+J`（macOS `⌘⌥J` / Windows/Linux `Ctrl+Alt+J`；官方没有的键，插件自己挂固定键；终端内另走捕获拦截） |
@@ -30,7 +30,7 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | `src/strip-scroll.ts` | 第 5 组附带：右栏页签行的滚动 —— 注入一条作用域限定在右侧栏的 `scroll-behavior: auto` 规则（消掉"先回到最左、再迅速滑过去"的动画），并在切页前后保持观察窗口（`captureStripScroll` / `restoreStripScroll`：先还回旧位置，只有目标芯片不在窗口里时才按最小可见 + 24px 边缘余量推移）。纯视图补偿，不消费按键、不参与归属；由页面切换桥的注入作用域安装 / 卸载 |
 | `src/question-keys.ts` | 第 6 组：提问卡片 `Esc` 取消 / 关闭（同一个 `pendingInteraction` 槽位的提问域，调面板自己的 `dismiss()`） |
 | `src/session-cycle.ts` | 第 7 组：会话导航 `primary+↑` / `primary+↓`（macOS `⌘↑` / `⌘↓` / Windows/Linux `Ctrl+↑` / `Ctrl+↓`，全部候选）与 `primary+alt+↑` / `primary+alt+↓`（macOS `⌘⌥↑` / `⌘⌥↓` / Windows/Linux `Ctrl+Alt+↑` / `Ctrl+Alt+↓`，只走活跃会话）（官方没有的键对，插件自己挂两条固定键；候选只取左侧栏前三个工作区当前渲染出来的会话行，活跃 = 行上有状态点者，终端内另走捕获拦截） |
-| `src/session-new.ts` | 第 8 组：内置「新建会话」`session.new`（Web/macOS `⌘⌥N` / Web/Windows·Linux `Ctrl+Alt+N`）的终端那一格 —— 不注册固定键、不开观察者，只跟随**生效目录**里那一行当前的绑定，在捕获阶段拦下 `.xterm` 内的这一按并调用同一个 `uiWorkspace.startSession()`；页面 / 文本控件里仍归内置命令 |
+| `src/session-new.ts` | 第 8 组：内置「新建会话」`session.new`（Web/macOS `⌘⌥N` / Web/Windows `Ctrl+Alt+N`；上游没有声明 `web:linux` 的默认值，见第 6 册第 7 节）的终端那一格 —— 不注册固定键、不开观察者，只跟随**生效目录**里那一行当前的绑定，在捕获阶段拦下 `.xterm` 内的这一按并调用同一个 `uiWorkspace.startSession()`；页面 / 文本控件里仍归内置命令 |
 | `src/binding.ts` | 多数桥共用：上游手势 / 绑定 / 两类快捷键目录行的匹配（纯函数，无 DOM、无 Cordis）；停止桥与提问桥各有自己的判定，不读目录行 |
 | `src/capture.ts` | 捕获阶段共用：按键落点（`composedElement` / `pressElement`）、原始手势（`captureGesture`）、归属上下文（`captureContext`：区域 + 模态）与终端落点判定（`terminalTarget`），由页面循环桥、会话导航桥、聚焦输入框桥、聚焦右栏页面桥与新建会话桥（终端）以及审批桥（过程卡片）的捕获钩子共用 |
 | `src/focus-ring.ts` | 审批桥用：拿走某个控件的按键之后，给它打上官方的"无环聚焦"标记（`data-dsh-automatic-focus`）——焦点不动，那圈 `:focus-visible` 边框不显形；标记在 blur 或 Tab / 方向键导航时按官方同一套规则摘除 |
@@ -95,7 +95,7 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 重启 / 刷新 GUI 后验证：
 
 - 焦点放在输入框，按 `⌘⌥Enter` → 应直接全屏右侧栏面板；
-- 右侧栏开着并至少有一张页面（不是只剩那块停靠 guide）时，焦点放哪儿都行（输入框、消息区、侧栏），按 `⌘⌥W`（macOS）/ `Ctrl+Alt+W`（Windows/Linux）→ 应直接关掉右侧栏**当前**那一页（活动 pane 的活动页面），键盘不用先点进右侧栏；焦点已经在面板内按同一键 → 由内置命令关页（插件让位），效果相同；
+- 右侧栏开着并至少有一张页面（不是只剩那块停靠 guide）时，焦点放哪儿都行（输入框、消息区、侧栏），按 `⌘⌥W`（macOS）/ `Ctrl+Alt+W`（Web/Windows；Web/Linux 上 `page.close` 未绑定）→ 应直接关掉右侧栏**当前**那一页（活动 pane 的活动页面），键盘不用先点进右侧栏；焦点已经在面板内按同一键 → 由内置命令关页（插件让位），效果相同；
 - 右侧栏折叠时按 `⌘⌥W` / `Ctrl+Alt+W` → 无动作（没有"当前显示的页面"；先用展开键展开，展开会顺手聚焦活动 pane）；只挂着那块停靠 guide 时按它 → 收起右侧栏（这是 `page.close` 自己的语义，与焦点在面板内时按同一键一致）；
 - 打开设置 / 快捷键等弹窗后按 `⌘⌥W` / `Ctrl+Alt+W` → 弹窗被关掉、后台页面不受影响（这一按归弹出的模态层，插件让位）；
 - 把关页键改绑到别的组合 → 新组合生效、旧组合不再触发；解绑或处于冲突中 → 无动作；
@@ -108,7 +108,7 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 - 有待答提问时按 `Esc` 与连按两下 `Esc` 都不停止当前轮次（待答交互存在时停止侧拒绝）；
 - 焦点放哪儿都行（消息区、侧栏、甚至别的文本控件里），按 `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux） → 应直接聚焦底部输入框，光标回到上次位置，可以立刻开始输入；
 - 把焦点点进右侧栏的终端（`.xterm`）里再按 `⌘⌥J` / `Ctrl+Alt+J` → 依然聚焦回底部输入框，而且这一按不会被当成终端输入送进 shell（终端内的那一按由 window 捕获阶段先拦下）；
-- 在终端里按 `⌘⌥N`（macOS）/ `Ctrl+Alt+N`（Windows/Linux）—— 内置「新建会话」`session.new` 在 Web 上的默认键位 → 应直接新建会话并切过去，同样不会把这一按送进 shell；焦点在输入框 / 消息区时按同一键 → 由内置命令处理（插件让位），效果相同；
+- 在终端里按 `⌘⌥N`（macOS）/ `Ctrl+Alt+N`（Web/Windows；Web/Linux 上 `session.new` 未绑定）—— 内置「新建会话」`session.new` 在 Web 上的默认键位 → 应直接新建会话并切过去，同样不会把这一按送进 shell；焦点在输入框 / 消息区时按同一键 → 由内置命令处理（插件让位），效果相同；
 - 把「新建会话」改绑到别的组合 → 新组合在终端里生效、旧组合不再触发；解绑或处于冲突中 → 无动作、也不吞这一按（键位读的是生效目录）；
 - 在终端里按 `⌘⌥M` / `Ctrl+Alt+M` → 「工作区快速切换」浮层照常弹出（那一半在 [dsh-workspace-quick-switch](../dsh-workspace-quick-switch.md) 里），这一按同样不会进 shell；
 - 右侧栏开着并至少有两张页面时，任意焦点位置按 `⌘⌥→` / `⌘⌥←`（macOS）/ `Ctrl+Alt+→` / `Ctrl+Alt+←`（Windows/Linux） → 应切成下一页 / 上一页（环状），且键盘落到新页面：切到终端可直接打字，切到文件页方向键可直接滚动；焦点已经在终端里按这对键 → 依然能切页；

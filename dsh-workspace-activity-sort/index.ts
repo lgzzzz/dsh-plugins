@@ -1,7 +1,7 @@
 /**
  * 宿主半部：把最近有会话活动的工作区提到左侧栏 Workspace 分组最前。
  *
- * 分组顺序就是 Workspace 注册表的持久显示顺序（`ctx.workspaceRegistry` 的 `workspaceIds`），
+ * 分组顺序就是 Workspace 注册表的持久显示顺序（域全局单例的 `workspaceIds`，`registry.list()` 按它投影），
  * 浏览器通过 workspace 控制器 follow() 的 order 增量跟随。插件只写注册表顺序：用注册表自己的
  * `insertBefore` 把目标工作区移到最前。
  *

@@ -3,8 +3,8 @@
  *
  * 装配顺序即依赖顺序:`createBrowserNotifyEnv` 读 Notification 能力与 localStorage,
  * `createNotifyStore` 持有权限与开关快照,`startNotifyRuntime` 订阅 uiSession 的状态变化并在
- * 命中策略时调用 `createBrowserDelivery`。设置行注册进 `settings.general.item` 槽,样式由
- * `ensureNotifySettingsStyles` 自己挂一张 `<style>`。
+ * 命中策略时把通知交给 `createBrowserDelivery` 产出的投递器。设置行注册进
+ * `settings.general.item` 槽,样式由 `ensureNotifySettingsStyles` 自己挂一张 `<style>`。
  *
  * 没有 window / document(非浏览器环境)时直接返回,不注册任何东西。
  */

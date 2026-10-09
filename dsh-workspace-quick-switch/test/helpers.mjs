@@ -4,7 +4,7 @@
  *
  * 浮层组件用**真的 React** 渲染(react-dom/server 的 `renderToStaticMarkup`),所以不需要
  * React 替身;浮层里的 `useEffect` 在服务端渲染下不会跑,测试就自己把 effect 拿出来跑,
- * 再把它们往 `document` 上挂的监听收进 `reactCleanups`。
+ * 并收下它们交出的清理函数(往 `document` 上挂的监听由此撤掉)。
  *
  * 跑全部请用 `node test/run-all.mjs`。
  */

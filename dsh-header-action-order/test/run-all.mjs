@@ -2,7 +2,7 @@
  * 跑完 test/ 下所有 `*.test.mjs`,按主题顺序执行并汇总结果。
  *
  *   node test/run-all.mjs                 # 全部
- *   node test/run-all.mjs slots           # 只跑文件名/主题匹配 "slots" 的
+ *   node test/run-all.mjs slots           # 只跑文件名匹配 "slots" 的
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'

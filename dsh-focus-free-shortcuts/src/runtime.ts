@@ -1,6 +1,8 @@
 /**
  * 各桥接共用的运行时基础：诊断用的插件名、注册表固定输入联合类型里的 keydown 分支，
- * 以及主视图当前保留的那个 Session（停止桥接与审批桥接都在无 DOM 焦点时解析它）。
+ * 以及主视图当前保留的那个 Session（停止、审批、提问与聚焦输入框四桥都在无 DOM 焦点时解析它）。
+ *
+ * 上游锚点、已知边界与验证方式见 docs/dsh-focus-free-shortcuts.md。
  */
 import type {ShortcutFixedInput} from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {SessionListState, SessionSummary} from '@deepseek-ai/dsh-api-session-controller/client'

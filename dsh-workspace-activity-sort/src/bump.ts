@@ -22,7 +22,7 @@ export interface PendingSession {
   readonly since: number
 }
 
-/** 一次上浮请求；`reason` 只用于日志与测试断言，不参与判定。 */
+/** 一次上浮请求；`reason` 只用于测试断言，不参与判定，也不进日志。 */
 export interface FrontRequest {
   /** 要提到最前的工作区。 */
   readonly workspaceId: string

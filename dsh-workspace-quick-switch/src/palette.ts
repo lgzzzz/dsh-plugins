@@ -121,7 +121,7 @@ export interface PaletteStore {
   select(index: number): void
   /** 相对位移选中行(`delta` 为 ±1),到两端环状回头;没有候选时不动。 */
   move(delta: number): void
-  /** 同步渲染方投影出来的候选;选中行已不在候选里时退回第一行。 */
+  /** 同步渲染方投影出来的候选;选中下标越出候选范围时退回第一行。 */
   sync(entries: readonly PaletteEntry[]): void
 }
 

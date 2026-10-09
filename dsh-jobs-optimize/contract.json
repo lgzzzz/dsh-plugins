@@ -1,5 +1,5 @@
 {
-  "description": "dsh-jobs-optimize 依赖的 DSH 客户端事实：后台任务控件所在的槽与注册 id、slots 的同 id 遮蔽规则、渲染器在渲染期读取条目 component、驱动上游开合动作所必需的两处上游实现（触发器上的 aria-expanded 真值、点击即 toggle）、菜单在宿主内，以及被对齐的那个参照物——子代理控件的悬停延迟与点击语义（本插件的三个行为按它们取值，参照物一变，两边就不再一致）。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：任何一条改名或改走别的路径，本插件的接管都会静默退化或与子代理控件分叉，这里把那种退化提前变成一次显式失败，并在 hint 里写明会退化成什么。",
+  "description": "dsh-jobs-optimize 依赖的 DSH 客户端事实：后台任务控件所在的槽与注册 id、slots 的同 id 遮蔽规则、渲染器在渲染期读取条目 component、驱动上游开合动作所必需的两处上游实现（触发器上的 aria-expanded 真值、点击即 toggle）、菜单在宿主内，以及被对齐的那个参照物——子代理控件的悬停延迟与点击语义（本插件的三个行为按它们取值，参照物一变，两边就不再一致）。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：任何一条改名或改走别的路径，本插件的接管都会退化（有的路径当场告警，有的静默不生效）或与子代理控件分叉，这里把那种退化提前变成一次显式失败，并在 hint 里写明会退化成什么。",
   "checks": [
     {"id":"job-list-slot","plugin":"dsh-jobs-optimize","token":"conversation.session.header.actions","paths":["dsh-client-ui-conversation/lib"],"hint":"承载后台任务控件的槽键消失：slots.inject 永远等不到声明，遮蔽项无处注册，悬停展开完全不生效"},
     {"id":"header-actions-render","plugin":"dsh-jobs-optimize","pattern":"renderSlot\\(\\s*\"conversation\\.session\\.header\\.actions\"","paths":["dsh-client-ui-conversation/lib"],"hint":"会话头部不再渲染 header.actions 出口：即使槽键还在，遮蔽项也不会被渲染，悬停展开不生效"},

@@ -2,7 +2,7 @@
   "name": "dsh-desktop-notify",
   "version": "1.0.0",
   "private": true,
-  "description": "本插件在页面不处于前台时,通过浏览器 Notification API 发送桌面通知:回合结束或出现待审批/待回答/待确认计划时弹系统通知,并提供设置项开关。",
+  "description": "在页面不处于前台时,通过浏览器 Notification API 发送桌面通知:回合结束或出现待审批/待回答/待确认计划时弹系统通知,并提供设置项开关。",
   "type": "module",
   "exports": {
     ".": {

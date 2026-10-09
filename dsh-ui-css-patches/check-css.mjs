@@ -9,8 +9,8 @@
 //      (清单里逐条写明实际后果)。
 // 这里在构建后把清单逐条对上游产物 grep 一遍,缺一条就显式失败,提示里写明后果。
 //
-// 本文件同时是 dsh-changes-hover-off 的校验器:它以 `--manifest contract.json` 复用这份脚本,
-// 所以下面的参数、DSH 根解析顺序与退出码对所有调用方一致。
+// 本文件同时是 dsh-changes-hover-off 与 dsh-jobs-optimize 的校验器:两者都以
+// `--manifest contract.json` 复用这份脚本,所以下面的参数、DSH 根解析顺序与退出码对所有调用方一致。
 //
 // 用法(本脚本与 css-contract.json 同目录):
 //   node dsh-ui-css-patches/check-css.mjs [--dsh-root <path>] [--manifest <json>]

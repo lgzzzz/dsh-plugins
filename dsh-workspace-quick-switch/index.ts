@@ -3,6 +3,8 @@
  *
  * 本插件只在浏览器里动作(快捷键 + `shell.overlay` 浮层),宿主侧不需要任何服务,
  * 因此这里只有名字与空的 apply —— Node Type Stripping 直接加载,没有构建产物。
+ *
+ * 键位、启用方式与已知边界见 docs/dsh-workspace-quick-switch.md。
  */
 export const name = 'dsh-workspace-quick-switch'
 

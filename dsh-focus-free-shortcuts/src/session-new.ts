@@ -2,7 +2,8 @@
  * 内置命令 `session.new`（新建会话）的终端那一半。
  *
  * `session.new` 是 Workspace browser 贡献的**可配置命令**，Web 上的默认键位是
- * `primary+alt+N`（macOS `⌘⌥N`、Windows/Linux `Ctrl+Alt+N`；桌面端仍是 `primary+N`），
+ * `primary+alt+N`（macOS `⌘⌥N`、Windows `Ctrl+Alt+N`；桌面端仍是 `primary+N`；上游没有声明
+ * `web:linux` 的默认值，该平台上这一行未绑定，本桥随之不动），
  * 归属区域只有 `page` 与 `editable`。它平时走 DOM 通道就够了，焦点在终端里却不行：
  * 终端在自己的 textarea 处理器里对经手的按键 `preventDefault()+stopPropagation()`，
  * 事件到不了 window 上的键盘适配器，这一按既不新建会话、也不报错。

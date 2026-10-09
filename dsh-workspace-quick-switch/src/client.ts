@@ -7,8 +7,8 @@
  * 浮层列出的候选**就是左侧栏那一份**:上游 Workspace 控制器的 `list` 快照按宿主持久
  * 显示顺序排列(`dsh-workspace-activity-sort` 之类改的正是这份顺序),取前
  * {@link WORKSPACE_LIMIT} 个即可。浮层开着的时候候选继续跟随快照(顺序变了、工作区被
- * 删了,列表跟着变),选中行尽量停在原来那个工作区上。会话目录能读到主视图会话时,
- * 它所属的工作区会标上「当前」,并作为打开时的初始选中行。
+ * 删了,列表跟着变),选中行按原下标保留(候选变短到装不下这个下标时回到第一行)。
+ * 会话目录能读到主视图会话时,它所属的工作区会标上「当前」,并作为打开时的初始选中行。
  *
  * 四条通路:
  *
@@ -574,7 +574,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
     }
 
     scope.effect(installStyleTag, `${name}: palette styles`)
-    // 固定行要先挂载,固定输入观察者才读得到它;三者同属一个 scope,按同序销毁。
+    // 固定行要先挂载,固定输入观察者才读得到它;三者同属一个 scope,卸载时按登记逆序跑清理函数。
     scope.effect(() => {
       try {
         return shortcuts.registerFixed(fixedCommand(platform))

@@ -2,9 +2,11 @@
 
 > 本文件是 [DSH 组件 CSS 架构](../dsh-css-architecture.md) 的第 2 册：`\0dsh-css:` / `\0dsh-global-css:` / `\0dsh-inline-css:` 三个虚拟模块。
 
+-----
+
 ## 3. 构建期 CSS 处理：三个虚拟模块
 
-在 `tsdown.client.mjs` 里，CSS 通过三个 `\0` 前缀的虚拟模块 ID 处理，避免进入 tsdown 自带的 CSS 管道（由 lightningcss 直接编译）：
+在 `tsdown.client.mjs` 里，CSS 通过三个 `\0` 前缀的虚拟模块 ID 处理，避免进入 tsdown 自带的 CSS 管道；三个虚拟模块由本仓库直接调用 lightningcss 编译：
 
 | 虚拟模块前缀 | 触发条件 | 产物 | 注入方式 |
 |---|---|---|---|

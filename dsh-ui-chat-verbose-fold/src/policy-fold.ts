@@ -6,6 +6,8 @@
  * 就能让已绑定的 usePresentation 选择器直接读到折叠值,无需重挂载。
  *
  * 除两处原地写入(注册项的 inject 与 source 的 getSnapshot)外无副作用。
+ *
+ * 上游锚点、已知边界与验证方式见 docs/dsh-ui-chat-verbose-fold.md。
  */
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { ChatPresentationPolicy } from '@deepseek-ai/dsh-client-ui-chat/client'

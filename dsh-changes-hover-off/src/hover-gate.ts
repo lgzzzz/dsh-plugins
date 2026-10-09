@@ -86,7 +86,7 @@ export interface HoverGateDocument {
   defaultView?: { MutationObserver?: MutationObserverCtor } | null
 }
 
-/** 鸭子类型判定「可 `closest` 的节点」,与上游捕获层同一手法,测试可传普通假元素。 */
+/** 鸭子类型判定「可 `closest` 的节点」,与 `dsh-focus-free-shortcuts` 的捕获层同一手法,测试可传普通假元素。 */
 function hasClosest(value: unknown): value is Element {
   return typeof value === 'object'
     && value !== null

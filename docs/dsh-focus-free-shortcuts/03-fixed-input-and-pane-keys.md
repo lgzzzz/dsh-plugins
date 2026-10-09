@@ -154,7 +154,7 @@ function handlePaneInput(shortcuts, sidebar, input) {
 ```
 
 - 只作用于**右侧栏**（`[data-sidebar-right-session]`）：对话区那套同样由 dockkit 渲染的条带不受影响；
-- 用属性选择器而不是 dockkit 的哈希类名；两个属性选择器的特异性（0,2,0）高于类规则（0,1,0），与样式表顺序无关，所以不需要 `!important`；
+- 用属性选择器而不是 dockkit 的哈希类名；两个属性选择器的特异性（0，2，0）高于类规则（0，1，0），与样式表顺序无关，所以不需要 `!important`；
 - 标签按持有者计数共享一个 `<style>`：同一文档里已有同一份规则（dev / HMR 下旧实例留下的标签）就复用它且不由本实例摘除；本实例插入的标签在最后一个持有者卸载时移除。没有 `document`、或 document 承载不了标签（极简 / 假 DOM）时整段是 no-op；
 - 代价：kit 在"开 / 关 / 移动页签"时的滑动过渡也一并变成瞬时 —— 纯装饰差异，换来的是滚动位置永远不需要"先回到起点、再修正"。
 
@@ -221,7 +221,7 @@ function handlePageCloseInput(shortcuts, sidebar, input) {
 逐行说明（①③④⑤⑥⑧⑨ 与 [第 5.3 节](03-fixed-input-and-pane-keys.md) 的面板键逐行同义，不再重复）：
 
 - **②** `context.modal !== null` → 返回。这里与面板键的动机不同：`page.close` 的 `modals` 是 `["settings", "shortcuts", "other"]`，**声明了模态** —— 弹窗打开时内置派发用同一条命令关掉最上面那层弹窗（`closeTopModal(document)`），所以这一按归弹窗，插件必须让位，否则会越过弹窗去关后台页面。
-- **③** `pageCloseFor` 经 `enabledBinding` 判定这一按是否**恰好**命中 `page.close` 当前生效的键位。Web 上是官方默认的 `primary+alt+W`（macOS `⌘⌥W` / Windows/Linux `Ctrl+Alt+W`），Desktop 上是 `primary+W`；用户改绑后跟随新键，解绑 / 被保留 / 冲突时不接管。
+- **③** `pageCloseFor` 经 `enabledBinding` 判定这一按是否**恰好**命中 `page.close` 当前生效的键位。Web 上是官方默认的 `primary+alt+W`（macOS `⌘⌥W` / Windows `Ctrl+Alt+W`；上游没有声明 `web:linux` 的默认值，Web/Linux 上这一行未绑定，本桥随之不接管），Desktop 上是 `primary+W`；用户改绑后跟随新键，解绑 / 被保留 / 冲突时不接管。
 - **⑤** `!sidebar.isExpanded()` → 返回。折叠时没有"当前显示的页面"，且内置的 `focusedTarget` 对**停靠**面板同样解析不到（`sidebarTargetFromElement` 对 `host === 'dock' && !layout.expanded` 返回 `undefined`）——两者同向。唯一在折叠时仍被绘制的是浮动面板，而那种情形焦点本来就落在浮动面板内、由 ④ 让位给内置命令。
 - **⑦** `canCloseTarget(target)` 是官方"这个目标现在能不能关"的判定（`isTargetCurrent(target) && target.tabId !== undefined`），内置 `resolve()` 也用同一个词。为假（活动面板是空的、或身份已变）时不消费：这一按仍由内置命令收场（Web 上解析为 `blocked / command.noFocus` 并自行消费），插件不抢归属，也不多关。
 - **⑩** `closeTarget(target)` 与内置 `run()` 调的是同一个动词：目标页可移除就移除（走它的资源清理处理器），活动面板只剩那块停靠 guide 时收成侧栏（`setExpanded(false)`）。插件**不调** `closeWindow()` —— 那是 Desktop 分支的语义；本桥只在 Web 安装，所以 Web 上永远只关页面、不关窗口。这一动词也不搬键盘：官方 host 的 `closeWithPaneFocus` 只在"关之前焦点就在这个 pane 里"时才把焦点交给存活的面板（`retain`），焦点在 composer / 别处时它提交完变更就返回 —— 免聚焦关页之后键盘仍在原处，不会因为关掉一页而被吸进右侧栏。

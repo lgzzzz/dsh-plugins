@@ -106,7 +106,7 @@ export const SPLIT_PRESS = gesture('Backslash', { meta: true })
 export const PAGE_CLOSE_ID = 'page.close'
 /** Web/macOS 上的默认绑定:primary+alt+W(带 Alt,以免被浏览器当成关标签页的 `⌘W`)。 */
 export const PAGE_CLOSE_BINDING = { code: 'KeyW', modifiers: ['alt', 'meta'] }
-/** Web/Windows/Linux 上的同一组合:primary+alt+W。 */
+/** Web/Windows 上的同一组合:primary+alt+W(上游没有声明 `web:linux` 默认值)。 */
 export const PAGE_CLOSE_WIN_BINDING = { code: 'KeyW', modifiers: ['alt', 'control'] }
 export const PAGE_CLOSE_PRESS = gesture('KeyW', { alt: true, meta: true })
 export const PAGE_CLOSE_WIN_PRESS = gesture('KeyW', { alt: true, control: true })
@@ -186,7 +186,7 @@ export const SIDEBAR_TOGGLE_PRESS = gesture('KeyB', { control: true, shift: true
 
 /** 内置"新建会话"命令 id:Web 上的默认键位就是 primary+alt+N(桌面端是 primary+N)。 */
 export const SESSION_NEW_ID = 'session.new'
-/** Web/Windows·Linux 的默认绑定:`Ctrl+Alt+N`。 */
+/** Web/Windows 的默认绑定:`Ctrl+Alt+N`(上游没有声明 `web:linux` 默认值)。 */
 export const SESSION_NEW_BINDING = { code: 'KeyN', modifiers: ['control', 'alt'] }
 /** Web/macOS 的同一份默认绑定:`⌘⌥N`。 */
 export const SESSION_NEW_MAC_BINDING = { code: 'KeyN', modifiers: ['alt', 'meta'] }
