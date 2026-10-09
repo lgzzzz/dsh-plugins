@@ -1,0 +1,8 @@
+# dsh-jobs-optimize 的 web bundle 挂载行:随 dsh.profile.bundles 自动挂载。
+# 宿主半部按 <name>/package.json 解析(空 apply);客户端半部由 dsh.client.platform=web + immediately
+# 注册进浏览器 roster。补丁不依赖与官方 ui-jobs 的先后顺序:它靠 slots.subscribe 在账本变化时重扫,
+# ui-jobs 先注册或后注册都能遮蔽到。
+# 包名 / patch id / patch name / 导出 name / 服务名五者的分工见 docs/plugin-naming.md。
+- insert:
+    - id: dsh-jobs-optimize
+      name: dsh-jobs-optimize

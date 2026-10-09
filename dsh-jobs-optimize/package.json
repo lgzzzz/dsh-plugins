@@ -1,0 +1,39 @@
+{
+  "name": "dsh-jobs-optimize",
+  "version": "1.0.0",
+  "private": true,
+  "description": "让会话标题栏的后台任务计数控件的三个行为与子代理控件一致——悬停 150ms 展开、指针离开 120ms 折叠、点击钉住（已展开时点击也不折叠）：按 id 遮蔽 conversation.session.header.actions 槽里的 job-list 注册项，用 display:contents 包装层接管指针进出与点击，并以合成 click 驱动上游自己的开合逻辑。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown && node ../dsh-ui-css-patches/check-css.mjs --manifest contract.json",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node ../dsh-ui-css-patches/check-css.mjs --manifest contract.json",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}
