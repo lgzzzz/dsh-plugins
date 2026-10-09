@@ -2,7 +2,7 @@
   "name": "dsh-ui-css-patches",
   "version": "1.0.0",
   "private": true,
-  "description": "本地持久化的 Web UI CSS 补丁:加宽对话正文、固定右栏标签宽度,并把右栏预览与对话卡片的字号、代码块字号统一为 14px。",
+  "description": "本地持久化的 Web UI CSS 补丁:加宽对话正文、固定右栏标签宽度、把会话标题栏后台任务菜单加宽到 548px(命令/输出框保持上游基线宽度 478px,两侧各留 35px 空隙),并把右栏预览与对话卡片的字号、代码块字号统一为 14px。",
   "type": "module",
   "exports": {
     ".": {
