@@ -33,6 +33,9 @@
     {"id":"chat-width-declared","pattern":"--dsh-chat-content-width\\s*:","paths":[],"hint":"--dsh-chat-content-width 声明消失，正文宽度无变化（插件仍覆盖为 100%）"},
     {"id":"chat-width-consumed","token":"var(--dsh-chat-content-width","paths":[],"hint":"var(--dsh-chat-content-width) 消费消失，正文宽度从 100% 变为 920px"},
     {"id":"subagent-tree-role","pattern":"role:\\s*\"tree\"[\\s\\S]{0,200}?tree\\.aria","paths":["dsh-client-ui-subagent/lib"],"hint":"子智能体会话树的 role=\"tree\" + aria-label 锚点消失，该面板字号从 14px 变回上游的 12px"},
-    {"id":"subagent-tree-aria-zh","token":"\"tree.aria\": \"子智能体会话\"","paths":["dsh-client-ui-subagent/lib"],"hint":"子智能体会话树的中文 aria-label 文案变更，div[role=\"tree\"][aria-label=\"子智能体会话\"] 落空（英文界面用的是 Subagent sessions）"}
+    {"id":"subagent-tree-aria-zh","token":"\"tree.aria\": \"子智能体会话\"","paths":["dsh-client-ui-subagent/lib"],"hint":"子智能体会话树的中文 aria-label 文案变更，div[role=\"tree\"][aria-label=\"子智能体会话\"] 落空（英文界面用的是 Subagent sessions）"},
+    {"id":"tool-details-inspect-attr","pattern":"\"data-inspect\":\\s*hasInspect","paths":["dsh-client-ui-tool/lib"],"hint":"ToolDetails 根不再输出 data-inspect，[data-inspect] 落空：无说明行、仅靠它命中的工具详情卡退回上游 13px 正文 / 12px 说明行、副标题、徽标、状态文案（带说明行的卡片仍由 [data-caption] 命中）"},
+    {"id":"tool-details-caption-attr","pattern":"\"data-caption\":\\s*model\\.caption","paths":["dsh-client-ui-tool/lib"],"hint":"ToolDetails 根不再输出 data-caption，[data-caption] 落空：无「查看」入口、仅靠它命中的工具详情卡退回上游 13px 正文 / 12px 说明行、副标题、徽标、状态文案（带查看入口的卡片仍由 [data-inspect] 命中）"},
+    {"id":"tool-details-status-role-img","pattern":"role:\\s*\"img\",[\\s\\S]{0,60}?\"aria-label\":\\s*item\\.change","paths":["dsh-client-ui-tool/lib"],"hint":"ToolDetails 行首状态标记不再带 role=\"img\"，:not([role=\"img\"]) 例外失效：+ / − 变更字形从上游 16px 变为 14px"}
   ]
 }
