@@ -124,4 +124,16 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
 div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"]) * {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
+
+/* 工具详情卡整块 14px（data-inspect = 有「查看」入口，data-caption = 有说明行，命中其一即可）。
+   含 12px 的说明行、副标题、徽标、状态文案与 13px 的正文 / 代码块；根的 font: var(--dsw-font-xs-13) 一并覆盖。
+   行首状态标记（[role="img"]，即 + / − 变更字形）排除在外：它是图标语义（含义由 aria-label 承载），保留上游 16px。
+   两个属性都可能缺失——无查看入口且详情模型不带说明行时（todo / goal / schedule），
+   整条规则不命中，字号仍是上游 13px / 12px */
+[data-inspect],
+[data-caption],
+[data-inspect] *:not([role="img"]),
+[data-caption] *:not([role="img"]) {
+  font-size: var(--dsh-content-font-size, 14px) !important;
+}
 `
