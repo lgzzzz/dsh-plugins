@@ -15,6 +15,7 @@ PLUGINS=(
   dsh-focus-free-shortcuts
   dsh-git-guard
   dsh-header-action-order
+  dsh-jobs-optimize
   dsh-ui-css-patches
   dsh-workspace-activity-sort
   dsh-workspace-quick-switch
