@@ -21,7 +21,6 @@ dsh-focus-free-shortcuts/lib/
 dsh-header-action-order/lib/
 dsh-jobs-optimize/lib/
 dsh-ui-css-patches/lib/
-dsh-ui-chat-verbose-fold/lib/
 dsh-workspace-quick-switch/lib/
 
 # 本地排查痕迹(探针脚本产出、快照、备份)

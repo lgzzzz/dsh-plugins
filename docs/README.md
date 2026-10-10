@@ -20,7 +20,6 @@
 | `dsh-focus-free-shortcuts` | 未聚焦目标区域也能触发的内置快捷键桥接（`⌘⌥J` / `⌘⌥N` 等在终端 `.xterm` 内同样生效），外加 `⌘⌥K` / `Ctrl+Alt+K` 聚焦右栏当前显示的页面（通常是终端；Web 上有意占用内置会话搜索的键位） | [说明](dsh-focus-free-shortcuts.md) |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
-| `dsh-ui-chat-verbose-fold` | Verbose 模式下折叠已完成的轮次 | [说明](dsh-ui-chat-verbose-fold.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
