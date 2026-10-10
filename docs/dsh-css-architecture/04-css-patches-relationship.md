@@ -32,7 +32,7 @@
 2. **依赖上游 token 的「契约」**：补丁选择器和变量引用都建立在「上游存在这些 `data-*` 属性 + CSS 变量」的前提上。一旦上游改名 / 删 token，补丁会**静默失效**（选择器落空不报错）。插件配了构建后静态校验：
    - [`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json)：逐条声明「依赖哪个 token（或正则）、去哪几个包的 `lib/` 里找、失效时的后果 hint」。
    - [`../../dsh-ui-css-patches/check-css.mjs`](../../dsh-ui-css-patches/check-css.mjs)：按清单在上游构建产物里逐个 `grep`，缺失即报错（退出码 1）。
-   - `package.json` 的 `build` 脚本是 `tsdown && node check-css.mjs`，即**每次构建后自动校验**；升级上游版本后重跑 `pnpm -r build` 即可发现静默失效。
+   - `package.json` 的 `check:css` 脚本是 `node check-css.mjs`：在**构建后**单独跑（`pnpm check:css`），不在 `pnpm build` 里；升级上游版本后重跑一次即可发现静默失效。
 
 3. **复合属性选择器的覆盖条件**：上游类名带构建哈希（`_tab_6nhg2_134` 每版构建都变），无法可靠命中；而 `data-dockkit-tab` + `role="tab"` 是稳定的语义锚点，且特异性 `(0,2,0)` 大于上游 `.tab` 的 `(0,1,0)`，因此**无需 `!important` 即可覆盖**（`css.ts` 里的 `[data-dockkit-tab][role="tab"] { box-sizing; min-width: 100px; max-width: 100px }` 即如此）。
 

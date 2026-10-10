@@ -64,7 +64,7 @@ document.querySelector('[data-slot="conversation.session.header.actions"] div[st
 # 仓库根:把新包记进 lockfile
 pnpm install
 
-# 构建浏览器半部(tsdown → lib/client.js)+ 校验上游契约
+# 构建浏览器半部(tsdown → lib/client.js)
 pnpm --filter dsh-jobs-optimize build
 
 # 挂进 web profile(宿主半部为空 apply,客户端半部随 immediately 注册)
@@ -93,9 +93,9 @@ dsh plugin --profile web add C:\Users\LGZ\dsh-plugins\dsh-jobs-optimize
 
 ## 契约校验与测试
 
-两部分：构建期的上游契约静态校验，与 `test/` 下的行为测试。
+两部分：上游契约静态校验（[`check-css.mjs`](../dsh-jobs-optimize/check-css.mjs)），与 `test/` 下的行为测试。
 
-- [`contract.json`](../dsh-jobs-optimize/contract.json)：声明十一条上游事实。前八条是接管本身依赖的锚点（槽键、出口渲染、注册 id、遮蔽规则、渲染期读取条目组件、触发器的开合真值与 toggle、菜单在宿主内），后三条钉住**被对齐的参照物**——子代理控件的 150ms / 120ms 两个延迟与「点击只钉住、从不折叠」的点击语义。由 [`dsh-ui-css-patches/check-css.mjs`](../dsh-ui-css-patches/check-css.mjs) `--manifest contract.json` 在**每次 `build` 后**静态校验：锚点改名或改走别的路径会失败，参照物变了同样会失败（那时要重新对齐本插件的取值），而不是让接管退化（部分路径会告警，部分静默不生效）或与子代理控件分叉。
+- [`contract.json`](../dsh-jobs-optimize/contract.json)：声明十一条上游事实。前八条是接管本身依赖的锚点（槽键、出口渲染、注册 id、遮蔽规则、渲染期读取条目组件、触发器的开合真值与 toggle、菜单在宿主内），后三条钉住**被对齐的参照物**——子代理控件的 150ms / 120ms 两个延迟与「点击只钉住、从不折叠」的点击语义。由本目录的 [`check-css.mjs`](../dsh-jobs-optimize/check-css.mjs) 经 `pnpm check:css` 静态校验（不在 `pnpm build` 里）：锚点改名或改走别的路径会失败，参照物变了同样会失败（那时要重新对齐本插件的取值），而不是让接管退化（部分路径会告警，部分静默不生效）或与子代理控件分叉。
 - `pnpm test`（即 `node test/run-all.mjs`）：
   - `shadow.test.mjs` —— 源项定位、遮蔽项的注册选项、安装 / 保持 / 重建 / 撤回序列、注册抛错后记账无残留、对账期间被同步回调时不叠加包装；
   - `hover-open.test.mjs` —— 延迟展开、未达延迟就离开则不展开、延迟折叠、点击钉住且离开不折叠、**已展开时点击不折叠**（替身建模了「捕获阶段拦下则上游 onClick 不派发」这条传播关系）、两个延迟常量与参照物同值、只有受信任的触发器点击才改变钉住、进入时复位、宿主内位移不触发、已展开时不重复点击、卸载后不再动作、触发器缺席时是空操作；

@@ -65,9 +65,9 @@ pnpm check:css                 # 上游槽位 / 主题令牌契约校验(--dsh-r
 node test/run-all.mjs          # 五个测试文件(spawn 被沙箱拒时逐个跑,见下)
 ```
 
-`pnpm build` 是 `tsdown && node check-css.mjs`：浮层注册进的 `shell.overlay` 槽、注入样式
-消费的 `--dsw-*` / `--dsh-*` 令牌逐条登记在 [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json)，上游
-改名 / 删 token 时**构建即失败**，不会让浮层静默不显示或掉到兜底色。
+`pnpm check:css`（即 `node check-css.mjs`，不挂在 `pnpm build` 上）逐条校验浮层注册进的 `shell.overlay` 槽、
+注入样式消费的 `--dsw-*` / `--dsh-*` 令牌，清单在 [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json)：
+上游改名 / 删 token 时**校验即失败**，不会让浮层静默不显示或掉到兜底色。
 
 | 测试文件 | 覆盖 |
 | --- | --- |
