@@ -24,10 +24,10 @@
 `node test/run-all.mjs` 按 A–C 主题顺序跑：
 
 - **A 纯逻辑**（`test/fold-anchor.test.mjs`）——探针是替身，验证参照点记账、修正量符号、亚像素抖动、锚点失效，以及即时折叠的「显回→量→复原→量→写」调用顺序与「原生锚定已补过则差值为 0」。
-- **B 接线**（`test/client-wiring.test.mjs`）——用带布局模型的假 DOM 摆 9 组场景：滚动口发现（共享/普通两种模式、限频重扫）、窗口开合、`ResizeObserver` 修正、即时折叠修正、锚点失效停手、折叠在阅读线下方不写、折叠窗口接管过的元素不补第二次、尾随输出让位。
+- **B 接线**（`test/client-wiring.test.mjs`）——用带布局模型的假 DOM 摆 10 组场景：滚动口发现（共享/普通两种模式、限频重扫）、窗口开合、`ResizeObserver` 修正、即时折叠修正与「整批元素都不能当锚点」、锚点失效停手、折叠在阅读线下方不写、折叠窗口接管过的元素不补第二次、尾随输出让位。
 - **C 产物**（`test/artifact-client.test.mjs`）——载入真产物 `lib/client.js`，校验模块 id / 插件名 / 无 external，并在假 DOM 上把「折叠窗口内补回阅读位置」走通一遍（含 `ctx.effect` 的清理）。
 
-假 DOM 只实现插件真正用到的那部分语义：`[attr]` / `[attr="value"]` 选择器、`dataset` 与属性表的双向映射、`style` 写入触发属性记录、`hidden` 归零高度并把下方内容整体上移、`MutationObserver` 的子树通知、`ResizeObserver` 由测试显式推进。
+假 DOM 只实现插件真正用到的那部分语义：`[attr]` / `[attr="value"]` 选择器、`dataset` 与属性表的双向映射、`style` 写入触发属性记录、`hidden` 归零高度（含任一祖先 `hidden` 时子树整体归零）并把下方内容整体上移、`MutationObserver` 的子树通知、`ResizeObserver` 由测试显式推进。
 
 -----
 

@@ -11,7 +11,7 @@ import {
   DISCOVERY_THROTTLE_MS,
   SPACER_SELECTOR,
   createRuntime,
-} from '../src/client.ts'
+} from '../src/viewport.ts'
 import {
   FakeElement,
   buildChat,

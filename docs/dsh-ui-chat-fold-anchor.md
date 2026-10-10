@@ -24,6 +24,6 @@
 <details>
 <summary>Dev Note</summary>
 
-插件的浏览器半部是 `src/client.ts`（观察与探针）+ `src/fold-anchor.ts`（纯记账，能在假探针上直接测）；上游契约钉在 `contract.json` 里，由同目录 `check-css.mjs` 逐条校验。行为实测装置在 `test/browser/`，跑法见[第 3 册](dsh-ui-chat-fold-anchor/03-build-test-and-enable.md)。
+插件的浏览器半部是 `src/client.ts`（入口 `apply()`，只做装配与清理）+ `src/viewport.ts`（DOM 适配：认信号、选锚点、读写滚动口）+ `src/fold-anchor.ts`（纯记账，能在假探针上直接测）；上游契约钉在 `contract.json` 里，由同目录 `check-css.mjs` 逐条校验。行为实测装置在 `test/browser/`，跑法见[第 3 册](dsh-ui-chat-fold-anchor/03-build-test-and-enable.md)。
 
 </details>
