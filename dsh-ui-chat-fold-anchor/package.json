@@ -1,0 +1,38 @@
+{
+  "name": "dsh-ui-chat-fold-anchor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "本地 Web UI 运行时补丁:ui-chat 折叠过程组时保持阅读位置不动(滚动补偿)。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "node test/run-all.mjs",
+    "test:browser": "node test/browser/run.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "check:css": "node check-css.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}

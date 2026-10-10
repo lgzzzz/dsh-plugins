@@ -16,6 +16,7 @@ PLUGINS=(
   dsh-git-guard
   dsh-header-action-order
   dsh-jobs-optimize
+  dsh-ui-chat-fold-anchor
   dsh-ui-chat-verbose-fold
   dsh-ui-css-patches
   dsh-workspace-activity-sort

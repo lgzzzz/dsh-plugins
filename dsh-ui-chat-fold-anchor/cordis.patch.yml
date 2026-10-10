@@ -1,0 +1,8 @@
+# dsh-ui-chat-fold-anchor 的 web bundle 挂载行:随 dsh.profile.bundles 自动挂载。
+# 宿主半部按 <name>/package.json 解析(空 apply);客户端半部由 dsh.client.platform=web + immediately
+# 注册进浏览器 roster。本插件不注册槽位、不读 ui-chat 的账本:它只观察 DOM 上的折叠窗口,
+# 因此与 ui-chat 的先后顺序无关,也不遮蔽任何上游组件。
+# 包名 / patch id / patch name / 导出 name / 服务名五者的分工见 docs/plugin-naming.md。
+- insert:
+    - id: dsh-ui-chat-fold-anchor
+      name: dsh-ui-chat-fold-anchor

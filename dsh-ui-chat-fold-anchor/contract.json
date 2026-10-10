@@ -1,0 +1,12 @@
+{
+  "description": "dsh-ui-chat-fold-anchor 依赖的上游事实:ui-chat 折叠动画用来关原生滚动锚定的那条内联样式、折叠标记先于窗口打开写入的执行顺序,以及发现滚动口与选锚点用的 data-* 契约。本目录的 check-css.mjs 逐条校验(由 pnpm check:css 触发,不挂在 pnpm build 上)。",
+  "checks": [
+    {"id":"fold-window-signal","plugin":"dsh-ui-chat-fold-anchor","pattern":"overflowAnchor\\s*=\\s*active\\s*\\?\\s*\"none\"\\s*:\\s*\"\"","paths":["dsh-client-ui-chat/lib"],"hint":"折叠动画不再用内联 overflow-anchor:none 关掉原生锚定(或换了属性/取值):本插件的折叠窗口永不打开,补偿静默失效,阅读位置又开始跳"},
+    {"id":"collapse-marker-first","plugin":"dsh-ui-chat-fold-anchor","pattern":"chatMotion\\s*=\\s*\"collapse\"[\\s\\S]{0,120}?foldStarted\\(\\)","paths":["dsh-client-ui-chat/lib"],"hint":"折叠动画不再在 foldStarted()(即写 overflow-anchor)之前打上 data-chat-motion=\"collapse\":窗口打开时选锚点会选中正在折叠的那一段,补偿落在要被移除的高度上"},
+    {"id":"collapse-marker","plugin":"dsh-ui-chat-fold-anchor","token":"data-chat-motion","paths":["dsh-client-ui-chat/lib"],"hint":"折叠中的元素标记 data-chat-motion 消失:选锚点时无法跳过正在折叠的段"},
+    {"id":"anchor-key-attr","plugin":"dsh-ui-chat-fold-anchor","token":"data-chat-anchor-key","paths":["dsh-client-ui-chat/lib"],"hint":"流程行的 data-chat-anchor-key 消失:锚点选不出来,补偿降级为空操作"},
+    {"id":"turn-spacer-attr","plugin":"dsh-ui-chat-fold-anchor","token":"data-chat-turn-spacer","paths":["dsh-client-ui-chat/lib"],"hint":"聊天列表尾部的 data-chat-turn-spacer 消失:滚动口发现落空,补偿完全装不上"},
+    {"id":"conversation-scroll-attr","plugin":"dsh-ui-chat-fold-anchor","token":"data-conversation-scroll","paths":["dsh-client-ui-chat/lib"],"hint":"共享滚动模式外层滚动口的 data-conversation-scroll 消失:共享滚动模式退回用列表当滚动口,判断错对象时会写错元素"},
+    {"id":"following-tail-attr","plugin":"dsh-ui-chat-fold-anchor","token":"data-chat-following-tail","paths":["dsh-client-ui-chat/lib"],"hint":"尾随输出标记 data-chat-following-tail 消失:折叠收尾那次修正不再让位给 ui-chat 的跟随策略,尾随时可能把它平滑回到底部的动作拽住"}
+  ]
+}

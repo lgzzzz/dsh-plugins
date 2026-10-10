@@ -21,6 +21,7 @@ dsh-focus-free-shortcuts/lib/
 dsh-header-action-order/lib/
 dsh-jobs-optimize/lib/
 dsh-ui-css-patches/lib/
+dsh-ui-chat-fold-anchor/lib/
 dsh-ui-chat-verbose-fold/lib/
 dsh-workspace-quick-switch/lib/
 
