@@ -167,6 +167,18 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
+/* 过程组（data-step-process）的成员区整棵子树 14px：组成员（思考 / 工具卡 / 回复）都渲染在
+   [data-step-process-content] 下；它自己在上游没有任何 font-size 声明（上游 .…_content 只声明
+   display / flex-direction），字号靠继承，成员内部又会各自声明更小的字号，所以容器与全部后代一起
+   钉到 --dsh-content-font-size（应用字号，默认 14px）。
+   这条规则的 !important 用来压过后代自己声明的小字号（上游在 chat / primitives / tool 里没有别的
+   font-size !important 会跟它抢）。工具详情卡那条特异性 (0,2,0) 更高，对非图标文字给出的同样是 14px，
+   但它给 [role="img"] 变更字形留的上游 16px 例外在组内不再生效——字形也被这条规则钉成 14px。 */
+[data-step-process-content],
+[data-step-process-content] * {
+  font-size: var(--dsh-content-font-size, 14px) !important;
+}
+
 /* 侧栏会话行的时间戳 13px(上游 10px;行高不动,仍是上游 16px)。固定值,不引用 --dsh-content-font-size。
    这个 span 上没有任何 data-* 属性,唯一的抓手是 CSS Module 的局部类名 time:生成名是 [hash]_[local],
    构建只换 [hash] 前缀、_time 不变,所以用 [class*="_time"] 通配符匹配类名。
