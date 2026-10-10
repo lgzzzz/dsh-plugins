@@ -1,15 +1,16 @@
 /**
  * `dsh-ui-css-patches` 的全部补丁规则,由 `client.ts` 挂成一条 `<style>`。
  *
- * 同特异性规则的覆盖顺序由本文件的源码顺序唯一确定(后写者胜);规则只用稳定的 `data-*` /
- * `role` / `aria-label` 锚点,不依赖上游的哈希类名。锚点与令牌清单、以及构建后校验见
- * docs/dsh-css-architecture/04-css-patches-relationship.md。
+ * 同特异性规则的覆盖顺序由本文件的源码顺序唯一确定(后写者胜);锚点是稳定的 `data-*` / `role` /
+ * `aria-label`。两处例外拿不到这类锚点:
+ *   - 后台任务菜单那两条额外用了元素类型 `ul`:菜单 `<ul>` 上没有任何 `data-*`,且它是
+ *     `[data-slot="conversation.session.header.actions"]` 里唯一内联渲染的 `ul`(该槽其余注册项里,
+ *     agent-preset 的标签只渲染 `span`,subagent-catalog 与 agent-team 的菜单 portal 到 `document.body`),
+ *     类型选择器是它唯一的稳定锚点。框(终端卡)的宽度钉在上游基线 478px 上并居中:父面板没有属性锚点,
+ *     所以这条约定放在框自身上(见该处注释)。
+ *   - 侧栏会话行的时间戳额外用了 CSS Module 的局部类名通配符(见该处注释)。
  *
- * 后台任务菜单那两条额外用了元素类型 `ul`:菜单 `<ul>` 上没有任何 `data-*`,且它是
- * `[data-slot="conversation.session.header.actions"]` 里唯一内联渲染的 `ul`(该槽其余注册项里,
- * agent-preset 的标签只渲染 `span`,subagent-catalog 与 agent-team 的菜单 portal 到 `document.body`),
- * 类型选择器是它唯一的稳定锚点。框(终端卡)的宽度钉在上游基线 478px 上并居中:父面板没有属性锚点,
- * 所以这条约定放在框自身上(见该处注释)。
+ * 锚点与令牌清单、以及构建后校验见 docs/dsh-css-architecture/04-css-patches-relationship.md。
  */
 export const CSS = `
 /* 对话正文撑满可用宽度 */
@@ -164,5 +165,17 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
 [data-inspect] *:not([role="img"]),
 [data-caption] *:not([role="img"]) {
   font-size: var(--dsh-content-font-size, 14px) !important;
+}
+
+/* 侧栏会话行的时间戳 13px(上游 10px;行高不动,仍是上游 16px)。固定值,不引用 --dsh-content-font-size。
+   这个 span 上没有任何 data-* 属性,唯一的抓手是 CSS Module 的局部类名 time:生成名是 [hash]_[local],
+   构建只换 [hash] 前缀、_time 不变,所以用 [class*="_time"] 通配符匹配类名。
+   行锚点靠 data-row-key 的取值前缀区分行的种类 —— 会话行 session:<id>、工作区行 workspace:<key>、
+   溢出提示行 overflow:<key>、新建会话占位行 empty,所以 [data-row-key^="session:"] 只命中会话行。
+   特异性 (0,2,0) 大于上游 .…_time 的 (0,1,0),无需 !important。
+   行锚点消失、或局部名不再叫 time 时本规则整条落空,字号退回上游 10px,由 css-contract.json 的
+   session-row-key-anchor / session-time-class 两条契约在构建后报「失效规则」。 */
+[data-row-key^="session:"] [class*="_time"] {
+  font-size: 13px;
 }
 `

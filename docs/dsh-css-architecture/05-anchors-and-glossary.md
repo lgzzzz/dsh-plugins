@@ -14,7 +14,7 @@
   - `STYLES`（8 个全局 inline sheet）+ `installThemeStyles()` 挂载；
   - `apply()`：`installThemeStyles` + `new ThemeRuntime` + `ctx.provide("theme", theme)` + 注册两个 settings 行。
 - 本仓库 [`../../tsdown.client.mjs`](../../tsdown.client.mjs)：三个 CSS 虚拟模块（`\0dsh-css:` / `\0dsh-global-css:` / `\0dsh-inline-css:`）、`styleInjectionModule()`、lightningcss `cssModules: { pattern: '[hash]_[local]' }`。
-- 本仓库 [`../../dsh-ui-css-patches/src/css.ts`](../../dsh-ui-css-patches/src/css.ts)、[`../../dsh-ui-css-patches/src/client.ts`](../../dsh-ui-css-patches/src/client.ts)：插件自己的 `data-*` + CSS 变量规则与注入生命周期。
+- 本仓库 [`../../dsh-ui-css-patches/src/css.ts`](../../dsh-ui-css-patches/src/css.ts)、[`../../dsh-ui-css-patches/src/client.ts`](../../dsh-ui-css-patches/src/client.ts)：插件自己的 `data-*` / CSS 变量 / 局部类名规则与注入生命周期。
 - 本仓库 [`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json) + [`../../dsh-ui-css-patches/check-css.mjs`](../../dsh-ui-css-patches/check-css.mjs)：构建后契约校验。
 - dockkit tab 真实 DOM：`<div role="tab" data-dockkit-tab="<id>" class="_tab_6nhg2_134 …">` —— 两属性同元素，复合选择器命中。
 
