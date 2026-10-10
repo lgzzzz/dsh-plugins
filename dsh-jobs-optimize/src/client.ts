@@ -8,14 +8,17 @@
  *
  * 包装层是 `display: contents` 的 div：它只作为可寻址的宿主存在，不产生盒子，因此头部动作条
  * 的 `display: flex; gap: 8px` 仍只看到上游控件那一个 flex 子项（`display: contents` 的子元素
- * 直接参与父级 flex 布局）。调度细节见 `hover-open.ts`，账本遮蔽见 `shadow.ts`。
+ * 直接参与父级 flex 布局）。指针进出与点击都由这层 div 上的 React 事件接住：上游把菜单
+ * `createPortal` 到 `document.body`，DOM 上它在包装层之外，但 React 的 enter/leave 按 React 树
+ * 算边界，portal 内容仍算在包装层之内，指针从触发器移向菜单因此不会被误判为离开。调度细节见
+ * `hover-open.ts`，账本遮蔽见 `shadow.ts`。
  *
  * 上游锚点、已知边界与验证方式见 docs/dsh-jobs-optimize.md。
  */
 import * as React from 'react'
 import { createHoverOpen } from './hover-open.ts'
 import { JOB_LIST_ID, JOB_LIST_SLOT, createShadowState, reconcileShadow, withdrawShadow } from './shadow.ts'
-import type { HoverHost } from './hover-open.ts'
+import type { HoverHost, HoverOpenController } from './hover-open.ts'
 import type { ShadowSlots } from './types.ts'
 
 export const name = 'dsh-jobs-optimize'
@@ -54,7 +57,8 @@ interface ClientContext {
  * 把源组件包进悬停宿主。
  *
  * 返回的组件把 props 原样透传给源组件，自身不读业务面，因此源组件的 `inject` 面
- * （`hooks.jobs` / `watchRows` / `observe` / `killJob`）与 `t` 座位都照常到达。
+ * （`hooks.jobs` / `watchRows` / `observe` / `killJob`）与 `t` 座位都照常到达。它还把进出与捕获
+ * 点击三枚 React 事件挂在包装层上，把结果交给状态机——上游控件的开合只由这条路径驱动。
  *
  * @param Inner - 上游那个后台任务控件组件。
  * @returns 包装组件；把它交给 `slots.register()` 即可。
@@ -62,17 +66,41 @@ interface ClientContext {
 export function withHoverOpen(Inner: unknown): unknown {
   function JobListHoverOpen(props: Record<string, unknown>): React.ReactElement {
     const hostRef = React.useRef<HTMLDivElement | null>(null)
+    const controllerRef = React.useRef<HoverOpenController | null>(null)
     React.useEffect(() => {
       const host = hostRef.current
       if (host === null) return
       const controller = createHoverOpen(host as unknown as HoverHost)
+      controllerRef.current = controller
       return () => {
+        controllerRef.current = null
         controller.dispose()
       }
     }, [])
     return React.createElement(
       'div',
-      { ref: hostRef, style: ANCHOR_STYLE },
+      {
+        ref: hostRef,
+        style: ANCHOR_STYLE,
+        // 进出判定交给 React：portal 到 body 的菜单仍在 React 树里，因此它和触发器同属一个
+        // 进出区域，指针从触发器移向菜单不会排上折叠。
+        onMouseEnter: () => {
+          controllerRef.current?.enter()
+        },
+        onMouseLeave: () => {
+          controllerRef.current?.leave()
+        },
+        // 捕获阶段，早于上游 onClick 的冒泡派发；已展开时由状态机拦下那次点击。
+        onClickCapture: (event: React.MouseEvent<HTMLDivElement>) => {
+          controllerRef.current?.click({
+            target: event.target,
+            isTrusted: event.nativeEvent.isTrusted,
+            stopPropagation: () => {
+              event.stopPropagation()
+            },
+          })
+        },
+      },
       React.createElement(Inner as React.FunctionComponent<Record<string, unknown>>, props),
     )
   }
