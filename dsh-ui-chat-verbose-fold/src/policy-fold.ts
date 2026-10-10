@@ -56,7 +56,7 @@ export function createFoldPatchState(): FoldPatchState {
  * 都按原对象返回,使无关模式上的选择器保持稳定引用。
  */
 export function foldCompletedForVerbose(policy: ChatPresentationPolicy): ChatPresentationPolicy {
-  if (policy.mode !== VERBOSE_MODE || policy.foldCompletedTurns === true) return policy
+  if (policy.mode !== VERBOSE_MODE || policy.foldCompletedTurns) return policy
   return { ...policy, foldCompletedTurns: true }
 }
 
