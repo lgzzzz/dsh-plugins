@@ -83,69 +83,43 @@ export class FakeTrigger {
 }
 
 /**
- * 宿主替身：镜像 `display: contents` 包装层用到的四个方法。
- *
- * `contains` 只认登记在 `children` 里的节点，与真实 `Node.contains` 在「指针进了宿主内的另一个
- * 节点」这一情形上的判定一致；`relatedTarget` 传 `undefined` 代表从宿主外进来（真实 DOM 里是
- * `null`）。
+ * 宿主替身：状态机只用它定位触发器。指针进出不在这里判定——真实链路里那一步由 React 的
+ * `onMouseEnter` / `onMouseLeave` 按 React 树（含 portal 菜单）算好，测试直接调用
+ * `controller.enter()` / `controller.leave()` 喂进去。
  */
 export class FakeHost {
   constructor(trigger = new FakeTrigger()) {
     this.trigger = trigger
-    this.children = new Set([trigger])
-    this.listeners = new Map()
-  }
-
-  addEventListener(type, listener, capture) {
-    const list = this.listeners.get(type) ?? []
-    list.push({ listener, capture })
-    this.listeners.set(type, list)
-  }
-
-  removeEventListener(type, listener, capture) {
-    const list = (this.listeners.get(type) ?? []).filter((item) => item.listener !== listener || item.capture !== capture)
-    if (list.length === 0) this.listeners.delete(type)
-    else this.listeners.set(type, list)
-  }
-
-  contains(node) {
-    return this.children.has(node)
   }
 
   querySelector(selector) {
     return selector === TRIGGER_SELECTOR ? this.trigger : null
   }
+}
 
-  /** 派发给本类型上的全部监听器（本状态机只用捕获阶段，因此不区分阶段）。 */
-  emit(type, event) {
-    for (const item of this.listeners.get(type) ?? []) item.listener(event)
+/**
+ * 模拟一次真实用户点击：先走包装层捕获阶段的 `click()`，**未被拦下时**才让上游的 `onClick` 生效。
+ *
+ * 真实链路里上游的 `onClick` 由 React 在冒泡阶段派发，捕获阶段（包装层的 `onClickCapture`）的
+ * `stopPropagation()` 会让事件到不了那里；本替身把这条传播关系显式建模，于是「已展开时点击
+ * 不折叠」是被真的验证的，而不只是验证调用过一次 `stopPropagation`。
+ *
+ * @param controller - 被点击的控件状态机。
+ * @param trigger - 上游触发器替身；未被拦下时由它执行 toggle。
+ * @param node - 点击落点，默认是触发器本身。
+ */
+export function userClick(controller, trigger, node = trigger) {
+  const event = {
+    isTrusted: true,
+    target: node,
+    stopped: false,
+    stopPropagation() {
+      this.stopped = true
+    },
   }
-
-  /**
-   * 模拟一次真实用户点击：先走宿主的捕获监听，**未被拦下时**才让上游的 `onClick` 生效。
-   *
-   * 真实链路里上游的 `onClick` 由 React 委派在应用根容器的冒泡阶段派发，捕获阶段的
-   * `stopPropagation()` 会让事件到不了那里；本替身把这条传播关系显式建模，于是「已展开时点击
-   * 不折叠」是被真的验证的，而不只是验证调用过一次 `stopPropagation`。
-   */
-  userClick(node = this.trigger) {
-    const event = {
-      isTrusted: true,
-      target: node,
-      stopped: false,
-      stopPropagation() {
-        this.stopped = true
-      },
-    }
-    this.emit('click', event)
-    if (!event.stopped && typeof node.click === 'function') node.click()
-    return event
-  }
-
-  /** 当前有监听的类型。 */
-  get types() {
-    return [...this.listeners.keys()].sort()
-  }
+  controller.click(event)
+  if (!event.stopped && typeof node.click === 'function') node.click()
+  return event
 }
 
 /** 假定时器：登记待触发回调，由测试决定何时推进。 */

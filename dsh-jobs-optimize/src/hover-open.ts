@@ -16,19 +16,20 @@
  *    折叠，关闭只剩两条路径：点击控件外部，或按 Escape。
  *
  * 第 3 条要求拦下「已展开时的那次点击」：上游后台任务控件的 onClick 是无条件 toggle，放它过去
- * 就会把菜单关掉。捕获阶段的监听器挂在宿主上，早于 React 委派在应用根容器上的冒泡派发，因此
- * 已展开时 `stopPropagation()` 就能让这次点击到不了上游的 onClick。
+ * 就会把菜单关掉。调用方用包装层的 React `onClickCapture` 把点击交给 `click()`，捕获派发早于
+ * 上游 onClick 的冒泡派发，因此已展开时 `stopPropagation()` 就能让这次点击到不了上游的
+ * onClick。
+ *
+ * **指针进出由调用方按 React 的 enter/leave 语义喂进来**（`enter()` / `leave()`）：菜单被上游
+ * `createPortal` 到 `document.body`（见 contract.json 的 menu-portal），落在包装层的 DOM 子树
+ * 之外，按「`relatedTarget` 是否在包装层内」判定会把「指针移进菜单」当成离开、排上折叠；React
+ * 的 enter/leave 按 **React 树**（而不是 DOM 树）算边界，portal 内容仍算在渲染它的组件之内，
+ * 因此触发器与菜单是同一个进出区域。
  *
  * **pin 语义**：合成 click 的 `isTrusted` 为 `false`，用它区分「用户点的」和「我们点的」。
  * 外部 `pointerdown` 关闭（上游的 `useDismissOnOutsidePointer`，合成 click 不派发 pointerdown，
  * 所以两者不冲突）与 Escape 关闭都不经过本状态机，因此进入时若读到控件已关闭就必须复位 pin，
  * 否则会出现「点外部关闭后再也关不掉」的粘滞。
- *
- * 指针进出的判定用冒泡的 `mouseover` / `mouseout` 加 `relatedTarget` 包含关系，而不是
- * `mouseenter` / `mouseleave`：监听器挂在包装层上，而包装层是 `display: contents`（无盒），
- * 冒泡事件在 DOM 树上照常经过它，不依赖「无盒元素是否参与命中测试」这类浏览器细节。
- * 触发器与菜单之间那段视觉间隙会让指针短暂离开宿主（`mouseout` 排关闭），紧接着进入菜单时
- * `mouseover` 取消关闭，`HOVER_CLOSE_DELAY_MS` 的余量覆盖这段位移。
  *
  * 上游锚点、已知边界与验证方式见 docs/dsh-jobs-optimize.md。
  */
@@ -40,10 +41,10 @@ export const HOVER_OPEN_DELAY_MS = 150
 export const HOVER_CLOSE_DELAY_MS = 120
 
 /**
- * 触发器选择器：上游控件里第一个带 `aria-expanded` 的按钮。
+ * 触发器选择器：宿主里第一个带 `aria-expanded` 的按钮。
  *
- * 菜单里的行展开按钮与「已结束」分组开关也带同一属性，`querySelector` 按文档序取到的仍是
- * 触发器（它排在菜单之前）。
+ * 菜单里的行展开按钮与「已结束」分组开关也带同一属性，但它们随菜单被 portal 到 `document.body`，
+ * 不在宿主内，因此 `querySelector` 命中的就是触发器。
  */
 export const TRIGGER_SELECTOR = 'button[aria-expanded]'
 
@@ -57,22 +58,16 @@ export interface TriggerLike {
   click(): void
 }
 
-/** 本状态机读到的指针 / 点击事件。 */
-export interface HoverEvent {
+/** 交给 `click()` 的一次点击；由调用方从 React 的 `onClickCapture` 转写而来。 */
+export interface HoverClickEvent {
   readonly target?: unknown
-  readonly relatedTarget?: unknown
   readonly isTrusted?: boolean
   /** 拦下这次点击，使上游的 `onClick` 收不到它（已展开时的点击用它保持展开）。 */
   stopPropagation?(): void
 }
 
-export type HoverListener = (event: HoverEvent) => void
-
-/** 承装包装层的宿主：一个 `display: contents` 元素。 */
+/** 承装包装层的宿主：只用来定位触发器（进出判定由调用方的 React enter/leave 负责）。 */
 export interface HoverHost {
-  addEventListener(type: string, listener: HoverListener, capture: boolean): void
-  removeEventListener(type: string, listener: HoverListener, capture: boolean): void
-  contains(node: unknown): boolean
   querySelector(selector: string): TriggerLike | null
 }
 
@@ -89,18 +84,24 @@ const DEFAULT_TIMER: HoverTimer = {
   },
 }
 
-/** 一次悬停接管；`dispose()` 摘掉全部监听与待触发定时器。 */
+/** 一次悬停接管；`dispose()` 清掉待触发定时器，此后三个入口都成为空操作。 */
 export interface HoverOpenController {
   /** 是否处于「用户点击打开、离开也不折叠」的钉住状态。 */
   readonly pinned: boolean
+  /** React 的 `onMouseEnter`：指针进入包装层或它的 portal 子树。 */
+  enter(): void
+  /** React 的 `onMouseLeave`：指针离开包装层及其 portal 子树。 */
+  leave(): void
+  /** React 的 `onClickCapture`：受信任的触发器点击把它钉住。 */
+  click(event: HoverClickEvent): void
   dispose(): void
 }
 
 /**
  * 在一个宿主上接管后台任务控件的指针进出与点击。
  *
- * @param host - `display: contents` 包装层；监听器挂在它身上，因此上游在无任务时返回
- *   `null`（内部触发器整体消失又重建）不会让监听丢失。
+ * @param host - `display: contents` 包装层；用它定位触发器，因此上游在无任务时返回
+ *   `null`（内部触发器整体消失又重建）不会让接管失效。
  * @param timer - 定时器实现；默认用全局定时器。
  * @returns 控制器；`dispose()` 之后不再有任何开合动作。
  */
@@ -108,6 +109,7 @@ export function createHoverOpen(host: HoverHost, timer: HoverTimer = DEFAULT_TIM
   let openTimer: number | undefined
   let closeTimer: number | undefined
   let pinned = false
+  let disposed = false
 
   const trigger = (): TriggerLike | null => host.querySelector(TRIGGER_SELECTOR)
   const expanded = (): boolean => trigger()?.getAttribute(EXPANDED_ATTRIBUTE) === 'true'
@@ -133,6 +135,7 @@ export function createHoverOpen(host: HoverHost, timer: HoverTimer = DEFAULT_TIM
   }
 
   const enter = (): void => {
+    if (disposed) return
     cancelOpen()
     cancelClose()
     if (!expanded()) pinned = false
@@ -144,6 +147,7 @@ export function createHoverOpen(host: HoverHost, timer: HoverTimer = DEFAULT_TIM
   }
 
   const leave = (): void => {
+    if (disposed) return
     cancelOpen()
     if (pinned || closeTimer !== undefined) return
     closeTimer = timer.setTimeout(() => {
@@ -152,13 +156,8 @@ export function createHoverOpen(host: HoverHost, timer: HoverTimer = DEFAULT_TIM
     }, HOVER_CLOSE_DELAY_MS)
   }
 
-  const onOver = (event: HoverEvent): void => {
-    if (!host.contains(event.relatedTarget)) enter()
-  }
-  const onOut = (event: HoverEvent): void => {
-    if (!host.contains(event.relatedTarget)) leave()
-  }
-  const onClick = (event: HoverEvent): void => {
+  const click = (event: HoverClickEvent): void => {
+    if (disposed) return
     if (event.isTrusted !== true) return
     const node = trigger()
     if (node === null) return
@@ -172,20 +171,17 @@ export function createHoverOpen(host: HoverHost, timer: HoverTimer = DEFAULT_TIM
     pinned = true
   }
 
-  host.addEventListener('mouseover', onOver, true)
-  host.addEventListener('mouseout', onOut, true)
-  host.addEventListener('click', onClick, true)
-
   return {
     get pinned(): boolean {
       return pinned
     },
+    enter,
+    leave,
+    click,
     dispose(): void {
+      disposed = true
       cancelOpen()
       cancelClose()
-      host.removeEventListener('mouseover', onOver, true)
-      host.removeEventListener('mouseout', onOut, true)
-      host.removeEventListener('click', onClick, true)
     },
   }
 }

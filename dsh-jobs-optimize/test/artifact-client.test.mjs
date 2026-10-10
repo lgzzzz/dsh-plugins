@@ -173,6 +173,9 @@ console.log('--- A⑤ 产物里的稳定契约 ---')
   checkTrue('产物含开合属性名', text.includes(EXPANDED_ATTRIBUTE))
   checkTrue('产物含无盒锚点', text.includes('display: contents') || text.includes('display:contents'))
   checkTrue('产物含悬停延迟', text.includes(String(HOVER_OPEN_DELAY_MS)) && text.includes(String(HOVER_CLOSE_DELAY_MS)))
+  // 进出必须挂在 React 的 enter/leave 上（不是 DOM 包含关系），点击必须在捕获阶段接住。
+  checkTrue('产物把进出挂在 React enter/leave 上', text.includes('onMouseEnter:') && text.includes('onMouseLeave:'))
+  checkTrue('产物在捕获阶段接住点击', text.includes('onClickCapture:'))
 }
 
 console.log('--- A⑥ 源项始终缺席时的自检窗口 ---')
