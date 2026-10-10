@@ -37,9 +37,9 @@
 
 ## 上游契约校验
 
-依赖上游 CSS 选择器 / 槽位 / DOM 锚点的插件，在 `build` 里跟一段**构建后静态校验**：把清单
-逐条对 DSH 安装产物 grep 一遍，上游改名 / 删 token 时构建失败，而不是让补丁在页面上静默
-失效（选择器落空不报错）。校验器是各插件目录下的 `check-css.mjs`（与它的清单同目录）；
+依赖上游 CSS 选择器 / 槽位 / DOM 锚点的插件配了一段**静态校验**（`pnpm check:css`，不挂在
+`pnpm build` 上）：把清单逐条对 DSH 安装产物 grep 一遍，上游改名 / 删 token 时显式失败，
+而不是让补丁在页面上静默失效（选择器落空不报错）。校验器是各插件目录下的 `check-css.mjs`（与它的清单同目录）；
 `dsh-changes-hover-off` 与 `dsh-jobs-optimize` 复用 `dsh-ui-css-patches/check-css.mjs`，用
 `--manifest contract.json` 指向自己的清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
@@ -52,8 +52,9 @@
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 
-根目录 `pnpm check` 一次跑完两件事：`pnpm -r check`（各插件产物的 lib 语法检查）与
-`pnpm -r check:css`（上面 6 份契约清单）。单个插件内也可 `pnpm check:css` 只跑契约。
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 6 份契约清单
+（`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
+校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
 ## 常用命令
 

@@ -7,7 +7,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm -r check",
-    "check:css": "pnpm -r check:css",
+    "check:css": "pnpm -r --no-bail check:css",
     "test": "pnpm -r test"
   },
   "devDependencies": {
