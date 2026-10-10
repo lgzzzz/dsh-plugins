@@ -22,7 +22,6 @@ import {
   moveUpForFold,
   withFakeDom,
 } from './helpers.mjs'
-
 console.log('--- B① 折叠窗口内把阅读位置补回去 ---')
 withFakeDom(({ doc }) => {
   const chat = buildChat()
@@ -195,6 +194,61 @@ withFakeDom(({ doc }) => {
   chat.group.collapseTo = undefined
   chat.group.setAttribute('hidden', 'until-found')
   check('收尾的 hidden 不再按折叠前几何补一次', chat.scroller.scrollTop, 700)
+  runtime.dispose()
+})
+
+console.log('--- B⑩ 即时折叠：整批元素都不能当锚点 ---')
+withFakeDom(({ doc }) => {
+  const chat = buildChat()
+  // 真实日志里的形状：一「批」被隐藏的元素有多个，且**批里的第一个元素与阅读线上的过程组无关**。
+  // 剖面坐标：外层折叠体 700..760 在阅读线上方，过程组 900..1200 压在阅读线上，回答行
+  // 1200..1400 在下方；滚动位置 1000。
+  //   - 批里的第一条 = `wrapperBody`，在 `wrapper` 的子树里，与过程组 A 无关；
+  //   - 批里的第二条 = `wrapper` 自己（外层折叠体的根，带 `data-chat-anchor-key`）；
+  //   - 过程组 A = `chat.group`，它的折叠体 `chat.body` 也在批里。
+  //
+  // 本用例守住的不变量：整批折叠后，仍在阅读线上的两条行都按「上方收掉了多少」得到补偿，
+  // 而不是被收掉的高度顶走。旧实现只登记 `entries[0]`（`wrapperBody`），`wrapper` 与过程组根
+  // 都逃过排除；真实页面里被选中的过程组根随即也被隐藏，`measure()` 重新测量时返回 null，
+  // 整次补偿被放弃——这正是那次 522px 跳动的成因。
+  //
+  // 注意判据的限度：本用例**证明不了**旧实现会失败（假 DOM 里 reveal() 对两种锚点都会把
+  // 位置补回来，只是修正量的来源不同）。它的作用是钉住这个形状下的结果，真实差异由
+  // test/browser 的实测与现场埋点验证。
+  const wrapper = new FakeElement('div')
+  wrapper.dataset.chatAnchorKey = 'wrapper:9'
+  wrapper.contentTop = 700
+  wrapper.height = 60
+  const wrapperBody = new FakeElement('div')
+  wrapperBody.contentTop = 700
+  wrapperBody.height = 60
+  wrapper.append(wrapperBody)
+  chat.column.append(wrapper)
+
+  doc.body.append(chat.outer)
+  chat.scroller.scrollTop = 1000
+  const runtime = createRuntime(doc)
+  const top = (element) => element.getBoundingClientRect().top
+
+  check('折叠前回答行视觉顶边在 200', top(chat.answer), 200)
+  const wrapperBefore = top(wrapper)
+  const answerBefore = top(chat.answer)
+
+  // 同一个批次三条记录：wrapperBody（无关）、wrapper（外层折叠体根）、chat.body（A 的折叠体）。
+  for (const observer of [...chat.list.observers]) {
+    observer.notify([
+      { type: 'attributes', target: wrapperBody, attributeName: 'hidden', oldValue: null },
+      { type: 'attributes', target: wrapper, attributeName: 'hidden', oldValue: null },
+      { type: 'attributes', target: chat.body, attributeName: 'hidden', oldValue: null },
+    ])
+  }
+
+  // 回答行不受折叠影响：上方收掉的高度由它们的共同祖先吸收，所以它相对滚动口不动。
+  check('整批折叠后回答行仍钉在原处', top(chat.answer), answerBefore)
+  check('整批折叠后回答行的相对位移为 0', top(chat.answer) - answerBefore, 0)
+  // 折叠体自己在内容坐标里下移了 60（它收矮了 60），补偿补上同样的量，视觉上只平移 60。
+  check('折叠体按补偿量平移，没有被额外顶走', top(wrapper) - wrapperBefore, 60)
+
   runtime.dispose()
 })
 

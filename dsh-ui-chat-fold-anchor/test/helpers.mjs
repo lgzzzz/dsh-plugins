@@ -199,10 +199,21 @@ export class FakeElement {
     return null
   }
 
-  /** 本元素当前实际占的高度：`hidden` 归零，折叠动画期间由 `collapseTo` 给出中间值。 */
+  /**
+   * 本元素当前实际占的高度：自己或任一祖先是 `hidden` 时归零（真实 DOM 里隐藏的元素
+   * 不参与布局，子树整体不占高度），折叠动画期间由 `collapseTo` 给出中间值。
+   */
   collapsedHeight() {
-    if (this.hasAttribute('hidden')) return 0
+    if (this.isHiddenByAncestorOrSelf()) return 0
     return this.collapseTo ?? this.height
+  }
+
+  /** 自己或任一祖先带 `hidden` 属性。 */
+  isHiddenByAncestorOrSelf() {
+    for (let node = this; node !== null; node = node.parentElement) {
+      if (node.hasAttribute('hidden')) return true
+    }
+    return false
   }
 
   /** 自己在内容坐标里被上移了多少：所有「在它上方、收矮了」的行收掉的高度之和。 */

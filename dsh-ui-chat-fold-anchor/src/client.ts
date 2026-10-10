@@ -113,8 +113,8 @@ export class FoldAnchorViewport {
    * 集合在每次窗口打开时重建，所以上一个窗口留下的元素不会挡住它日后的一次即时折叠。
    */
   private handled = new WeakSet<Element>()
-  /** 即时折叠补偿期间临时显回来的元素；选锚点时要跳过它们。 */
-  private leaving: Element | null = null
+  /** 即时折叠期间被临时显回来、随后又要隐藏的一整批元素；选锚点时要整批跳过。 */
+  private readonly folded = new Set<Element>()
 
   /**
    * @param spacer - 列表尾部的占位元素，列表与流程列都由它定位。
@@ -188,7 +188,7 @@ export class FoldAnchorViewport {
     try {
       compensateHidden(this.hiddenProbe(batch))
     } finally {
-      this.leaving = null
+      this.folded.clear()
       this.observeHidden()
     }
   }
@@ -242,8 +242,13 @@ export class FoldAnchorViewport {
     return {
       ...this.probe(),
       reveal: () => {
-        for (const { element } of entries) element.removeAttribute(HIDDEN_ATTRIBUTE)
-        this.leaving = entries[0]?.element ?? null
+        // 整批记账：这批元素马上又要隐藏，选锚点时必须整批排除，否则会锚到一条
+        // 自己马上要隐藏的行上——重新测量时它已 `hidden`，measure 返回 null，整次补偿被放弃。
+        this.folded.clear()
+        for (const { element } of entries) {
+          element.removeAttribute(HIDDEN_ATTRIBUTE)
+          this.folded.add(element)
+        }
         return () => {
           for (const { element, value } of entries) element.setAttribute(HIDDEN_ATTRIBUTE, value)
         }
@@ -255,23 +260,34 @@ export class FoldAnchorViewport {
     }
   }
 
-  /** 本行是否正在被即时折叠补偿临时显回来（马上又要隐藏，不能当锚点）。 */
-  private isLeaving(row: Element): boolean {
-    const leaving = this.leaving
-    return leaving !== null && (leaving === row || leaving.contains(row) || row.contains(leaving))
+  /**
+   * 本行是否属于「马上又要隐藏」的那一批（自身是批元素，或子树里含有批元素——过程组根就是这样）。
+   *
+   * 两个方向都要查：过程组根自己是可作锚点的行，而批元素是它的后代。
+   */
+  private isFolded(row: Element): boolean {
+    if (this.folded.size === 0) return false
+    if (this.folded.has(row)) return true
+    for (const element of this.folded) {
+      if (row.contains(element) || element.contains(row)) return true
+    }
+    return false
   }
 
   /**
    * 取阅读线上最近一条可作锚点的行。
    *
    * 跳过已隐藏的行、正落在折叠动画里的行（自身折叠或子树里有折叠元素——过程组根就是这样，
-   * 它的折叠体在收，根自己的顶边不动，拿它当锚点救不了阅读位置），
-   * 于是锚点落在折叠段**下方**第一条仍在的行上，折叠展开的空间从上方收回去。
+   * 它的折叠体在收，根自己的顶边不动，拿它当锚点救不了阅读位置），以及**本批正在被即时
+   * 折叠掉的行**（补偿期间它们被临时显回来，看起来可用，但马上又要隐藏；拿它们当锚点会在
+   * 重新测量时失效，整次补偿被放弃）。
+   *
+   * 于是锚点落在这批折掉的段**下方**第一条仍在的行上，折叠收上去的空间从上方补回。
    */
   private pick(): Anchor | null {
     const scrollerTop = this.scroller.getBoundingClientRect().top
     for (const row of this.list.querySelectorAll(`[${ANCHOR_ATTRIBUTE}]`)) {
-      if (hidden(row) || unstable(row) || this.isLeaving(row)) continue
+      if (hidden(row) || unstable(row) || this.isFolded(row)) continue
       const key = anchorKey(row)
       const rect = row.getBoundingClientRect()
       if (key === null || rect.height === 0) continue
