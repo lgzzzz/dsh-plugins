@@ -1,6 +1,6 @@
 /**
  * C 产物：`lib/client.js` 的模块 id / 插件名 / 无 external 依赖，并用真产物在假 DOM 上
- * 走一遍「折叠窗口内补回阅读位置」。
+ * 走一遍「即时折叠后补回阅读位置」。
  */
 import {
   buildChat,
@@ -8,8 +8,6 @@ import {
   checkTrue,
   finish,
   loadClientArtifact,
-  markCollapsing,
-  moveUpForFold,
   withFakeDom,
 } from './helpers.mjs'
 
@@ -44,14 +42,12 @@ withFakeDom(({ doc }) => {
       return dispose
     },
   })
-  // 滚动口上挂着两条属性观察：折叠窗口的 `style` 与即时折叠的 `hidden`。
-  check('装配后挂上属性观察', chat.scroller.observers.length, 2)
+  // 列表上挂着 `hidden` 属性观察。
+  check('装配后挂上属性观察', chat.scroller.observers.length, 1)
 
-  markCollapsing(chat)
-  chat.scroller.style.overflowAnchor = 'none'
-  moveUpForFold(chat)
-  chat.column.notifyResize()
-  check('折叠窗口内补回阅读位置', chat.scroller.scrollTop, 700)
+  chat.group.setAttribute('hidden', 'until-found')
+  check('折叠后补回阅读位置', chat.scroller.scrollTop, 700)
+  check('锚点回到原位置', chat.answer.getBoundingClientRect().top, 200)
 
   for (const dispose of disposers) dispose()
   check('清理后摘掉观察', chat.scroller.observers.length, 0)

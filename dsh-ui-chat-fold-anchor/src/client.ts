@@ -20,7 +20,6 @@ export const name = 'dsh-ui-chat-fold-anchor'
  */
 export function apply(ctx: Context): void {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return
-  if (typeof ResizeObserver !== 'function') return
   const runtime = createRuntime(document)
   if (typeof ctx.effect === 'function') ctx.effect(() => () => runtime.dispose(), 'ui-chat 折叠滚动补偿')
 }

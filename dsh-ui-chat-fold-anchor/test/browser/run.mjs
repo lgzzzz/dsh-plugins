@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 浏览器实测：用 headless Chrome 打开 test/browser/fold-harness.html，跑完五组折叠场景并断言
+// 浏览器实测：用 headless Chrome 打开 test/browser/fold-harness.html，跑完三组折叠场景并断言
 // 「装了插件之后阅读位置不动」。需要本机有 Chrome；找不到时只告警并跳过（退出码 0），
 // 与 check-css.mjs 找不到 DSH 根目录时的态度一致。
 //
@@ -26,6 +26,8 @@ const CHROME_CANDIDATES = [
   '/usr/bin/google-chrome',
   '/usr/bin/chromium',
   '/usr/bin/chromium-browser',
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
 ].filter((value) => typeof value === 'string' && value !== '')
 
 /** 调试端口；被占用时换下一个。 */
@@ -33,9 +35,7 @@ const PORTS = [9333, 9334, 9335]
 
 /** 每组场景的断言：对照组建模「问题确实存在」，装插件后允许亚像素残差。 */
 const EXPECTATIONS = [
-  { label: 'control animated (no plugin)', min: -400, max: -300 },
   { label: 'control instant, no native anchoring (no plugin)', min: -400, max: -300 },
-  { label: 'patched animated (plugin)', min: -30, max: 30 },
   { label: 'patched instant, no native anchoring (plugin)', min: -5, max: 5 },
   { label: 'patched instant, native anchoring on (plugin)', min: -5, max: 5 },
 ]

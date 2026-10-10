@@ -3,14 +3,12 @@
 // 验证 dsh-ui-chat-fold-anchor 依赖的上游事实是否仍存在于 DSH 客户端构建产物中。
 // 无需运行时、无需浏览器。
 //
-// 本插件认「ui-chat 在折叠动画期间把滚动口的内联 overflow-anchor 关掉」这个信号，
-// 并在窗口内按住阅读线上的锚点行。会**静默**退化的是三类上游事实：
-//   1. 折叠动画不再写 `overflowAnchor`——窗口永不打开，补偿不再发生，页面上只表现为
-//      「又开始跳了」，不报错；
-//   2. `[data-chat-turn-spacer]` / `[data-conversation-scroll]` 改名——滚动口发现落空，
-//      同样静默失效；
-//   3. `[data-chat-anchor-key]` / `[data-chat-motion="collapse"]` 改名——锚点选不到，
-//      或选到正在折叠的那一段上。
+// 本插件认 ui-chat 收起过程组时写在行上的 `hidden="until-found"`，并在这批行的属性变化里
+// 把阅读位置补回原处。会**静默**退化的是两类上游事实：
+//   1. `[data-chat-turn-spacer]` / `[data-conversation-scroll]` 改名——滚动口发现落空，
+//      补偿完全装不上；
+//   2. `[data-chat-anchor-key]` 改名，或折叠改成卸载节点——锚点选不到、折叠信号认不到，
+//      补偿降级为空操作。
 // 这里在构建后把清单逐条对上游产物 grep 一遍，缺一条就显式失败，提示里写明后果。
 //
 // 用法(本脚本与 contract.json 同目录):

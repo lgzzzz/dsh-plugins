@@ -14,7 +14,7 @@
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm test` | 三组 Node 测试，见下 |
 | `pnpm test:browser` | headless Chrome 实测，见下；找不到 Chrome 时告警跳过（退出码 0） |
-| `pnpm check:css` | 对 DSH 安装产物校验 `contract.json` 里的 7 条上游契约 |
+| `pnpm check:css` | 对 DSH 安装产物校验 `contract.json` 里的 4 条上游契约 |
 | `pnpm check` | `lib/client.js` 与 `index.ts` 的语法检查 |
 
 -----
@@ -23,27 +23,25 @@
 
 `node test/run-all.mjs` 按 A–C 主题顺序跑：
 
-- **A 纯逻辑**（`test/fold-anchor.test.mjs`）——探针是替身，验证参照点记账、修正量符号、亚像素抖动、锚点失效，以及即时折叠的「显回→量→复原→量→写」调用顺序与「原生锚定已补过则差值为 0」。
-- **B 接线**（`test/client-wiring.test.mjs`）——用带布局模型的假 DOM 摆 10 组场景：滚动口发现（共享/普通两种模式、限频重扫）、窗口开合、`ResizeObserver` 修正、即时折叠修正与「整批元素都不能当锚点」、锚点失效停手、折叠在阅读线下方不写、折叠窗口接管过的元素不补第二次、尾随输出让位。
-- **C 产物**（`test/artifact-client.test.mjs`）——载入真产物 `lib/client.js`，校验模块 id / 插件名 / 无 external，并在假 DOM 上把「折叠窗口内补回阅读位置」走通一遍（含 `ctx.effect` 的清理）。
+- **A 纯逻辑**（`test/fold-anchor.test.mjs`）——探针是替身，验证折叠前后两次测量的记账、修正量符号、亚像素抖动，以及没有可用锚点 / 锚点不可测时的降级。
+- **B 接线**（`test/client-wiring.test.mjs`）——用带布局模型的假 DOM 摆 6 组场景：滚动口发现（共享/普通两种模式、限频重扫）、即时折叠补回阅读位置、展开不补、折叠在阅读线下方不写、整批元素都不能当锚点、dispose 摘掉观察。
+- **C 产物**（`test/artifact-client.test.mjs`）——载入真产物 `lib/client.js`，校验模块 id / 插件名 / 无 external，并在假 DOM 上把「即时折叠补回阅读位置」走通一遍（含 `ctx.effect` 的清理）。
 
-假 DOM 只实现插件真正用到的那部分语义：`[attr]` / `[attr="value"]` 选择器、`dataset` 与属性表的双向映射、`style` 写入触发属性记录、`hidden` 归零高度（含任一祖先 `hidden` 时子树整体归零）并把下方内容整体上移、`MutationObserver` 的子树通知、`ResizeObserver` 由测试显式推进。
+假 DOM 只实现插件真正用到的那部分语义：`[attr]` / `[attr="value"]` 选择器、`dataset` 与属性表的双向映射、`hidden` 归零高度（含任一祖先 `hidden` 时子树整体归零）并把下方内容整体上移、`MutationObserver` 的子树通知。
 
 -----
 
 ## 浏览器实测装置
 
-`node test/browser/run.mjs` 用 headless Chrome 打开 `test/browser/fold-harness.html`，跑五组折叠场景并断言锚点位移：
+`node test/browser/run.mjs` 用 headless Chrome 打开 `test/browser/fold-harness.html`，跑三组折叠场景并断言锚点位移：
 
-1. 动画折叠 + 不装插件 → 应当看到阅读位置被顶走（复现问题）；
-2. 即时折叠 + 滚动口没有原生锚定 + 不装插件 → 同上；
-3. 动画折叠 + 装插件；
-4. 即时折叠、没有原生锚定 + 装插件；
-5. 即时折叠、有原生锚定 + 装插件。
+1. 即时折叠、滚动口没有原生锚定 + 不装插件 → 应当看到阅读位置被顶走（复现问题）；
+2. 即时折叠、滚动口没有原生锚定 + 装插件；
+3. 即时折叠、滚动口有原生锚定 + 装插件。
 
-第 1、2 组的断言是「位移接近 −折叠高度」，第 3–5 组的断言是「位移在 ±30px / ±5px 内」——装置同时证明问题与修复都在场。它需要先 `pnpm build`（装置加载 `lib/client.js`），并用 `--chrome <path>` 或 `$CHROME` 指定浏览器；找不到 Chrome 时只告警跳过。
+第 1 组的断言是「位移接近 −折叠高度」，第 2、3 组的断言是「位移在 ±5px 内」——装置同时证明问题与修复都在场。它需要先 `pnpm build`（装置加载 `lib/client.js`），并用 `--chrome <path>` 或 `$CHROME` 指定浏览器；找不到 Chrome 时只告警跳过。
 
-假 DOM 测不出「布局之后、绘制之前」的真实时序，浏览器实测补的是这一段：五组场景的实测值见[第 1 册的行为对照表](01-behavior-difference.md#装与不装各看到什么)。
+假 DOM 测不出「布局之后、绘制之前」的真实时序，浏览器实测补的是这一段：三组场景的实测值见[第 1 册的行为对照表](01-behavior-difference.md#装与不装各看到什么)。
 
 -----
 
@@ -53,7 +51,7 @@
 2. 最终回复还在输出（或刚输出完）时向上滚一段，让最终回复停在视口中部；
 3. 等过程组折叠：不装插件时正在看的那段会整体上移（折叠量大时移出视口），装上插件后停在原处。
 
-两种折叠时机都值得试：默认的「回合结束时」走即时折叠，设置里切到「下一次输入时」才走带画的折叠动画。
+前提是设置里的「工作步骤收起时机」保持默认的「回答结束后」——它走即时折叠，也就是本插件补偿的那条路径。切成「下次有新消息时」后折叠带过渡动画，本插件不认那条路径（见[第 2 册的已知边界](02-how-it-works-and-failure-modes.md#已知边界)）。
 
 -----
 

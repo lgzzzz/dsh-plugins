@@ -32,9 +32,9 @@ if (files.length === 0) {
   const failed = []
   for (const file of files) {
     console.log(`\n=== ${file} ===`)
-    const result = spawnSync(process.execPath, [join(here, file)], { cwd: here, encoding: 'utf8' })
-    if (result.stdout) process.stdout.write(result.stdout)
-    if (result.stderr) process.stderr.write(result.stderr)
+    // `stdio: 'inherit'`：受限环境（例如 DSH 沙箱）里管道式 stdio 会被拒绝（EPERM），
+    // 而这里只需要子进程的退出码与它自己的原样输出。
+    const result = spawnSync(process.execPath, [join(here, file)], { cwd: here, stdio: 'inherit' })
     if (result.error) console.error(result.error.message)
     if (result.status !== 0) failed.push(file)
   }

@@ -26,10 +26,10 @@
 /*
  * dsh-ui-chat-fold-anchor 的浏览器实测装置（由 test/browser/run.mjs 驱动，见 docs/dsh-ui-chat-fold-anchor/03）。
  *
- * 建五棵与 ui-chat 同构的聊天树，摆两种折叠：
- *   - 动画折叠：照 createFlowMotion.collapse 的顺序打标记、预留高度、写 overflow-anchor:none、走 height 过渡；
- *   - 即时折叠：直接写 hidden（用 CSS overflow-anchor:none 模拟不支持原生滚动锚定的浏览器）。
- * 先在不装插件时各跑一次做对照（应当看到阅读位置被顶走），装上 lib/client.js 后再各跑一次（应当不动）。
+ * 建三棵与 ui-chat 同构的聊天树，摆同一种折叠：直接给过程组写 `hidden`（取值 `until-found`），
+ * 布局一次到位。`.no-anchor` 用 CSS 的 `overflow-anchor: none` 模拟没有原生滚动锚定能力的滚动口：
+ * 先在不装插件时跑一次做对照（应当看到阅读位置被顶走），装上 lib/client.js 后再跑两次
+ * （没有原生锚定、有原生锚定，都应当不动）。
  */
 window.__ModuleLoader__ = { load: (value) => { window.__loaded = value; } };
 
@@ -85,6 +85,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const findRow = (chat, key) => chat.column.querySelector('[data-chat-anchor-key="' + key + '"]');
 const topOf = (chat, el) => el.getBoundingClientRect().top - chat.scroller.getBoundingClientRect().top;
 
+/** 与插件同取法：滚动口顶边下方 1px 处第一条仍露出的行。 */
 function readingAnchor(chat) {
   const top = chat.scroller.getBoundingClientRect().top;
   for (const row of chat.column.querySelectorAll('[data-chat-anchor-key]')) {
@@ -96,37 +97,7 @@ function readingAnchor(chat) {
   return null;
 }
 
-function startFold(chat, turn) {
-  const group = findRow(chat, 'group:' + turn);
-  const body = group.querySelector('[data-step-process-body]');
-  const height = group.getBoundingClientRect().height;
-  const marginTop = Number.parseFloat(getComputedStyle(group).marginTop) || 0;
-  body.dataset.chatMotion = 'collapse';
-  chat.spacer.style.height = Math.ceil(height + marginTop) + 'px';
-  chat.scroller.style.overflowAnchor = 'none';
-  void group.offsetHeight;
-  const style = group.style;
-  style.transition = 'none';
-  style.overflow = 'hidden';
-  style.height = height + 'px';
-  style.marginTop = marginTop + 'px';
-  void group.offsetHeight;
-  style.transition = 'opacity 70ms cubic-bezier(0.4,0,0.2,1), height 110ms cubic-bezier(0.4,0,0.2,1) 50ms, margin-top 110ms cubic-bezier(0.4,0,0.2,1) 50ms';
-  style.opacity = '0';
-  style.height = '0px';
-  style.marginTop = '0px';
-  return { group, body, height };
-}
-
-function endFold(chat, handle) {
-  const style = handle.group.style;
-  style.height = ''; style.marginTop = ''; style.opacity = ''; style.overflow = ''; style.transition = '';
-  delete handle.group.dataset.chatMotion;
-  handle.group.setAttribute('hidden', 'until-found');
-  chat.spacer.style.height = '';
-  chat.scroller.style.overflowAnchor = '';
-}
-
+/** 把目标行滚到阅读线上，并等布局稳定。 */
 async function positionAt(chat, turn) {
   for (let i = 0; i < 3; i++) {
     const group = findRow(chat, 'group:' + turn);
@@ -138,31 +109,7 @@ async function positionAt(chat, turn) {
   await wait(60);
 }
 
-async function scenario(chat, turn, label) {
-  await positionAt(chat, turn);
-  const before = readingAnchor(chat);
-  if (before === null) return { label, error: 'no anchor' };
-  const handle = startFold(chat, turn);
-  const samples = [];
-  const started = performance.now();
-  while (performance.now() - started < 420) {
-    await nextFrame();
-    const row = findRow(chat, before.key);
-    if (row !== null) samples.push([+(topOf(chat, row) - before.top).toFixed(1), chat.scroller.scrollTop, Math.round(chat.column.getBoundingClientRect().height)]);
-  }
-  endFold(chat, handle);
-  await nextFrame(); await nextFrame();
-  const row = findRow(chat, before.key);
-  return {
-    label,
-    anchor: before.key,
-    foldedHeight: +handle.height.toFixed(1),
-    finalDelta: row === null ? null : +(topOf(chat, row) - before.top).toFixed(1),
-    samples: samples.slice(0, 10),
-  };
-}
-
-/** 即时折叠：直接写 `hidden`，滚动口上没有折叠窗口信号（用 CSS 关掉原生锚定模拟无锚定的浏览器）。 */
+/** 即时折叠：直接给过程组写 `hidden`，位置由插件在属性变化的微任务里补。 */
 async function instantScenario(chat, turn, label) {
   await positionAt(chat, turn);
   const before = readingAnchor(chat);
@@ -182,13 +129,10 @@ async function instantScenario(chat, turn, label) {
 }
 
 window.__run = async () => {
-  const control = build('control');
-  const patched = build('patched');
   const controlInstant = build('control-instant', true);
   const patchedInstant = build('patched-instant', true);
   const patchedInstantAnchored = build('patched-instant-anchored', false);
 
-  log(await scenario(control, 3, 'control animated (no plugin)'));
   log(await instantScenario(controlInstant, 3, 'control instant, no native anchoring (no plugin)'));
 
   const script = document.createElement('script');
@@ -201,34 +145,6 @@ window.__run = async () => {
   plugin.apply({ effect: (run) => { run(); return () => {}; } });
 
   log({ pluginName: plugin.name });
-  log(await scenario(patched, 3, 'patched animated (plugin)'));
-  log(await instantScenario(patchedInstant, 3, 'patched instant, no native anchoring (plugin)'));
-  log(await instantScenario(patchedInstantAnchored, 3, 'patched instant, native anchoring on (plugin)'));
-  return JSON.stringify(out, null, 1);
-};
-</script>
-</body>
-</html>window.__run = async () => {
-  const control = build('control');
-  const patched = build('patched');
-  const controlInstant = build('control-instant', true);
-  const patchedInstant = build('patched-instant', true);
-  const patchedInstantAnchored = build('patched-instant-anchored', false);
-
-  log(await scenario(control, 3, 'control animated (no plugin)'));
-  log(await instantScenario(controlInstant, 3, 'control instant, no native anchoring (no plugin)'));
-
-  const script = document.createElement('script');
-  script.src = BUNDLE_URL;
-  document.body.append(script);
-  await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = reject; });
-  const registration = window.__loaded;
-  if (registration === undefined) throw new Error('bundle did not register');
-  const plugin = registration.factory(() => { throw new Error('external module requested'); });
-  plugin.apply({ effect: (run) => { run(); return () => {}; } });
-
-  log({ pluginName: plugin.name });
-  log(await scenario(patched, 3, 'patched animated (plugin)'));
   log(await instantScenario(patchedInstant, 3, 'patched instant, no native anchoring (plugin)'));
   log(await instantScenario(patchedInstantAnchored, 3, 'patched instant, native anchoring on (plugin)'));
   return JSON.stringify(out, null, 1);

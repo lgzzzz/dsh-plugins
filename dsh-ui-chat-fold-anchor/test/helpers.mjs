@@ -1,11 +1,11 @@
 /**
  * dsh-ui-chat-fold-anchor 测试的共享装置：断言与失败计数、够用的假 DOM（元素树 / 内联样式 /
- * MutationObserver / rAF 队列），以及产物加载器。
+ * MutationObserver / 几何模型），以及产物加载器。
  *
  * 假 DOM 只实现本插件真正用到的那部分语义：`[attr]` / `[attr="value"]` 选择器、
- * `dataset` 与属性表的双向映射、`style` 写入触发 `style` 属性记录、
- * `scrollTop` 按 `[0, scrollHeight - clientHeight]` 夹取，以及由测试显式推进的
- * `MutationObserver` / `ResizeObserver` 通知。
+ * `dataset` 与属性表的双向映射、`hidden` 归零高度（含任一祖先 `hidden` 时子树整体归零）并把
+ * 下方内容整体上移、`scrollTop` 按 `[0, scrollHeight - clientHeight]` 夹取，以及由测试显式
+ * 推进的 `MutationObserver` 通知。
  *
  * 跑全部请用 `node test/run-all.mjs`（或 pnpm test）。
  * 依赖 Node 22+ 的 Type Stripping 直接 import .ts。
@@ -36,12 +36,6 @@ export function checkTrue(label, actual) {
   const ok = actual === true
   if (!ok) failures += 1
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 true,实得 ${JSON.stringify(actual)}`}`)
-}
-
-export function checkFalse(label, actual) {
-  const ok = actual === false
-  if (!ok) failures += 1
-  console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 false,实得 ${JSON.stringify(actual)}`}`)
 }
 
 /** 对象同一性断言（null / undefined / 函数用）。 */
@@ -98,7 +92,6 @@ export class FakeElement {
     this.contentBase = 0
     this.isScroller = false
     this.observers = []
-    this.resizeObservers = []
     this._scrollTop = 0
     this.style = new Proxy({}, {
       set: (props, key, value) => {
@@ -186,11 +179,6 @@ export class FakeElement {
     this.notifyAttribute(name, oldValue)
   }
 
-  /** 触发登记在本元素上的 ResizeObserver（真实环境里由布局变化触发）。 */
-  notifyResize() {
-    for (const observer of [...this.resizeObservers]) observer.callback([], observer)
-  }
-
   /** 本元素或祖先是滚动口时返回它。 */
   scrollerAncestor() {
     for (let node = this; node !== null; node = node.parentElement) {
@@ -201,11 +189,10 @@ export class FakeElement {
 
   /**
    * 本元素当前实际占的高度：自己或任一祖先是 `hidden` 时归零（真实 DOM 里隐藏的元素
-   * 不参与布局，子树整体不占高度），折叠动画期间由 `collapseTo` 给出中间值。
+   * 不参与布局，子树整体不占高度）。
    */
   collapsedHeight() {
-    if (this.isHiddenByAncestorOrSelf()) return 0
-    return this.collapseTo ?? this.height
+    return this.isHiddenByAncestorOrSelf() ? 0 : this.height
   }
 
   /** 自己或任一祖先带 `hidden` 属性。 */
@@ -293,14 +280,11 @@ export class FakeDocument {
   }
 }
 
-/** 假 MutationObserver：`observe` 把回调登记到元素上，测试用 `setAttribute` / `style` 写入触发。 */
+/** 假 MutationObserver：`observe` 把回调登记到元素上，测试用 `setAttribute` 触发。 */
 export class FakeMutationObserver {
-  static instances = []
-
   constructor(callback) {
     this.callback = callback
     this.options = null
-    FakeMutationObserver.instances.push(this)
   }
 
   observe(target, options) {
@@ -325,79 +309,22 @@ export class FakeMutationObserver {
   }
 }
 
-/** 假 ResizeObserver：`observe` 把回调登记到元素上，测试用 `notifyResize()` 触发。 */
-export class FakeResizeObserver {
-  constructor(callback) {
-    this.callback = callback
-  }
-
-  observe(target) {
-    this.target = target
-    target.resizeObservers.push(this)
-  }
-
-  disconnect() {
-    if (this.target !== undefined) {
-      this.target.resizeObservers = this.target.resizeObservers.filter((item) => item !== this)
-    }
-  }
-}
-
-/** 假 rAF：登记回调，由 `flushFrame()` 手动推进一帧。 */
-export class FakeFrames {
-  constructor() {
-    this.pending = new Map()
-    this.nextHandle = 1
-  }
-
-  request = (callback) => {
-    const handle = this.nextHandle
-    this.nextHandle += 1
-    this.pending.set(handle, callback)
-    return handle
-  }
-
-  cancel = (handle) => {
-    this.pending.delete(handle)
-  }
-
-  /** 推进当前这一帧的全部回调（回调新排的帧留到下一次）。 */
-  flush() {
-    const current = [...this.pending.values()]
-    this.pending.clear()
-    for (const callback of current) callback()
-  }
-
-  /** 待推进的帧数。 */
-  get size() {
-    return this.pending.size
-  }
-}
-
 /**
- * 在假 DOM 环境里跑一段代码：安装 `document` / `MutationObserver` / `requestAnimationFrame`
- * 全局，跑完还原。
+ * 在假 DOM 环境里跑一段代码：安装 `document` / `MutationObserver` 全局，跑完还原。
  *
  * @param run - 使用安装好的全局。
  * @returns `run` 的返回值。
  */
 export function withFakeDom(run) {
   const doc = new FakeDocument()
-  const frames = new FakeFrames()
   const previous = {
     document: globalThis.document,
     MutationObserver: globalThis.MutationObserver,
-    ResizeObserver: globalThis.ResizeObserver,
-    requestAnimationFrame: globalThis.requestAnimationFrame,
-    cancelAnimationFrame: globalThis.cancelAnimationFrame,
   }
   globalThis.document = doc
   globalThis.MutationObserver = FakeMutationObserver
-  globalThis.ResizeObserver = FakeResizeObserver
-  globalThis.requestAnimationFrame = frames.request
-  globalThis.cancelAnimationFrame = frames.cancel
   try {
-    return run({ doc, frames })
+    return run({ doc })
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete globalThis[key]
@@ -409,8 +336,8 @@ export function withFakeDom(run) {
 /**
  * 建一个聊天滚动口：滚动口（可选外层）→ 列表 → 过程组（内含折叠体）+ 回答行 + 占位元素。
  *
- * 布局（内容坐标）：垫高行 850..900（供折叠收尾的收矮用）、过程组 900..1200、回答行
- * 1200..1400；滚动位置 1000 时阅读线落在过程组底部与回答行顶部的交界上，回答行的视觉顶边是 200。
+ * 布局（内容坐标）：垫高行 850..900、过程组 900..1200、回答行 1200..1400；滚动位置 1000 时
+ * 阅读线落在过程组底部与回答行顶部的交界上，回答行的视觉顶边是 200。
  *
  * @param options.shared - true 时按共享滚动模式多建一层 `[data-conversation-scroll]` 祖先。
  */
@@ -460,19 +387,6 @@ export function buildChat({ shared = false } = {}) {
     list.contentBase = 900
   }
   return { outer, list, column, filler, group, body, answer, spacer, scroller: shared ? outer : list }
-}
-
-/**
- * 打上折叠标记：ui-chat 在写折叠窗口信号（`overflow-anchor: none`）**之前**就打了这个标记，
- * 此时几何还没变——选锚点就发生在这一刻。
- */
-export function markCollapsing(chat) {
-  chat.body.dataset.chatMotion = 'collapse'
-}
-
-/** 折叠动画让几何真的变：折叠体收成 0，它下方的内容按模型自动整体上移同高。 */
-export function moveUpForFold(chat) {
-  chat.group.collapseTo = 0
 }
 
 /** 以假 `window.__ModuleLoader__` 载入构建产物，返回注册对象。 */
