@@ -8,7 +8,7 @@
 
 上游 `@deepseek-ai/dsh-client-ui-deliverables` 让每个完成轮次以「改动文件卡片」收尾。指针在卡片里的文件行（单文件时是卡片标题行）上停留 **500ms** 后，会在 `<body>` 上弹出一个可滚动的单列改动浮层：
 
-- 触发器：`lib/client.js` 1394-1428，即 `$DSH_ROOT/node_modules/@deepseek-ai/dsh-client-ui-deliverables/lib/client.js`(`$DSH_ROOT` = DSH 安装根，解析顺序见 [`dsh-ui-css-patches/check-css.mjs`](../dsh-ui-css-patches/check-css.mjs))，两处 `HoverCard` + `openDelayMs: 500`；
+- 触发器：`lib/client.js` 1394-1428，即 `$DSH_ROOT/node_modules/@deepseek-ai/dsh-client-ui-deliverables/lib/client.js`(`$DSH_ROOT` = DSH 安装根，解析顺序见本目录的 [`check-css.mjs`](../dsh-changes-hover-off/check-css.mjs))，两处 `HoverCard` + `openDelayMs: 500`；
 - 浮层内容：`ChangedFilePreview`，带 `data-changes-hover-preview`，**只在打开时挂载**——即「读取该文件对比」这个动作也只在打开时发生；
 - 上游没有暴露任何开关(`lib/` 里没有 Schema/Config)，`HoverCard` 自带的 `disabled` 也没有被传。
 
@@ -52,7 +52,7 @@ document.documentElement.hasAttribute('data-dsh-changes-hover-off')   // true = 
 # 仓库根:把新包记进 lockfile
 pnpm install
 
-# 构建浏览器半部(tsdown → lib/client.js)+ 校验上游契约
+# 构建浏览器半部(tsdown → lib/client.js)
 pnpm --filter dsh-changes-hover-off build
 
 # 挂进 web profile(宿主半部为空 apply,客户端半部随 immediately 注册)
@@ -83,9 +83,9 @@ dsh plugin --profile web add C:\Users\LGZ\dsh-plugins\dsh-changes-hover-off
 
 ## 契约校验与测试
 
-三条上游事实由构建期静态校验盯着，行为测试分两个文件跑。
+三条上游事实由 [`check-css.mjs`](../dsh-changes-hover-off/check-css.mjs) 静态校验盯着，行为测试分两个文件跑。
 
-- [`contract.json`](../dsh-changes-hover-off/contract.json)：声明依赖的三条上游事实(`data-changed-files`、`openDelayMs: 500`、`data-changes-hover-preview`)，由 [`dsh-ui-css-patches/check-css.mjs`](../dsh-ui-css-patches/check-css.mjs) `--manifest contract.json` 在**每次 `build` 后**静态校验。上游改名/删 token 时会报错，而不是让闸门静默落空。
+- [`contract.json`](../dsh-changes-hover-off/contract.json) 配本目录的 [`check-css.mjs`](../dsh-changes-hover-off/check-css.mjs)：声明依赖的三条上游事实(`data-changed-files`、`openDelayMs: 500`、`data-changes-hover-preview`)，由 `pnpm check:css` 静态校验（不在 `pnpm build` 里）。上游改名/删 token 时会报错，而不是让闸门静默落空。
 - `pnpm test`(即 `node test/run-all.mjs`)：
   - `hover-gate.test.mjs` —— 归属判定、消费与放行、捕获阶段安装/卸载、无文档环境（非浏览器）下的空操作、网兜（含降级路径）、生效标记；
   - `artifact-client.test.mjs` —— 加载 `lib/client.js`，断言模块 id / 插件名 / `effect` 标签 / 三个标记 token，并在假文档上验证：拦停卡片内手势、放行卡片外手势、网兜隐藏 portal 外壳、卸载后全部还原。

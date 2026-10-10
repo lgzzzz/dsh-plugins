@@ -73,7 +73,7 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 本插件的桥接读的是上游**没有对外承诺**的 DOM 锚点（清单与含义见第 6 册第 8 节）。锚点被改名 / 搬走时桥会退化成 no-op（不误动作），但"退化"在现场是静默的；`check-css.mjs` 在构建后把清单逐条对已安装的 DSH 客户端产物 grep 一遍，缺一条就显式失败，并在 `hint` 里写明这条契约对应的功能会退化成什么：
 
 ```bash
-node check-css.mjs                        # 或 pnpm check:css；pnpm build 也会跑（tsdown && node check-css.mjs）
+node check-css.mjs                        # 或 pnpm check:css；不在 pnpm build 里（build 只跑 tsdown）
 node check-css.mjs --dsh-root <DSH 根>    # 指定 DSH 安装位置
 node check-css.mjs --manifest <清单>      # 换一份清单（默认同目录的 css-contract.json）
 ```

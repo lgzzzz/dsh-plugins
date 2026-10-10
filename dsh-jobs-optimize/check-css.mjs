@@ -1,16 +1,20 @@
 #!/usr/bin/env node
 // check-css.mjs — 构建后静态契约校验器
-// 验证 dsh-ui-css-patches 依赖的 data-* 属性与 CSS 变量是否仍存在于 DSH Web
-// 前端构建产物中。无需运行时、无需浏览器。
+// 验证 dsh-jobs-optimize 依赖的上游事实是否仍存在于 DSH 客户端构建产物中。
+// 无需运行时、无需浏览器。
 //
-// 本插件选择器用的都是稳定的 data-* 锚点与 CSS 变量;会**静默**退化的是两处上游事实:
-//   1. 锚点属性被改名 / 移除——对应规则整条落空,页面上只表现为「补丁没生效」,不报错;
-//   2. 规则引用的 --dsw-* / --dsh-* 令牌被改名——声明整条失效,对应规则退回兜底值或上游默认值
-//      (清单里逐条写明实际后果)。
-// 这里在构建后把清单逐条对上游产物 grep 一遍,缺一条就显式失败,提示里写明后果。
+// 本插件按 id 遮蔽 conversation.session.header.actions 槽里的 job-list 条目，
+// 把它的组件换成一层无盒包装，并接管指针进出与点击。会**静默**退化或与参照物
+// 分叉的上游事实有两类：
+//   1. 接管本身依赖的锚点——槽键、槽出口的渲染、注册 id、同 id 遮蔽规则、渲染器
+//      在渲染期读取条目 component、触发器的 aria-expanded 真值与点击即 toggle、
+//      菜单是宿主内的绝对定位元素；任一条改名 / 改走别的路径，对应路径会告警或静默不生效；
+//   2. 被对齐的参照物——子代理控件的 150ms / 120ms 悬停延迟与「点击只钉住、
+//      从不折叠」的点击语义；参照物一变，本插件的取值就不再与它一致。
+// 这里在构建后把清单逐条对上游产物 grep 一遍，缺一条就显式失败，提示里写明后果。
 //
-// 用法(本脚本与 css-contract.json 同目录):
-//   node dsh-ui-css-patches/check-css.mjs [--dsh-root <path>] [--manifest <json>]
+// 用法(本脚本与 contract.json 同目录):
+//   node dsh-jobs-optimize/check-css.mjs [--dsh-root <path>] [--manifest <json>]
 // DSH 根目录解析顺序: --dsh-root > $DSH_ROOT > `npm root -g` > 常见全局安装路径
 //
 // 退出码: 0 = 全部通过(或无法定位 DSH 根目录时仅告警), 1 = 存在契约缺失, 2 = 配置错误
@@ -85,15 +89,15 @@ function firstMatch(needle, files) {
   return null
 }
 
-const HELP = `check-css: 构建后 CSS 契约校验器
-  node dsh-ui-css-patches/check-css.mjs [--dsh-root <path>] [--manifest <json>]
+const HELP = `check-css: dsh-jobs-optimize 的构建后上游事实契约校验器
+  node dsh-jobs-optimize/check-css.mjs [--dsh-root <path>] [--manifest <json>]
 `
 
 function main() {
   const a = parseArgs(process.argv.slice(2))
   if (a.help) { console.log(HELP); process.exit(0) }
 
-  const manifestPath = resolve(a.manifest ?? join(here, 'css-contract.json'))
+  const manifestPath = resolve(a.manifest ?? join(here, 'contract.json'))
   if (!existsSync(manifestPath)) { console.error(`[check-css] manifest 不存在: ${manifestPath}`); process.exit(2) }
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 
