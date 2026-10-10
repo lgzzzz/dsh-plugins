@@ -121,22 +121,39 @@ function main() {
     return cache.get(key)
   }
 
-  let pass = 0
-  const failed = []
-  for (const c of manifest.checks ?? []) {
-    const { id, plugin, token, pattern, paths = [], hint } = c
-    const needle = pattern ? new RegExp(pattern, 's') : token ?? null
-    if (needle === null) { console.warn(`[check-css] 跳过 ${plugin}/${id}: 缺少 token 或 pattern`); continue }
-    if (firstMatch(needle, filesFor(paths))) pass++
-    else failed.push({ id, plugin, needle: token ?? pattern, hint })
+  const checks = manifest.checks
+  if (!Array.isArray(checks)) {
+    console.error(`[check-css] manifest 缺少 checks 数组: ${manifestPath}`)
+    process.exit(2)
   }
 
-  for (const f of failed) {
-    console.error(`\u2717  ${f.plugin}/${f.id}  —  ${f.hint ?? '契约 token 缺失'}`)
-    console.error(`     needle: ${f.needle}`)
+  // 逐条校验:任一条规则失败(含正则写错、清单缺 needle)都只记录、不中断,
+  // 保证一次运行能覆盖清单里的每一条;全部跑完后在末尾统一列出失效规则。
+  let pass = 0
+  const failed = []
+  for (const c of checks) {
+    const { id = '(未命名)', plugin = '(未声明)', token, pattern, paths = [], hint } = c
+    const label = `${plugin}/${id}`
+    const shown = token ?? pattern ?? '(未声明)'
+    try {
+      const needle = pattern ? new RegExp(pattern, 's') : token ?? null
+      if (needle === null) failed.push({ label, shown, hint: '清单缺少 token 或 pattern' })
+      else if (firstMatch(needle, filesFor(paths))) pass++
+      else failed.push({ label, shown, hint: hint ?? '契约 token 缺失' })
+    } catch (e) {
+      failed.push({ label, shown, hint: `规则无法校验: ${e.message}` })
+    }
   }
 
   const total = pass + failed.length
+  if (failed.length) {
+    console.error(`\n[check-css] 失效规则 ${failed.length}/${total}:`)
+    for (const f of failed) {
+      console.error(`\u2717  ${f.label}  —  ${f.hint}`)
+      console.error(`     needle: ${f.shown}`)
+    }
+  }
+
   console.log(`\n[check-css] ${pass}/${total} 通过${failed.length ? `，${failed.length} 失败` : ''}  (dsh: ${dshRoot})`)
   process.exit(failed.length ? 1 : 0)
 }
