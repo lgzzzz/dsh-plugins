@@ -21,6 +21,7 @@
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
 | `dsh-ui-chat-verbose-fold` | Verbose 模式下折叠已完成的轮次 | [说明](dsh-ui-chat-verbose-fold.md) |
+| `dsh-ui-chat-fold-anchor` | 折叠过程组时把阅读位置补回原处（滚动补偿） | [说明](dsh-ui-chat-fold-anchor.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
@@ -40,19 +41,20 @@
 依赖上游 CSS 选择器 / 槽位 / DOM 锚点的插件配了一段**静态校验**（`pnpm check:css`，不挂在
 `pnpm build` 上）：把清单逐条对 DSH 安装产物 grep 一遍，上游改名 / 删 token 时显式失败，
 而不是让补丁在页面上静默失效（选择器落空不报错）。每个插件目录都有自己的 `check-css.mjs`，
-默认读同目录的清单（`css-contract.json`；`dsh-changes-hover-off` 与 `dsh-jobs-optimize` 是
-`contract.json`），可用 `--manifest` 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
+默认读同目录的清单（`css-contract.json`；`dsh-changes-hover-off`、`dsh-jobs-optimize` 与
+`dsh-ui-chat-fold-anchor` 是 `contract.json`），可用 `--manifest` 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
 | `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + CSS 变量 + 槽位键 |
+| `dsh-ui-chat-fold-anchor` | [`contract.json`](../dsh-ui-chat-fold-anchor/contract.json) | 折叠信号与 `data-*` 锚点 + 折叠标记先于窗口打开的执行顺序 |
 | `dsh-focus-free-shortcuts` | [`css-contract.json`](../dsh-focus-free-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-changes-hover-off` | [`contract.json`](../dsh-changes-hover-off/contract.json) | 改动文件卡片锚点 + 悬停延迟 |
 | `dsh-jobs-optimize` | [`contract.json`](../dsh-jobs-optimize/contract.json) | 槽位 / 注册 / 渲染锚点 + 触发器的开合真值与 toggle + 菜单由本控件经 React portal 渲染到 body + 子代理控件（参照物）的两个延迟与点击语义 |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 6 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 7 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
