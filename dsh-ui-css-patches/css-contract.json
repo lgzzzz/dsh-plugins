@@ -1,5 +1,5 @@
 {
-  "description": "统一 CSS 补丁插件 dsh-ui-css-patches 依赖的 DSH 前端稳定契约（data-* 属性 + CSS 变量）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中。",
+  "description": "统一 CSS 补丁插件 dsh-ui-css-patches 依赖的 DSH 前端稳定契约（data-* 属性 + 槽位键 + CSS 变量，以及侧栏会话行时间戳那一处的 CSS Module 局部类名）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中。",
   "checks": [
     {"id":"flow-kind-attr","token":"data-chat-flow-kind","paths":["dsh-client-ui-chat/lib"],"hint":"data-chat-flow-kind 属性消失，卡片内代码块字体从 14px 变为 11px/19px"},
     {"id":"disclosure-row-attr","token":"data-disclosure-row","paths":["dsh-client-ui-primitives/lib"],"hint":"data-disclosure-row 属性消失，披露行标题/摘要字体从 14px 变为 13px"},
@@ -40,6 +40,8 @@
     {"id":"jobs-menu-element","pattern":"\"ul\",\\s*\\{\\s*ref: menuRef[\\s\\S]{0,120}?className: JobListAction_module_css_default\\.menu","paths":["dsh-client-ui-jobs/lib"],"hint":"后台任务菜单不再是 header.actions 里那个内联渲染的 <ul>（agent-preset 的标签只渲染 span，subagent-catalog 与 agent-team 的菜单 portal 到 body），[data-slot=\"conversation.session.header.actions\"] ul 宽度规则落空：菜单回到上游 500px，框两侧的空隙也不再被放大"},
     {"id":"jobs-menu-width","pattern":"width:500px;\\s*max-width:min\\(560px,\\s*100vw - 32px\\)","paths":["dsh-client-ui-jobs/lib"],"hint":"后台任务菜单的 width/max-width 基线变了（上游自己调宽或收窄了），548px 这个取值需要复核；同时 478px 框宽与 35px 空隙都是按 500 菜单推导出来的，要跟着重算"},
     {"id":"jobs-panel-margin","pattern":"margin:0 8px 8px\\}","paths":["dsh-client-ui-jobs/lib"],"hint":"命令行/实时输出面板的左右 8px 外边距变了，478 = 500 − 2×3 − 2×8 这条推导失效：钉住的框宽不再等于上游默认框宽（框会显得比上游窄或宽），548 = 478 + 2×35 与 35px 空隙也要重算"},
-    {"id":"jobs-terminal-attr","pattern":"\"data-terminal\":","paths":["dsh-client-ui-primitives/lib"],"hint":"TerminalBlock 根不再输出 data-terminal，钉宽 + 居中的那条规则整条落空：框回到面板的满宽（548 菜单里 526px 宽），两侧空隙缩回上游的 11px"}
+    {"id":"jobs-terminal-attr","pattern":"\"data-terminal\":","paths":["dsh-client-ui-primitives/lib"],"hint":"TerminalBlock 根不再输出 data-terminal，钉宽 + 居中的那条规则整条落空：框回到面板的满宽（548 菜单里 526px 宽），两侧空隙缩回上游的 11px"},
+    {"id":"session-row-key-anchor","pattern":"\"data-row-key\":\\s*`session:","paths":["dsh-client-ui-workspace/lib"],"hint":"侧栏会话行不再用 data-row-key=\"session:<会话 id>\" 作行锚点（工作区行是 workspace:<key>、溢出提示行是 overflow:<key>、新建会话占位行是 empty），[data-row-key^=\"session:\"] 落空：会话行时间戳字号从 13px 变为上游 10px"},
+    {"id":"session-time-class","pattern":"\"time\":\\s*\"\\w+_time\"","paths":["dsh-client-ui-workspace/lib"],"hint":"会话行时间戳失去 CSS Module 的 time 局部类名（生成名形如 YDXeBa_time；[hash] 前缀随构建变化不影响该通配符，局部名变化才影响），[class*=\"_time\"] 落空：字号从 13px 变为上游 10px"}
   ]
 }
