@@ -54,23 +54,6 @@ export const CSS = `
   font-size: 1em !important;
 }
 
-
-/* 披露行标题 / 摘要 14px */
-[data-chat-flow-kind] [data-disclosure-row] {
-  --dsh-content-font-size-secondary: var(--dsh-content-font-size, 14px);
-}
-
-/* 样例卡（bash）标题 / 摘要 14px */
-[data-sample] {
-  --dsh-content-font-size-secondary: var(--dsh-content-font-size, 14px);
-}
-
-/* 压缩卡标题 / 摘要 / 展开体 14px */
-[data-chat-flow-kind="compaction"],
-[data-chat-flow-kind="manual-compaction"] {
-  --dsh-content-font-size-secondary: var(--dsh-content-font-size, 14px);
-}
-
 /* 卡片内代码块 14px */
 [data-chat-flow-kind] pre,
 [data-chat-flow-kind] pre code {
@@ -85,16 +68,6 @@ export const CSS = `
 /* 卡片内表格 14px */
 [data-chat-flow-kind] table th,
 [data-chat-flow-kind] table td {
-  font-size: var(--dsh-content-font-size, 14px) !important;
-}
-
-/* 展开内容正文 14px */
-[data-chat-flow-kind] [data-open]:not([data-turn-process]) > :not([data-disclosure-row]) {
-  font-size: var(--dsh-content-font-size, 14px) !important;
-}
-
-/* compact markdown 正文 14px */
-[data-chat-flow-kind] [data-open]:not([data-turn-process]) [data-markdown-variant="compact"] {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
@@ -155,27 +128,24 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
-/* 工具详情卡整块 14px（data-inspect = 有「查看」入口，data-caption = 有说明行，命中其一即可）。
-   含 12px 的说明行、副标题、徽标、状态文案与 13px 的正文 / 代码块；根的 font: var(--dsw-font-xs-13) 一并覆盖。
-   行首状态标记（[role="img"]，即 + / − 变更字形）排除在外：它是图标语义（含义由 aria-label 承载），保留上游 16px。
-   两个属性都可能缺失——既没有查看入口、详情模型也不带说明行时，
-   整条规则不命中，字号仍是上游 13px / 12px */
-[data-inspect],
-[data-caption],
-[data-inspect] *:not([role="img"]),
-[data-caption] *:not([role="img"]) {
-  font-size: var(--dsh-content-font-size, 14px) !important;
-}
-
 /* 过程组（data-step-process）的成员区整棵子树 14px：组成员（思考 / 工具卡 / 回复）都渲染在
    [data-step-process-content] 下；它自己在上游没有任何 font-size 声明（上游 .…_content 只声明
    display / flex-direction），字号靠继承，成员内部又会各自声明更小的字号，所以容器与全部后代一起
    钉到 --dsh-content-font-size（应用字号，默认 14px）。
-   这条规则的 !important 用来压过后代自己声明的小字号（上游在 chat / primitives / tool 里没有别的
-   font-size !important 会跟它抢）。工具详情卡那条特异性 (0,2,0) 更高，对非图标文字给出的同样是 14px，
-   但它给 [role="img"] 变更字形留的上游 16px 例外在组内不再生效——字形也被这条规则钉成 14px。 */
+   这条规则的 !important 用来压过后代自己声明的小字号，覆盖的是组内每个元素的 font-size：组内成员的
+   字号（披露行 / 样例卡 / 压缩卡标题与摘要、展开体正文、compact markdown 正文、工具详情卡整块）全部
+   由它给出，文件里因此没有只作用于组内的卡片级字号规则。两处例外由本文件的其它规则负责：
+     - 组内行内 code：上游 .markdown / .compact 的 :not(pre) > code 带更高特异性的 font-size
+       !important，由 [data-chat-flow-kind] :not(pre) > code 压住；
+     - 代码块 / 小号代码的行高 / 字重 / 字体族：--dsw-font-markdown-code-block 与 -small 是 font
+       简写，本规则只覆盖 font-size，故工具卡 / 样例卡那两条令牌规则保留。
+   行首状态标记（[role="img"]，即 + / − 变更字形）排除在这条规则之外：它是图标语义（含义由 aria-label
+   承载），字号保留上游声明（工具详情卡里是 16px）。:where() 不贡献特异性，排除后这条选择器仍是
+   (0,1,0)，与覆盖其余元素时一致。
+   文件里其余的 [data-chat-flow-kind] 规则服务于组外节点：最终回答是一个独立的 [data-chat-flow-kind]
+   流项，它的 pre / 行内 code / 表格不在组内，不能只靠这条规则覆盖。 */
 [data-step-process-content],
-[data-step-process-content] * {
+[data-step-process-content] *:where(:not([role="img"])) {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 

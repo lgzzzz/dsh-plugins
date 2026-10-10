@@ -11,7 +11,7 @@
 | **DSH 上游** | 哈希类 + CSS 变量 + `data-*` 状态开关 | 组件局部 + 令牌全局 | 组件自身样式、主题、状态 |
 | **插件 dsh-ui-css-patches** | `[data-dockkit-tab][role="tab"]` 复合属性选择器 | 全局属性选择器（受属性限定） | 跨构建稳定锚定 dockkit tab 并覆盖上游 |
 
-`dsh-ui-css-patches` 是一个 CSS 补丁插件，规则覆盖：全宽对话正文、dockkit tab 固定宽度、会话标题栏后台任务菜单的宽度（500px → 548px，命令/输出框保持基线宽度 478px、两侧各留 35px 空隙）、右栏预览与变更审查的字号 / 行高、对话卡片（披露行 / 样例卡 / 压缩卡 / 工具卡 / 工具详情卡 / 表格 / 代码块）字号、会话头部与子智能体会话树字号、过程组（`[data-step-process-content]`）成员区整棵子树的字号、侧栏会话行的时间戳字号（10px → 13px）。关键实现：
+`dsh-ui-css-patches` 是一个 CSS 补丁插件，规则覆盖：全宽对话正文、dockkit tab 固定宽度、会话标题栏后台任务菜单的宽度（500px → 548px，命令/输出框保持基线宽度 478px、两侧各留 35px 空隙）、右栏预览与变更审查的字号 / 行高、卡片内代码块 / 行内代码 / 表格字号、工具卡 / 样例卡的代码块令牌（字号 + 行高）、会话头部与子智能体会话树字号、过程组（`[data-step-process-content]`）成员区整棵子树的字号（`[role="img"]` 图标语义除外，保留上游字号）、侧栏会话行的时间戳字号（10px → 13px）。组内成员的字号全部由过程组那条给出，所以不需要只作用于组内的卡片级规则。关键实现：
 
 1. **只注入一条 `<style data-plugin="dsh-ui-css-patches">`**：规则全部写在一个字符串 `CSS` 里（[`../../dsh-ui-css-patches/src/css.ts`](../../dsh-ui-css-patches/src/css.ts)），`installStyles` 一次挂载（[`../../dsh-ui-css-patches/src/client.ts`](../../dsh-ui-css-patches/src/client.ts)）：
 
@@ -36,7 +36,7 @@
 
 3. **复合属性选择器的覆盖条件**：上游类名带构建哈希（`_tab_6nhg2_134` 每版构建都变），无法可靠命中；而 `data-dockkit-tab` + `role="tab"` 是稳定的语义锚点，且特异性 `(0,2,0)` 大于上游 `.tab` 的 `(0,1,0)`，因此**无需 `!important` 即可覆盖**（`css.ts` 里的 `[data-dockkit-tab][role="tab"] { box-sizing; min-width: 100px; max-width: 100px }` 即如此）。
 
-4. **除下面两条受控例外外，其余规则同样只用稳定锚点**：`[data-slot='main.conversation'] [data-conversation-content]`、`[data-textpreview-body]`、`[data-changes-review]`、`[data-document-markdown]`、`[data-chat-flow-kind]`、`[data-step-process-content]`、`[data-turn-trigger]`、工具详情卡的 `[data-inspect]` / `[data-caption]` 等，都是 `data-*` 属性 + CSS 变量；子智能体会话树改用 `div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"])` 的 role + `aria-label` 双锚点（中英文界面各一个取值）。所有规则**不使用** `:nth-child` / `:has()` 这类位置猜测。
+4. **除下面两条受控例外外，其余规则同样只用稳定锚点**：`[data-slot='main.conversation'] [data-conversation-content]`、`[data-textpreview-body]`、`[data-changes-review]`、`[data-document-markdown]`、`[data-chat-flow-kind]`、`[data-step-process-content]`、`[data-turn-trigger]` 等，都是 `data-*` 属性 + CSS 变量；子智能体会话树改用 `div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"])` 的 role + `aria-label` 双锚点（中英文界面各一个取值）。所有规则**不使用** `:nth-child` / `:has()` 这类位置猜测。
 
 5. **受控例外之一，后台任务菜单那两条**：菜单 `<ul>` 上没有任何 `data-*`，且它是 `[data-slot="conversation.session.header.actions"]` 里唯一内联渲染的 `ul`（该槽其余注册项里，agent-preset 的标签只渲染 `span`，subagent-catalog 与 agent-team 的菜单 portal 到 `document.body`），所以宽度规则锚在 `[data-slot="conversation.session.header.actions"] ul` 上（属性 + 类型，特异性 `(0,1,1)` 大于上游 `.…_menu` 的 `(0,1,0)`）。另两点：
 

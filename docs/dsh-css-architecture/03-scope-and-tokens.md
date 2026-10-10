@@ -50,7 +50,7 @@ function installThemeStyles(ctx) {
 - **`focus.css`**：`--dsw-focus-ring-width` 与 `:focus-visible` 焦点环。
 - **`onboarding.css`**：onboarding 相关渐变 / 卡片令牌，含 `body[data-ds-dark-theme]` 暗色覆盖。
 - **`scrollbar.css`**：`--dsh-scrollbar-*` 滚动条令牌。
-- **`gradient-shadow-text.css`**：`--dsw-shadow-*`、`--dsw-elevation-*` 阴影/层级令牌，以及 `--dsh-content-font-delta`、`--dsh-content-font-size-secondary`、`--dsw-font-markdown-*` 这些**正文排版令牌**（也是本仓库 CSS 补丁插件依赖的关键令牌）。
+- **`gradient-shadow-text.css`**：`--dsw-shadow-*`、`--dsw-elevation-*` 阴影/层级令牌，以及 `--dsh-content-font-delta`、`--dsh-content-font-size-secondary`、`--dsw-font-markdown-*` 这些**正文排版令牌**（其中 `--dsh-content-font-delta` 与 `--dsw-font-markdown-*` 也是本仓库 CSS 补丁插件依赖的关键令牌）。
 - **`shiki.css`**：`--shiki-*` 代码高亮配色，含 `body[data-ds-dark-theme]` 暗色覆盖。
 - **`corner-shape.css`**：`@supports (corner-shape:superellipse(1.5))` 下的圆角形状开关。
 
