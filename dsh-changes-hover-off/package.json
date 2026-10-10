@@ -23,7 +23,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown && node ../dsh-ui-css-patches/check-css.mjs --manifest contract.json",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check:css": "node ../dsh-ui-css-patches/check-css.mjs --manifest contract.json",
     "check": "node --check lib/client.js && node --check index.ts",

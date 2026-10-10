@@ -23,7 +23,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown && node check-css.mjs",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check:css": "node check-css.mjs",
     "check": "node --check lib/client.js && node --check index.ts",
@@ -31,13 +31,13 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-api-session-controller": "^0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-approval": "^0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-session": "^0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-user-questions": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-approval": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-user-questions": "^0.2.1-alpha.2",
     "@types/react": "~18.3.1",
     "tsdown": "^0.22.2",
     "typescript": "^5.9.3"
