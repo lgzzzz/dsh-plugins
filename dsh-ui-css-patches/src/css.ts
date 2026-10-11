@@ -2,12 +2,14 @@
  * `dsh-ui-css-patches` 的全部补丁规则,由 `client.ts` 挂成一条 `<style>`。
  *
  * 同特异性规则的覆盖顺序由本文件的源码顺序唯一确定(后写者胜);锚点是稳定的 `data-*` / `role` /
- * `aria-label`。两处例外拿不到这类锚点:
- *   - 后台任务菜单那两条额外用了元素类型 `ul`:菜单 `<ul>` 上没有任何 `data-*`,且它是
- *     `[data-slot="conversation.session.header.actions"]` 里唯一内联渲染的 `ul`(该槽其余注册项里,
- *     agent-preset 的标签只渲染 `span`,subagent-catalog 与 agent-team 的菜单 portal 到 `document.body`),
- *     类型选择器是它唯一的稳定锚点。框(终端卡)的宽度钉在上游基线 478px 上并居中:父面板没有属性锚点,
- *     所以这条约定放在框自身上(见该处注释)。
+ * `aria-label`。两处例外:
+ *   - 后台任务菜单那两条锚在菜单自身的 `aria-label` 上(中英文各一个取值),并额外用元素类型 `ul` 收窄:
+ *     菜单 `<ul>` 上没有任何 `data-*`,而且上游 0.2.1-alpha.2 起它由 `createPortal` 渲染到
+ *     `document.body`、定位是 `position:fixed` —— 不再是 `[data-slot="conversation.session.header.actions"]`
+ *     的后代,按槽位锚定会整条落空(上游的 `useAnchoredPosition` 会按实测 `offsetWidth` 重算 `left`,
+ *     所以 portal 不影响加宽后的回拉)。`dsh-client-ui-schedule` 的活动提醒菜单是另一个 portal 到 body 的
+ *     `<ul>`,文案不同,由 css-contract.json 的 jobs-menu-aria-unique 反向契约兜住。框(终端卡)的宽度钉在
+ *     上游基线 478px 上并居中:父面板没有属性锚点,所以这条约定放在框自身上(见该处注释)。
  *   - 侧栏会话行的时间戳额外用了 CSS Module 的局部类名通配符(见该处注释)。
  *
  * 锚点与令牌清单、以及构建后校验见 docs/dsh-css-architecture/04-css-patches-relationship.md。
@@ -100,10 +102,14 @@ export const CSS = `
 }
 
 /* 后台任务菜单加宽 500px → 548px(= 框 478 + 两侧空隙 2×35,见下一条)。
+   菜单 <ul> 上没有任何 data-*,且上游 0.2.1-alpha.2 起它是 createPortal 到 document.body 的
+   position:fixed 浮层,不再是 header.actions 槽的后代,所以锚在菜单自身的 aria-label 上
+   (t("list.aria"),中英文两个取值);ul 只用来收窄到列表元素。
    上游是 width:500px + max-width:min(560px,100vw - 32px):max-width 也一并覆盖,菜单宽度才不跟着
    上游那个上限走(上游调小它时,菜单会跟着缩、空隙静默变小)。
-   菜单是绝对定位元素,加宽不参与头部布局;上游按实测 offsetWidth 算的 left 仍会把菜单拉回视口内 */
-[data-slot="conversation.session.header.actions"] ul {
+   菜单的 left/top 由上游按实测 offsetWidth 算,加宽后它经 ResizeObserver 重算,仍会把菜单拉回视口内 */
+ul[aria-label="后台任务"],
+ul[aria-label="Background jobs"] {
   width: 548px;
   max-width: min(548px, 100vw - 32px);
 }
@@ -114,7 +120,8 @@ export const CSS = `
    max-width:100% 兜住窄窗口(菜单被 min(548px,100vw - 32px) 收窄时框跟着收窄,不溢出面板)。
    478 / 548 / 35 互相推导,依赖上游的 500 菜单与 8px 面板外边距 —— css-contract.json 的 jobs-menu-width /
    jobs-panel-margin 负责让构建失败。面板里的提示行(「已省略 N 行」/输出错误)没有属性锚点、不参与居中 */
-[data-slot="conversation.session.header.actions"] ul [data-terminal] {
+ul[aria-label="后台任务"] [data-terminal],
+ul[aria-label="Background jobs"] [data-terminal] {
   box-sizing: border-box;
   width: 478px;
   max-width: 100%;

@@ -30,7 +30,7 @@
    规则覆盖顺序由 `css.ts` 里的**源码顺序唯一确定**（后写者胜，用于同特异性规则）。
 
 2. **依赖上游 token 的「契约」**：补丁选择器和变量引用都建立在「上游存在这些 `data-*` 属性 + CSS 变量」的前提上。一旦上游改名 / 删 token，补丁会**静默失效**（选择器落空不报错）。插件配了构建后静态校验：
-   - [`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json)：逐条声明「依赖哪个 token（或正则）、去哪几个包的 `lib/` 里找、失效时的后果 hint」。
+   - [`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json)：逐条声明「依赖哪个 token（或正则）、去哪几个包的 `lib/` 里找、失效时的后果 hint」；带 `forbid` 的条目是反向契约（命中即失败），用于钉住「同样的锚点出现在别处会让选择器撞车」这类退化。
    - [`../../dsh-ui-css-patches/check-css.mjs`](../../dsh-ui-css-patches/check-css.mjs)：按清单在上游构建产物里逐个 `grep`，缺失即报错（退出码 1）。
    - `package.json` 的 `check:css` 脚本是 `node check-css.mjs`：在**构建后**单独跑（`pnpm check:css`），不在 `pnpm build` 里；升级上游版本后重跑一次即可发现静默失效。
 
@@ -38,12 +38,12 @@
 
 4. **除下面两条受控例外外，其余规则同样只用稳定锚点**：`[data-slot='main.conversation'] [data-conversation-content]`、`[data-textpreview-body]`、`[data-changes-review]`、`[data-document-markdown]`、`[data-chat-flow-kind]`、`[data-step-process-content]`、`[data-turn-trigger]` 等，都是 `data-*` 属性 + CSS 变量；子智能体会话树改用 `div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"])` 的 role + `aria-label` 双锚点（中英文界面各一个取值）。所有规则**不使用** `:nth-child` / `:has()` 这类位置猜测。
 
-5. **受控例外之一，后台任务菜单那两条**：菜单 `<ul>` 上没有任何 `data-*`，且它是 `[data-slot="conversation.session.header.actions"]` 里唯一内联渲染的 `ul`（该槽其余注册项里，agent-preset 的标签只渲染 `span`，subagent-catalog 与 agent-team 的菜单 portal 到 `document.body`），所以宽度规则锚在 `[data-slot="conversation.session.header.actions"] ul` 上（属性 + 类型，特异性 `(0,1,1)` 大于上游 `.…_menu` 的 `(0,1,0)`）。另两点：
+5. **受控例外之一，后台任务菜单那两条**：菜单 `<ul>` 上没有任何 `data-*`，上游 0.2.1-alpha.2 起它改为 `createPortal(<ul>, document.body)` 的 `position:fixed` 浮层，因此**不再是** `[data-slot="conversation.session.header.actions"]` 的后代（锚槽位会整条落空）；锚点落在菜单自身的 `aria-label` 上：`ul[aria-label="后台任务"]` / `ul[aria-label="Background jobs"]`（上游 `t("list.aria")`，中英文各一个取值，元素类型 `ul` 只用来收窄到列表元素），特异性 `(0,1,1)` 大于上游 `.…_menu` 的 `(0,1,0)`。同一槽位的 subagent-catalog 与 agent-team 菜单也 portal 到 `body`，但它们渲染的是 `div`；`dsh-client-ui-schedule` 的活动提醒菜单是另一个 portal 到 `body` 的 `<ul>`（文案「活动提醒」/「Active reminders」），由 `jobs-menu-aria-unique` 反向契约兜住。另两点：
 
    - **加宽必须连 `max-width` 一起覆盖**：只改 `width` 时，菜单宽度仍跟着上游的 `min(560px, 100vw − 32px)` 走，上游调小它就会让菜单缩、两侧空隙静默变小。
    - **命令/输出框保持上游基线宽度**：`[data-terminal]` 上钉 `box-sizing:border-box; width:478px; max-width:100%; margin-left:auto; margin-right:auto`——478px = 菜单 500 − 菜单内边距 2×3 − 面板左右外边距 2×8，菜单比它宽出来的 70px 因此全部变成框两侧的空隙（548 菜单下两侧各 35px = 3 + 8 + 24 居中余量，框仍是 478px、正文仍是 452px）；显式 `border-box` 是因为上游 `.…_block` 是 content-box 且带 12px 左内边距，不写会钉成 490px。
    - **提示行是已知边界**：面板里那句截断提示（「已省略 N 行」/ 输出错误）没有属性锚点、不参与居中，仍留在面板左沿。
 
-   菜单宽度与框宽这两条规则依赖的事实（`<ul>` 是菜单、上游 500px 基线、面板外边距恰好 8px、`data-terminal` 存在）由 `jobs-menu-element` / `jobs-menu-width` / `jobs-panel-margin` / `jobs-terminal-attr` 四条契约在构建后校验（[`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json)）。
+   菜单宽度与框宽这两条规则依赖的事实（`<ul>` 是菜单且带这两个 `aria-label` 取值、上游 500px 基线、面板外边距恰好 8px、`data-terminal` 存在）由 `jobs-menu-element` / `jobs-menu-aria-zh` / `jobs-menu-aria-en` / `jobs-menu-aria-unique` / `jobs-menu-width` / `jobs-panel-margin` / `jobs-terminal-attr` 七条契约在构建后校验（[`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json)）。
 
 6. **受控例外之二，侧栏会话行的时间戳**：时间戳 `<span>` 上没有任何 `data-*`，唯一抓手是上游 CSS Module 的局部类名 `time`——生成名是 `[hash]_[local]`，构建只换 `[hash]` 前缀、`_time` 不变，所以锚在 `[class*="_time"]` 上；行的种类靠 `data-row-key` 取值前缀区分（会话行 `session:<id>`、工作区行 `workspace:<key>`、溢出提示行 `overflow:<key>`、新建会话占位行 `empty`），所以 `[data-row-key^="session:"]` 只命中会话行。这条规则把时间戳固定在 `13px`（上游 10px，行高仍是上游 16px），不引用 `--dsh-content-font-size`；特异性 `(0,2,0)` 大于上游 `._time` 的 `(0,1,0)`，因此不需要 `!important`。行锚点消失、或局部名不再叫 `time` 时整条规则落空、字号退回 10px，由 `session-row-key-anchor` / `session-time-class` 两条契约在构建后校验。
