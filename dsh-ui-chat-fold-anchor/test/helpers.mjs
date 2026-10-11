@@ -112,14 +112,6 @@ export class FakeElement {
     })
   }
 
-  /** 真实 DOM 里没有前一个兄弟节点时返回 null（占位元素的前一个兄弟就是流程列）。 */
-  get previousElementSibling() {
-    const parent = this.parentElement
-    if (parent === null) return null
-    const index = parent.children.indexOf(this)
-    return index > 0 ? parent.children[index - 1] : null
-  }
-
   get scrollTop() {
     return this._scrollTop
   }
@@ -334,22 +326,23 @@ export function withFakeDom(run) {
 }
 
 /**
- * 建一个聊天滚动口：滚动口（可选外层）→ 列表 → 过程组（内含折叠体）+ 回答行 + 占位元素。
+ * 建一个聊天滚动口（共享滚动模式）：外层会话滚动口 `[data-conversation-scroll]` → 列表 →
+ * 过程组（内含折叠体）+ 回答行 + 占位元素。
  *
  * 布局（内容坐标）：垫高行 850..900、过程组 900..1200、回答行 1200..1400；滚动位置 1000 时
  * 阅读线落在过程组底部与回答行顶部的交界上，回答行的视觉顶边是 200。
  *
- * @param options.shared - true 时按共享滚动模式多建一层 `[data-conversation-scroll]` 祖先。
+ * 尾部占位元素按上游形状保留，但插件已不依赖它（见 `client-wiring.test.mjs` 的 B① 断言）。
  */
-export function buildChat({ shared = false } = {}) {
-  const outer = new FakeElement('div')
-  outer.isScroller = true
-  outer.clientHeight = 400
-  outer.contentBase = 900
-  if (shared) outer.setAttribute('data-conversation-scroll', '')
+export function buildChat() {
+  const scroller = new FakeElement('div')
+  scroller.isScroller = true
+  scroller.clientHeight = 400
+  scroller.contentBase = 900
+  scroller.setAttribute('data-conversation-scroll', '')
 
   const list = new FakeElement('div')
-  outer.append(list)
+  scroller.append(list)
 
   const column = new FakeElement('div')
   column.setAttribute('data-chat-flow', '')
@@ -381,12 +374,7 @@ export function buildChat({ shared = false } = {}) {
   spacer.setAttribute('data-chat-turn-spacer', '')
   list.append(spacer)
 
-  if (!shared) {
-    list.isScroller = true
-    list.clientHeight = 400
-    list.contentBase = 900
-  }
-  return { outer, list, column, filler, group, body, answer, spacer, scroller: shared ? outer : list }
+  return { scroller, list, column, filler, group, body, answer, spacer }
 }
 
 /** 以假 `window.__ModuleLoader__` 载入构建产物，返回注册对象。 */

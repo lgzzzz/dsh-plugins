@@ -26,10 +26,11 @@ export const HIDDEN_SELECTOR = '[hidden]'
 /** 即时折叠写在这条属性上（取值可能是 `until-found`，复原时按原值写回）。 */
 export const HIDDEN_ATTRIBUTE = 'hidden'
 
-/** 聊天列表尾部的占位元素：它的父元素就是承载行的列表。 */
-export const SPACER_SELECTOR = '[data-chat-turn-spacer]'
-
-/** 共享滚动模式下承载聊天的外层滚动口。 */
+/**
+ * 承载聊天的外层会话滚动口：一个这样的元素就是一个补偿器。
+ *
+ * 它同时是折叠信号的观察根与锚点行的查找根，所以插件不必先找聊天列表、再往上反查滚动口。
+ */
 export const CONVERSATION_SCROLL_SELECTOR = '[data-conversation-scroll]'
 
 /** 阅读线取在滚动口顶边下方 1px（与 ui-chat 的 `capturePosition` 同取法）。 */
@@ -61,26 +62,20 @@ function hidden(row: Element): boolean {
 
 /** 一个滚动口上的补偿器：认即时折叠写下的 `hidden`，在属性变化的微任务里补回阅读位置。 */
 export class FoldAnchorViewport {
-  /** 承载行的聊天列表。 */
-  private readonly list: Element
-  /** 真正滚动的元素：共享滚动模式是外层会话滚动口，否则是列表本身。 */
+  /** 承载聊天、真正滚动的元素：观察、测量与写回都落在它身上。 */
   private readonly scroller: Element
-  /** 认即时折叠的观察（列表子树的 `hidden` 属性）。 */
+  /** 认即时折叠的观察（滚动口子树的 `hidden` 属性）。 */
   private readonly hiddens: MutationObserver
   /** 即时折叠期间被临时显回来、随后又要隐藏的一整批元素；选锚点时要整批跳过。 */
   private readonly folded = new Set<Element>()
 
-  /**
-   * @param spacer - 列表尾部的占位元素，列表由它定位。
-   * @param scroller - 承载该列表的滚动口（与 ui-chat 的 `viewport.attach` 同取法）。
-   */
-  constructor(spacer: Element, scroller: Element) {
-    this.list = spacer.parentElement ?? scroller
+  /** @param scroller - 承载聊天的外层会话滚动口。 */
+  constructor(scroller: Element) {
     this.scroller = scroller
     this.hiddens = new MutationObserver(this.onHidden)
   }
 
-  /** 观察列表子树的 `hidden` 属性。 */
+  /** 观察滚动口子树的 `hidden` 属性。 */
   observe(): void {
     this.observeHidden()
   }
@@ -92,7 +87,7 @@ export class FoldAnchorViewport {
 
   /** 补偿期间要临时断开观察，免得把自己写回的值当成新的一批折叠加进来。 */
   private observeHidden(): void {
-    this.hiddens.observe(this.list, { attributes: true, attributeFilter: [HIDDEN_ATTRIBUTE], attributeOldValue: true, subtree: true })
+    this.hiddens.observe(this.scroller, { attributes: true, attributeFilter: [HIDDEN_ATTRIBUTE], attributeOldValue: true, subtree: true })
   }
 
   /**
@@ -173,7 +168,7 @@ export class FoldAnchorViewport {
    */
   private pick(): Anchor | null {
     const scrollerTop = this.scroller.getBoundingClientRect().top
-    for (const row of this.list.querySelectorAll(`[${ANCHOR_ATTRIBUTE}]`)) {
+    for (const row of this.scroller.querySelectorAll(`[${ANCHOR_ATTRIBUTE}]`)) {
       if (hidden(row) || this.isFolded(row)) continue
       const key = anchorKey(row)
       const rect = row.getBoundingClientRect()
@@ -185,7 +180,7 @@ export class FoldAnchorViewport {
 
   /** 按稳定键重测同一条行；它已被折叠、卸载或清空时返回 null。 */
   private measure(key: string): number | null {
-    for (const row of this.list.querySelectorAll(`[${ANCHOR_ATTRIBUTE}]`)) {
+    for (const row of this.scroller.querySelectorAll(`[${ANCHOR_ATTRIBUTE}]`)) {
       if (anchorKey(row) !== key) continue
       if (hidden(row)) return null
       const rect = row.getBoundingClientRect()
@@ -207,8 +202,11 @@ export interface FoldAnchorRuntime {
 /**
  * 建立运行期。
  *
- * 滚动口用聊天列表的占位元素（`[data-chat-turn-spacer]`）反查，所以不依赖任何 ui-chat
- * 的 JS 形状；列表随会话挂载/卸载，因此用 `childList` 观察限频重扫，并及时回收已断开的滚动口。
+ * 只支持共享滚动模式：一个 `[data-conversation-scroll]` 会话滚动口就是一个补偿器——它既是
+ * 折叠信号的观察根，也是选锚点、读写 `scrollTop` 的滚动口。所以发现就是直接枚举这类元素，
+ * 不必先找到聊天列表或尾部占位元素再往上反查，也就不依赖 ui-chat 的任何 JS 形状。
+ *
+ * 滚动口随会话挂载/卸载，因此用 `childList` 观察限频重扫，并及时回收已断开的滚动口。
  *
  * @param doc - 页面文档；测试替身传入假 document。
  * @returns 运行期句柄。
@@ -218,10 +216,9 @@ export function createRuntime(doc: Document): FoldAnchorRuntime {
   let lastDiscovery = 0
 
   const discover = (): void => {
-    for (const spacer of doc.querySelectorAll(SPACER_SELECTOR)) {
-      const scroller = spacer.closest(CONVERSATION_SCROLL_SELECTOR) ?? spacer.parentElement
-      if (scroller === null || viewports.has(scroller)) continue
-      const viewport = new FoldAnchorViewport(spacer, scroller)
+    for (const scroller of doc.querySelectorAll(CONVERSATION_SCROLL_SELECTOR)) {
+      if (viewports.has(scroller)) continue
+      const viewport = new FoldAnchorViewport(scroller)
       viewport.observe()
       viewports.set(scroller, viewport)
     }

@@ -16,7 +16,7 @@
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm test` | 三组 Node 测试，见下 |
 | `pnpm test:browser` | headless Chrome 实测，见下；找不到 Chrome 时告警跳过（退出码 0） |
-| `pnpm check:css` | 对 DSH 安装产物校验 `contract.json` 里的 4 条上游契约 |
+| `pnpm check:css` | 对 DSH 安装产物校验 `contract.json` 里的 3 条上游契约 |
 | `pnpm check` | `lib/client.js` 与 `index.ts` 的语法检查 |
 
 -----
@@ -26,7 +26,7 @@
 `node test/run-all.mjs` 按 A–C 主题顺序跑：
 
 - **A 纯逻辑**（`test/fold-anchor.test.mjs`）——探针是替身，验证折叠前后两次测量的记账、修正量符号、亚像素抖动，以及没有可用锚点 / 锚点不可测时的降级。
-- **B 接线**（`test/client-wiring.test.mjs`）——用带布局模型的假 DOM 摆 6 组场景：滚动口发现（共享/普通两种模式、限频重扫）、即时折叠补回阅读位置、展开不补、折叠在阅读线下方不写、整批元素都不能当锚点、dispose 摘掉观察。
+- **B 接线**（`test/client-wiring.test.mjs`）——用带布局模型的假 DOM 摆 6 组场景：共享滚动口发现（占位元素上没有 `data-chat-turn-spacer` 也装）与即时折叠补回阅读位置、没有共享滚动口（非共享滚动模式）时不装观察、展开不补、折叠在阅读线下方不写、整批元素都不能当锚点、限频重扫与 dispose 摘掉观察。
 - **C 产物**（`test/artifact-client.test.mjs`）——载入真产物 `lib/client.js`，校验模块 id / 插件名 / 无 external，并在假 DOM 上把「即时折叠补回阅读位置」走通一遍（含 `ctx.effect` 的清理）。
 
 假 DOM 只实现插件真正用到的那部分语义：`[attr]` / `[attr="value"]` 选择器、`dataset` 与属性表的双向映射、`hidden` 归零高度（含任一祖先 `hidden` 时子树整体归零）并把下方内容整体上移、`MutationObserver` 的子树通知。

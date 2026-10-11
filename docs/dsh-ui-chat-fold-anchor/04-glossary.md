@@ -6,9 +6,7 @@
 
 | 词 | 含义 |
 |---|---|
-| **滚动口**（scrollport） | 真正发生滚动的那个元素：插件读写它的 `scrollTop`，所有几何测量的参照边也取自它。共享滚动模式下是外层 `[data-conversation-scroll]`，普通模式下就是列表本身；详见[第 2 册](02-how-it-works-and-failure-modes.md)的「滚动口是什么」 |
-| **列表** | 承载聊天行的容器，尾部占位元素的父元素；`hidden` 折叠信号观察在它身上 |
-| **占位元素**（spacer） | 列表尾部的 `[data-chat-turn-spacer]`；插件只凭它反查列表与滚动口 |
+| **滚动口**（scrollport） | 真正发生滚动的那个元素：插件读写它的 `scrollTop`，几何测量的参照边与 `hidden` 折叠信号的观察根也落在它身上。它是会话根上的 `[data-conversation-scroll]`，一个这样的元素就是一个补偿器；枚举不到它就不装（插件只支持共享滚动模式）。详见[第 2 册](02-how-it-works-and-failure-modes.md)的「滚动口是什么」 |
 | **阅读线** | 滚动口顶边下方 1px 的水平参考线，与 ui-chat `capturePosition()` 的取样线相同。ui-chat 选活跃轮次另有一条位置更靠下的线，上游文档里说的「阅读线」指的是那一条；详见[第 2 册](02-how-it-works-and-failure-modes.md)的「阅读线是什么」 |
 | **锚点行** | 带 `data-chat-anchor-key`、被选作参照物的那条行（压住阅读线的那条）；补偿就是让它在折叠前后停在同一个视觉位置。选取规则见[第 2 册](02-how-it-works-and-failure-modes.md)的「锚点行怎么选」 |
 | **本批 / 批元素** | 一次折叠里一起被写上 `hidden` 的那组元素——具体就是同一个 `MutationObserver` 回调里到达、且「从无到有」的那些 `hidden` 记录的目标元素。补偿期间它们被临时显回，所以选锚点时要整批排除，连同它们的祖先与后代 |
@@ -20,4 +18,4 @@
 | **探针**（probe） | `HiddenBatchProbe`：读写滚动位置、显隐本批元素、测量锚点这一组 DOM 能力的接口。纯逻辑 `fold-anchor.ts` 只依赖它，所以能在假探针上直接测 |
 | **假 DOM / 假探针** | 测试替身，只实现插件真正用到的那部分语义（选择器、`dataset`、`hidden` 归零高度、子树通知），用于没有浏览器的 Node 测试 |
 | **限频重扫** | 用 `childList` 观察会话挂载 / 卸载，最多每 500ms 重扫一遍滚动口 |
-| **契约清单** | 插件目录里的 `contract.json`：钉住上游 DOM 形状的 4 条事实，由 `pnpm check:css` 逐条校验，缺失即显式失败 |
+| **契约清单** | 插件目录里的 `contract.json`：钉住上游 DOM 形状的 3 条事实，由 `pnpm check:css` 逐条校验，缺失即显式失败 |

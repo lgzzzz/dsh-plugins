@@ -5,23 +5,26 @@
  * 滚动位置按可滚动范围夹取。折叠照 ui-chat 的执行顺序摆：直接给行写 `hidden`
  * （取值 `until-found`），属性观察在同一个微任务里把这一批行临时显回来量一次折叠前的几何、
  * 再按原样隐藏量第二次，并写回滚动位置。
+ *
+ * 滚动口只认共享滚动模式：一个 `[data-conversation-scroll]` 会话滚动口就是一个补偿器，
+ * 观察与锚点查找都落在它子树上，不再经过尾部占位元素与列表。
  */
 import {
   CONVERSATION_SCROLL_SELECTOR,
   DISCOVERY_THROTTLE_MS,
-  SPACER_SELECTOR,
   createRuntime,
 } from '../src/viewport.ts'
 import { FakeElement, buildChat, check, checkTrue, finish, withFakeDom } from './helpers.mjs'
 
-console.log('--- B① 即时折叠补回阅读位置 ---')
+console.log('--- B① 共享滚动口发现与即时折叠补偿（不依赖占位元素） ---')
 withFakeDom(({ doc }) => {
   const chat = buildChat()
-  doc.body.append(chat.outer)
+  // 插件只认滚动口选择器：占位元素上连 `data-chat-turn-spacer` 都没有也照样装。
+  chat.spacer.removeAttribute('data-chat-turn-spacer')
+  doc.body.append(chat.scroller)
   chat.scroller.scrollTop = 1000
   const runtime = createRuntime(doc)
-  // 非共享滚动模式下滚动口就是列表，`hidden` 观察挂在它身上。
-  check('列表挂上 hidden 观察', chat.scroller.observers.length, 1)
+  check('滚动口挂上 hidden 观察', chat.scroller.observers.length, 1)
 
   chat.group.setAttribute('hidden', 'until-found')
   check('折叠后补回阅读位置', chat.scroller.scrollTop, 700)
@@ -31,10 +34,26 @@ withFakeDom(({ doc }) => {
   check('dispose 摘掉观察', chat.scroller.observers.length, 0)
 })
 
-console.log('--- B② 折叠发生在阅读线下方时不动滚动位置 ---')
+console.log('--- B② 没有共享滚动口时不装任何观察 ---')
 withFakeDom(({ doc }) => {
   const chat = buildChat()
-  doc.body.append(chat.outer)
+  // 普通布局：列表自己滚，没有外层 `[data-conversation-scroll]`。
+  chat.scroller.removeAttribute('data-conversation-scroll')
+  doc.body.append(chat.scroller)
+  chat.scroller.scrollTop = 1000
+  const runtime = createRuntime(doc)
+  check('滚动口不挂观察', chat.scroller.observers.length, 0)
+
+  chat.group.setAttribute('hidden', 'until-found')
+  check('折叠照旧把内容顶走', chat.answer.getBoundingClientRect().top, -100)
+  check('没有写滚动位置', chat.scroller.scrollTop, 1000)
+  runtime.dispose()
+})
+
+console.log('--- B③ 折叠发生在阅读线下方时不动滚动位置 ---')
+withFakeDom(({ doc }) => {
+  const chat = buildChat()
+  doc.body.append(chat.scroller)
   chat.scroller.scrollTop = 1000
   const runtime = createRuntime(doc)
   // 阅读线落在过程组底部与回答行顶部的交界上（过程组视觉顶边 −100），折叠的是它下面的回答行。
@@ -47,10 +66,10 @@ withFakeDom(({ doc }) => {
   runtime.dispose()
 })
 
-console.log('--- B③ 展开（移除 hidden）不补位置 ---')
+console.log('--- B④ 展开（移除 hidden）不补位置 ---')
 withFakeDom(({ doc }) => {
   const chat = buildChat()
-  doc.body.append(chat.outer)
+  doc.body.append(chat.scroller)
   chat.scroller.scrollTop = 1000
   const runtime = createRuntime(doc)
 
@@ -60,20 +79,6 @@ withFakeDom(({ doc }) => {
   chat.group.removeAttribute('hidden')
   check('展开不动滚动位置', chat.scroller.scrollTop, 700)
 
-  runtime.dispose()
-})
-
-console.log('--- B④ 共享滚动模式下认外层滚动口 ---')
-withFakeDom(({ doc }) => {
-  const chat = buildChat({ shared: true })
-  doc.body.append(chat.outer)
-  chat.scroller.scrollTop = 1000
-  const runtime = createRuntime(doc)
-  check('外层滚动口不挂观察', chat.outer.observers.length, 0)
-  check('列表挂 hidden 观察', chat.list.observers.length, 1)
-
-  chat.group.setAttribute('hidden', 'until-found')
-  check('外层滚动口补回原位置', chat.scroller.scrollTop, 700)
   runtime.dispose()
 })
 
@@ -98,7 +103,7 @@ withFakeDom(({ doc }) => {
   wrapper.append(wrapperBody)
   chat.column.append(wrapper)
 
-  doc.body.append(chat.outer)
+  doc.body.append(chat.scroller)
   chat.scroller.scrollTop = 1000
   const runtime = createRuntime(doc)
   const top = (element) => element.getBoundingClientRect().top
@@ -108,7 +113,7 @@ withFakeDom(({ doc }) => {
   const answerBefore = top(chat.answer)
 
   // 同一个批次三条记录：wrapperBody（无关）、wrapper（外层折叠体根）、chat.body（过程组的折叠体）。
-  for (const observer of [...chat.list.observers]) {
+  for (const observer of [...chat.scroller.observers]) {
     observer.notify([
       { type: 'attributes', target: wrapperBody, attributeName: 'hidden', oldValue: null },
       { type: 'attributes', target: wrapper, attributeName: 'hidden', oldValue: null },
@@ -128,21 +133,21 @@ withFakeDom(({ doc }) => {
 console.log('--- B⑥ 运行时按限频重扫新挂载的滚动口 ---')
 withFakeDom(({ doc }) => {
   const first = buildChat()
-  doc.body.append(first.outer)
+  doc.body.append(first.scroller)
   const runtime = createRuntime(doc)
   check('首个滚动口已发现', first.scroller.observers.length, 1)
 
   const second = buildChat()
-  doc.body.append(second.outer)
+  doc.body.append(second.scroller)
   check('限频窗口外的变动立即重扫', second.scroller.observers.length, 1)
 
   const third = buildChat()
-  doc.body.append(third.outer)
+  doc.body.append(third.scroller)
   check('限频窗口内不重扫', third.scroller.observers.length, 0)
   runtime.discover()
   check('显式 discover 补上', third.scroller.observers.length, 1)
   checkTrue('限频值非零', DISCOVERY_THROTTLE_MS > 0)
-  check('常量与选择器', [SPACER_SELECTOR, CONVERSATION_SCROLL_SELECTOR], ['[data-chat-turn-spacer]', '[data-conversation-scroll]'])
+  check('选择器', CONVERSATION_SCROLL_SELECTOR, '[data-conversation-scroll]')
   runtime.dispose()
 })
 

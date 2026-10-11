@@ -28,7 +28,7 @@ console.log('--- C① lib/client.js 注册与声明 ---')
 console.log('--- C② 真产物在假 DOM 上补回阅读位置 ---')
 withFakeDom(({ doc }) => {
   const chat = buildChat()
-  doc.body.append(chat.outer)
+  doc.body.append(chat.scroller)
   chat.scroller.scrollTop = 1000
   const registration = loadClientArtifact()
   const plugin = registration.factory(() => {
@@ -42,8 +42,8 @@ withFakeDom(({ doc }) => {
       return dispose
     },
   })
-  // 列表上挂着 `hidden` 属性观察。
-  check('装配后挂上属性观察', chat.scroller.observers.length, 1)
+  // 滚动口上挂着 `hidden` 属性观察。
+  check('装配后滚动口挂上属性观察', chat.scroller.observers.length, 1)
 
   chat.group.setAttribute('hidden', 'until-found')
   check('折叠后补回阅读位置', chat.scroller.scrollTop, 700)

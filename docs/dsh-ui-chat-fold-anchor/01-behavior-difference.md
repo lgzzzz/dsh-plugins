@@ -41,4 +41,4 @@ ui-chat 收起过程组时不带任何滚动位置补偿：只给行加上 `hidd
 
 ui-chat 的聊天视图暴露了一个「Verbose 折叠」用的策略注入面（见 [dsh-ui-chat-verbose-fold](../dsh-ui-chat-verbose-fold.md)），但它只改「折什么」，没有任何滚动位置相关的开关；滚动策略（`ChatViewport` 的 `capturePosition` / `preserve`）是组件内部对象，插件拿不到。因此本插件走 DOM 这一层：只读折叠留下的信号与行的几何，只写滚动口的 `scrollTop`，不改 ui-chat 的状态、不注册槽位、不遮蔽任何组件。
 
-代价是它依赖 ui-chat 的内部形状——`hidden="until-found"` 的写法、`data-chat-*` 锚点、`[data-chat-turn-spacer]` 的位置。这些都在 `contract.json` 里逐条钉住：上游改名或换机制时 `pnpm check:css` 显式失败，而不是让补丁在页面上静默失效。
+代价是它依赖 ui-chat 的内部形状——`hidden="until-found"` 的写法与两个 `data-chat-*` 锚点（会话滚动口、锚点行）。这些都在 `contract.json` 里逐条钉住：上游改名或换机制时 `pnpm check:css` 显式失败，而不是让补丁在页面上静默失效。

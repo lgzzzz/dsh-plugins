@@ -1,6 +1,6 @@
 # dsh-ui-chat-fold-anchor
 
-不 fork 官方 `@deepseek-ai/dsh-client-ui-chat`，在运行时把「自动折叠把阅读位置顶走」这件事补回来：ui-chat 收起过程组时只给行加上 `hidden`（取值 `until-found`），自己不做任何滚动位置补偿，位置交给浏览器的原生滚动锚定；浏览器不支持 `overflow-anchor`（Safari）或该能力被关掉时，折叠掉的高度就没人补。插件认这条 `hidden` 信号，在属性变化的微任务里把这一批行临时显回来量一次折叠前的几何、再按原样隐藏量第二次，把两次之差写回滚动位置。装进 web profile 后刷新 GUI 页面即生效：折叠结束后正在看的那段内容停在原处，而不是被顶走被折叠掉的高度。失败路径都是安全 no-op——没有滚动口、阅读线上没有可用锚点、锚点行本身被折叠掉时，插件什么都不写。它依赖 ui-chat 的内部契约（`hidden="until-found"` 的写法、`data-chat-*` DOM 锚点），不是稳定公共契约，上游改形状时补丁退化为 no-op，并由 `pnpm check:css` 显式失败。
+不 fork 官方 `@deepseek-ai/dsh-client-ui-chat`，在运行时把「自动折叠把阅读位置顶走」这件事补回来：ui-chat 收起过程组时只给行加上 `hidden`（取值 `until-found`），自己不做任何滚动位置补偿，位置交给浏览器的原生滚动锚定；浏览器不支持 `overflow-anchor`（Safari）或该能力被关掉时，折叠掉的高度就没人补。插件认这条 `hidden` 信号，在属性变化的微任务里把这一批行临时显回来量一次折叠前的几何、再按原样隐藏量第二次，把两次之差写回滚动位置。装进 web profile 后刷新 GUI 页面即生效：折叠结束后正在看的那段内容停在原处，而不是被顶走被折叠掉的高度。失败路径都是安全 no-op——没有共享滚动口（插件只挂 `[data-conversation-scroll]` 外层滚动口）、阅读线上没有可用锚点、锚点行本身被折叠掉时，插件什么都不写。它依赖 ui-chat 的内部契约（`hidden="until-found"` 的写法、`data-chat-*` DOM 锚点），不是稳定公共契约，上游改形状时补丁退化为 no-op，并由 `pnpm check:css` 显式失败。
 
 -----
 

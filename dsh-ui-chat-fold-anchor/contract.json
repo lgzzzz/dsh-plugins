@@ -1,9 +1,8 @@
 {
-  "description": "dsh-ui-chat-fold-anchor 依赖的上游事实:即时折叠写在行上的 hidden=\"until-found\"、发现滚动口与选锚点用的 data-* 契约。本目录的 check-css.mjs 逐条校验(由 pnpm check:css 触发,不挂在 pnpm build 上)。",
+  "description": "dsh-ui-chat-fold-anchor 依赖的上游事实:即时折叠写在行上的 hidden=\"until-found\"、会话滚动口与锚点行用的 data-* 契约。本目录的 check-css.mjs 逐条校验(由 pnpm check:css 触发,不挂在 pnpm build 上)。",
   "checks": [
     {"id":"hidden-until-found","plugin":"dsh-ui-chat-fold-anchor","pattern":"setAttribute\\(\\s*\"hidden\"\\s*,\\s*\"until-found\"\\s*\\)","paths":["dsh-client-ui-chat/lib"],"hint":"ui-chat 不再用 hidden=\"until-found\" 收起行(例如改成卸载节点):本插件认不到折叠信号,属性观察永不触发,补偿静默失效,阅读位置又开始跳"},
     {"id":"anchor-key-attr","plugin":"dsh-ui-chat-fold-anchor","token":"data-chat-anchor-key","paths":["dsh-client-ui-chat/lib"],"hint":"流程行的 data-chat-anchor-key 消失:锚点选不出来,补偿降级为空操作"},
-    {"id":"turn-spacer-attr","plugin":"dsh-ui-chat-fold-anchor","token":"data-chat-turn-spacer","paths":["dsh-client-ui-chat/lib"],"hint":"聊天列表尾部的 data-chat-turn-spacer 消失:滚动口发现落空,补偿完全装不上"},
-    {"id":"conversation-scroll-attr","plugin":"dsh-ui-chat-fold-anchor","token":"data-conversation-scroll","paths":["dsh-client-ui-chat/lib"],"hint":"共享滚动模式外层滚动口的 data-conversation-scroll 消失:共享滚动模式退回用列表当滚动口,判断错对象时会写错元素"}
+    {"id":"conversation-scroll-attr","plugin":"dsh-ui-chat-fold-anchor","token":"data-conversation-scroll","paths":["dsh-client-ui-chat/lib"],"hint":"会话滚动口 data-conversation-scroll 消失:插件只支持共享滚动模式,一个滚动口都找不到就什么都不装,补偿整体失效"}
   ]
 }
