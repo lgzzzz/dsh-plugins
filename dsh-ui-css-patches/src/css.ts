@@ -130,8 +130,7 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
 
 /* 过程组（data-step-process）的成员区整棵子树 14px：组成员（思考 / 工具卡 / 回复）都渲染在
    [data-step-process-content] 下；它自己在上游没有任何 font-size 声明（上游 .…_content 只声明
-   display / flex-direction），字号靠继承，成员内部又会各自声明更小的字号，所以容器与全部后代一起
-   钉到 --dsh-content-font-size（应用字号，默认 14px）。
+   display / flex-direction），字号靠继承，成员内部又会各自声明更小的字号。
    这条规则的 !important 用来压过后代自己声明的小字号，覆盖的是组内每个元素的 font-size：组内成员的
    字号（披露行 / 样例卡 / 压缩卡标题与摘要、展开体正文、compact markdown 正文、工具详情卡整块）全部
    由它给出，文件里因此没有只作用于组内的卡片级字号规则。两处例外由本文件的其它规则负责：
@@ -139,9 +138,8 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
        !important，由 [data-chat-flow-kind] :not(pre) > code 压住；
      - 代码块 / 小号代码的行高 / 字重 / 字体族：--dsw-font-markdown-code-block 与 -small 是 font
        简写，本规则只覆盖 font-size，故工具卡 / 样例卡那两条令牌规则保留。
-   行首状态标记（[role="img"]，即 + / − 变更字形）排除在这条规则之外：它是图标语义（含义由 aria-label
-   承载），字号保留上游声明（工具详情卡里是 16px）。:where() 不贡献特异性，排除后这条选择器仍是
-   (0,1,0)，与覆盖其余元素时一致。
+   行首状态标记（[role="img"]，即 + / − 变更字形）排除在这条规则之外：字号保留上游声明（工具详情卡里是 16px）。:where() 不贡献特异性，
+   排除后这条选择器仍是(0,1,0)，与覆盖其余元素时一致。
    文件里其余的 [data-chat-flow-kind] 规则服务于组外节点：最终回答是一个独立的 [data-chat-flow-kind]
    流项，它的 pre / 行内 code / 表格不在组内，不能只靠这条规则覆盖。 */
 [data-step-process-content],
