@@ -47,7 +47,7 @@
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
 | `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + CSS 变量 + 槽位键 |
-| `dsh-ui-chat-fold-anchor` | [`contract.json`](../dsh-ui-chat-fold-anchor/contract.json) | 折叠信号与 `data-*` 锚点 + 折叠标记先于窗口打开的执行顺序 |
+| `dsh-ui-chat-fold-anchor` | [`contract.json`](../dsh-ui-chat-fold-anchor/contract.json) | 收起行用的 `hidden="until-found"` + 会话滚动口与锚点行的 `data-*` 锚点 |
 | `dsh-focus-free-shortcuts` | [`css-contract.json`](../dsh-focus-free-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-changes-hover-off` | [`contract.json`](../dsh-changes-hover-off/contract.json) | 改动文件卡片锚点 + 悬停延迟 |
 | `dsh-jobs-optimize` | [`contract.json`](../dsh-jobs-optimize/contract.json) | 槽位 / 注册 / 渲染锚点 + 触发器的开合真值与 toggle + 菜单由本控件经 React portal 渲染到 body + 子代理控件（参照物）的两个延迟与点击语义 |
