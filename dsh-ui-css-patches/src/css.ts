@@ -167,6 +167,21 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
+/* 改动文件卡片(data-changed-files="true")自身与整棵子树 14px。
+   卡片内的字号由上游 ChangedFiles.module.css 各自声明:标题 13px、统计行 10px、文件名行 11px、
+   路径 12px、展开按钮 12px;卡片根元素自己反而没有 font-size,所以根元素与后代都要覆盖,
+   并靠 !important 压过后代自己的声明 —— 本选择器的后代段与上游 .…_title / .…_row 同为 (0,1,0),
+   而上游的 <style> 由模块自注入、挂载顺序不归本插件掌握,不能只靠源码顺序取胜。
+   取值钉在 "true" 上:上游写作 "data-changed-files": true(React 把布尔属性渲染成 ="true"),
+   与卡片自己的 [data-single=true] 是同一套写法,取值变了选择器就整条落空,
+   由 css-contract.json 的 changed-files-attr 在构建后报失效。
+   500ms 悬停预览(ChangedFilePreview)是 HoverCard 的内容、portal 到 document.body,
+   不在卡片子树里,字号不由这条规则负责(装 dsh-changes-hover-off 后它也不再打开)。 */
+[data-changed-files="true"],
+[data-changed-files="true"] * {
+  font-size: var(--dsh-content-font-size, 14px) !important;
+}
+
 /* 侧栏会话行的时间戳 13px(上游 10px;行高不动,仍是上游 16px)。固定值,不引用 --dsh-content-font-size。
    这个 span 上没有任何 data-* 属性,唯一的抓手是 CSS Module 的局部类名 time:生成名是 [hash]_[local],
    构建只换 [hash] 前缀、_time 不变,所以用 [class*="_time"] 通配符匹配类名。

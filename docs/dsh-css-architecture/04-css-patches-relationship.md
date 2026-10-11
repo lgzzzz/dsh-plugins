@@ -11,7 +11,7 @@
 | **DSH 上游** | 哈希类 + CSS 变量 + `data-*` 状态开关 | 组件局部 + 令牌全局 | 组件自身样式、主题、状态 |
 | **插件 dsh-ui-css-patches** | `[data-dockkit-tab][role="tab"]` 复合属性选择器 | 全局属性选择器（受属性限定） | 跨构建稳定锚定 dockkit tab 并覆盖上游 |
 
-`dsh-ui-css-patches` 是一个 CSS 补丁插件，规则覆盖：全宽对话正文、dockkit tab 固定宽度、会话标题栏后台任务菜单的宽度（500px → 548px，命令/输出框保持基线宽度 478px、两侧各留 35px 空隙）与字号（菜单自身与整棵子树，上游 10–12px → 14px）、右栏预览与变更审查的字号 / 行高、卡片内代码块 / 行内代码 / 表格字号、工具卡 / 样例卡的代码块令牌（字号 + 行高）、会话头部与子智能体会话树字号、过程组（`[data-step-process-content]`）成员区整棵子树的字号（`[role="img"]` 图标语义除外，保留上游字号）、侧栏会话行的时间戳字号（10px → 13px）。组内成员的字号全部由过程组那条给出，所以不需要只作用于组内的卡片级规则。关键实现：
+`dsh-ui-css-patches` 是一个 CSS 补丁插件，规则覆盖：全宽对话正文、dockkit tab 固定宽度、会话标题栏后台任务菜单的宽度（500px → 548px，命令/输出框保持基线宽度 478px、两侧各留 35px 空隙）与字号（菜单自身与整棵子树，上游 10–12px → 14px）、右栏预览与变更审查的字号 / 行高、卡片内代码块 / 行内代码 / 表格字号、工具卡 / 样例卡的代码块令牌（字号 + 行高）、会话头部与子智能体会话树字号、过程组（`[data-step-process-content]`）成员区整棵子树的字号（`[role="img"]` 图标语义除外，保留上游字号）、改动文件卡片（`[data-changed-files="true"]`）自身与整棵子树的字号（标题 13px / 统计行 10px / 文件名行 11px / 路径与展开按钮 12px → 14px）、侧栏会话行的时间戳字号（10px → 13px）。组内成员的字号全部由过程组那条给出，所以不需要只作用于组内的卡片级规则。关键实现：
 
 1. **只注入一条 `<style data-plugin="dsh-ui-css-patches">`**：规则全部写在一个字符串 `CSS` 里（[`../../dsh-ui-css-patches/src/css.ts`](../../dsh-ui-css-patches/src/css.ts)），`installStyles` 一次挂载（[`../../dsh-ui-css-patches/src/client.ts`](../../dsh-ui-css-patches/src/client.ts)）：
 
@@ -36,7 +36,9 @@
 
 3. **复合属性选择器的覆盖条件**：上游类名带构建哈希（`_tab_6nhg2_134` 每版构建都变），无法可靠命中；而 `data-dockkit-tab` + `role="tab"` 是稳定的语义锚点，且特异性 `(0,2,0)` 大于上游 `.tab` 的 `(0,1,0)`，因此**无需 `!important` 即可覆盖**（`css.ts` 里的 `[data-dockkit-tab][role="tab"] { box-sizing; min-width: 100px; max-width: 100px }` 即如此）。
 
-4. **除下面两条受控例外外，其余规则同样只用稳定锚点**：`[data-slot='main.conversation'] [data-conversation-content]`、`[data-textpreview-body]`、`[data-changes-review]`、`[data-document-markdown]`、`[data-chat-flow-kind]`、`[data-step-process-content]`、`[data-turn-trigger]` 等，都是 `data-*` 属性 + CSS 变量；子智能体会话树改用 `div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"])` 的 role + `aria-label` 双锚点（中英文界面各一个取值）。所有规则**不使用** `:nth-child` / `:has()` 这类位置猜测。
+4. **除下面两条受控例外外，其余规则同样只用稳定锚点**：`[data-slot='main.conversation'] [data-conversation-content]`、`[data-textpreview-body]`、`[data-changes-review]`、`[data-document-markdown]`、`[data-chat-flow-kind]`、`[data-step-process-content]`、`[data-turn-trigger]`、`[data-changed-files="true"]` 等，都是 `data-*` 属性 + CSS 变量；子智能体会话树改用 `div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent sessions"])` 的 role + `aria-label` 双锚点（中英文界面各一个取值）。所有规则**不使用** `:nth-child` / `:has()` 这类位置猜测。
+
+   `[data-changed-files="true"]` 连取值一起钉住（上游是 React 的布尔属性 `data-changed-files={true}`，渲染成 `="true"`，与卡片自己的 `[data-single=true]` 同一套写法），取值一变选择器就整条落空，由 `changed-files-attr` 契约在构建后校验。卡片内的字号由上游 `ChangedFiles.module.css` 逐个声明（标题 13px、统计行 10px、文件名行 11px、路径与展开按钮 12px），根元素自己没有 `font-size`，所以根元素与后代都要覆盖，并靠 `!important` 取胜——这条规则的后代段与上游 `.…_title` / `.…_row` 特异性同为 `(0,1,0)`，而上游 `<style>` 由模块自注入、挂载顺序不归插件掌握。两个边界：卡片里 500ms 悬停预览的 `HoverCard` 内容 portal 到 `document.body`，不在卡片子树内，这条规则覆盖不到它；卡片折叠只影响渲染的行数与按钮文案，字号不随折叠状态变化。
 
 5. **受控例外之一，后台任务菜单那三条**：菜单 `<ul>` 上没有任何 `data-*`，上游 0.2.1-alpha.2 起它改为 `createPortal(<ul>, document.body)` 的 `position:fixed` 浮层，因此**不再是** `[data-slot="conversation.session.header.actions"]` 的后代（锚槽位会整条落空）；锚点落在菜单自身的 `aria-label` 上：`ul[aria-label="后台任务"]` / `ul[aria-label="Background jobs"]`（上游 `t("list.aria")`，中英文各一个取值，元素类型 `ul` 只用来收窄到列表元素），特异性 `(0,1,1)` 大于上游 `.…_menu` 的 `(0,1,0)`。同一槽位的 subagent-catalog 与 agent-team 菜单也 portal 到 `body`，但它们渲染的是 `div`；`dsh-client-ui-schedule` 的活动提醒菜单是另一个 portal 到 `body` 的 `<ul>`（文案「活动提醒」/「Active reminders」），由 `jobs-menu-aria-unique` 反向契约兜住。另三点：
 
