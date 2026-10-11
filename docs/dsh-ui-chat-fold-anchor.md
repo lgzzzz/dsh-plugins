@@ -9,8 +9,9 @@
 | 分册 | 内容 |
 |---|---|
 | [1. 行为差异与影响面](dsh-ui-chat-fold-anchor/01-behavior-difference.md) | 装与不装各看到什么；这条折叠路径缺什么；哪些折叠不需要补 |
-| [2. 工作原理与失败模式](dsh-ui-chat-fold-anchor/02-how-it-works-and-failure-modes.md) | 三条 DOM 信号、纯逻辑与 DOM 的分工、时序、逐条失败路径与已知边界 |
+| [2. 工作原理与失败模式](dsh-ui-chat-fold-anchor/02-how-it-works-and-failure-modes.md) | 滚动口与阅读线是什么、锚点行怎么选；三条 DOM 信号、纯逻辑与 DOM 的分工、时序、逐条失败路径与已知边界 |
 | [3. 构建、测试与启用](dsh-ui-chat-fold-anchor/03-build-test-and-enable.md) | 构建 / 测试 / 契约校验命令、三组 Node 测试与浏览器实测装置、挂载方式 |
+| [4. 术语速查表](dsh-ui-chat-fold-anchor/04-glossary.md) | 滚动口、阅读线、锚点行、本批元素、原生滚动锚定等词的一行定义 |
 
 -----
 
