@@ -10,6 +10,8 @@
 //   3. CSS Module 的局部类名被改名——哈希前缀变化不影响通配符,局部名变化才让它落空,规则整条失效
 //      (清单里逐条写明实际后果)。
 // 这里在构建后把清单逐条对上游产物 grep 一遍,缺一条就显式失败,提示里写明后果。
+// 契约默认是「必须命中」(token / pattern);清单里带 forbid 的条目是**反向契约**「必须不命中」,
+// 用于钉住「换个地方出现同样的锚点会让选择器撞车」这类退化(命中即失败)。
 //
 // 用法(本脚本与 css-contract.json 同目录):
 //   node dsh-ui-css-patches/check-css.mjs [--dsh-root <path>] [--manifest <json>]
@@ -133,14 +135,21 @@ function main() {
   let pass = 0
   const failed = []
   for (const c of checks) {
-    const { id = '(未命名)', plugin = '(未声明)', token, pattern, paths = [], hint } = c
+    const { id = '(未命名)', plugin = '(未声明)', token, pattern, forbid, paths = [], hint } = c
     const label = `${plugin}/${id}`
-    const shown = token ?? pattern ?? '(未声明)'
+    const shown = forbid !== undefined ? `forbid ${forbid}` : token ?? pattern ?? '(未声明)'
     try {
-      const needle = pattern ? new RegExp(pattern, 's') : token ?? null
-      if (needle === null) failed.push({ label, shown, hint: '清单缺少 token 或 pattern' })
-      else if (firstMatch(needle, filesFor(paths))) pass++
-      else failed.push({ label, shown, hint: hint ?? '契约 token 缺失' })
+      if (forbid !== undefined) {
+        // 反向契约:命中即失败(例如另一个浮层菜单改用同一 aria-label 文案时,选择器会同时命中它)。
+        const hit = firstMatch(new RegExp(forbid, 's'), filesFor(paths))
+        if (hit === null) pass++
+        else failed.push({ label, shown, hint: hint ?? '契约禁止的 token 出现了', where: hit })
+      } else {
+        const needle = pattern ? new RegExp(pattern, 's') : token ?? null
+        if (needle === null) failed.push({ label, shown, hint: '清单缺少 token 或 pattern' })
+        else if (firstMatch(needle, filesFor(paths))) pass++
+        else failed.push({ label, shown, hint: hint ?? '契约 token 缺失' })
+      }
     } catch (e) {
       failed.push({ label, shown, hint: `规则无法校验: ${e.message}` })
     }
@@ -152,6 +161,7 @@ function main() {
     for (const f of failed) {
       console.error(`\u2717  ${f.label}  —  ${f.hint}`)
       console.error(`     needle: ${f.shown}`)
+      if (f.where !== undefined) console.error(`     命中于: ${f.where}`)
     }
   }
 
