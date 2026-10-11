@@ -3,7 +3,7 @@
  *
  * 同特异性规则的覆盖顺序由本文件的源码顺序唯一确定(后写者胜);锚点是稳定的 `data-*` / `role` /
  * `aria-label`。两处例外:
- *   - 后台任务菜单那两条锚在菜单自身的 `aria-label` 上(中英文各一个取值),并额外用元素类型 `ul` 收窄:
+ *   - 后台任务菜单那三条锚在菜单自身的 `aria-label` 上(中英文各一个取值),并额外用元素类型 `ul` 收窄:
  *     菜单 `<ul>` 上没有任何 `data-*`,而且上游 0.2.1-alpha.2 起它由 `createPortal` 渲染到
  *     `document.body`、定位是 `position:fixed` —— 不再是 `[data-slot="conversation.session.header.actions"]`
  *     的后代,按槽位锚定会整条落空(上游的 `useAnchoredPosition` 会按实测 `offsetWidth` 重算 `left`,
@@ -127,6 +127,19 @@ ul[aria-label="Background jobs"] [data-terminal] {
   max-width: 100%;
   margin-left: auto;
   margin-right: auto;
+}
+
+/* 后台任务菜单自身与整棵子树 14px(默认 14px,跟随 --dsh-content-font-size)。
+   菜单里的分组标题 / 停止按钮 / 命令行 / 种类 / 状态 / 时长 / 提示行各自声明了 10–12px,
+   菜单 <ul> 自己反而没有 font-size,所以根元素与后代都要显式覆盖,且要 !important 压过后代声明。
+   这条不能省:菜单由 createPortal 挂到 document.body,不在会话标题栏那一行里,
+   [data-slot="conversation.session.header"] * 那条 14px 覆盖不到它。
+   锚点与上面两条宽度规则相同(菜单自身的 aria-label,中英文两个取值),ul 只用来收窄到列表元素。 */
+ul[aria-label="后台任务"],
+ul[aria-label="Background jobs"],
+ul[aria-label="后台任务"] *,
+ul[aria-label="Background jobs"] * {
+  font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
 /* 子智能体会话树（role="tree" 精确锚点）自身与子元素 14px */
