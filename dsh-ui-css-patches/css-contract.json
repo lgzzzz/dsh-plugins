@@ -12,6 +12,7 @@
     {"id":"textpreview-body-attr","token":"data-textpreview-body","paths":["dsh-client-ui-sidebar-documentpreview/lib"],"hint":"data-textpreview-body 属性消失，右栏预览代码字体从 14px 变为 11px"},
     {"id":"changes-review-attr","token":"data-changes-review","paths":["dsh-client-ui-deliverables/lib"],"hint":"data-changes-review 属性消失，审查面板代码字体从 14px 变为 11px"},
     {"id":"diff-line-attr","token":"data-diff-line","paths":["dsh-client-ui-deliverables/lib"],"hint":"data-diff-line 属性消失，diff 行高从 22px 变为 18px"},
+    {"id":"changed-files-attr","pattern":"\"data-changed-files\":\\s*true","paths":["dsh-client-ui-deliverables/lib"],"hint":"改动文件卡片根不再输出 data-changed-files={true}（React 渲染成 data-changed-files=\"true\"），[data-changed-files=\"true\"] 整条落空：卡片标题/统计行/文件名行/路径/展开按钮的字号回到上游的 13px/10px/11px/12px"},
     {"id":"document-markdown-attr","token":"data-document-markdown","paths":["dsh-client-ui-sidebar-documentpreview/lib"],"hint":"data-document-markdown 属性消失，文档表格字体从 14px 变为 13px"},
     {"id":"table-head-var","token":"--dsw-font-markdown-table-head","paths":[],"hint":"--dsw-font-markdown-table-head 变量消失，表头字体从 14px 变为 13px"},
     {"id":"table-var","token":"--dsw-font-markdown-table","paths":[],"hint":"--dsw-font-markdown-table 变量消失，表格字体从 14px 变为 13px"},
