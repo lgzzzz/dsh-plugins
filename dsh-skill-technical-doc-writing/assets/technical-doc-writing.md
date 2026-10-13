@@ -1,8 +1,3 @@
----
-name: technical-doc-writing
-description: 编写、审查、精简或恢复任意项目的技术文档与文案时使用——README、Markdown 文档、JSDoc 与代码/测试注释、提示词、工具与技能描述、诊断信息、CLI/UI 文案，不限于某个具体仓库。
----
-
 # 通用技术文档与文案标准：编写、审查、精简与恢复
 
 ## 这份技能是做什么的
