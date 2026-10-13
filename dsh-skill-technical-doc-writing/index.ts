@@ -26,8 +26,7 @@ const SKILL_NAME = 'technical-doc-writing'
 
 /** 发现阶段给模型看的路由描述。 */
 const SKILL_DESCRIPTION =
-  '编写、审查、精简或恢复任意项目的技术文档与文案时使用——README、Markdown 文档、JSDoc 与代码/测试注释、' +
-  '提示词、工具与技能描述、诊断信息、CLI/UI 文案，不限于某个具体仓库。'
+  '编写、审查、精简或恢复任意项目的技术文档与文案时使用——README、Markdown 文档、JSDoc 与代码/测试注释、提示词、工具与技能描述、诊断信息、CLI/UI 文案，不限于某个具体仓库。'
 
 /** 正文资产与相对资源根：按模块 URL 解析，因此与进程 cwd 无关。 */
 const SKILL_BODY_URL = new URL('./assets/technical-doc-writing.md', import.meta.url)
