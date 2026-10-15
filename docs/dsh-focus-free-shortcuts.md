@@ -12,6 +12,8 @@
 
 提问卡片是这几类里唯一的例外：它自己没绑 `Esc`，唯一出口是面板上的关闭 / 取消按钮(调 `PendingQuestion.dismiss()`)；有待答提问时这一按本来没有主人（内置停止序列与本插件的停止桥都以「有待答交互」为门槛拒绝，且都不消费）。插件把这一按接过来，按面板按钮自己的语义取消：没有工具调用线索的阻塞式提问 → 以 `ASK_CANCELLED` 结束整组等待；带工具调用线索的提问 → 只收起面板，问题仍可从它的工具调用行重新打开。
 
+全屏呈现的右栏是另一处 `Esc` 没有主人的状态：右侧栏铺满视口时，面板自带的折叠按钮要先把指针挪到面板自己的页签行末端，`⌘⌥Enter` 又是"切换呈现方式"而不是"关闭"。插件在 window 捕获阶段接住裸 `Esc`，先 `preventDefault()+stopPropagation()` 再折叠右栏（与那个按钮同一条 `toggleExpanded()`）。因此全屏期间内置 `response.stop` 与本插件的停止桥都收不到这一按，凑不成「连按两下停止」；关栏之后再按两下才停。焦点在终端里、或落在右栏自己的文本控件里（例如终端页签的重命名输入框）时让位；待答审批与提问卡片也不在同一按上作答——它们同样被这块浮层盖住（见 [第 2 册第 3.6 节](dsh-focus-free-shortcuts/02-ownership-resolution.md) 与 [第 5 册第 5.11 节](dsh-focus-free-shortcuts/05-approval-key-bridge.md)）。
+
 `⌘⌥J` / `Ctrl+Alt+J`、`⌘⌥←/→` / `Ctrl+Alt+←/→`、`⌘↑/↓` / `Ctrl+↑/↓` 与 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` 是官方没有任何命令占用的键，插件各挂一条固定键(`dsh-focus-free-shortcuts.focus-composer` / `dsh-focus-free-shortcuts.page-cycle` / `dsh-focus-free-shortcuts.session-cycle` / `dsh-focus-free-shortcuts.session-active-cycle`)，走同一条固定输入通道把键盘交还给 composer、把右侧栏切到下一张页面、或在左侧栏前三个工作区当前显示出来的会话之间切换。
 
 `⌘⌥K` / `Ctrl+Alt+K`(`dsh-focus-free-shortcuts.focus-page`)是唯一一条**有意占用内置键位**的固定键：Web 上内置 `session.search`（会话搜索）的默认键位就是 `primary+alt+K`，固定行一挂上，那一行在快捷键设置里就变成「冲突」、按键不再打开搜索(需要保留搜索就自己给它改绑；桌面端 `session.search` 是 `⌘K` / `Ctrl+K`，与本键不相干)。连带代价：上游把「恢复全部默认」的校验也建立在这份冲突表上，改动过快捷键时点它会以冲突失败 —— 这是固定行占住内置默认键位的必然副作用，删掉本条固定行即恢复（见 [第 6 册第 7 节](dsh-focus-free-shortcuts/06-boundaries-and-contracts.md)）。换来的能力是：固定行是唯一够得着终端那一格的通道，而这条键的主要用场正是"把键盘交进右侧栏当前显示的那一页"。交棒复用页面切换键的 `focusShownPage`：定位该会话的右栏根节点、选出可见 pane、页面自持键盘就不抢，否则聚焦 pane 并下探到页面自己的输入面(终端的 `.xterm-helper-textarea`)；右栏折叠、屏幕上没有会话、可见 pane 尚未渲染时按各自的边界让位（细节见 [第 3 册第 5.6 节](dsh-focus-free-shortcuts/03-fixed-input-and-pane-keys.md) 与 [第 6 册](dsh-focus-free-shortcuts/06-boundaries-and-contracts.md) 第 6 / 7 节）。
@@ -20,7 +22,7 @@
 
 页面切换键还顺带修掉两个上游的视觉抖动。其一：右栏页签行只在**当前选中**那条页面所在的 host 里渲染，所以每次换页签都是新的 chip box，`scrollLeft` 从 0 开始；kit 自己那次"把活动芯片滚进视野"本应在首帧之前完成，却被页签行的 `scroll-behavior: smooth` 变成"先回到最左、再迅速滑过去"的动画。其二：kit 那次修正以 **0** 为起点，于是目标芯片一定落在视野最右缘、把来源顶出去，"我从哪儿切过来"就看不见了。插件注入一条只作用于右侧栏的 `scroll-behavior: auto` 规则把它瞬时化，并在切页前后**保持观察窗口**（切页前记下页签行滚到的位置，新 chip box 挂载后先放回去，只有目标芯片不在窗口里时才最小推移）——于是相邻来回切时整行**完全不动**，来源页签仍在视野里（纯视图补偿，不消费按键、不改任何归属判定，鼠标点页签同样受益；细节见 [第 3 册第 5.4 节](dsh-focus-free-shortcuts/03-fixed-input-and-pane-keys.md)）。
 
-两条会话键共用同一份候选，差别只在池子：`⌘↑` / `Ctrl+↑` 与 `⌘↓` / `Ctrl+↓` 在候选里环状步进；`⌘⌥↑` / `Ctrl+Alt+↑` 与 `⌘⌥↓` / `Ctrl+Alt+↓` 只走候选里的**活跃会话** —— 活跃 = 行上有状态点的会话（运行中 / 待交互 / 已完成未读那一颗绿点；回合以出错收场时运行状态同样由 true 变 false 并亮起同一颗绿点，所以这类会话也在池里，DSH 的会话状态面没有独立的「出错」状态）。没有活跃会话、或活跃池里只剩当前会话时，这对键不动作、也不消费，常规导航交给 `⌘↑` / `Ctrl+↑` 与 `⌘↓` / `Ctrl+↓`。
+两条会话键共用同一份候选，差别只在池子：`⌘↑` / `Ctrl+↑` 与 `⌘↓` / `Ctrl+↓` 在候选里环状步进；`⌘⌥↑` / `Ctrl+Alt+↑` 与 `⌘⌥↓` / `Ctrl+Alt+↓` 只走候选里的**活跃会话** —— 活跃 = 行上有状态点的会话（运行中 / 待交互 / 已完成未读那一颗绿点；回合以出错收场时运行状态同样由 true 变 false 并亮起同一颗绿点，所以这类会话也在池里，DSH 的会话状态面没有独立的「出错」状态）。没有活跃会话、或活跃池里只剩当前会话时，这对键不动作，但这一按仍被消费掉（不会漏给浏览器 / 终端），常规导航交给 `⌘↑` / `Ctrl+↑` 与 `⌘↓` / `Ctrl+↓`。两条键都守同一条口径：**只要这一按归本行就消费** —— 没有候选、目标就是当前会话、长按重复、模态层打开都只消费不动作，只有输入法组字中两者都不做。
 
 会话切换的候选**不从服务面推导**，而是直接读左侧栏此刻渲染出来的会话行(`[data-row-key="session:…"]`)：折叠的工作区、被每分组 5 行上限挡在「展开更多」之后的会话、归档行、「未分组」桶、搜索过滤与窄侧栏下的列表都不算候选 —— 也就是说，能按快捷键走到的，恰好是眼睛能看到、点一下就能打开的那批行（详见 [第 6 册](dsh-focus-free-shortcuts/06-boundaries-and-contracts.md) 第 8 节）。
 
@@ -30,10 +32,10 @@
 
 | 分册 | 内容 |
 |---|---|
-| [1. 行为差异与影响面](dsh-focus-free-shortcuts/01-behavior-difference.md) | 六条「按下去没反应」的快捷键：前五条要先聚焦，最后一条(提问卡片 `Esc`)是既有键在那个状态下没有主人；DOM / 焦点 / `keydown` / `closest()` / `preventDefault()` 预备知识 |
-| [2. 归属判定](dsh-focus-free-shortcuts/02-ownership-resolution.md) | 键盘事件的完整链路；面板命令、页面关闭命令、停止序列与审批面板各自的归属判定；提问卡片的判定 |
+| [1. 行为差异与影响面](dsh-focus-free-shortcuts/01-behavior-difference.md) | 六条「按下去没反应」的快捷键：前五条要先聚焦，最后一条(提问卡片 `Esc`)是既有键在那个状态下没有主人；外加全屏右栏上的 `Esc`（本插件补的关闭路径）；DOM / 焦点 / `keydown` / `closest()` / `preventDefault()` 预备知识 |
+| [2. 归属判定](dsh-focus-free-shortcuts/02-ownership-resolution.md) | 键盘事件的完整链路；面板命令、页面关闭命令、停止序列、审批面板与全屏右栏上 `Esc` 各自的归属判定；提问卡片的判定 |
 | [3. 固定输入通道与面板键桥接](dsh-focus-free-shortcuts/03-fixed-input-and-pane-keys.md) | 机制总览；固定输入通道与「消费即让位」；`enabledBinding`；`handlePaneInput`；`handlePageCloseInput`；右栏页签行的滚动补偿 |
-| [4. 停止桥接(`Esc Esc`)](dsh-focus-free-shortcuts/04-stop-sequence-bridge.md) | `handleStopInput`；轮次身份（turn identity）；双按序列；归属不重叠 |
-| [5. 审批键桥接(`Enter` / `Esc`)](dsh-focus-free-shortcuts/05-approval-key-bridge.md) | `handleApprovalInput`；面板 / 审批桥 / 提问桥 / 停止序列的归属不重叠；提问卡片取消桥的 `editable` 放宽与 `dismiss()` |
+| [4. 停止桥接(`Esc Esc`)](dsh-focus-free-shortcuts/04-stop-sequence-bridge.md) | `handleStopInput`；轮次身份（turn identity）；双按序列；归属不重叠（含全屏右栏与它的交叉点） |
+| [5. 审批键桥接(`Enter` / `Esc`)](dsh-focus-free-shortcuts/05-approval-key-bridge.md) | `handleApprovalInput`；面板 / 审批桥 / 提问桥 / 停止序列的归属不重叠；提问卡片取消桥的 `editable` 放宽与 `dismiss()`；全屏右栏关栏桥（5.11） |
 | [6. 边界与依赖契约](dsh-focus-free-shortcuts/06-boundaries-and-contracts.md) | 与内置命令的对照表；已知边界与失败模式；依赖的非正式契约 |
 | [7. 构建、测试与启用](dsh-focus-free-shortcuts/07-build-test-and-enable.md) | 构建 / 测试命令；`test/` 分组；上游 DOM 锚点契约校验(`check-css.mjs`)；启用与撤销 |

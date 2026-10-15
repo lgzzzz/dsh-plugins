@@ -408,4 +408,39 @@ console.log('--- I⑫ 作答后的焦点环:被按下过的控件不再画边框
   }
 }
 
+console.log('--- I⑬ 全屏右栏盖住审批:这一按归右栏关栏,审批不作答 ---')
+{
+  // 右栏全屏呈现时浮层盖住整块 composer,审批卡片在下面看不见;两条 Esc 路(捕获与固定通道)
+  // 都要让位,否则同一次按键会一边关栏、一边拒掉一个看不见的审批。
+  const withFullscreenPanel = (app) => {
+    const panel = app.append(new FakeElement('div', {
+      'data-sidebar-right-session': 's1',
+      'data-sidebar-right-panel': 'fullscreen',
+      'data-sidebar-right-open': '',
+    }))
+    return staleCard(panel)
+  }
+
+  const app = new FakeElement('div', { 'data-app': '' })
+  const panelCard = withFullscreenPanel(app)
+  const dom = withApprovalDom({ app, activeElement: panelCard })
+  const pending = approvalPending()
+  try {
+    const { shortcuts, sidebar } = withPending(pending)
+    const escape = fakeKeyEvent({ path: [panelCard, app], code: 'Escape' })
+    dom.window.emit(escape)
+    check('捕获路:不作答', pending.answers, [])
+    check('捕获路:这一按归全屏关栏桥', sidebar.calls, [['toggleExpanded']])
+
+    // 固定通道那一半:全屏关栏桥命中时会在捕获阶段停掉事件,观察者收不到;这里直接投给观察者,
+    // 模拟两路模态读数不一致等边角情形,审批同样让位。
+    const fixed = keydown(gesture('Escape'), shortcutContext({ target: panelCard }))
+    shortcuts.emit(fixed.input)
+    check('观察者路:不作答', pending.answers, [])
+    check('观察者路:不消费', fixed.consumed.count, 0)
+  } finally {
+    dom.restore()
+  }
+}
+
 finish()

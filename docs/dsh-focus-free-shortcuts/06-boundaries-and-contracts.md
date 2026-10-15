@@ -64,14 +64,14 @@
 | 模态层打开，按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 模态层掌权 | 让位，不动作、不消费 |
 | 任意焦点位置按 `⌘↓` / `⌘↑`（macOS）/ `Ctrl+↓` / `Ctrl+↑`（Windows/Linux） | 没有任何命令占用（官方唯一带方向键的固定行是菜单的裸 `↑` / `↓`，与本组合的修饰键集合不相交）；文本框里浏览器默认做自己的光标移动 | 在左侧栏前三个工作区**当前显示出来**的会话行之间环状切换（`↓` 往显示顺序的后一个、`↑` 往前一个）；当前会话不在候选里时 `↓` 落候选首、`↑` 落候选尾；切换调 `uiWorkspace.openSession()`，与点击侧栏那一行同一操作 |
 | 任意焦点位置按 `⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` | 没有任何命令占用，浏览器默认无动作 | **只在活跃会话之间**环状切换：池子是候选里带状态点的会话（运行中 / 待交互 / 已完成未读）；当前会话不在活跃池里时 `↓` 落活跃池首、`↑` 落活跃池尾；切换动词同上 |
-| 候选里没有任何活跃会话（没有行带状态点） | 无动作 | 不动作、不消费：活跃池是空的，不退回全部候选（常规导航是 `⌘↑/↓` / `Ctrl+↑/↓` 自己那一条） |
-| 活跃池里唯一那个活跃会话**正是**当前会话 | 无动作 | 不动作、不消费（没有可切的目标），同样不退回全部候选 |
-| 候选只有一个、或算出来的目标就是当前会话，按这两对键中的任意一对 | 无动作 | 不动作、不消费（没有可切的目标） |
-| 焦点在文本控件里按这两对键 | `⌘↓/↑`（文档首 / 尾）/ `Ctrl+↓/↑`（按段移动光标）是浏览器自己的默认行为；`⌘⌥↓/↑` / `Ctrl+Alt+↓/↑` 无动作 | 照常切换并消费（不看 `defaultPrevented`、不限制 region）——命中候选时这一按不再落到光标上 |
-| 焦点在终端里按这两对键 | 终端把按键当普通输入处理并 `preventDefault()+stopPropagation()`（事件到不了固定通道） | 捕获阶段在 `.xterm` 之前拦下并照常切换，顺带不让 `\x1b[1;5A` / `\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）与 `\x1b[1;7A` / `\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）进 shell；macOS 上同样的行是 `⌘↑/↓` 与 `⌘⌥↑/↓`，xterm 不为它们产出这些序列，但捕获钩子照常运行 |
-| 工作区折叠 / 会话藏在「展开更多」之后 / 列表带搜索词 / 侧栏收起成窄栏 / 分组方式为「单列表」，按这两对键 | 无动作（那时也没有会话行可点） | 不动作、不消费：候选就是「此刻渲染出来的会话行」，这些情况下没有候选 |
-| 会话已归档，按这两对键 | 点那一行只弹提示（`toast.archivedNotOpenable`）、不切换 | 不动作、不消费：归档行不进候选（按 `aria-description` 标记识别） |
-| 模态层打开，按这两对键 | 模态层掌权 | 让位，不动作、不消费 |
+| 候选里没有任何活跃会话（没有行带状态点） | 无动作 | 不动作，但**消费**：活跃池是空的，不退回全部候选（常规导航是 `⌘↑/↓` / `Ctrl+↑/↓` 自己那一条） |
+| 活跃池里唯一那个活跃会话**正是**当前会话 | 无动作 | 不动作，但**消费**（没有可切的目标），同样不退回全部候选 |
+| 候选只有一个、或算出来的目标就是当前会话，按这两对键中的任意一对 | 无动作 | 不动作，但**消费**（没有可切的目标） |
+| 焦点在文本控件里按这两对键 | `⌘↓/↑`（文档首 / 尾）/ `Ctrl+↓/↑`（按段移动光标）是浏览器自己的默认行为；`⌘⌥↓/↑` / `Ctrl+Alt+↓/↑` 无动作 | 照常切换并消费（不看 `defaultPrevented`、不限制 region）——两条键「归本行就消费」，所以无论有没有可切目标，这一按都不再落到光标上 |
+| 焦点在终端里按这两对键 | 终端把按键当普通输入处理并 `preventDefault()+stopPropagation()`（事件到不了固定通道） | 捕获阶段在 `.xterm` 之前拦下并照常切换，顺带不让 `\x1b[1;5A` / `\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）与 `\x1b[1;7A` / `\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）进 shell（没有可切目标时同样拦下，只吞不切）；macOS 上同样的行是 `⌘↑/↓` 与 `⌘⌥↑/↓`，xterm 不为它们产出这些序列，但捕获钩子照常运行 |
+| 工作区折叠 / 会话藏在「展开更多」之后 / 列表带搜索词 / 侧栏收起成窄栏 / 分组方式为「单列表」，按这两对键 | 无动作（那时也没有会话行可点） | 不动作，但**消费**：候选就是「此刻渲染出来的会话行」，这些情况下没有候选 |
+| 会话已归档，按这两对键 | 点那一行只弹提示（`toast.archivedNotOpenable`）、不切换 | 不动作，但**消费**：归档行不进候选（按 `aria-description` 标记识别） |
+| 模态层打开，按这两对键 | 模态层掌权 | **消费**但不动作：这一按归本行（只吞掉，不切换会话），浏览器 / 终端拿不到它；长按重复同理 |
 | 焦点在终端里按 `⌘⌥N` / `Ctrl+Alt+N`（内置 `session.new`） | 终端把按键当普通输入处理并 `preventDefault()+stopPropagation()`（事件到不了 DOM 通道），内置命令的 `regions` 也不含 `terminal` | 捕获阶段在 `.xterm` 之前拦下并调用与内置 `run()` 同一个 `uiWorkspace.startSession()`（不带参数 = 沿用当前 / 最近的工作区），顺带不让 Windows/Linux 上的 AltGr 把这一按变成字符送进 shell |
 | 焦点在页面 / 文本控件里按 `⌘⌥N` / `Ctrl+Alt+N` | 内置 `session.new` 自己处理（`regions` 含 `page` 与 `editable`） | 让位：本桥的捕获钩子只认 `.xterm`，不注册固定键也不开观察者，页面 / 文本控件里的这一按完全归内置命令 |
 | `session.new` 被改绑 / 解绑 / 有 issue / 存在冲突，焦点在终端里按原键位 | — | 不动作、不吞事件：键位读**生效目录**（`enabledBinding`），改绑后跟随新键，解绑 / 冲突后让位（与页面关闭桥跟随 `page.close` 同一条约定） |
@@ -86,6 +86,13 @@
 | 面板已展开、可见 pane 尚未渲染，按 `⌘⌥K` / `Ctrl+Alt+K` | — | 消费但不动焦点（"先消费再动作"；下一次按即可交棒） |
 | 模态层打开，按 `⌘⌥K` / `Ctrl+Alt+K` | 模态层掌权 | 让位，不动作、不消费 |
 | 桌面端（Desktop）按 `⌘⌥K` | Desktop 的 `session.search` 是 `primary+K`（`⌘K` / `Ctrl+K`），`⌘⌥K` 没有占用 | 本桥同样安装（固定行是插件自己的，不经原生派发）；与 `⌘K` 搜索互不相干 |
+| 右栏全屏呈现（手动全屏，或窄于 768px 的窗口里展开），按 `Esc` | 无人处理：面板的两个控件都在它自己的页签行末端，`⌘⌥Enter` 是"切换呈现方式" | 关栏：吞掉这一按，再调与折叠按钮同一个 `toggleExpanded()`；停靠呈现（`push`）与折叠态不动作 |
+| 同上，正有回合在跑 | 焦点在会话区内时第一下 `Esc` 归内置 `response.stop`（被消费、记不下来），焦点在别处则无人处理 | 全屏这一半先关栏：两条停止序列都收不到这一按，要停止需在关栏之后再按两下 |
+| 同上，有待答审批 / 待答提问 | 焦点在 `page` 区域时审批桥一下即拒绝（捕获路），或提问桥一下即取消（固定通道） | 让位：浮层盖住 composer，待答卡片在屏幕上看不见；这一按先关栏，关栏之后再按 `Esc` 才答卡片 |
+| 同上，焦点在终端 `.xterm` 内 | 终端自己的 `Esc` | 让位，不动作、不消费（与停止桥、审批桥、提问桥同一条门槛） |
+| 同上，焦点在右栏自己的文本控件里（例如终端页签的重命名输入框） | 控件自己处理：那个输入框的 `keydown` 用 `Esc` 取消重命名 | 让位，不动作、不消费（归属收口到 `[data-sidebar-right-session]` 之外） |
+| 同上，模态层打开 | 模态层掌权 | 让位，不动作、不消费（`Esc` 先归模态） |
+| 右栏停靠呈现或已折叠，按 `Esc` | 无人处理 | 不动作、不消费（只认「全屏 + 展开」这一个状态） |
 
 -----
 
@@ -143,18 +150,22 @@
 | 切页后的自动聚焦 | 只补位、不抢键盘 | `sidebar.focus()` 提交的是 store 变更，React 异步渲染，所以桥在**下一帧**才定位新显示的 pane（`[data-sidebar-right-session]` 根 + 带 `-active` 标记的可见 pane）。若新页面自己聚焦了（终端 body 在 `visible` 变化时聚焦 xterm），`document.activeElement` 已落在 pane 内，桥不碰键盘。 |
 | 快捷键**展开**右栏（`sidebar.right.toggle`） | 面板确认展开后把键盘交到活动页自己的输入面（终端的 xterm） | 内置 toggle 走 `openWithPaneFocus`：`flushSync` 提交展开后**同步**聚焦活动 **pane 容器**——这一步发生在终端"`visible` 变化时自聚焦"之后，把刚落到 xterm 的焦点顶掉，此后 `visible` / `writable` 不再变化，终端不会二次自聚焦。补位**不假定展开与按键同步**：以 50ms 间隔有界轮询（≤800ms）`sidebar.isExpanded()`，面板一确认展开就在下一帧调用 `focusShownPage`；当焦点停在 pane 容器本身、而该页有输入面（`.xterm-helper-textarea`，`readOnly` 视为页面自己拒绝）时补位聚焦它；页面内部控件已持键盘则仍不碰。这一按**不消费**，owner 仍是内置 toggle；窗口内面板始终没展开则放弃。 |
 | 换页签时页签行的滚动位置 | 跨切换保持观察窗口：相邻来回切时整行不动、能看见来源页签（不会"先回到最左、再迅速滑到该页签"） | 机制、上游锚点与"以旧窗口为起点"的最小推移见第 3 册第 5.4 节。边界：只覆盖插件自己驱动的切换，鼠标点芯片与别处命令切页仍走 kit 原规则（这条补偿不消费按键、不参与归属）；跨 pane、目标尚未渲染、没记下窗口时不动作。若上游改了 `[data-dockkit-strip-tabs]` / `[data-dockkit-tab]` / `[data-sidebar-right-session]` 任一标记，规则匹配不到、窗口也记不下：页签行照旧"重置 + 滑动 + 目标贴最右"，不误动作；若上游改了渐隐带宽度，最坏是目标与边缘的间距观感不同。 |
-| 会话导航的候选口径：**只看左侧栏此刻渲染出来的会话行** | 不切换、不消费 | 候选不是从服务面推导的，而是读 `[data-row-key]` 行：折叠的工作区不渲染会话行、每个分组默认最多渲染 5 行（多出来的挡在「展开更多」按钮之后）、搜索过滤把列表区换成搜索结果（没有行标记）、窄 / 收起侧栏时整个列表区不渲染、「单列表」分组模式根本没有工作区分组行。这些都不是故障，而是「没被展示出来就不切」这条规则本身；副作用是候选会随侧栏的展开状态、分组方式与搜索词实时变化。两条会话键共用同一份候选，只是池子不同。 |
+| 会话导航的候选口径：**只看左侧栏此刻渲染出来的会话行** | 不切换，但消费 | 候选不是从服务面推导的，而是读 `[data-row-key]` 行：折叠的工作区不渲染会话行、每个分组默认最多渲染 5 行（多出来的挡在「展开更多」按钮之后）、搜索过滤把列表区换成搜索结果（没有行标记）、窄 / 收起侧栏时整个列表区不渲染、「单列表」分组模式根本没有工作区分组行。这些都不是故障，而是「没被展示出来就不切」这条规则本身；副作用是候选会随侧栏的展开状态、分组方式与搜索词实时变化。两条会话键共用同一份候选，只是池子不同。 |
 | 「未分组」桶里的会话 | 不进候选 | 「未分组」桶的分组键是空串，不是工作区：它既不占前三个名额，也不贡献候选。 |
-| 左侧栏此刻没有渲染出任何会话行（或只有一个且已是当前会话） | 不动作、不消费 | 没有候选就没有可切的目标；只有一个候选且它就是当前会话时，「切」到自己没有意义，同样不动作、不消费。 |
+| 左侧栏此刻没有渲染出任何会话行（或只有一个且已是当前会话） | 不动作，但消费 | 没有候选就没有可切的目标；只有一个候选且它就是当前会话时，「切」到自己没有意义。两种情况都只消费、不动作——两条会话键「归本行就消费」，所以这一按不再漏给浏览器 / 终端。 |
 | 当前会话不在候选里（它在第四个 / 别的工作区） | `⌘↑/↓` / `Ctrl+↑/↓`：`↓` 落候选首、`↑` 落候选尾；`⌘⌥↑/↓` / `Ctrl+Alt+↑/↓`：`↓` 落活跃池首、`↑` 落活跃池尾 | 当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出；它不在池子里时按「进入池子」处理，方向决定落在哪一端。 |
 | 「活跃」的判定口径 | 只有行上有状态点的会话进 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` 的池子 | 三项状态事实取并集，全部读 `uiSession.sessionStatus`：`pendingInteraction !== undefined`（待审批 / 计划待审 / 待回答）、`completionUnread === true`（已完成未读那一颗绿点）、`running === true`（状态表读数缺席时退回会话目录的 `running`）。回合以出错收场时运行状态同样由 true 变 false 并亮起同一颗绿点，所以这类会话在池子里——DSH 的会话状态面**没有**独立的「出错」状态，桥不去猜一个不存在的读数。子智能体还在跑的会话也不进池子（那是行上的另一个 occupant，不是会话自己的状态）。 |
-| 活跃池里唯一的活跃会话**正是**当前会话 | 不动作、不消费 | 池子里只剩当前会话，再按也没有可切的目标；**不**退回全部候选——常规导航是 `⌘↑/↓` / `Ctrl+↑/↓` 自己那一条，两条键各守各的池子。 |
-| `primary+↓/↑`（不带 `Alt`，即 macOS `⌘↓/↑` / Windows/Linux `Ctrl+↓/↑`）在 Web 上被官方标为保留组合 | 固定键照常收到这一按 | `bindingIssue` 对 `runtime === 'web'` 的方向键组合返回 `reserved`，因此用户**不能**把某个可配置命令分配到 `⌘↓/↑` / `Ctrl+↓/↑`（macOS 的 `⌘` 形态与 Windows/Linux 的 `control` 形态一样受这条保留约束；固定行不受限制——`registerFixed` 只做规范化，不查保留表）。代价是命中候选时这一按会从文本框手里拿走浏览器自己的默认光标移动：没有候选、或目标就是当前会话时桥不消费，光标照常移动。 |
+| 活跃池里唯一的活跃会话**正是**当前会话 | 不动作，但消费 | 池子里只剩当前会话，再按也没有可切的目标；**不**退回全部候选——常规导航是 `⌘↑/↓` / `Ctrl+↑/↓` 自己那一条，两条键各守各的池子。这一按仍被吞掉，不会漏给浏览器 / 终端。 |
+| `primary+↓/↑`（不带 `Alt`，即 macOS `⌘↓/↑` / Windows/Linux `Ctrl+↓/↑`）在 Web 上被官方标为保留组合 | 固定键照常收到这一按 | `bindingIssue` 对 `runtime === 'web'` 的方向键组合返回 `reserved`，因此用户**不能**把某个可配置命令分配到 `⌘↓/↑` / `Ctrl+↓/↑`（macOS 的 `⌘` 形态与 Windows/Linux 的 `control` 形态一样受这条保留约束；固定行不受限制——`registerFixed` 只做规范化，不查保留表）。代价是这一按归本行后，文本框里浏览器自己的默认光标移动被顶掉：两条会话键「归本行就消费」，没有候选、目标就是当前会话、长按重复与模态层打开时也照常吞掉。 |
 | 上游改了行标记 / 分组结构 / 归档标记 | 最坏情形是候选变空（不动作），不误动作 | 候选依赖三项文档事实：`[data-row-key]` 的 `workspace:` / `session:` 两种前缀（只有 Workspace browser 发布这个属性）、行的归属（HoverCard 包装下的「父节点的最近 `div` 祖先 = 分组容器；容器里第一个工作区行 = 它的分组行」）、归档行的 `aria-description` 标记。认不出归属的行直接丢掉，绝不猜它属于谁。 |
 | `uiWorkspace` 服务缺席（没有 Workspace browser 的客户端） | 两条会话固定行都不安装，不告警 | 会话导航面由 Workspace browser 所在的客户端包提供；没有它既没有侧栏行、也没有可切换的动作。该服务名与其余三项一样声明在 `ctx.inject` 的依赖列表里：`ctx.get` 默认只认**已激活**的服务，而 Workspace browser 的客户端包依赖一长串服务（`layout` / `remote.directoryPicker` 等），激活可能晚于本插件，采样一次会把「还没激活」错判成「缺席」。 |
 | `uiWorkspace` 在、但公开面形状不符（上游改了 `openSession` 的方法名） | 两条会话固定行都不安装，告警一次 | 本插件不把该包声明成类型依赖，只按结构读 `scope.get('uiWorkspace').openSession`（见下面第 21 条）；注入只保证服务来了，形状仍要运行时确认。 |
-| 终端内按 `⌘↓/↑` / `Ctrl+↓/↑` 或 `⌘⌥↓/↑` / `Ctrl+Alt+↓/↑` | 照常切换并消费 | 与页面循环同一条机制：`.xterm` 内的 keydown 到不了固定通道的 window 冒泡监听，所以桥在 window **捕获阶段**另挂一个 keydown 监听，只对会落进 `.xterm` 的按键拦下（判定与通道路径共用 `sessionCyclePlan`，它一次解析出命中的是哪一条行、走哪个池子），其余按键放行。 |
+| 终端内按 `⌘↓/↑` / `Ctrl+↓/↑` 或 `⌘⌥↓/↑` / `Ctrl+Alt+↓/↑` | 照常切换并消费；没有可切目标时只消费、不切换 | 与页面循环同一条机制：`.xterm` 内的 keydown 到不了固定通道的 window 冒泡监听，所以桥在 window **捕获阶段**另挂一个 keydown 监听，只对会落进 `.xterm` 的按键拦下（判定与通道路径共用 `sessionCycleDecision`，它一次解析出命中的是哪一条行、走哪个池子、要不要消费），其余按键放行。 |
 | 会话切换后键盘落在哪里 | 键盘留在原地，桥不搬焦点 | 与点击那一行同一效果：`uiWorkspace.openSession()` 只换主视图会话，不聚焦任何人；新会话的 composer 是否取键盘由应用自己决定（页面切换键的「补位聚焦新页面」是另一条规则，见第 6 节）。 |
+| 右栏全屏呈现、服务面却读到折叠（面板正在卸载） | 不动作、不消费 | 两侧读数不一致时不碰 `toggleExpanded()`：它在折叠态下的语义是**展开**，凭陈旧的 DOM 标记调用会把右栏展开。DOM 标记与服务面读数缺一不可（第 5.11 节 ⑦⑧）。 |
+| 上游改了 `data-sidebar-right-panel`、或把 `data-sidebar-right-open` 挪到别的元素上 | 全屏下按 `Esc` 不再关栏（不误动作），审批 / 提问的守卫一并失效 | 关栏桥读不到全屏标记 → 整条桥 no-op；审批桥 ⑤′ 与提问桥第 4 步同源，也读不到面板，`Esc` 回到各自原本的归属（有待答请求时答掉请求）—— **要跟着修**，不是无害退化。`css-contract.json` 的 `sidebar-right-panel` 一条在构建期就会显式失败。 |
+| 全屏右栏上的带修饰键 `Esc`（如 `⌘Esc` / `Ctrl+Esc`） | 不动作、不消费 | 准入要求无修饰键；带修饰键的这一按仍是系统或别的 owner 的，关栏桥不接。 |
+| 全屏右栏 + 待答交互，按第二次 `Esc` | 关栏之后这一按落到原来的 owner | 第一次 `Esc` 关栏并吞掉；面板不再是全屏后，第二次 `Esc` 回到审批桥 / 提问桥 / 停止序列的判定 —— 此时浮层已经不在，被盖住的卡片看得见。 |
 
 告警前缀统一为 `[dsh-focus-free-shortcuts]`，方便在控制台过滤。
 
@@ -176,7 +187,7 @@
 8. `conversation.input`（`SessionInputResolver.for(scope)`）与它返回的 `SessionInput.focus()` 语义——与应用在遮罩结束后把键盘还给 composer 用的是同一个操作，光标还原；若上游改了这个入口，聚焦键退化为 no-op 并告警；
 9. 固定键 id `dsh-focus-free-shortcuts.page-cycle` 与它声明的两个逻辑组合 `primary+alt+ArrowLeft` / `primary+alt+ArrowRight`（`registerFixed` 按平台落成 `meta+alt`（macOS `⌘⌥←/→`）或 `control+alt`（Windows/Linux `Ctrl+Alt+←/→`）；本插件自己在 `shortcuts.registerFixed` 处声明；同一行两个绑定 = 上一页 / 下一页两个方向，约定同第 7 条）；
 10. DOM 标记 `[data-sidebar-right-session]` / `[data-dockkit-pane]` / `[data-dockkit-float]`（含 `-active` 后缀与 `data-sidebar-right-open`）——自动聚焦步的 pane 选择与官方 `visibleSidebarPane` 同源；该函数不在包 `/client` 的公开导出里，所以按同一份标记重写"活动标记优先、否则第一块可见 pane"的三选逻辑。`[data-sidebar-right-session]` 同时出现在**会话包装 div 与内层面板 div** 上（同 id、嵌套）：会话根按"取带 `data-sidebar-right-open` 者、否则取最深者"复刻 `closest()` 的"最内层 owner"语义（内层面板才带 `data-sidebar-right-open` 并持有 panes）。若上游改了标记，聚焦退化为只切页不聚焦（no-op），不误动作。
-11. 终端的 `.xterm` 类——与官方键盘适配器判定 `terminal` 区域用的是同一个类（同为 `dsh-client-ui-sidebar-terminal` 的 xterm 根）。捕获阶段拦截**只**认 `closest('.xterm')` 命中的按键，其余按键一律放行给固定通道；每条桥的两路共用同一个判定（`pageCycleTarget` / `sessionCyclePlan` / `focusComposerTarget` / `sessionNewPress`），互斥不双触发。若上游改了终端根类名，终端内这些键会退化（该按到不了通道、捕获钩子也不再认它），但不会误动作。
+11. 终端的 `.xterm` 类——与官方键盘适配器判定 `terminal` 区域用的是同一个类（同为 `dsh-client-ui-sidebar-terminal` 的 xterm 根）。捕获阶段拦截**只**认 `closest('.xterm')` 命中的按键，其余按键一律放行给固定通道；每条桥的两路共用同一个判定（`pageCycleTarget` / `sessionCycleDecision` / `focusComposerTarget` / `sessionNewPress`），互斥不双触发。若上游改了终端根类名，终端内这些键会退化（该按到不了通道、捕获钩子也不再认它），但不会误动作。
 12. 模态选择器 `[role="dialog"][aria-modal="true"], [role="menu"]`——与 `@deepseek-ai/dsh-client-ui-primitives` 的 `modalSelector` 同源。捕获阶段跑在键盘适配器算出 `context.modal` **之前**，桥自行按这份选择器复推"当前是否有模态层"，再交给共享判定，使两路的模态否决一致。若上游改了选择器，最坏情形是捕获路径在模态层打开时仍切页（与通道路径的否决不一致），不误动作。
 13. `pendingInteraction` 槽位的**提问域运行时形状**：类型就是 `@deepseek-ai/dsh-client-ui-user-questions/client` 的 `PendingQuestion`，但该槽位是复用的，所以 `asDismissableQuestion` 仍在运行时确认 `kind` 为 `'question'` 或 `'plan-review'`、`key` 为字符串、`dismiss` 为函数之后才代关（第 6 条是审批侧的同一条约定；两侧共用同一个槽位、靠 `kind` 分工，谁都不越界）。
 14. DOM 标记 `[data-question-key]` / `[data-plan-review-key]`（提问卡片两处根节点携带请求 key 的属性名）：`questionCardOwnsTarget` 先用 `closest('[data-question-key], [data-plan-review-key]')` 找到卡片，再要求**该元素自身的属性值恰好等于本次待答提问的 `key`**——因此过期卡片、另一次调用的 review 卡片、以及没有 `getAttribute` 的裸节点都匹配不上。若上游改了标记名、或把 key 挪到子节点上，`editable` 区域内的 `Esc` 会退化成"不再取消"（不误动作），而卡片之外的文本控件本来就保留自己的 `Esc`。
@@ -194,3 +205,4 @@
 24. 命令 id `session.new`（与官方 `shortcuts.register` 处同源）、它 Web 上的默认绑定 `primary+alt+KeyN`（macOS `⌘⌥N`、Web/Windows `Ctrl+Alt+N`；桌面端是 `primary+KeyN`；上游没有声明 `web:linux` 的默认值，该平台上这一行未绑定，见第 7 节）与它的 `regions` 只有 `page` / `editable` 这一事实：`src/session-new.ts` 只在**捕获阶段**、且目标落在 `.xterm` 内时按**生效目录**里那一行当前的绑定出手（`enabledBinding` + `bindingMatches`，所以改绑 / 解绑 / 有 issue / 冲突都立刻跟随），其余位置一概让位。若上游改了这个命令 id，本桥读不到行、退化为 no-op（不误动作）；若上游把 `terminal` 加进 `regions` 并让适配器在终端里也能收到这一按，本桥会与内置命令同时动作 —— 那时应当整条删掉（它的存在理由只是补内置够不着的那一格）。
 25. `uiWorkspace.startSession(workspaceId?)` 的语义（上游 `UiWorkspace` 的公开面：走一次"新建会话"流程并导航到那个会话，不带参数 = 沿用当前 / 最近的工作区；就是内置 `session.new` 的 `run()` 调的那一个动词）。与第 21 条同一条纪律：把 `uiWorkspace` 写进注入依赖列表、等服务**激活**后再按结构读 `scope.get('uiWorkspace')` 的 `startSession`（`ctx.get` 默认只认已激活的服务，采样一次会把「还没激活」误判成「缺席」）。服务缺席时 Cordis 不跑桥的回调，整条桥不安装、也不告警；服务在而形状不符（上游改了这个方法名）时告警一次 `uiWorkspace service unavailable; session.new key not bridged into the terminal`、整条桥同样不安装。
 26. 固定键 id `dsh-focus-free-shortcuts.focus-page` 与它声明的逻辑组合 `primary+alt+KeyK`（`registerFixed` 按设备平台规范化成生效的物理绑定：macOS 落成 `meta+alt+KeyK`（`⌘⌥K`），Windows/Linux 落成 `control+alt+KeyK`（`Ctrl+Alt+K`）；本插件自己在 `shortcuts.registerFixed` 处声明，约定同第 7 / 9 / 22 条：存在即预约、跟随挂载行）。交棒本身**不引入新的 DOM 锚点**：它复用第 10 条（`[data-sidebar-right-session]` / `[data-dockkit-pane]`（含 `-active`）/ `data-sidebar-right-open`）、第 11 条（`.xterm`）与页面切换桥的 `.xterm-helper-textarea` 下探，判定函数就是 `page-cycle.ts` 导出的 `focusShownPage`（同一份实现，两条键共用）。另有一条**与上游命令目录相撞**的非正式事实：Web 上 `session.search` 的默认绑定是 `primary+alt+KeyK`，本固定行会让它变成冲突行（见第 6 / 7 节）。若上游把 `session.search` 挪到别的键位，冲突消失、本键不受影响；若上游改了 pane / 会话根 / 终端标记，交棒退化为 no-op（最坏是只消费、不动键盘），不误动作。
+27. DOM 标记 `[data-sidebar-right-panel]`（右栏面板的呈现方式，取值 `fullscreen` / `push`）与它和第 10 条那个 `data-sidebar-right-open` 的**组合**：`src/fullscreen-dismiss.ts` 把"两个标记同时落在同一个元素上"读成"有一个全屏呈现且已展开的右栏面板"（手动全屏与窄窗口自动全屏都带它），另加 `sidebarRight.isExpanded()` 作为防陈旧标记的第二读数。关栏动词 `sidebarRight.toggleExpanded()` 是 `ISidebarRight` 的公开成员、不是非正式契约。审批桥（第 5 册 5.9.2 ⑤′）与提问桥（同册 5.10.1 第 4 步）引用同一个 `fullscreenSidebarShown()`，在面板全屏时让出 `Esc`；两处与本条同源，改名时一起失效。若上游改了呈现标记、或把开合标记挪到别的元素上，关栏桥退化成 no-op（全屏下按 `Esc` 不再关栏，不误动作），两条守卫也一并失效 —— 那时 `Esc` 回到各自原本的归属，见第 7 节的失败模式一行。

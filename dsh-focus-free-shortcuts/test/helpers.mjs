@@ -521,6 +521,10 @@ export function fakeSidebar() {
     // 到活动 pane;其余情形回退到活动 dock pane。
     commandTarget: (element) => (sidebar.focused !== undefined || element?.closest?.('[data-sidebar-right-session]') ? sidebar.focused : sidebar.command),
     isExpanded: () => sidebar.expanded,
+    // 全屏关栏桥用的折叠动作:记录每一次调用(与面板自带的折叠按钮同一条服务动词)。
+    toggleExpanded: () => {
+      sidebar.calls.push(['toggleExpanded'])
+    },
     isTargetCurrent: () => sidebar.current,
     toggleFullscreen: (target) => sidebar.calls.push(['fullscreen', target]),
     split: (paneId) => {

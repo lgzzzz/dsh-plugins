@@ -13,6 +13,7 @@
     {"id":"xterm-helper-textarea","plugin":"dsh-focus-free-shortcuts","token":"xterm-helper-textarea","paths":["dsh-client-ui-sidebar-terminal/lib"],"hint":"终端输入面改名：切页 / 展开后的键盘交接下探不到终端输入框，只聚焦 pane 容器（要再点一下才能打字）"},
     {"id":"sidebar-right-session","plugin":"dsh-focus-free-shortcuts","token":"data-sidebar-right-session","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏会话根标记消失：自动聚焦与页签行窗口保持都找不到会话根，切页后只切页、不交还键盘"},
     {"id":"sidebar-right-open","plugin":"dsh-focus-free-shortcuts","token":"data-sidebar-right-open","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏『已展开』标记消失：取不到内层会话根、dock pane 查找落空，自动聚焦退化成 no-op"},
+    {"id":"sidebar-right-panel","plugin":"dsh-focus-free-shortcuts","token":"data-sidebar-right-panel","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏呈现方式标记消失：Esc 认不出『全屏呈现』的右栏，全屏下按 Esc 不再关栏（不误动作）"},
     {"id":"dockkit-pane","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-pane","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit pane 标记消失：自动聚焦的 pane 选择与面板归属判定一并落空"},
     {"id":"dockkit-pane-active","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-pane-active","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 活动 pane 标记消失：自动聚焦退化为『第一个可见 pane』，分屏时可能交还键盘给另一块面板"},
     {"id":"dockkit-float","plugin":"dsh-focus-free-shortcuts","token":"data-dockkit-float","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 浮动 pane 标记消失：浮动面板的自动聚焦落空"},

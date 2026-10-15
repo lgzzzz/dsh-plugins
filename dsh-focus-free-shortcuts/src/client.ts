@@ -13,6 +13,8 @@
  *   - stop（`Esc` `Esc`）→ `stop-sequence.ts`；
  *   - approval（`Enter` / `Esc`）→ `approval-keys.ts`；
  *   - question 取消（`Esc`）→ `question-keys.ts`；
+ *   - 全屏右栏关栏（`Esc`）→ `fullscreen-dismiss.ts`：右栏全屏呈现时这一按先归它，因此
+ *     全屏期间两条停止序列都收不到 `Esc`（见该文件头）；
  *   - focus composer（`⌘⌥J`，Windows/Linux 为 `Ctrl+Alt+J`）→ `focus-composer.ts`；
  *   - focus page（`⌘⌥K`，Windows/Linux 为 `Ctrl+Alt+K`）→ `focus-page.ts`：在 Web 上与内置
  *     `session.search` 的默认键位相撞，本桥有意保留该冲突；
@@ -37,6 +39,7 @@
 import { installApprovalBridge } from './approval-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
 import { installFocusPageBridge } from './focus-page.ts'
+import { installFullscreenDismissBridge } from './fullscreen-dismiss.ts'
 import { installPageCloseBridge } from './page-close.ts'
 import { installPageCycleBridge } from './page-cycle.ts'
 import { installPaneBridge } from './pane-keys.ts'
@@ -59,6 +62,7 @@ export function apply(ctx: Context): void {
   installStopBridge(ctx)
   installApprovalBridge(ctx)
   installQuestionBridge(ctx)
+  installFullscreenDismissBridge(ctx)
   installFocusComposerBridge(ctx)
   installFocusPageBridge(ctx)
   installPageCycleBridge(ctx)

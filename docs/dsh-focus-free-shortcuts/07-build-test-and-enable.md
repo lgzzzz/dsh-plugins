@@ -31,15 +31,16 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | `src/question-keys.ts` | 第 6 组：提问卡片 `Esc` 取消 / 关闭（同一个 `pendingInteraction` 槽位的提问域，调面板自己的 `dismiss()`） |
 | `src/session-cycle.ts` | 第 7 组：会话导航 `primary+↑` / `primary+↓`（macOS `⌘↑` / `⌘↓` / Windows/Linux `Ctrl+↑` / `Ctrl+↓`，全部候选）与 `primary+alt+↑` / `primary+alt+↓`（macOS `⌘⌥↑` / `⌘⌥↓` / Windows/Linux `Ctrl+Alt+↑` / `Ctrl+Alt+↓`，只走活跃会话）（官方没有的键对，插件自己挂两条固定键；候选只取左侧栏前三个工作区当前渲染出来的会话行，活跃 = 行上有状态点者，终端内另走捕获拦截） |
 | `src/session-new.ts` | 第 8 组：内置「新建会话」`session.new`（Web/macOS `⌘⌥N` / Web/Windows `Ctrl+Alt+N`；上游没有声明 `web:linux` 的默认值，见第 6 册第 7 节）的终端那一格 —— 不注册固定键、不开观察者，只跟随**生效目录**里那一行当前的绑定，在捕获阶段拦下 `.xterm` 内的这一按并调用同一个 `uiWorkspace.startSession()`；页面 / 文本控件里仍归内置命令 |
+| `src/fullscreen-dismiss.ts` | 第 9 组：全屏呈现的右栏上按 `Esc` 关栏 —— 只挂 window 捕获阶段的一条 `keydown`（其余捕获钩子都挑落点，这条不挑），命中即吞掉这一按再调与折叠按钮同一个 `toggleExpanded()`；不注册固定行、也不看快捷键目录。它同时给审批桥与提问桥判"让位"（`fullscreenSidebarShown()`），详见第 5 册 5.11 |
 | `src/binding.ts` | 多数桥共用：上游手势 / 绑定 / 两类快捷键目录行的匹配（纯函数，无 DOM、无 Cordis）；停止桥与提问桥各有自己的判定，不读目录行 |
-| `src/capture.ts` | 捕获阶段共用：按键落点（`composedElement` / `pressElement`）、原始手势（`captureGesture`）、归属上下文（`captureContext`：区域 + 模态）与终端落点判定（`terminalTarget`），由页面循环桥、会话导航桥、聚焦输入框桥、聚焦右栏页面桥与新建会话桥（终端）以及审批桥（过程卡片）的捕获钩子共用 |
+| `src/capture.ts` | 捕获阶段共用：按键落点（`composedElement` / `pressElement`）、原始手势（`captureGesture`）、归属上下文（`captureContext`：区域 + 模态）与终端落点判定（`terminalTarget`），由页面循环桥、会话导航桥、聚焦输入框桥、聚焦右栏页面桥与新建会话桥（终端）以及审批桥（过程卡片）、全屏关栏桥的捕获钩子共用 |
 | `src/focus-ring.ts` | 审批桥用：拿走某个控件的按键之后，给它打上官方的"无环聚焦"标记（`data-dsh-automatic-focus`）——焦点不动，那圈 `:focus-visible` 边框不显形；标记在 blur 或 Tab / 方向键导航时按官方同一套规则摘除 |
-| `src/runtime.ts` | 十组共用：插件名与诊断、固定输入 keydown 窄化、主视图会话判定 |
-| `src/client.ts` | 入口：把十组桥各装一次（`apply`），`name` / `inject` 也在这里导出 |
+| `src/runtime.ts` | 十一组共用：插件名与诊断、固定输入 keydown 窄化、主视图会话判定 |
+| `src/client.ts` | 入口：把十一组桥各装一次（`apply`），`name` / `inject` 也在这里导出 |
 
 > 这些文件不自行重述上游类型：所有手势 / 绑定 / 目录行 / 待答审批 / 待答提问 / 会话与服务面都是 `import type` 自上游声明（清单见第 6 册第 8 节），打包时被擦除，客户端纯度门看不到它们。
 
-`test/` 下按主题分散（A–Q 十七组，外加「平台键端到端」R、「页签行瞬时滚动」S、「页面关闭桥」T、「新建会话终端桥判定」U、「新建会话终端桥」V、「聚焦右栏页面判定」W 与「聚焦右栏页面桥」X 七组，共二十四组；共享装置在 `test/helpers.mjs`，runner 是 `test/run-all.mjs`）：
+`test/` 下按主题分散（A–Q 十七组，外加「平台键端到端」R、「页签行瞬时滚动」S、「页面关闭桥」T、「新建会话终端桥判定」U、「新建会话终端桥」V、「聚焦右栏页面判定」W、「聚焦右栏页面桥」X、「全屏关栏判定」Y 与「全屏关栏桥」Z 九组，共二十六组；共享装置在 `test/helpers.mjs`，runner 是 `test/run-all.mjs`）：
 
 - **A 绑定判定**（`test/decide-binding.test.mjs`）：`bindingMatches`（修饰键顺序无关、双键和弦拒绝）、`enabledBinding`（解绑 / 保留 / 冲突 / 缺席）
 - **B Escape 准入**（`test/decide-escape.test.mjs`）：`escapeEligible` 逐项否决
@@ -50,7 +51,7 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 - **J 聚焦判定**（`test/decide-focus-composer.test.mjs`）：固定行预约的物理组合（macOS `⌘⌥J` / Windows/Linux `Ctrl+Alt+J` 各自命中，另一平台的组合不命中）、`focusComposerEligible` 逐项否决（page 与文本控件都准入，模态 / 终端 / repeat / 组字 / 已消费否决）
 - **W 聚焦右栏页面判定**（`test/decide-focus-page.test.mjs`，文件内分组标号 W①–W⑤）：固定行预约的物理组合（macOS `⌘⌥K` / Windows/Linux `Ctrl+Alt+K` 各自命中，另一平台的组合不命中）、`focusPageEligible` 逐项否决（页面 / 文本控件 / 终端 / 已被消费都准入，模态 / repeat / 组字否决）、`focusPageTarget`（行在 + 右栏展开 + 有会话才给出目标；折叠 / 没有会话 / 行未挂载 / 别的键 / 模态 / repeat 一律 `undefined`）
 - **L 页面循环判定**（`test/decide-page-cycle.test.mjs`）：固定行一行预约两个方向（macOS `⌘⌥←` / `⌘⌥→` 与 Windows/Linux `Ctrl+Alt+←` / `Ctrl+Alt+→`）、`pageCycleEligible` 逐项否决（页面 / 文本控件 / 终端 / 已被消费都准入，模态 / repeat / 组字否决）、`steppedPageId` 环状步进（回头绕到末尾、到头绕回开头、单页 / 空列表 / 当前页不在列表不切）
-- **P 会话导航判定**（`test/decide-session-cycle.test.mjs`）：两条固定行各自预约一对方向键（macOS `⌘↑` / `⌘↓` 与 `⌘⌥↑` / `⌘⌥↓`，Windows/Linux `Ctrl+↑` / `Ctrl+↓` 与 `Ctrl+Alt+↑` / `Ctrl+Alt+↓`；各平台只认自己那一组，左右方向键不与任何一条命中）、`sessionStepFor` 归属（行只认自己那对键）、`sessionCycleRequest` 按命中的行定池子（不带 `Alt` → `all`，带 `Alt` → `active`）、`sessionCycleEligible` 逐项否决（页面 / 文本控件 / 终端 / 已被消费都准入，模态 / repeat / 组字否决）、候选口径 `displayedSidebar` / `displayedSessionIds`（假侧栏 DOM：前三个工作区、显示顺序、折叠分组不贡献会话行但仍占名额、「未分组」桶不占名额也不贡献、归档行被标出且不进候选、第四个工作区不进候选、工作区树模式下父分组自己的会话行仍归父分组、单列表模式没有工作区行、搜索 / 窄侧栏没有行标记、没有 document）、活跃判定 `sessionActive` / `activeAmong`（待答即活跃、`completionUnread` 即活跃、状态表的 `running` 优先、目录缺读数不算活跃、三项取并集）、池子 `sessionPool`（`all` 就是候选、`active` 就是活跃候选、没有活跃候选时是空池）、`steppedSessionId` 环状步进、`sessionCycleTarget`（目标等于当前会话 / 候选为空 / 活跃池为空 / 活跃池里只剩当前会话时都不动）
+- **P 会话导航判定**（`test/decide-session-cycle.test.mjs`）：两条固定行各自预约一对方向键（macOS `⌘↑` / `⌘↓` 与 `⌘⌥↑` / `⌘⌥↓`，Windows/Linux `Ctrl+↑` / `Ctrl+↓` 与 `Ctrl+Alt+↑` / `Ctrl+Alt+↓`；各平台只认自己那一组，左右方向键不与任何一条命中）、`sessionStepFor` 归属（行只认自己那对键）、`sessionCycleRequest` 按命中的行定池子（不带 `Alt` → `all`，带 `Alt` → `active`）、`sessionCycleEligible` 逐项否决（页面 / 文本控件 / 终端 / 已被消费都准入，模态 / repeat / 组字否决动作）、`sessionCycleDecision` 的消费口径（归本行就消费：有目标时切换并消费，没有候选 / 唯一候选就是当前 / 活跃池为空 / 活跃池只剩当前 / 长按重复 / 模态层之上都只消费不动作，组字中与不归本行的键既不消费也不动作，平台各认各的物理键）、候选口径 `displayedSidebar` / `displayedSessionIds`（假侧栏 DOM：前三个工作区、显示顺序、折叠分组不贡献会话行但仍占名额、「未分组」桶不占名额也不贡献、归档行被标出且不进候选、第四个工作区不进候选、工作区树模式下父分组自己的会话行仍归父分组、单列表模式没有工作区行、搜索 / 窄侧栏没有行标记、没有 document）、活跃判定 `sessionActive` / `activeAmong`（待答即活跃、`completionUnread` 即活跃、状态表的 `running` 优先、目录缺读数不算活跃、三项取并集）、池子 `sessionPool`（`all` 就是候选、`active` 就是活跃候选、没有活跃候选时是空池）、`steppedSessionId` 环状步进、`sessionCycleTarget`（目标等于当前会话 / 候选为空 / 活跃池为空 / 活跃池里只剩当前会话时都不动）
 - **E 面板键桥接**（`test/bridge-pane-keys.test.mjs`）：聚焦让位、回退全屏/分屏、折叠/模态/repeat/过期目标、改绑/解绑/冲突、desktop 让位、服务缺席
 - **T 页面关闭桥**（`test/bridge-page-close.test.mjs`）：焦点不在右侧栏时回退到活动 dock pane 关掉当前页并消费、已聚焦让位、折叠 / 无活动 pane / 陈旧侧栏标记 / 模态 / repeat / 组字 / 已被消费 / 不可关的页面一律不动作（只有 repeat 仍消费）、改绑 / 解绑 / 冲突 / 命令缺席、macOS 与 Windows 两种物理形态各认自己那一组、别的键不误关页面、desktop 让位、服务缺席即 no-op、缺 `observeFixedInput` 告警、卸载后不再关页
 - **F 停止桥接**（`test/bridge-stop-sequence.test.mjs`）：主视图会话歧义、停止成功与全部否决路径、卸载复位
@@ -59,14 +60,16 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 - **K 聚焦桥接**（`test/bridge-focus-composer.test.mjs`）：无焦点聚焦、从文本控件抢回键盘、固定行挂载与卸载、准入否决、主视图歧义、`conversation.input` 缺失 / `for()` 抛错、服务缺席即不装；终端内的**捕获阶段拦截**（K⑦–K⑩）：`.xterm` 内的这一按在冒泡到固定通道之前就被终端停掉，所以桥在 window 捕获阶段先于 xterm 拦下并聚焦输入框（吞掉事件），各平台只认自己那一组、非 `.xterm` 目标 / 模态 / 长按 / 组字 / 别的键 / 主视图歧义 / 输入面不可达一律放行不吞，卸载时捕获监听一并释放
 - **X 聚焦右栏页面桥**（`test/bridge-focus-page.test.mjs`，文件内分组标号 X①–X⑩）：从别处（composer）按 `Ctrl+Alt+K` / `⌘⌥K` 时先聚焦活动 pane、再落到终端的 `.xterm-helper-textarea` 并消费；页面已自持键盘（终端里）时不抢但仍消费；非终端页只聚焦 pane；面板展开但没有可见 pane 时只消费、不动作；折叠 / 没有会话 / 别的键 / 模态 / repeat / 组字一律不动作、不消费；缺 `sidebarRight` 不挂固定行、缺 `observeFixedInput` 告警且不装；终端内的**捕获阶段拦截**（吞掉事件、不让这一按落进 shell）、捕获路径让位（折叠 / 没有会话 / 模态 / repeat / 非 `.xterm` 目标都不吞）、卸载时固定行 / 观察者 / 捕获监听一起释放
 - **M 页面循环桥接**（`test/bridge-page-cycle.test.mjs`）：切页并自动聚焦（commit 之后才聚焦）、页面自聚焦时不抢、从文本控件 / 终端 / 已被消费里仍切页、折叠 / 单页 / 无活动页 / 无会话让位、缺服务即不装、卸载复位；终端内的**捕获阶段拦截**（M⑦–M⑩）：`.xterm` 内的事件在冒泡到固定通道之前就被终端停掉，所以桥在 window 捕获阶段先于 xterm 拦下（吞掉事件、不让终端的转义序列进 shell），判定与通道路径共用同一函数，非 `.xterm` 目标一律放行、模态 / 单页 / repeat 时不吞事件，卸载时捕获监听一并释放
-- **Q 会话导航桥接**（`test/bridge-session-cycle.test.mjs`）：`⌘↓` / `Ctrl+↓` 与 `⌘↑` / `Ctrl+↑` 无焦点时在全部候选里环状走并消费按键（本组跑的是 Windows/Linux 那组物理键，macOS 的 `⌘` 系组合端到端见下面「平台键端到端」一条；当前会话由 `retainedBy.mainView` 给出，切换后跟随新的主视图会话继续走）、当前会话不在候选里时 ↓ 落候选首 / ↑ 落候选尾；`⌘⌥↓` / `Ctrl+Alt+↓` 与 `⌘⌥↑` / `Ctrl+Alt+↑` 只在活跃会话之间走（两个活跃只在它们之间走、跳过非活跃行、唯一活跃一键抵达、待答交互也算活跃、已完成未读也算活跃）、活跃池空或只剩当前会话时不动作、不消费（同一时刻 `⌘↓` / `Ctrl+↓` 照常在全部候选里往下走）；让位（侧栏没有任何行 / 只有一行且已是当前会话 / 没有 document / 别的键 / 右栏页面循环的键只切页不动会话）、文本框内与已被消费照常切换、模态层之上让位、终端内**捕获阶段拦截**（两对键都吞事件并切换、只切一次，活跃池只剩当前会话时同样放行不吞）、捕获路径让位（非终端目标 / 长按 / 模态 / 没有候选都不吞）、失败模式（缺 `uiWorkspace` 时停在注入等待里、不装也不告警，服务晚到后补装两条固定行并照常切换，`uiWorkspace` 形状不符时告警且不挂固定行，缺 `observeFixedInput` 告警）、卸载（两条固定行与捕获监听一起释放）
+- **Q 会话导航桥接**（`test/bridge-session-cycle.test.mjs`）：`⌘↓` / `Ctrl+↓` 与 `⌘↑` / `Ctrl+↑` 无焦点时在全部候选里环状走并消费按键（本组跑的是 Windows/Linux 那组物理键，macOS 的 `⌘` 系组合端到端见下面「平台键端到端」一条；当前会话由 `retainedBy.mainView` 给出，切换后跟随新的主视图会话继续走）、当前会话不在候选里时 ↓ 落候选首 / ↑ 落候选尾；`⌘⌥↓` / `Ctrl+Alt+↓` 与 `⌘⌥↑` / `Ctrl+Alt+↑` 只在活跃会话之间走（两个活跃只在它们之间走、跳过非活跃行、唯一活跃一键抵达、待答交互也算活跃、已完成未读也算活跃）、活跃池空或只剩当前会话时不动作、但仍消费（同一时刻 `⌘↓` / `Ctrl+↓` 照常在全部候选里往下走）；没有可切目标时同样消费（侧栏没有任何行 / 只有一行且已是当前会话 / 没有 document / 别的键放行 / 右栏页面循环的键只切页不动会话）、文本框内与已被消费照常切换、模态层之上与长按重复消费但不切换（组字中既不消费也不动作）、终端内**捕获阶段拦截**（两对键都吞事件并切换、只切一次，活跃池只剩当前会话或没有候选时只吞不切）、捕获路径只放行非终端目标（长按 / 模态 / 没有候选都吞掉事件）、失败模式（缺 `uiWorkspace` 时停在注入等待里、不装也不告警，服务晚到后补装两条固定行并照常切换，`uiWorkspace` 形状不符时告警且不挂固定行，缺 `observeFixedInput` 告警）、卸载（两条固定行与捕获监听一起释放）
 - **U 新建会话终端桥判定**（`test/decide-session-new.test.mjs`，文件内分组标号 U①–U③）：`sessionNewPress` 命中**生效目录**里 `session.new` 当前那一行（macOS `⌘⌥N` / Windows/Linux `Ctrl+Alt+N` 各认自己那一组、裸 N / 少一个修饰键 / 多按 Shift / 别的键 / 行缺席都不命中）、解绑（`binding` 为 `null`）/ 有 issue / 存在冲突都不命中、改绑后新键命中而旧键不命中、只有别的命令占着这个键也不命中；`sessionNewEligible` 的准入（终端 / 页面 / 文本控件都准入，模态 / 长按 / 组字否决）
+- **Y 全屏关栏判定**（`test/decide-fullscreen-dismiss.test.mjs`，文件内分组标号 Y①–Y④）：`fullscreenDismissEligible` 逐项否决（裸 `Esc` 通过；带修饰键 / 长按 / 组字 / 已被消费 / 模态 / 终端 / 别的键否决）、归属只对 `editable` 收口（右栏自己的文本控件保留 `Esc`，右栏外的输入框与右栏内的页面区域都放行）、`fullscreenSidebarShown` 的面板标记读数（「全屏 + 展开」才算，停靠呈现 / 折叠态 / 没有面板 / 没有 document 都不算）、`fullscreenDismissOwned` 要准入、服务面展开态与面板标记三者同时成立
 - **V 新建会话终端桥**（`test/bridge-session-new.test.mjs`，文件内分组标号 V①–V⑨）：终端内捕获阶段拦下并调用同一个 `uiWorkspace.startSession()`（不带参数）、只调一次、不注册固定行；其余键位一律放行不吞（少修饰键 / 多 Shift / 长按 / 组字 / 别的键）；捕获路径只认 `.xterm`（文本控件里让位）、模态层之上让位；键位跟随生效目录（改绑跟随、没有这一行就不出手）；macOS 与 Windows 各认自己那一组；`uiWorkspace` 缺席时停在注入等待里（不告警），到位后补装并照常动作，形状不符时告警一次且不安装；没有 `window` 时静默不装；固定通道不替内置命令出手；卸载后捕获监听释放
-- **G 产物**（`test/artifact-client.test.mjs`）：`lib/client.js` 的模块 id / 插件名 / `inject` 声明与端到端装配（产物零 `require`，不依赖任何 external）；G③ 另在产物上验证终端捕获（`.xterm` 内 `Ctrl+Alt+J` 聚焦输入框、`Ctrl+Alt+N` 新建会话，两次都吞掉事件）
+- **Z 全屏关栏桥**（`test/bridge-fullscreen-dismiss.test.mjs`，文件内分组标号 Z①–Z⑦）：页面焦点上吞掉这一按并关栏（`toggleExpanded()`，与折叠按钮同一个服务动词）、焦点还停在被盖住的输入框里照样关栏；让位（服务面已折叠 / DOM 停靠呈现 / DOM 已折叠 / 带修饰键 / 长按 / 组字 / 别的键 / 终端内 / 右栏自己的文本控件内 / 模态之上）都不吞、都不关栏；缺 `sidebarRight` 即不装、没有 `window` 时静默不装也不告警、卸载后监听释放；**与待答交互的交叠**（Z⑦）：全屏浮层盖着待答审批 / 提问时这一按只关栏，两条桥都不作答、不消费
+- **G 产物**（`test/artifact-client.test.mjs`）：`lib/client.js` 的模块 id / 插件名 / `inject` 声明与端到端装配（产物零 `require`，不依赖任何 external）；G③ 另在产物上验证终端捕获（`.xterm` 内 `Ctrl+Alt+J` 聚焦输入框、`Ctrl+Alt+N` 新建会话，两次都吞掉事件），G④ 验证全屏关栏（全屏右栏上的裸 `Esc` 被吞掉并关栏）
 - **R 平台键端到端**（`test/bridge-platform-keys.test.mjs`，文件内分组标号 R①–R④）：经假注册表实装四条自挂固定行，验证 `primary` 按设备平台规范化成生效的物理绑定与键帽标签 —— macOS 上是 `meta` 系（`⌘⌥J` / `⌘⌥←` / `⌘⌥→` / `⌘↑` / `⌘↓` / `⌘⌥↑` / `⌘⌥↓`），Windows 上是 `control` 系（`Ctrl+Alt+J` / `Ctrl+Alt+←` / `Ctrl+Alt+→` / `Ctrl+↑` / `Ctrl+↓` / `Ctrl+Alt+↑` / `Ctrl+Alt+↓`），且各平台只认自己那一组物理组合（另一平台的组合不动作、不消费）
 - **S 页签行滚动**（`test/strip-scroll.test.mjs`，文件内分组标号 S①–S⑫）：规则文本与作用面（锚在 `[data-sidebar-right-session] [data-dockkit-strip-tabs]`、`scroll-behavior: auto`、不用 `!important`、不按哈希类名定位）、注入一个带认领标记的标签、多个持有者共用一个标签且最后一个卸载时才摘除、同一文档已有同一份规则时复用且不由本实例摘除、没有 `document` / document 承载不了标签时退化为 no-op，经插件装配时装上与释放全部 effect 后摘掉；**观察窗口保持**：采集（所属条带 + `scrollLeft`，页签未渲染 / 没有活动页 / 别的会话的同名芯片 / 浮动 pane / 没有 document 都不记）、还原 + 最小推移（以旧窗口为起点：原来那颗、左邻、窗口最左都是零位移；左外侧 / 右外侧的最小推移含 24px 边缘余量）、让位（跨 pane / 目标未渲染 / 没有窗口 / 浮动 pane / 没有 document 都不动作不抛），以及经页面循环桥的接线（切页前记窗口 → `focus` 重建 chip box → 下一帧还回去；折叠时不采也不还）
 
-> `test/run-all.mjs` 的 `ORDER`：A、B、C、D、H、N、J、W、L、P、U、E、T、F、I、O、K、X、M、Q、V、S、G；不在 `ORDER` 里的文件（如平台键端到端）按文件名补在最后跑。
+> `test/run-all.mjs` 的 `ORDER`：A、B、C、D、H、N、J、W、L、P、U、Y、E、T、F、I、O、K、X、M、Q、V、Z、S、G；不在 `ORDER` 里的文件（如平台键端到端）按文件名补在最后跑。
 
 ### 9.1 上游 DOM 锚点契约校验（`check-css.mjs` + `css-contract.json`）
 
@@ -80,7 +83,7 @@ node check-css.mjs --manifest <清单>      # 换一份清单（默认同目录�
 
 - DSH 根目录解析顺序：`--dsh-root` > `$DSH_ROOT` > `npm root -g` > 常见全局安装路径（纯路径回退，不依赖 spawn 成功）。
 - 每条 check 是 `{ id, plugin, token | pattern, paths, hint }`：`token` 按子串、`pattern` 按正则（带 `s` 标志）匹配；`paths` 是从 `<DSH>/node_modules/@deepseek-ai/` 起算的搜索目录（省略即全量扫，很慢）；任一文件命中即通过。
-- 覆盖 23 条锚点：审批面板根、会话根 / 输入区、提问卡片与 plan-review 根、模态选择器、`data-dsh-automatic-focus` 标记与主题那条 `outline:none` 规则、终端根类与 `xterm-helper-textarea`、右栏会话根与 `data-sidebar-right-open`、dockkit 的 pane / 浮动 pane / 活动标记 / chip box / 页面芯片、页签行的 `scroll-behavior:smooth`，以及左侧栏 `data-row-key` 的两个前缀与归档行标记。
+- 覆盖 24 条锚点：审批面板根、会话根 / 输入区、提问卡片与 plan-review 根、模态选择器、`data-dsh-automatic-focus` 标记与主题那条 `outline:none` 规则、终端根类与 `xterm-helper-textarea`、右栏会话根、`data-sidebar-right-open` 与呈现方式 `data-sidebar-right-panel`、dockkit 的 pane / 浮动 pane / 活动标记 / chip box / 页面芯片、页签行的 `scroll-behavior:smooth`，以及左侧栏 `data-row-key` 的两个前缀与归档行标记。
 - 退出码：`0` 全部通过（定位不到 DSH 根目录时只告警也算通过 —— 在别的机器上不会误报）；`1` 有锚点缺失（**升级 DSH 之后先看这里**）；`2` 清单路径或 JSON 有问题。
 - 它只证明"**有东西可选**"：不解析选择器、不跑 CSS 引擎，所以证明不了"后代组合子真的命中""特异性真的赢过 dockkit 的类规则"。那两件事只能看运行时，见第 10 节的手测项。
 
@@ -106,6 +109,9 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 - 让 agent 提一个问题（`ask_user_question`，或 plan 模式下的 plan-review 卡片），**不要点卡片**：直接按 `Esc` → 卡片应被取消 / 关闭（阻塞式提问 → 整组等待以 `ASK_CANCELLED` 结束，agent 收到"用户取消了提问"；带工具调用线索的提问 → 只收起面板，问题仍可从它的工具调用行重新打开）；焦点落在卡片自己的答案输入框里按 `Esc` → 同样关闭（自由文本问题会自动聚焦那个输入框）；
 - 有待答提问时，把焦点点进侧栏搜索框或终端再按 `Esc` → **不**关卡片：那一按归控件自己（终端 / 别的文本控件保持自己的键）；
 - 有待答提问时按 `Esc` 与连按两下 `Esc` 都不停止当前轮次（待答交互存在时停止侧拒绝）；
+- 展开右侧栏后按 `⌘⌥Enter`（macOS）/ `Ctrl+Alt+Enter` 把它切到全屏，或把窗口拖窄到 768px 以下让它自动全屏 → 任意焦点位置（面板内、消息区，甚至焦点还停在被盖住的输入框里）按 `Esc` → 右栏应直接收起；焦点在终端 `.xterm` 内、或停在右栏自己的文本控件（例如双击终端页签标题出现的重命名输入框）里按 `Esc` → **不**关栏，那一按归控件自己（重命名照常取消）；模态弹窗打开时按 `Esc` → 关弹窗、右栏不动；右栏是停靠呈现（`push`）或已折叠时按 `Esc` → 无动作；
+- 右栏全屏 + 正有回合在跑时按 `Esc` → 先关栏、**不**停止回合（全屏期间那两下凑不成停止）；关栏之后再连按两下 `Esc` → 停止；
+- 右栏全屏 + 有待答审批 / 提问时按 `Esc` → 只关栏、**不**作答（卡片被浮层盖住，看不见）；关栏之后卡片重新可见，再按 `Esc` → 才拒绝审批 / 取消卡片；
 - 焦点放哪儿都行（消息区、侧栏、甚至别的文本控件里），按 `⌘⌥J`（macOS）/ `Ctrl+Alt+J`（Windows/Linux） → 应直接聚焦底部输入框，光标回到上次位置，可以立刻开始输入；
 - 把焦点点进右侧栏的终端（`.xterm`）里再按 `⌘⌥J` / `Ctrl+Alt+J` → 依然聚焦回底部输入框，而且这一按不会被当成终端输入送进 shell（终端内的那一按由 window 捕获阶段先拦下）；
 - 在终端里按 `⌘⌥N`（macOS）/ `Ctrl+Alt+N`（Web/Windows；Web/Linux 上 `session.new` 未绑定）—— 内置「新建会话」`session.new` 在 Web 上的默认键位 → 应直接新建会话并切过去，同样不会把这一按送进 shell；焦点在输入框 / 消息区时按同一键 → 由内置命令处理（插件让位），效果相同；
@@ -116,10 +122,10 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 - 页签行放不下所有页面（出现横向溢出）时来回切页 → 页签行**不应**"先回到最左、再滑到新的活动页签"：新活动页签直接出现在它该在的位置；连续往一个方向走、又切回相邻的那一颗时，**页签行完全不动**（来源页签仍在视野里，一眼能看出从哪儿切过来），只有目标页签不在当前窗口里时才最小幅度滚动（插件把 kit 那次"从 0 出发"的修正换成"以旧窗口为起点"，见第 3 册第 5.4 节；注入的 `scroll-behavior: auto` 规则与按键无关，鼠标点页签同样瞬时到位，只是那一路没有"旧窗口"可记、仍走 kit 原规则）。升级 DSH 之后想确认这层覆盖仍生效，可在 DevTools 里看 `getComputedStyle(document.querySelector('[data-sidebar-right-session] [data-dockkit-strip-tabs]')).scrollBehavior` 是否为 `auto`。
 - 先在左侧栏展开若干工作区（默认只有当前会话所在的那一组会展开，且每组默认最多列出 5 行，多出来的藏在「展开更多」之后），然后任意焦点位置按 `⌘↓` / `⌘↑`（macOS）/ `Ctrl+↓` / `Ctrl+↑`（Windows/Linux） → 应在**前三个工作区当前显示出来**的会话行之间环状切换，顺序与侧栏一致，当前会话随之高亮；走一趟的顺序与眼睛看到的顺序相同；
 - 另一条键对 `⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` **只走活跃会话**：有会话正在运行、停在审批 / 提问卡片上等人回答、或刚跑完还没被看（行上那颗绿点）时，按这对键只在这些会话之间环状走，中间的普通会话会被跳过；
-- 这时按 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑` 仍走全部候选 —— 两条键各守各的池子；如果没有任何活跃会话（所有行都是空闲点），或活跃池里只剩当前这一个会话，`⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` 不动作、也不消费（想继续往下走就用 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑`）；
+- 这时按 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑` 仍走全部候选 —— 两条键各守各的池子；如果没有任何活跃会话（所有行都是空闲点），或活跃池里只剩当前这一个会话，`⌘⌥↓` / `⌘⌥↑` / `Ctrl+Alt+↓` / `Ctrl+Alt+↑` 不动作，但这一按仍被吞掉（不会漏给浏览器 / 终端；想继续往下走就用 `⌘↓` / `⌘↑` / `Ctrl+↓` / `Ctrl+↑`）；
 - 折叠掉某个工作区、或把某些会话留在「展开更多」之后，再按这两对键 → 这些会话行不在候选里（看不到就走不到）；归档行也不在候选里，所以不会弹出归档行的提示（`toast.archivedNotOpenable`）；「未分组」桶不是工作区，既不占前三个名额也不贡献候选；
-- 侧栏搜索框里有搜索词（列表区换成搜索结果）、侧栏收起成窄栏、或分组方式切成「单列表」时按这两对键 → 无动作、不消费（那时没有工作区分组行可读）；
-- 焦点在终端里按这两对键 → 依然能切会话，且这些键不会被当成终端输入送进 shell（终端内按 `⌘↑/↓` / `Ctrl+↑/↓` 或 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` 都会先被捕获路拦下）；模态弹窗打开时 → 让位给弹窗，不动作、不消费。
+- 侧栏搜索框里有搜索词（列表区换成搜索结果）、侧栏收起成窄栏、或分组方式切成「单列表」时按这两对键 → 不动作，但仍消费（那时没有工作区分组行可读）；
+- 焦点在终端里按这两对键 → 依然能切会话，且这些键不会被当成终端输入送进 shell（终端内按 `⌘↑/↓` / `Ctrl+↑/↓` 或 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` 都会先被捕获路拦下，没有可切目标时同样拦下）；模态弹窗打开或长按重复时 → 消费但不动作（弹窗里不会跳出会话切换，浏览器 / 终端也拿不到这一按）。
 
 撤销：
 
