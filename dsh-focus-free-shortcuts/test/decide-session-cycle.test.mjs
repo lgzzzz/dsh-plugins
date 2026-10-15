@@ -1,8 +1,8 @@
 /**
  * 会话循环纯决策:两条固定行(`primary+↑/↓` 走全部候选,`primary+alt+↑/↓` 只走活跃会话;
  * macOS 落成 `⌘↑/↓` 与 `⌘⌥↑/↓`,Windows/Linux 落成 `Ctrl+↑/↓` 与 `Ctrl+Alt+↑/↓`)、准入、
- * 候选口径(左侧栏前三个工作区里当前渲染出来的会话行)、归档行与「未分组」桶的取舍、
- * 活跃判定与环状步进。
+ * 消费判定(归本行就消费,与有没有可切目标无关)、候选口径(左侧栏前三个工作区里当前渲染
+ * 出来的会话行)、归档行与「未分组」桶的取舍、活跃判定与环状步进。
  */
 import {
   SESSION_ACTIVE_CYCLE_ID,
@@ -18,6 +18,7 @@ import {
   sessionActive,
   sessionActiveCycleCommand,
   sessionCycleCommand,
+  sessionCycleDecision,
   sessionCycleEligible,
   sessionCycleRequest,
   sessionCycleTarget,
@@ -25,7 +26,7 @@ import {
   sessionStepFor,
   steppedSessionId,
 } from '../src/session-cycle.ts'
-import { check, checkTrue, fakeDocument, fakeSessions, FakeElement, finish, gesture, shortcutContext, sidebarTree, statusTable, SESSION_ACTIVE_NEXT_MAC_PRESS, SESSION_ACTIVE_NEXT_PRESS, SESSION_ACTIVE_PREVIOUS_MAC_PRESS, SESSION_ACTIVE_PREVIOUS_PRESS, SESSION_CYCLE_FIXED_ROWS, SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_NEXT_MAC_PRESS, SESSION_NEXT_PRESS, SESSION_PREVIOUS_MAC_PRESS, SESSION_PREVIOUS_PRESS } from './helpers.mjs'
+import { check, checkTrue, fakeDocument, fakeSessions, fakeShortcuts, fakeUiSession, FakeElement, finish, gesture, session, shortcutContext, sidebarTree, statusTable, SESSION_ACTIVE_NEXT_MAC_PRESS, SESSION_ACTIVE_NEXT_PRESS, SESSION_ACTIVE_PREVIOUS_MAC_PRESS, SESSION_ACTIVE_PREVIOUS_PRESS, SESSION_CYCLE_FIXED_ROWS, SESSION_CYCLE_MAC_FIXED_ROWS, SESSION_NEXT_MAC_PRESS, SESSION_NEXT_PRESS, SESSION_PREVIOUS_MAC_PRESS, SESSION_PREVIOUS_PRESS, UNUSED_PRESS } from './helpers.mjs'
 
 /** 把一段假树当成整份 document,返回还原函数。 */
 function asDocument(tree) {
@@ -113,7 +114,7 @@ console.log('--- P② 归属:行各自认自己那对键,方向由命中的 code
   check('行都没挂载时没有请求', sessionCycleRequest([], SESSION_ACTIVE_NEXT_PRESS), undefined)
 }
 
-console.log('--- P③ 准入:页 / 文本控件 / 终端 / 已被消费都准入,模态 / repeat / 组字否决 ---')
+console.log('--- P③ 动作准入:页 / 文本控件 / 终端 / 已被消费都准入,模态 / repeat / 组字否决(消费口径见 P⑨) ---')
 {
   for (const [label, press] of [['全部候选', SESSION_NEXT_PRESS], ['活跃池', SESSION_ACTIVE_NEXT_PRESS]]) {
     checkTrue(`${label}:page 上准入`, sessionCycleEligible(press, shortcutContext()))
@@ -296,6 +297,100 @@ console.log('--- P⑧ 目标判定:全部候选只要不等于当前就走,活�
     sessionCycleTarget(facts(['s1', 's2'], 'ghost', ['s2']), request('active', 'next')),
     sessionCycleTarget(facts(['s1', 's2'], 'ghost', ['s2']), request('active', 'previous')),
   ], ['s2', 's2'])
+}
+
+console.log('--- P⑨ 消费判定:归本行就消费,没有可切目标也照常吞掉;组字中与不归本行的键都放行 ---')
+{
+  /** 一个默认场景:s1 是当前会话且空闲,s2 在运行,s3 空闲;树就是这三行的侧栏。 */
+  const TREE = sidebarTree([{ key: 'w1', sessions: ['s1', 's2', 's3'] }])
+  const SUMMARY = {
+    s1: session('s1', { running: false }),
+    s2: session('s2', { mainView: 0, running: true }),
+    s3: session('s3', { mainView: 0, running: false }),
+  }
+
+  /** 一份判定输入:行表 / 会话目录 / 状态表。 */
+  function scenario({ fixedRows = SESSION_CYCLE_FIXED_ROWS, summary = SUMMARY, status = new Map() } = {}) {
+    return {
+      shortcuts: fakeShortcuts({ fixedRows }),
+      sessions: fakeSessions({ summary }),
+      uiSession: fakeUiSession({ status }),
+    }
+  }
+
+  /** 让整份 document 缺席,返回还原函数。 */
+  function withoutDocument() {
+    const previous = globalThis.document
+    delete globalThis.document
+    return () => {
+      if (previous !== undefined) globalThis.document = previous
+    }
+  }
+
+  /** 在给定假侧栏树上跑一次判定;`tree: null` 表示整份 document 缺席。 */
+  function decide(env, press, { tree = TREE, context = shortcutContext() } = {}) {
+    const restore = tree === null ? withoutDocument() : asDocument(tree)
+    try {
+      return sessionCycleDecision(env.shortcuts, env.sessions, env.uiSession, press, context)
+    } finally {
+      restore()
+    }
+  }
+
+  const env = scenario()
+  check('活跃行有可切目标:切换并消费', decide(env, SESSION_ACTIVE_NEXT_PRESS), { target: 's2', consume: true })
+  check('活跃行反向同样有目标', decide(env, SESSION_ACTIVE_PREVIOUS_PRESS), { target: 's2', consume: true })
+  check('全部候选行有目标:切换并消费', decide(env, SESSION_NEXT_PRESS), { target: 's2', consume: true })
+
+  // 没有候选(侧栏没渲染行)/ 只有一个候选且就是当前会话:不动作,但照样消费。
+  const noRows = decide(env, SESSION_ACTIVE_NEXT_PRESS, { tree: sidebarTree([]) })
+  check('侧栏没有任何行:不动作', noRows.target, undefined)
+  check('侧栏没有任何行:仍消费', noRows.consume, true)
+  const onlyCurrent = decide(env, SESSION_NEXT_PRESS, { tree: sidebarTree([{ key: 'w1', sessions: ['s1'] }]) })
+  check('唯一候选就是当前会话:不动作', onlyCurrent.target, undefined)
+  check('唯一候选就是当前会话:仍消费', onlyCurrent.consume, true)
+  const noDocument = decide(env, SESSION_ACTIVE_NEXT_PRESS, { tree: null })
+  check('没有 document:没有候选', noDocument.target, undefined)
+  check('没有 document:仍消费', noDocument.consume, true)
+
+  // 活跃池为空(所有行都空闲)/ 活跃池里只剩当前会话:不动作,但照样消费。
+  const idle = scenario({ summary: {
+    s1: session('s1', { running: false }),
+    s2: session('s2', { mainView: 0, running: false }),
+    s3: session('s3', { mainView: 0, running: false }),
+  } })
+  check('活跃池为空:不动作', decide(idle, SESSION_ACTIVE_NEXT_PRESS).target, undefined)
+  check('活跃池为空:仍消费', decide(idle, SESSION_ACTIVE_NEXT_PRESS).consume, true)
+  const alone = scenario({ summary: {
+    s1: session('s1', { running: true }),
+    s2: session('s2', { mainView: 0, running: false }),
+    s3: session('s3', { mainView: 0, running: false }),
+  } })
+  check('活跃池里只剩当前会话:不动作', decide(alone, SESSION_ACTIVE_NEXT_PRESS).target, undefined)
+  check('活跃池里只剩当前会话:仍消费', decide(alone, SESSION_ACTIVE_NEXT_PRESS).consume, true)
+
+  // 长按重复与模态层:不动作,但都消费 —— 这一按不再漏给浏览器 / 终端。
+  const repeated = decide(env, { ...SESSION_ACTIVE_NEXT_PRESS, repeat: true })
+  check('长按重复:不动作', repeated.target, undefined)
+  check('长按重复:消费', repeated.consume, true)
+  const modal = decide(env, SESSION_ACTIVE_NEXT_PRESS, { context: shortcutContext({ modal: 'settings' }) })
+  check('模态层之上:不动作', modal.target, undefined)
+  check('模态层之上:消费', modal.consume, true)
+
+  // 输入法组字中:这一按归输入法,既不消费也不动作。
+  check('组字中:不消费也不动作', decide(env, { ...SESSION_ACTIVE_NEXT_PRESS, composing: true }), { target: undefined, consume: false })
+  // 键位不归本桥:别的键、别的修饰键集合、行未挂载,一律放行。
+  check('别的键放行', decide(env, UNUSED_PRESS), { target: undefined, consume: false })
+  check('多按一个修饰键放行', decide(env, gesture('ArrowDown', { control: true, alt: true, shift: true })), { target: undefined, consume: false })
+  check('左右方向键放行(那是右栏页面循环的键)', decide(env, gesture('ArrowLeft', { control: true, alt: true })), { target: undefined, consume: false })
+  const unmounted = scenario({ fixedRows: [] })
+  check('两条行都没挂载时放行', decide(unmounted, SESSION_ACTIVE_NEXT_PRESS), { target: undefined, consume: false })
+
+  // 平台各认各的物理键:macOS 的键表下 Ctrl+Alt+↓ 不归本桥。
+  const macos = scenario({ fixedRows: SESSION_CYCLE_MAC_FIXED_ROWS })
+  check('macOS:⌘⌥↓ 归活跃行并消费', decide(macos, SESSION_ACTIVE_NEXT_MAC_PRESS), { target: 's2', consume: true })
+  check('macOS:Ctrl+Alt+↓ 不归本桥', decide(macos, SESSION_ACTIVE_NEXT_PRESS), { target: undefined, consume: false })
+  check('macOS:⌘↓ 归全部候选行并消费', decide(macos, SESSION_NEXT_MAC_PRESS), { target: 's2', consume: true })
 }
 
 finish()
