@@ -1,8 +1,9 @@
 /**
  * 会话循环桥:两条键各走各的池子 —— `Ctrl+↓` / `Ctrl+↑` 在左侧栏前三个工作区当前渲染出来的
  * 会话行之间环状切换(全部候选);`Ctrl+Alt+↓` / `Ctrl+Alt+↑` 只在**活跃会话**(运行中 /
- * 待交互 / 已完成未读)之间切换,活跃池空或只剩当前会话时让位(不动作、不消费)。
- * 目标就是当前会话、没有候选、缺服务时让位;终端内(`.xterm`)的按键在 window 捕获阶段拦下。
+ * 待交互 / 已完成未读)之间切换。两条键都守「归本行就消费」:没有候选、目标就是当前会话、
+ * 活跃池为空或只剩当前会话、长按重复、模态层打开时都只消费不动作(组字中两者都不做)。
+ * 终端内(`.xterm`)的按键在 window 捕获阶段拦下,没有可切目标时同样吞掉。
  */
 import { captureWarnings, check, checkTrue, fakeDocument, fakeKeyEvent, fakePageSidebar, fakeSessionNavigation, fakeShortcuts, fakeSessions, fakeUiSession, fakeWindow, FakeCtx, FakeElement, finish, gesture, harness, keydown, session, shortcutContext, sidebarTree, statusTable, applyPlugin, SESSION_ACTIVE_CYCLE_ID, SESSION_ACTIVE_NEXT_PRESS, SESSION_ACTIVE_PREVIOUS_PRESS, SESSION_CYCLE_ID, SESSION_NEXT_PRESS, SESSION_PREVIOUS_PRESS, UNUSED_PRESS } from './helpers.mjs'
 
@@ -68,11 +69,11 @@ console.log('--- Q① Ctrl+↓ / Ctrl+↑:全部候选,无焦点环状切换并�
     check('末尾 ↓ 绕回开头,开头 ↑ 绕到末尾', navigation.opened, ['s2', 's3', 's1', 's3'])
     check('页面循环的键不受影响', sidebar.focusCalls, [])
 
-    // 没有任何会话带状态点:活跃池是空的,Ctrl+Alt+↓ 无事可做(也不消费)。
+    // 没有任何会话带状态点:活跃池是空的,Ctrl+Alt+↓ 没有可切目标(只消费,不动作)。
     const idle = keydown(SESSION_ACTIVE_NEXT_PRESS, shortcutContext({ target: null }))
     shortcuts.emit(idle.input)
     check('没有活跃会话时 Ctrl+Alt+↓ 不动', navigation.opened, ['s2', 's3', 's1', 's3'])
-    check('没有活跃会话时 Ctrl+Alt+↓ 不消费', idle.consumed.count, 0)
+    check('没有活跃会话时 Ctrl+Alt+↓ 仍消费', idle.consumed.count, 1)
   } finally {
     dom.restore()
   }
@@ -151,7 +152,7 @@ console.log('--- Q③ Ctrl+Alt+↓ / Ctrl+Alt+↑:只在活跃会话之间走 --
 }
 
 {
-  // 唯一活跃会话正是当前会话:活跃池里没有别人 —— 不动作、不消费(常规导航交给 Ctrl+↑/↓)。
+  // 唯一活跃会话正是当前会话:活跃池里没有别人 —— 不动作,但照样消费(常规导航交给 Ctrl+↑/↓)。
   const sidebar = PAGE_SIDEBAR()
   const tree = sidebarTree([{ key: 'w1', sessions: ['s1', 's2', 's3'] }])
   const summary = {
@@ -168,7 +169,7 @@ console.log('--- Q③ Ctrl+Alt+↓ / Ctrl+Alt+↑:只在活跃会话之间走 --
     const previous = keydown(SESSION_ACTIVE_PREVIOUS_PRESS, shortcutContext({ target: null }))
     shortcuts.emit(previous.input)
     check('已经站在唯一的活跃会话上:不切会话', navigation.opened, [])
-    check('已经站在唯一的活跃会话上:不消费', [next.consumed.count, previous.consumed.count], [0, 0])
+    check('已经站在唯一的活跃会话上:仍消费', [next.consumed.count, previous.consumed.count], [1, 1])
 
     // 同一时刻 Ctrl+↓ 照常往下走 —— 两条键互不顶替。
     switchCurrent(summary, 's2')
@@ -206,7 +207,7 @@ console.log('--- Q③ Ctrl+Alt+↓ / Ctrl+Alt+↑:只在活跃会话之间走 --
   }
 }
 
-console.log('--- Q④ 让位:没有候选 / 只有一个候选且已是当前会话 / 别的键 ---')
+console.log('--- Q④ 没有可切目标:没有候选 / 只有一个候选且已是当前会话 / 别的键 ---')
 {
   const cases = [
     ['侧栏没有任何行(窄 / 收起 / 搜索过滤中)', undefined],
@@ -222,7 +223,7 @@ console.log('--- Q④ 让位:没有候选 / 只有一个候选且已是当前会
         const input = keydown(press, shortcutContext({ target: null }))
         shortcuts.emit(input.input)
         check(`${label}:${key} 不切会话`, navigation.opened, [])
-        check(`${label}:${key} 不消费`, input.consumed.count, 0)
+        check(`${label}:${key} 仍消费`, input.consumed.count, 1)
       }
     } finally {
       dom.restore()
@@ -231,14 +232,14 @@ console.log('--- Q④ 让位:没有候选 / 只有一个候选且已是当前会
 }
 
 {
-  // 没有 document(理论上不该发生)时同样让位。
+  // 没有 document(理论上不该发生)时同样没有候选,但按键还是被吞掉。
   const sidebar = PAGE_SIDEBAR()
   const { shortcuts, navigation } = harness({ sidebar, summary: { s1: session('s1') } })
   for (const press of [SESSION_NEXT_PRESS, SESSION_ACTIVE_NEXT_PRESS]) {
     const input = keydown(press, shortcutContext({ target: null }))
     shortcuts.emit(input.input)
     check('没有 document:不切会话', navigation.opened, [])
-    check('没有 document:不消费', input.consumed.count, 0)
+    check('没有 document:仍消费', input.consumed.count, 1)
   }
 }
 
@@ -296,7 +297,7 @@ console.log('--- Q⑤ 文本框 / 已被消费也照常切换(与页面循环同
   }
 }
 
-console.log('--- Q⑥ 模态层之上让位 ---')
+console.log('--- Q⑥ 模态层之上与长按重复:不动作,但照常消费 ---')
 {
   const sidebar = PAGE_SIDEBAR()
   const tree = sidebarTree([{ key: 'w1', sessions: ['s1', 's2'] }])
@@ -309,8 +310,19 @@ console.log('--- Q⑥ 模态层之上让位 ---')
       const input = keydown(press, shortcutContext({ modal: 'settings', target: null }))
       shortcuts.emit(input.input)
       check('模态层之上不切会话', navigation.opened, [])
-      check('模态层之上不消费', input.consumed.count, 0)
+      check('模态层之上仍消费', input.consumed.count, 1)
     }
+    for (const press of [SESSION_NEXT_PRESS, SESSION_ACTIVE_NEXT_PRESS]) {
+      const input = keydown({ ...press, repeat: true }, shortcutContext({ target: null }))
+      shortcuts.emit(input.input)
+      check('长按重复不切会话', navigation.opened, [])
+      check('长按重复仍消费', input.consumed.count, 1)
+    }
+    // 组字中这一按归输入法:既不消费也不动作。
+    const composing = keydown({ ...SESSION_ACTIVE_NEXT_PRESS, composing: true }, shortcutContext({ target: null }))
+    shortcuts.emit(composing.input)
+    check('组字中不切会话', navigation.opened, [])
+    check('组字中不消费', composing.consumed.count, 0)
   } finally {
     dom.restore()
   }
@@ -345,7 +357,7 @@ console.log('--- Q⑦ 终端内切换:捕获阶段在 xterm 之前拦下,且不�
 }
 
 {
-  // 当前会话已站上唯一的活跃会话:捕获路径同样让位(不吞事件)。
+  // 当前会话已站上唯一的活跃会话:捕获路径不切换,但同样吞掉这一按(不让转义序列进 shell)。
   const sidebar = PAGE_SIDEBAR()
   const { tree, path } = treeWithTerminal([{ key: 'w1', sessions: ['s1', 's2'] }])
   const summary = {
@@ -357,14 +369,14 @@ console.log('--- Q⑦ 终端内切换:捕获阶段在 xterm 之前拦下,且不�
   try {
     const event = fakeKeyEvent({ path, code: 'ArrowDown', ctrlKey: true, altKey: true })
     dom.window.emit(event)
-    check('活跃池里只有当前会话时不吞事件', [event.prevented, event.stopped], [0, 0])
+    check('活跃池里只有当前会话时也吞事件', [event.prevented, event.stopped], [1, 1])
     check('活跃池里只有当前会话时不切换', navigation.opened, [])
   } finally {
     dom.restore()
   }
 }
 
-console.log('--- Q⑧ 捕获路径让位:非终端目标 / 长按 / 模态 / 没有候选 ---')
+console.log('--- Q⑧ 捕获路径:非终端目标放行;长按 / 模态 / 没有候选确实进不了终端,但这一按仍被吞 ---')
 {
   const sidebar = PAGE_SIDEBAR()
   const tree = sidebarTree([{ key: 'w1', sessions: ['s1', 's2'] }])
@@ -394,10 +406,10 @@ console.log('--- Q⑧ 捕获路径让位:非终端目标 / 长按 / 模态 / 没
   try {
     const repeated = fakeKeyEvent({ path, code: 'ArrowDown', ctrlKey: true, altKey: true, repeat: true })
     dom.window.emit(repeated)
-    check('长按重复不吞事件', [repeated.prevented, repeated.stopped], [0, 0])
+    check('长按重复:吞事件但不切换', [repeated.prevented, repeated.stopped], [1, 1])
     const modal = fakeKeyEvent({ path, code: 'ArrowDown', ctrlKey: true, altKey: true })
     dom.window.emit(modal)
-    check('模态层之上(捕获路径)不吞事件', [modal.prevented, modal.stopped], [0, 0])
+    check('模态层之上(捕获路径):吞事件但不切换', [modal.prevented, modal.stopped], [1, 1])
     check('两条都不切换', navigation.opened, [])
   } finally {
     dom.restore()
@@ -413,7 +425,7 @@ console.log('--- Q⑧ 捕获路径让位:非终端目标 / 长按 / 模态 / 没
     for (const [key, ctrlKey, altKey] of [['Ctrl+↓', true, false], ['Ctrl+Alt+↓', true, true]]) {
       const event = fakeKeyEvent({ path, code: 'ArrowDown', ctrlKey, altKey })
       dom.window.emit(event)
-      check(`${key} 没有候选时不吞事件`, [event.prevented, event.stopped], [0, 0])
+      check(`${key} 没有候选时也吞事件`, [event.prevented, event.stopped], [1, 1])
     }
     check('没有候选时不切换', navigation.opened, [])
   } finally {

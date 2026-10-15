@@ -17,11 +17,17 @@
  *
  * 活跃 = 行上有状态点的会话：待答交互(审批 / 计划 / 提问)、正在运行、或「已完成未读」的那
  * 一颗绿点。三项状态事实的读数与退回规则见 `sessionActive`。活跃池里没有活跃会话、或只剩
- * 当前会话时，第二条行不动作、也不消费，常规导航交给第一条行。
+ * 当前会话时，第二条行不动作，但仍消费这一按(见下)，常规导航交给第一条行。
+ *
+ * 两条行都守「归本行就消费」：只要这一按落在本桥挂载的行上(绑定命中、不在输入法组字中)，
+ * 本桥就 `preventDefault()` 把它吞掉，与有没有可跳的目标无关 —— 否则这个组合会漏到下层，
+ * 在终端里变成 xterm 修饰方向键的转义序列送进 shell，在文本框里变成浏览器自己的光标移动。
+ * 消费与动作是两件事：长按重复、模态层打开、候选为空、目标就是当前会话都只影响动作，
+ * 不撤销消费；只有输入法组字中(这一按归输入法)既不消费也不动作。
  *
  * 落在 `.xterm` 内的按键不会到达 window 上的 fixed-input 监听(终端在自己的 textarea
  * 处理器里 `stopPropagation()`)，因此与页面循环桥一样另装捕获阶段的 window `keydown`。
- * 两条路径共用同一个判定函数(`sessionCyclePlan`)，一次按键只被处理一次。
+ * 两条路径共用同一个判定函数(`sessionCycleDecision`)，一次按键只被处理一次。
  *
  * 切换动词 `uiWorkspace.openSession` 所在的服务声明为注入依赖。该服务来自 Workspace browser
  * 的客户端包，激活可能晚于本插件；直接 `ctx.get` 一次会把「还没激活」误判成「缺席」，整条桥
@@ -203,11 +209,11 @@ export function sessionCycleRequest(
 }
 
 /**
- * 该次按键能否在没有 DOM 焦点时切换会话。
+ * 该次按键能否**切换会话**(动作口径;要不要消费另见 `sessionCycleDecision`)。
  *
  * 任何输入区域都接受(包括终端:落在 `.xterm` 内的按键由捕获路先拦下),已消费的按键
  * (`defaultPrevented`)也照常处理;只保留输入法组合中、自动重复与存在模态这三项排除 ——
- * 与页面循环同一条准入。
+ * 与页面循环同一条准入。三项里只有组字同时否决消费,长按与模态层仍消费这一按。
  */
 export function sessionCycleEligible(gesture: ShortcutGesture, context: ShortcutContext): boolean {
   return !gesture.repeat
@@ -408,30 +414,56 @@ export function sessionCycleTarget(facts: SessionCycleFacts, request: SessionCyc
 }
 
 /**
- * 一次按键切换会话所需的全部信息,按当前状态解析;返回 undefined 表示不动该按键。
+ * 一次按键的处理结论:要切到哪个会话、以及要不要消费这一按。
  *
- * 两条投递路径(观察者与终端前的捕获拦截)共用本判定;两条 fixed 行也共用它,池子由
- * 命中的那一条行决定。
+ * 两者分开:没有可切的目标时这一按照样消费(见模块头),所以调用处不能拿 `target` 的有无
+ * 当作「这一按归不归本桥」的判据。
  */
-export function sessionCyclePlan(
+export interface SessionCycleDecision {
+  /** 要切换到的会话;没有可切的目标(含长按重复 / 模态层 / 没有候选)时 undefined。 */
+  readonly target: SessionId | undefined
+  /** 是否消费这一按,即是否调用 `preventDefault()`。 */
+  readonly consume: boolean
+}
+
+/** 键位不归本桥、或这一按归输入法时的结论:不消费、不动作。 */
+const NOT_OURS: SessionCycleDecision = { target: undefined, consume: false }
+
+/** 归本桥但不动作的结论:消费这一按,不切换会话。 */
+const CONSUMED_ONLY: SessionCycleDecision = { target: undefined, consume: true }
+
+/**
+ * 一次按键的全部结论:切到哪个会话、要不要消费,按当前状态解析。
+ *
+ * 消费口径是「归本行就消费」:命中本桥挂载的行(且不在组字中)即消费,与有没有可切的
+ * 目标无关;动作口径是 `sessionCycleEligible` 加目标判定。两条投递路径(观察者与终端前的
+ * 捕获拦截)共用本函数;两条 fixed 行也共用它,池子由命中的那一条行决定。
+ */
+export function sessionCycleDecision(
   shortcuts: Shortcuts,
   sessions: ISessions,
   uiSession: UiSession,
   gesture: ShortcutGesture,
   context: ShortcutContext,
-): SessionId | undefined {
-  if (!sessionCycleEligible(gesture, context)) return undefined
+): SessionCycleDecision {
+  // 组字中这一按归输入法;键位不归本桥(行未挂载、修饰键集合不符)时也不碰。
+  if (gesture.composing) return NOT_OURS
   const request = sessionCycleRequest(shortcuts.fixedCatalog.getSnapshot(), gesture)
-  if (request === undefined) return undefined
-  // 侧栏没渲染(窄/收起、搜索过滤中、单列表模式下没有工作区分组)时没有候选可切。
+  if (request === undefined) return NOT_OURS
+  // 归本行就消费:长按重复、模态层打开都照常吞掉,只是不动作。
+  if (!sessionCycleEligible(gesture, context)) return CONSUMED_ONLY
+  // 侧栏没渲染(窄/收起、搜索过滤中、单列表模式下没有工作区分组)时没有候选可切,但仍消费。
   const candidates = displayedSessionIds()
-  if (candidates.length === 0) return undefined
+  if (candidates.length === 0) return CONSUMED_ONLY
   const list = sessions.list.getSnapshot()
-  return sessionCycleTarget({
-    candidates,
-    current: mainViewSessionId(list),
-    active: activeAmong(candidates, uiSession.sessionStatus.getSnapshot(), list),
-  }, request)
+  return {
+    target: sessionCycleTarget({
+      candidates,
+      current: mainViewSessionId(list),
+      active: activeAmong(candidates, uiSession.sessionStatus.getSnapshot(), list),
+    }, request),
+    consume: true,
+  }
 }
 
 /**
@@ -439,7 +471,8 @@ export function sessionCyclePlan(
  *
  * 通过两条路径投递按键:观察者处理 DOM 通道收到的按键;捕获阶段 window `keydown`
  * 监听处理落在 `.xterm` 内、通道收不到的按键。两条路径运行同一判定
- * (`sessionCyclePlan`)与同一切换,一次按键只被处理一次。
+ * (`sessionCycleDecision`)与同一切换,一次按键只被处理一次;两条路都「归本行就消费」,
+ * 所以没有可切目标时这一按在终端里同样不会以转义序列的形式落到 shell。
  *
  * `uiWorkspace` 与其余三项一样声明在注入列表里,而不是在回调里直接 `get` 一次:
  * `ctx.get` 默认只认**已激活**的服务,而 Workspace browser 的客户端包依赖一长串服务
@@ -484,13 +517,13 @@ export function installSessionCycleBridge(ctx: Context): void {
         if (event.type !== 'keydown') return
         const element = composedElement(event)
         if (!terminalTarget(element)) return
-        const nextId = sessionCyclePlan(shortcuts, sessions, uiSession, captureGesture(event), captureContext(element))
-        if (nextId === undefined) return
+        const decision = sessionCycleDecision(shortcuts, sessions, uiSession, captureGesture(event), captureContext(element))
+        if (!decision.consume) return
         // 在终端自身处理器之前拦截:事件到此为止,xterm 既收不到该按键,也不会向
-        // shell 发送转义序列。
+        // shell 发送转义序列 —— 没有可切目标时同样拦下(只消费,不切换)。
         event.preventDefault()
         event.stopPropagation()
-        navigation.openSession(nextId)
+        if (decision.target !== undefined) navigation.openSession(decision.target)
       }
       window.addEventListener('keydown', onKeydown, true)
       return () => window.removeEventListener('keydown', onKeydown, true)
@@ -499,7 +532,7 @@ export function installSessionCycleBridge(ctx: Context): void {
 }
 
 /**
- * 处理固定通道投递的一次 keydown;只有解析出切换目标时才消费按键。
+ * 处理固定通道投递的一次 keydown:归本桥的按键一律先消费,再按结论决定要不要切会话。
  */
 function handleSessionCycleInput(
   shortcuts: Shortcuts,
@@ -508,9 +541,9 @@ function handleSessionCycleInput(
   navigation: SessionNavigation,
   input: KeydownInput,
 ): void {
-  const nextId = sessionCyclePlan(shortcuts, sessions, uiSession, input.gesture, input.context)
-  if (nextId === undefined) return
-  // 先消费再动作,避免该按键同时被页面内的输入控件处理。
+  const decision = sessionCycleDecision(shortcuts, sessions, uiSession, input.gesture, input.context)
+  if (!decision.consume) return
+  // 先消费再动作,避免该按键同时被页面内的输入控件处理;没有目标时只消费。
   input.consume()
-  navigation.openSession(nextId)
+  if (decision.target !== undefined) navigation.openSession(decision.target)
 }
