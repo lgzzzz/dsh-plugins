@@ -40,6 +40,7 @@ function membership() {
     },
   }
   return {
+    source,
     scope: new SidebarSurfaceScope(source),
     account(workspaceId: WorkspaceId, sessionIds: readonly SessionId[]): void {
       items.push({ workspaceId, sessionIds: [...sessionIds] })
@@ -89,6 +90,31 @@ it('keeps a Session no Workspace accounts for on a surface of its own', () => {
   alone.actions.open(B)
   expect(alone.getSnapshot().bySession[B]!.layout.expanded).toBe(false)
   expect(alone.getSnapshot().bySession[B]).not.toBe(accounted.getSnapshot().bySession[A])
+  handle.dispose()
+})
+
+it('shares nothing without a Workspace projection, and groups when one is attached', () => {
+  // The plugin's own contract must not require the Workspace service: without
+  // it every Session keeps the surface it had before Workspaces were consulted.
+  const scope = new SidebarSurfaceScope()
+  const alone = membership()
+  const handle = createSidebarRightStore(seed, scope)
+  const first = handle.create(A)
+  const second = handle.create(B)
+  expect(scope.keyOf(A)).toBe(A)
+  first.actions.open(A)
+  first.actions.setExpanded(A, true)
+  second.actions.open(B)
+  expect(second.getSnapshot().bySession[B]!.layout.expanded).toBe(false)
+  scope.attach(alone.source)
+  alone.account(W, [A, B])
+  expect(scope.keyOf(A)).toBe(W)
+  expect(second.getSnapshot().bySession[B]).toBe(first.getSnapshot().bySession[A])
+  // Dropping the service leaves each Session the surface they last shared.
+  scope.attach(undefined)
+  expect(scope.keyOf(A)).toBe(A)
+  second.actions.toggleExpanded(B)
+  expect(first.getSnapshot().bySession[A]!.layout.expanded).toBe(true)
   handle.dispose()
 })
 

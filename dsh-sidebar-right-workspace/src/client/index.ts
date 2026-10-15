@@ -81,8 +81,8 @@ export type { SidebarRightOpenTab } from './tab-inventory.ts'
 /** This package's copy namespace. */
 const NS = 'sidebarRight'
 
-/** Required browser services: the slot registry, the frame's panel actions, copy, the resource model, and Workspace membership. */
-export const inject = ['slots', 'layout', 'locale', 'resources', 'sessions', 'uiSession', 'shortcuts', 'workspaces']
+/** Required browser services: the slot registry, the frame's panel actions, copy, the resource model, and the Session model. */
+export const inject = ['slots', 'layout', 'locale', 'resources', 'sessions', 'uiSession', 'shortcuts']
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -111,7 +111,14 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   const tabs = new SidebarRightTabRegistry(ctx)
   // Which docking surface a Session draws into: its Workspace's, or its own.
-  const scope = new SidebarSurfaceScope(ctx.workspaces)
+  // The Workspace projection is watched, not injected: this package applies
+  // with the services it always required, and shares surfaces only when the
+  // composition has Workspaces to share them by.
+  const scope = new SidebarSurfaceScope()
+  ctx.inject(['workspaces'], (inner) => {
+    scope.attach(inner.workspaces)
+    return () => { scope.attach(undefined) }
+  })
   const views = new SidebarSessionViews(ctx.sessions, scope)
   ctx.effect(() => {
     const current = ctx.uiSession.adapter.current
