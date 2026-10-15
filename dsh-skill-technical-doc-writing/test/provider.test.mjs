@@ -31,7 +31,7 @@ assert.equal(provider.name, name, 'provider 名与插件名一致（注册表按
 const candidates = await provider.list({})
 assert.equal(candidates.length, 1, '只提供一条候选')
 const [candidate] = candidates
-assert.equal(candidate.name, 'technical-doc-writing', '技能名保持 kebab-case')
+assert.equal(candidate.name, 'technical-doc', '技能名保持 kebab-case')
 assert.equal(candidate.provider, provider.name, '候选的 provider 字段必须等于 provider 名，否则注册表拒收')
 assert.equal(candidate.source, 'bundled', '来源记为 bundled')
 assert.deepEqual(candidate.invocation, { modelInvocable: true, userInvocable: true }, '模型与用户都可调用')
@@ -50,7 +50,7 @@ assert.equal(skill.name, candidate.name, '取回的技能名与候选一致')
 assert.equal(skill.provider, provider.name, '取回的 provider 名与候选一致')
 assert.equal(skill.content, assetBytes, '正文逐字来自资产，没有第二份副本')
 assert.ok(skill.content.startsWith('# 通用技术文档与文案标准'), '正文从正文标题开始，不带 frontmatter')
-assert.equal(skill.content.includes('name: technical-doc-writing'), false, 'frontmatter 的 name 没有漏进正文')
+assert.equal(skill.content.includes('name: technical-doc'), false, 'frontmatter 的 name 没有漏进正文')
 assert.equal(skill.resourceBase?.kind, 'directory', '相对资源指向插件自带的 assets/ 目录')
 
 // 取消
