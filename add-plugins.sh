@@ -16,6 +16,7 @@ PLUGINS=(
   dsh-git-guard
   dsh-header-action-order
   dsh-jobs-optimize
+  dsh-skill-ste-zh
   dsh-skill-technical-doc-writing
   dsh-ui-css-patches
   dsh-workspace-activity-sort
