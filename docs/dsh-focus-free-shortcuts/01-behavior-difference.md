@@ -27,6 +27,12 @@
 
 > 焦点落在**终端**（`.xterm`）里时，上面五条里的 `primary+alt+J`、`primary+alt+K`、`primary+alt+←/→` 与 `primary+alt+↑/↓` / `primary+↑/↓` 依然生效：终端在自己的 textarea 处理器里对经手的按键 `preventDefault()+stopPropagation()`，事件到不了 window 上的固定通道，所以这些桥各自在 window **捕获阶段**另挂一个 `keydown` 监听，在事件进入终端前判定并吞掉这一按（见 [第 3 册](03-fixed-input-and-pane-keys.md) 第 4 节）。同一机制还补上了内置「新建会话」`session.new` 的 `primary+alt+N` = `⌘⌥N`（macOS）/ `Ctrl+Alt+N`（Windows/Linux）：它不是本插件的固定键，所以桥只跟随**生效目录**里那一行当前的绑定，动作调同一个 `uiWorkspace.startSession()`（`src/session-new.ts`）。
 
+### 1.1 全屏右栏上的 `Esc`：本插件补的关闭路径
+
+上表六条是"键有绑定，但焦点不在目标区域内"。全屏右栏上的 `Esc` 不属于这一类：那块浮层盖住整个视口，面板自带的折叠按钮与 `⌘⌥Enter` 都在它自己的页签行末端。插件在 window **捕获阶段**认领裸 `Esc`，命中即吞掉这一按再折叠右栏；这一按因此到不了固定通道里的两条停止序列，全屏期间凑不成"连按两下停止"（关栏之后再按两下才停）。
+
+让位规则来自浮层自身的边界：焦点在终端 `.xterm` 内 → 归终端；焦点在右栏自己的文本控件里（`[data-sidebar-right-session]` 内，例如终端页签的重命名输入框）→ 归那个控件；模态层打开 → 归模态层；右栏已折叠、或只是停靠呈现（`push`）→ 无人处理，也不消费。完整归属表见 [第 2 册第 3.6 节](02-ownership-resolution.md)，实现细节与失败模式见 [第 5 册第 5.11 节](05-approval-key-bridge.md) 与 [第 6 册](06-boundaries-and-contracts.md)。
+
 -----
 
 ## 2. 预备知识

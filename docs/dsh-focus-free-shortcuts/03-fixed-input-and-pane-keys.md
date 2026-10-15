@@ -22,6 +22,7 @@
 | 聚焦右栏页面（`⌘⌥K` / `Ctrl+Alt+K`） | 插件自己的固定行 `dsh-focus-free-shortcuts.focus-page` 占用这一按（`fixedRowOwns`），且右栏展开、`sidebar.mounted` 有会话 | `focusShownPage(sessionId)`：与页面切换键共用同一条交棒判定（页面自持键盘就不抢，否则聚焦可见 pane 并下探页面自己的输入面，终端即 `.xterm-helper-textarea`）；不换页 |
 | 会话导航 | 左侧栏此刻渲染出来的会话行：`[data-row-key="workspace:…"]` / `session:…` 两类行里取前三个工作区的会话行；当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出，活跃与否读 `uiSession.sessionStatus` | `uiWorkspace.openSession(id)`（与点击侧栏那一行同一操作）；`⌘↑/↓`（macOS）/ `Ctrl+↑/↓`（Windows/Linux）（`session-cycle`）在全部候选里环状走，`⌘⌥↑/↓`（macOS）/ `Ctrl+Alt+↑/↓`（Windows/Linux）（`session-active-cycle`）只走候选里带状态点的活跃会话（运行中 / 待交互 / 已完成未读） |
 | 新建会话（内置 `session.new`） | **生效目录**里 `session.new` 当前那一行（`enabledBinding`，改绑 / 解绑 / 冲突即刻跟随）；不注册固定键 | `uiWorkspace.startSession()`（与内置 `run()` 同一个动词，不带参数 = 沿用当前 / 最近的工作区）；只在终端内投递，页面 / 文本控件里仍归内置命令 |
+| 全屏右栏关栏（`Esc`） | DOM 上 `[data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]` 与 `sidebarRight.isExpanded()` 同时成立，且焦点不在终端、不在右栏自己的文本控件里 | `toggleExpanded()`（与面板自带的折叠按钮同一个动词）；只关栏、不重置记录的模式，所以再次展开仍回到全屏。面板全屏时待答审批与提问卡片也不在这一按上作答——它们被这块浮层盖住（见第 5.11 节） |
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
 
@@ -29,7 +30,9 @@
 
 > 五条自挂固定键的捕获路径只在 `.xterm` 内出手，所以它们与冒泡通道互斥、一次按键最多只被处理一次：命中即 `stopPropagation()`，window 冒泡上的固定通道再也看不到这一按。聚焦输入框那条的冒泡准入（`focusComposerEligible`）仍对 `terminal` 区域让位 —— 终端那一半只由捕获路径负责。`session.new` 没有固定通道那一半（插件不为内置命令注册固定键、也不开观察者），页面 / 文本控件里的这一按仍由内置命令自己处理。
 
-下面逐条展开：面板键见 [第 5.3 节](03-fixed-input-and-pane-keys.md)，页签行的滚动补偿见 [第 5.4 节](03-fixed-input-and-pane-keys.md)，页面关闭键见 [第 5.5 节](03-fixed-input-and-pane-keys.md)，聚焦右栏页面键见 [第 5.6 节](03-fixed-input-and-pane-keys.md)；停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键与提问卡片见 [第 5 册](05-approval-key-bridge.md)；聚焦输入框、页面切换、会话导航与新建会话的行为对照与边界见 [第 6 册](06-boundaries-and-contracts.md)。
+全屏右栏关栏另有一条**不挑落点**的捕获监听：右栏全屏呈现时它认领整页的裸 `Esc`（终端与右栏自己的文本控件除外），命中即吞掉这一按再折叠右栏。它不注册固定行、也不开观察者，两条投递路径都不经过固定通道（见 [第 5.11 节](05-approval-key-bridge.md)）。
+
+下面逐条展开：面板键见 [第 5.3 节](03-fixed-input-and-pane-keys.md)，页签行的滚动补偿见 [第 5.4 节](03-fixed-input-and-pane-keys.md)，页面关闭键见 [第 5.5 节](03-fixed-input-and-pane-keys.md)，聚焦右栏页面键见 [第 5.6 节](03-fixed-input-and-pane-keys.md)；停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键、提问卡片与全屏关栏见 [第 5 册](05-approval-key-bridge.md)；聚焦输入框、页面切换、会话导航与新建会话的行为对照与边界见 [第 6 册](06-boundaries-and-contracts.md)。
 
 -----
 

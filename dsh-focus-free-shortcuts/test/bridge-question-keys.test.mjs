@@ -2,7 +2,7 @@
  * 提问桥:`Esc` 关掉正在等答的提问卡片(含 plan-review)。覆盖无焦点关闭、别的文本控件
  * 不抢、准入否决、归属歧义、服务缺失即不装、关闭失败告警与卸载复位。
  */
-import { applyPlugin, approvalPending, captureWarnings, check, checkTrue, domBody, domComposer, domPlanReviewButton, domQuestionField, fakeSessions, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, gesture, harness, keydown, PLAN_REVIEW_KEY, QUESTION_KEY, questionPending, session, shortcutContext, sleep, statusWith } from './helpers.mjs'
+import { applyPlugin, approvalPending, captureWarnings, check, checkTrue, domBody, domComposer, domPlanReviewButton, domQuestionField, FakeElement, fakeDocument, fakeSessions, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, gesture, harness, keydown, PLAN_REVIEW_KEY, QUESTION_KEY, questionPending, session, shortcutContext, sleep, statusWith } from './helpers.mjs'
 
 /** 装配一个"主视图 s1 正挂着一条待答提问"的场景。 */
 function withPending(pending, options = {}) {
@@ -164,6 +164,31 @@ console.log('--- O⑧ 卸载:固定监听全部释放 ---')
   shortcuts.emit(press.input)
   check('释放后不再关闭', pending.dismissals, 0)
   check('释放后不再消费', press.consumed.count, 0)
+}
+
+console.log('--- O⑨ 全屏右栏盖住提问卡片:这一按归右栏关栏,卡片不作答 ---')
+{
+  // 卡片与审批面板一样是 composer 顶替,全屏右栏盖住整块 composer 后它看不见。关栏桥命中时
+  // 会在捕获阶段停掉这一按、观察者收不到;这里直接投给观察者,模拟边角情形,卡片同样让位。
+  const previousDocument = globalThis.document
+  const app = new FakeElement('div', { 'data-app': '' })
+  app.append(new FakeElement('div', {
+    'data-sidebar-right-session': 's1',
+    'data-sidebar-right-panel': 'fullscreen',
+    'data-sidebar-right-open': '',
+  }))
+  globalThis.document = fakeDocument({ root: app })
+  const pending = questionPending()
+  try {
+    const { shortcuts } = withPending(pending)
+    const press = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
+    shortcuts.emit(press.input)
+    check('卡片不作答', pending.dismissals, 0)
+    check('不消费', press.consumed.count, 0)
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document
+    else globalThis.document = previousDocument
+  }
 }
 
 finish()

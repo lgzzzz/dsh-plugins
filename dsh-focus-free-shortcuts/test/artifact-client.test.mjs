@@ -160,6 +160,36 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
       dom.restore()
     }
   }
+
+  console.log('--- G④ 产物里的全屏关栏:全屏右栏上的裸 Esc 被吞掉并关栏 ---')
+  {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const panel = app.append(new FakeElement('div', {
+      'data-sidebar-right-session': 's1',
+      'data-sidebar-right-panel': 'fullscreen',
+      'data-sidebar-right-open': '',
+    }))
+    const pane = panel.append(new FakeElement('section'))
+    const dom = withWindowDom({ root: app, activeElement: pane })
+    try {
+      const shortcuts = fakeShortcuts()
+      const sidebar = fakeSidebar()
+      const ctx = new FakeCtx({
+        shortcuts,
+        sidebarRight: sidebar,
+        sessions: fakeSessions({ summary: { s1: session('s1') } }),
+        uiSession: fakeUiSession(),
+        uiWorkspace: fakeSessionNavigation(),
+      })
+      check('全屏关栏装配无告警', captureWarnings(() => plugin.apply(ctx)), [])
+      const escape = fakeKeyEvent({ path: [pane, panel, app], code: 'Escape' })
+      dom.window.emit(escape)
+      check('产物里全屏 Esc 被吞', [escape.prevented, escape.stopped], [1, 1])
+      check('产物里全屏 Esc 关栏', sidebar.calls, [['toggleExpanded']])
+    } finally {
+      dom.restore()
+    }
+  }
 }
 
 finish()

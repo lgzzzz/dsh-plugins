@@ -226,3 +226,5 @@ function cancelSession(sessions, sessionId) {
 > **审批键与停止序列的交叉点**：有待答审批时，`Esc` 不是"第一下停止"而是"一下拒绝"。内置 `currentTurn()` 与插件 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛拒绝停止，所以停止侧既不动作也不消费这一按。审批桥的实现与它自己的让位策略见 [第 5 册](05-approval-key-bridge.md)（第 5.9 节）。
 
 > **提问卡片与停止序列的交叉点**：有待答提问时，`Esc` 是提问卡片自己的取消——按卡片关闭 / 取消按钮的同一个语义调 `PendingQuestion.dismiss()`。停止侧门槛与上一条相同，因此这一按在停止序列眼里连"第一下"都记不下来。提问桥在"这个槽位此刻发布的是提问域卡片"（`kind` 为 `question` / `plan-review`、`key` 是字符串、带 `dismiss()`）时才接下这一按。一个会话同一时刻只发布一个待答交互（跨域优先级由 `dsh-client-ui-session` 的 `publishPendingInteractions` 决定），所以审批桥与提问桥不可能同时认领同一按。细节见 [第 5 册](05-approval-key-bridge.md) 第 5.9.3、5.10 节与 [第 6 册](06-boundaries-and-contracts.md) 第 7 节。
+
+> **全屏右栏与停止序列的交叉点**：右栏全屏呈现时这一按先归全屏关栏桥——它挂在 window **捕获阶段**，命中即 `preventDefault()+stopPropagation()`，固定通道里的两条停止序列（内置 `response.stop` 与本节这条桥）都收不到。于是全屏期间「连按两下停止」不成立：先关栏，之后再按两下才停。见 [第 5 册](05-approval-key-bridge.md) 第 5.11 节与 [第 2 册](02-ownership-resolution.md) 第 3.6 节。

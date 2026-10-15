@@ -15,6 +15,7 @@
  *
  * 机制与 `dismiss()` 的三种落点见 docs/dsh-focus-free-shortcuts/05-approval-key-bridge.md。
  */
+import { fullscreenSidebarShown } from './fullscreen-dismiss.ts'
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {ISessions} from '@deepseek-ai/dsh-api-session-controller/client'
@@ -122,6 +123,8 @@ function handleQuestionInput(
   if (question === undefined) return
   // editable 区保留自己的按键，例外是本面板自己的答题输入框（它的 keydown 只处理 Enter）。
   if (context.region === 'editable' && !questionCardOwnsTarget(context.target, question.key)) return
+  // 全屏右栏盖在待答交互之上：这一按归它关栏，卡片不作答（见 fullscreen-dismiss.ts）。
+  if (fullscreenSidebarShown()) return
   // 先消费再关闭：该按键不得再传给浏览器，半消费的取消会让请求无人接管。
   input.consume()
   question.dismiss().catch((error: unknown) => {
