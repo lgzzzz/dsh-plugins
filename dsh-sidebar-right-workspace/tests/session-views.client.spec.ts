@@ -5,6 +5,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { SidebarSessionView } from '../src/client/session-view.ts'
 import { SidebarSessionViews } from '../src/client/session-views.ts'
+import { perSessionScope } from '../src/client/surface-scope.ts'
 
 const A = 'a' as SessionId
 const B = 'b' as SessionId
@@ -60,7 +61,7 @@ it('keeps one reference per View until the final committed root of a retired Vie
 
 it('retires only unselected Views without retained bodies and rejects released reference identities', async () => {
   const r = await runtime()
-  const views = new SidebarSessionViews(r.sessions)
+  const views = new SidebarSessionViews(r.sessions, perSessionScope())
   owners.push(views)
   views.select(A)
   const first = views.source.getSnapshot()
@@ -100,7 +101,7 @@ it('reports opening failure and releases Views even when committed roots are sti
     [Symbol.dispose]: () => { reference.release() },
   })
   const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-  const views = new SidebarSessionViews(r.sessions)
+  const views = new SidebarSessionViews(r.sessions, perSessionScope())
   owners.push(views)
   views.select(A)
   const view = views.source.getSnapshot()[0]!

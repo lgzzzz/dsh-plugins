@@ -1,4 +1,12 @@
-/** Root-scoped controller for the right Sidebar's Session content. */
+/**
+ * Root-scoped controller for the right Sidebar's Session content.
+ *
+ * Every Session view is mounted for its own store scope, but a surface is drawn
+ * by exactly one of them — its anchor — so a Workspace keeps one panel while
+ * the user moves between its conversations. The other views of that surface
+ * render nothing; the drawer of a surface that is not displayed stays mounted
+ * and hidden, which is how its retained tab bodies survive a trip elsewhere.
+ */
 import { useLayoutEffect } from 'react'
 import type { HostObservable, InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -18,12 +26,20 @@ function SessionView({ view, visible, SessionProvider, renderSlot, mountView, wi
   Pick<RootProps, 'SessionProvider' | 'renderSlot' | 'mountView' | 'width' | 'viewportWidth' | 'canShow'>
   & { readonly view: SidebarSessionViewSnapshot; readonly visible: boolean }) {
   useLayoutEffect(() => mountView(view.reference), [mountView, view.reference])
-  const active = visible && view.selected
-  return <div className={css.session} hidden={!active} data-sidebar-right-session={view.sessionId}>
-    <SessionProvider session={view.reference}>
-      {renderSlot('rightbar.session', { width, viewportWidth, canShow, active, retainTab: view.retainTab })}
-    </SessionProvider>
-  </div>
+  const active = visible && view.onScreen && view.draws
+  return (
+    <div
+      className={css.session}
+      hidden={!active}
+      data-sidebar-right-session={view.draws ? view.markerSession : undefined}
+    >
+      <SessionProvider session={view.reference}>
+        {renderSlot('rightbar.session', {
+          width, viewportWidth, canShow, active, draws: view.draws, markerSession: view.markerSession, retainTab: view.retainTab,
+        })}
+      </SessionProvider>
+    </div>
+  )
 }
 
 /**

@@ -27,6 +27,7 @@ import type { RightbarOwnerProps } from '@deepseek-ai/dsh-client-ui-layout/clien
 // lookup chain consults after this namespace misses.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { PaneId, TabId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SlotHookFactory } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TabHookContext } from '../tab-info.ts'
 import type { SidebarRightKey } from '../locales.ts'
@@ -45,6 +46,18 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: RightbarOwnerProps & {
         readonly active: boolean
+        /**
+         * Whether this Session draws its surface's panel. One Session per
+         * surface does — the Workspace's anchor — and the others render
+         * nothing while still holding their own store scope.
+         */
+        readonly draws: boolean
+        /**
+         * The Session whose sidebar this is: the selected Session of the
+         * surface, carried as the DOM marker so focus and commands name the
+         * conversation the user is looking at.
+         */
+        readonly markerSession: SessionId
         /** @param tabId - retained body. @param signal - tab occurrence lifetime. @returns releases the View-owned hold. */
         readonly retainTab: (tabId: TabId, signal: AbortSignal) => () => void
       }

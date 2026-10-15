@@ -1,20 +1,23 @@
 /**
  * The Tab domain: what a tab record carries that the layout does not.
  *
- * One `TabOccurrence` per open record, keyed by (session, tab id): where the
- * tab was navigated to, an abort signal spanning the record's life, and the
- * actions the tab may take on itself. Holding a record also pins its address in
- * the resource model, so switching tabs unmounts a body without dropping its
- * content.
+ * One `TabOccurrence` per open record, keyed by (surface, tab id) — the surface
+ * being the Workspace a Session draws into, or the Session itself when no
+ * Workspace accounts for it: where the tab was navigated to, an abort signal
+ * spanning the record's life, and the actions the tab may take on itself.
+ * Holding a record also pins its address in the resource model, so switching
+ * tabs unmounts a body without dropping its content. Records are therefore
+ * shared by every Session of one sidebar, exactly as the layout that lists them
+ * is: a tab opened from one Session's conversation is the same occurrence,
+ * with the same opener's parameters, in every other.
  *
- * `sync` reconciles occurrences against one session's layout after every
+ * `sync` reconciles occurrences against one surface's layout after every
  * commit: a record that appeared is pinned, one that vanished (closed, or its
  * open undone) is aborted and dropped. A record restored by undo is a new
  * occurrence and is fetched again if the resource model already let it go. The
- * controller syncs each session from that session's adopted store on every
- * commit, on screen or not, so a record closed from another session's seat is
- * aborted on that commit. The slot framework binds the navigation sources for
- * each record's `useTabInfo` reader.
+ * controller syncs each adopted store on every commit, on screen or not, so a
+ * record closed from one Session's seat is aborted on that commit. The slot
+ * framework binds the navigation sources for each record's `useTabInfo` reader.
  */
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
@@ -27,8 +30,9 @@ import type { SidebarRightTabActions, SidebarRightTabCommands, SidebarRightTabNa
 import type { SidebarRightOpenResourceOptions, SidebarRightOpenTabOptions, SidebarRightPlacement } from './service.ts'
 
 /**
- * The navigation face a tab's actions call back into, aimed at the session the
- * tab is in; nothing happens for a session whose store is not adopted.
+ * The navigation face a tab's actions call back into, aimed at the Session the
+ * record was opened under; the controller resolves that to a live Session of
+ * the same surface, and does nothing when the surface has none.
  */
 export interface SidebarRightNavigator {
   /** Open a resource in one session; see `ISidebarRight.openResource`. */
@@ -52,6 +56,11 @@ export interface TabOccurrence {
 
   /** Distinguishes a reopened record from its previous lifetime. */
   readonly id: SidebarRightOccurrenceId
+  /**
+   * The Session whose commit first held this record — its surface's opener,
+   * not necessarily the Session currently drawing it. A tab action aimed here
+   * lands on the record's surface whichever of its Sessions runs it.
+   */
   readonly sessionId: SessionId
   readonly tabId: TabId
   /** Aborted when the record disappears or this package unloads. */
@@ -73,29 +82,33 @@ interface Held extends TabOccurrence {
   pinned: boolean
 }
 
-/** Every session's occurrences. */
+/** Every surface's occurrences. */
 export class TabDomain {
-  private readonly bySession = new Map<SessionId, Map<TabId, Held>>()
+  private readonly bySurface = new Map<string, Map<TabId, Held>>()
 
   /**
    * @param navigator - where tab actions go, aimed at the tab's session; the navigation controller.
    * @param pin - `ctx.resources.pin`, called once per occurrence at its first sync.
+   * @param keyOf - the surface a Session draws into; without one, every Session is its own surface.
    */
   constructor(
     private readonly navigator: SidebarRightNavigator,
     private readonly pin: PinResource,
+    private readonly keyOf: (sessionId: SessionId) => string = sessionId => sessionId,
   ) {}
 
   /**
-   * Reconcile one session's occurrences with its committed layout.
+   * Reconcile one surface's occurrences with its committed layout.
    *
-   * Called by the seat after every commit, and only then: aborting a vanished
-   * record runs the types' cleanup, which writes their stores.
-   * @param sessionId - the session whose layout committed.
-   * @param layout - that session's layout as committed.
+   * Called by the controller after every commit of any store instance that
+   * draws into the surface, and only then: aborting a vanished record runs the
+   * types' cleanup, which writes their stores. A Session whose surface already
+   * reconciled that layout reconciles nothing.
+   * @param sessionId - the Session whose store committed.
+   * @param layout - that Session's layout as committed.
    */
   sync(sessionId: SessionId, layout: LayoutState): void {
-    const held = this.session(sessionId)
+    const held = this.surface(this.keyOf(sessionId))
     for (const [tabId, occurrence] of held) {
       if (layout.tabs[tabId] !== undefined) continue
       held.delete(tabId)
@@ -113,13 +126,13 @@ export class TabDomain {
 
   /**
    * Read an occurrence created by navigation or committed-store reconciliation.
-   * @param sessionId - the session the record is in.
+   * @param sessionId - the Session the record is shown in.
    * @param tab - the record being drawn.
-   * @returns its occurrence.
+   * @returns its surface's occurrence.
    * @throws when the record has not been reconciled or has disappeared.
    */
   occurrence(sessionId: SessionId, tab: Pick<TabRecord, 'id'>): TabOccurrence {
-    const occurrence = this.bySession.get(sessionId)?.get(tab.id)
+    const occurrence = this.bySurface.get(this.keyOf(sessionId))?.get(tab.id)
     if (occurrence === undefined) throw new Error(`sidebarRight: tab "${tab.id}" has no committed occurrence in session "${sessionId}"`)
     return occurrence
   }
@@ -129,12 +142,12 @@ export class TabDomain {
    *
    * A record the layout has not yet shown the seat gets its occurrence here, so
    * the body's first render already carries the opener's `params`.
-   * @param sessionId - the session opened into.
+   * @param sessionId - the Session opened into.
    * @param tabId - the tab the open settled on.
    * @param target - the address and the opener's params.
    */
   navigate(sessionId: SessionId, tabId: TabId, target: { address: string; params: SidebarRightNavigationParams }): void {
-    const existing = this.session(sessionId).get(tabId)
+    const existing = this.surface(this.keyOf(sessionId)).get(tabId)
     if (existing === undefined) {
       this.hold(sessionId, tabId, { ...target, revision: 1 })
       return
@@ -142,19 +155,19 @@ export class TabDomain {
     existing.navigation.set({ ...target, revision: existing.navigation.getSnapshot().revision + 1 })
   }
 
-  /** Abort every occurrence of every session; the package is unloading. */
+  /** Abort every occurrence of every surface; the package is unloading. */
   dispose(): void {
-    for (const held of this.bySession.values()) {
+    for (const held of this.bySurface.values()) {
       for (const occurrence of held.values()) occurrence.controller.abort()
     }
-    this.bySession.clear()
+    this.bySurface.clear()
   }
 
-  private session(sessionId: SessionId): Map<TabId, Held> {
-    let held = this.bySession.get(sessionId)
+  private surface(key: string): Map<TabId, Held> {
+    let held = this.bySurface.get(key)
     if (held === undefined) {
       held = new Map()
-      this.bySession.set(sessionId, held)
+      this.bySurface.set(key, held)
     }
     return held
   }
@@ -203,7 +216,7 @@ export class TabDomain {
         close: () => { navigator.closeIn(sessionId, tabId) },
       },
     }
-    this.session(sessionId).set(tabId, held)
+    this.surface(this.keyOf(sessionId)).set(tabId, held)
     return held
   }
 }

@@ -125,6 +125,12 @@ export type RightbarSeatProps =
 /** Everything the panel needs, already bound to one session. */
 interface PanelProps {
   readonly sessionId: SessionId
+  /**
+   * The Session whose sidebar this panel is. The surface's sessions share one
+   * panel, so the Session drawing it and the conversation it belongs to can
+   * differ; the DOM carries the conversation the user is looking at.
+   */
+  readonly markerSession: SessionId
   readonly surface: SurfaceState
   readonly actions: Store['actions']
   readonly t: RightbarSeatProps['t']
@@ -300,7 +306,7 @@ function PanelChrome({ sessionId, fullscreen, actions, t, shortcuts, toggleFulls
  * anchored to the frame's right edge and slid off it while collapsed.
  */
 function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<HTMLDivElement> }): ReactNode {
-  const { sessionId, surface, actions, t, renderSlot, openTab, width, reportRoom, fullscreen, panelRef } = panel
+  const { sessionId, markerSession, surface, actions, t, renderSlot, openTab, width, reportRoom, fullscreen, panelRef } = panel
   const { expanded } = surface.layout
   const types = panel.useTabTypes(value => value)
   return (
@@ -309,7 +315,7 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
       className={css.panel}
       style={{ width: fullscreen ? '100vw' : width,
         '--dsh-sidebar-width': fullscreen ? '100vw' : `${width}px` } as CSSProperties}
-      data-sidebar-right-session={sessionId}
+      data-sidebar-right-session={markerSession}
       data-sidebar-right-panel={fullscreen ? 'fullscreen' : 'push'}
       data-sidebar-right-open={expanded || undefined}
       // Dockkit hides individual docked hosts; floating descendants remain accessible.
@@ -350,7 +356,7 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
  * measured and the automatic fullscreen rule of its frame width.
  */
 export function RightbarSeat({
-  sessionId, width, viewportWidth, canShow, useStore, actions, t, renderSlot, syncPresentation, measureRoom, reportAutoFullscreen,
+  sessionId, draws, markerSession, width, viewportWidth, canShow, useStore, actions, t, renderSlot, syncPresentation, measureRoom, reportAutoFullscreen,
   openTab, closeTab, useTabTypes, useTabNavigation, occurrence, retainTab, active, useShortcuts, splitPane, toggleFullscreen,
 }: RightbarSeatProps): ReactNode {
   // One store instance per session, so this map holds this session's surface.
@@ -414,9 +420,11 @@ export function RightbarSeat({
   // store as the runtime minted it and reconciles on the store's own commits,
   // on screen or not.
 
-  if (surface === undefined) return null
+  // A non-drawing seat exists for its store scope alone: the surface's panel is
+  // the drawer's, and nothing here may report presentation for a second panel.
+  if (!draws || surface === undefined) return null
   const panel: PanelProps = {
-    sessionId, actions, t, renderSlot, surface, openTab, closeTab, useTabTypes, useTabNavigation, useStore, occurrence,
+    sessionId, markerSession, actions, t, renderSlot, surface, openTab, closeTab, useTabTypes, useTabNavigation, useStore, occurrence,
     fullscreen, autoFullscreen, reportRoom, active, retainTab, shortcuts, splitPane, toggleFullscreen,
   }
   return <SidebarPanel {...panel} width={width} panelRef={panelRef} />

@@ -20,6 +20,7 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
         "@deepseek-ai/dsh-client-resources",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-layout",
@@ -43,6 +44,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "~4.0.5-alpha.2",
     "@deepseek-ai/dsh-api-session-controller": "^0.2.1-alpha.3",
+    "@deepseek-ai/dsh-api-workspace-controller": "^0.2.1-alpha.3",
     "@deepseek-ai/dsh-brand": "^0.2.1-alpha.3",
     "@deepseek-ai/dsh-client-locale": "^0.2.1-alpha.3",
     "@deepseek-ai/dsh-client-resources": "^0.2.1-alpha.3",

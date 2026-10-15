@@ -2,6 +2,9 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-sidebar-right/README.md
+#
+# 本 fork 改了「停靠面属于工作区」相关的若干段落，两份 README 仍成对，但下面的哈希是
+# 上游值：重录要用上游 monorepo 的 verify-translation-pairing 脚本，本仓库没有它。
 /:
   en: 0960aa113255a3a8
   zh: 48e5173172a55a91

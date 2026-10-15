@@ -1,26 +1,31 @@
 /**
  * `ctx.sidebarRight`: what other plugins may ask of this column.
  *
- * The surface is per session and its state lives in that session's store
- * instance, which the slot runtime mints per session and a root service cannot
- * reach on its own. The plugin adopts each session's store instance as the
- * runtime mints it, so the controller reaches any session's store by id and
- * syncs the Tab domain from that store's commits, on screen or not.
+ * The surface belongs to a Workspace and its state lives in the store
+ * instances the slot runtime mints per Session, which a root service cannot
+ * reach on its own. The plugin adopts each Session's store instance as the
+ * runtime mints it — every one of them holds its Workspace's surface under its
+ * own id — so the controller reaches any Session's surface by id, and syncs the
+ * Tab domain from that store's commits, on screen or not. The Tab domain is
+ * scoped the way the surface is, so the tabs, their pins and the way each was
+ * navigated to are the Workspace's, not one Session's.
  *
  * The plugin also names the Session on screen — the selected Session while the
  * Conversation fills the main column — from the selection and the main panel,
  * before React renders either change, and publishes it as `mounted`. Every
- * command on the public face acts on that Session through its adopted store; a
- * command with no Session on screen, or with one whose store the runtime has not
- * minted, has nothing to act on and fails loudly rather than writing into a
- * surface nobody is drawing. The seats never publish which Session they draw:
- * they report only what they render with, the room their docking kit measured
- * and the automatic fullscreen rule of their frame width.
+ * command on the public face acts on that Session, resolved to a live store
+ * instance of its surface; a command with no Session on screen, or with one
+ * whose surface has no live store, has nothing to act on and fails loudly
+ * rather than writing into a surface nobody is drawing. The seats never publish
+ * which Session they draw: they report only what they render with, the room
+ * their docking kit measured and the automatic fullscreen rule of their frame
+ * width.
  *
- * A tab's own actions (`tabActions`) aim at the session the tab is in, not at
- * the on-screen one: they run through that session's adopted store, so a callback
- * fired after the user switched sessions still lands where its tab is, and they
- * do nothing for a session whose store was never minted.
+ * A tab's own actions (`tabActions`) aim at the surface the tab is in, not at
+ * the on-screen Session: they run through the store of whichever Session of
+ * that surface is still live, so a callback fired after the user switched
+ * Sessions still lands where its tab is, and they do nothing for a surface
+ * whose store was never minted.
  *
  * `openResource` and `openTab` are the navigation controller, and every way
  * into the column is a call to one of them: the conversation's file links, a
@@ -45,6 +50,7 @@ import { pageAddress } from './contract/seed.ts'
 import type { SidebarRightTabClaim, SidebarRightTabRegistry } from './tab-registry.ts'
 import { canCloseTab, type SidebarRightState, type SurfaceState } from './stores.ts'
 import type { createSidebarRightStore } from './stores.ts'
+import type { SurfaceScopeLike } from './surface-scope.ts'
 import { TabDomain, type PinResource } from './tab-domain.ts'
 import { SidebarTabInventory } from './tab-inventory.ts'
 
@@ -67,12 +73,20 @@ interface Adoption {
 /** The room rule's verdict for a docked pane, as a seat's docking kit last measured it: whether two working halves would fit. */
 type RoomRule = (paneId: PaneId) => boolean
 
+/** One live store instance of a surface: the Session it stores under, and the write set bound to it. */
+interface LiveStore {
+  readonly sessionId: SessionId
+  readonly actions: SurfaceActions
+}
+
 /** Plugin-owned Session state the controller reads; the plugin writes it through the factory's callbacks. */
 interface SidebarRightSessions {
   /** Each Session's latest adopted store. */
   readonly adopted: ReadonlyMap<SessionId, Adoption>
-  /** Each Session's room rule as its seat last reported it; a Session without one has room in every pane. */
-  readonly rooms: ReadonlyMap<SessionId, RoomRule>
+  /** Each surface's room rule as its panel last reported it; a surface without one has room in every pane. */
+  readonly rooms: ReadonlyMap<string, RoomRule>
+  /** Which surface a Session draws into. */
+  readonly scope: SurfaceScopeLike
   /** The Session the plugin names as on screen. */
   readonly onScreen: ObservableSnapshot<SessionId | undefined>
   /** Open tab metadata across saved and adopted Sessions. */
@@ -85,9 +99,10 @@ interface SidebarRightSessions {
  * @param tabs - registered tab types.
  * @param pin - resource retention for an occurrence's lifetime.
  * @param host - the viewport rule and focus continuity the commands use.
+ * @param scope - which surface a Session draws into; the Tab domain and the room rules are scoped by it.
  * @returns the controller; store adoption and scope removal; naming the on-screen Session; and recording a seat's room rule.
  */
-export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin: PinResource, host: SidebarRightHost): {
+export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin: PinResource, host: SidebarRightHost, scope: SurfaceScopeLike): {
   controller: SidebarRightController
   adopt: (sessionId: SessionId, store: SidebarRightSurfaceStore) => () => void
   forget: (sessionId: SessionId) => void
@@ -95,18 +110,18 @@ export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin:
   measure: (sessionId: SessionId, canSplitPane: RoomRule) => void
 } {
   const adopted = new Map<SessionId, Adoption>()
-  const rooms = new Map<SessionId, RoomRule>()
+  const rooms = new Map<string, RoomRule>()
   const onScreen = createSnapshotStore<SessionId | undefined>(undefined)
   const inventory = new SidebarTabInventory()
-  const controller = new SidebarRightController(tabs, pin, host, { adopted, rooms, onScreen, openTabs: inventory.source })
+  const controller = new SidebarRightController(tabs, pin, host, { adopted, rooms, scope, onScreen, openTabs: inventory.source })
   return {
     controller,
     forget: (sessionId) => {
       inventory.remove(sessionId)
-      rooms.delete(sessionId)
+      rooms.delete(scope.keyOf(sessionId))
     },
     show: (sessionId) => { if (onScreen.getSnapshot() !== sessionId) onScreen.set(sessionId) },
-    measure: (sessionId, canSplitPane) => { rooms.set(sessionId, canSplitPane) },
+    measure: (sessionId, canSplitPane) => { rooms.set(scope.keyOf(sessionId), canSplitPane) },
     adopt(sessionId, store) {
       adopted.get(sessionId)?.unsubscribe()
       const sync = (): void => {
@@ -265,7 +280,8 @@ export class SidebarRightController implements ISidebarRight {
   /** The on-screen Session; see {@link ISidebarRight.mounted}. */
   readonly mounted: ObservableSnapshot<SessionId | undefined>
   private readonly adopted: ReadonlyMap<SessionId, Adoption>
-  private readonly rooms: ReadonlyMap<SessionId, RoomRule>
+  private readonly rooms: ReadonlyMap<string, RoomRule>
+  private readonly scope: SurfaceScopeLike
   private readonly closeHandlers = new Map<string, SidebarRightCloseHandler>()
 
   /**
@@ -290,7 +306,7 @@ export class SidebarRightController implements ISidebarRight {
    * @param tabs - the tab-type registry consulted to claim an address.
    * @param pin - `ctx.resources.pin`, which the Tab domain holds addresses with.
    * @param host - the viewport rule and focus continuity the commands use.
-   * @param sessions - plugin-owned adopted stores, room rules, on-screen Session, and open tab metadata.
+   * @param sessions - plugin-owned adopted stores, room rules, scope, on-screen Session, and open tab metadata.
    */
   constructor(
     private readonly tabs: SidebarRightTabRegistry,
@@ -300,18 +316,19 @@ export class SidebarRightController implements ISidebarRight {
   ) {
     this.adopted = sessions.adopted
     this.rooms = sessions.rooms
+    this.scope = sessions.scope
     this.mounted = sessions.onScreen
     this.openTabs = sessions.openTabs
-    this.tabDomain = new TabDomain(this, pin)
+    this.tabDomain = new TabDomain(this, pin, sessionId => this.scope.keyOf(sessionId))
   }
 
   /**
-   * Read the committed tabs of a Session so providers can restore their content.
-   * @param sessionId - Session whose layout has been adopted.
+   * Read the committed tabs of one Session's surface so providers can restore their content.
+   * @param sessionId - Session whose surface has been adopted.
    * @returns its open records, or an empty list before adoption.
    */
   tabsIn(sessionId: SessionId): readonly TabRecord[] {
-    return Object.values(this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]?.layout.tabs ?? {})
+    return Object.values(this.surfaceOf(sessionId)?.layout.tabs ?? {})
   }
 
   /**
@@ -335,45 +352,45 @@ export class SidebarRightController implements ISidebarRight {
   }
 
   /**
-   * Open a resource in one session, for a tab's own action; nothing happens
-   * for a session whose store was never adopted or whose adoption was released.
+   * Open a resource in one Session, for a tab's own action; nothing happens for
+   * a surface with no live store.
    * Not part of `ISidebarRight`: the Tab domain's path.
-   * @param sessionId - the session the acting tab is in.
+   * @param sessionId - the Session the acting tab was opened under.
    * @param address - a `dsh-resource://<type>/…` address.
    * @param options - placement, the opening type, and navigation parameters.
    */
   openResourceIn(sessionId: SessionId, address: string, options: SidebarRightOpenResourceOptions = {}): void {
-    const actions = this.actionsFor(sessionId)
-    if (actions !== undefined) this.placeResource(sessionId, actions, address, options)
+    const live = this.actionsFor(sessionId)
+    if (live !== undefined) this.placeResource(live.sessionId, live.actions, address, options)
   }
 
   /**
-   * Open a page type in one session, for a tab's own action; nothing happens
-   * for a session whose store was never adopted or whose adoption was released.
+   * Open a page type in one Session, for a tab's own action; nothing happens for
+   * a surface with no live store.
    * Not part of `ISidebarRight`: the Tab domain's path.
-   * @param sessionId - the session the acting tab is in.
+   * @param sessionId - the Session the acting tab was opened under.
    * @param kind - the page type's kind.
    * @param options - placement and that kind's navigation parameters.
    */
   openTabIn<K extends string>(sessionId: SessionId, kind: K, options: SidebarRightOpenTabOptions<K> = {}): void {
-    const actions = this.actionsFor(sessionId)
-    if (actions !== undefined) this.placeTab(sessionId, actions, kind, options)
+    const live = this.actionsFor(sessionId)
+    if (live !== undefined) this.placeTab(live.sessionId, live.actions, kind, options)
   }
 
   /**
-   * Close a tab of one session, preserving the sole docked guide; nothing happens
-   * for a session whose store was never adopted or whose adoption was released.
+   * Close a tab of one Session, preserving the sole docked guide; nothing
+   * happens for a surface with no live store.
    * Not part of `ISidebarRight`: the Tab domain's path.
-   * @param sessionId - the session the tab is in.
+   * @param sessionId - the Session the tab was opened under.
    * @param tabId - the tab to close.
    */
   closeIn(sessionId: SessionId, tabId: TabId): void {
-    const actions = this.actionsFor(sessionId)
-    const surface = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
-    if (actions === undefined || surface === undefined) return
+    const live = this.actionsFor(sessionId)
+    const surface = this.surfaceOf(sessionId)
+    if (live === undefined || surface === undefined) return
     const tab = surface.layout.tabs[tabId]
     if (tab === undefined || !canCloseTab(surface, tabId)) return
-    this.removeAfterCleanup(sessionId, tab, () => { actions.closeTab(sessionId, tabId) })
+    this.removeAfterCleanup(live.sessionId, tab, () => { live.actions.closeTab(live.sessionId, tabId) })
   }
 
   private removeAfterCleanup(sessionId: SessionId, tab: TabRecord, commit: () => void): void {
@@ -381,7 +398,7 @@ export class SidebarRightController implements ISidebarRight {
     commit()
   }
 
-  /** Claim a resource and place it in one session; an address outside the scheme or one no type claims throws. */
+  /** Claim a resource and place it in one Session's surface; an address outside the scheme or one no type claims throws. */
   private placeResource(
     sessionId: SessionId,
     actions: SurfaceActions,
@@ -394,7 +411,7 @@ export class SidebarRightController implements ISidebarRight {
     this.place(sessionId, actions, this.tabs.claim(address, options.kind), address, options, options.params)
   }
 
-  /** Place a page type in one session at the address pages are recorded under; an unregistered kind throws. */
+  /** Place a page type in one Session's surface at the address pages are recorded under; an unregistered kind throws. */
   private placeTab<K extends string>(
     sessionId: SessionId,
     actions: SurfaceActions,
@@ -416,9 +433,12 @@ export class SidebarRightController implements ISidebarRight {
     placement: SidebarRightPlacement,
     params: SidebarRightNavigationParams,
   ): void {
-    const surface = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
+    const surface = this.surfaceOf(sessionId)
     const targetPane = surface === undefined ? undefined : placement.paneId ?? activeDockPaneId(surface.layout)
     const target = targetPane === undefined ? undefined : surface?.layout.nodes[targetPane]
+    // A new pane is only preferred for an open landing in the surface the user
+    // is looking at; a background Session's open takes the ordinary path.
+    const onScreen = this.mounted.getSnapshot()
     const preferNewPane = placement.preferNewPane === true
       && placement.replaceTab === undefined
       && surface !== undefined
@@ -427,7 +447,8 @@ export class SidebarRightController implements ISidebarRight {
       && target.tabs.length > 0
       && canSplit(surface.layout)
       && dockPaneIds(surface.layout).length < 2
-      && this.mounted.getSnapshot() === sessionId
+      && onScreen !== undefined
+      && this.scope.keyOf(onScreen) === this.scope.keyOf(sessionId)
       && this.canSplitPane(sessionId, target.id)
     const commit = (): void => { actions.openContent(sessionId, {
       kind: claim.kind,
@@ -691,13 +712,13 @@ export class SidebarRightController implements ISidebarRight {
   }
 
   /**
-   * The on-screen Session and its committed surface; `undefined` with no Session
-   * on screen, before the runtime mints its store, or before its first open.
+   * The on-screen Session and the surface it draws into; `undefined` with no
+   * Session on screen, or before any store of that surface has committed.
    */
   private screen(): { readonly sessionId: SessionId; readonly surface: SurfaceState } | undefined {
     const sessionId = this.mounted.getSnapshot()
     if (sessionId === undefined) return undefined
-    const surface = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
+    const surface = this.surfaceOf(sessionId)
     return surface === undefined ? undefined : { sessionId, surface }
   }
 
@@ -706,29 +727,56 @@ export class SidebarRightController implements ISidebarRight {
     return this.screen()?.surface
   }
 
-  /** Whether a Session's docked pane has room for two working halves, as its seat last measured; unmeasured panes do. */
+  /**
+   * The committed surface one Session draws into, read from that Session's
+   * adopted store — or, when the runtime has not minted one for it, from any
+   * Session of the same surface, which mirrors the very same object.
+   * @param sessionId - Session whose surface is wanted.
+   * @returns the surface, or `undefined` before any of the surface's stores committed.
+   */
+  private surfaceOf(sessionId: SessionId): SurfaceState | undefined {
+    const own = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
+    if (own !== undefined) return own
+    const key = this.scope.keyOf(sessionId)
+    for (const [id, adoption] of this.adopted) {
+      if (id === sessionId || this.scope.keyOf(id) !== key) continue
+      const sibling = adoption.store.getSnapshot().bySession[id]
+      if (sibling !== undefined) return sibling
+    }
+    return undefined
+  }
+
+  /** Whether a surface's docked pane has room for two working halves, as its panel last measured; unmeasured panes do. */
   private canSplitPane(sessionId: SessionId, paneId: PaneId): boolean {
-    return this.rooms.get(sessionId)?.(paneId) ?? true
+    return this.rooms.get(this.scope.keyOf(sessionId))?.(paneId) ?? true
   }
 
   /**
-   * The store actions a tab's own action on `sessionId` runs through: that
-   * session's adopted store. `undefined` — nothing to act on — for a session
-   * whose store was never minted or whose adoption was released.
+   * The store a tab's own action on `sessionId` runs through: that Session's
+   * adopted store, or the store of another live Session of the same surface.
+   * `undefined` — nothing to act on — for a surface no store was ever minted
+   * for or whose adoptions were all released. The returned Session id is the
+   * one the store writes under, which is what every action call must carry.
    */
-  private actionsFor(sessionId: SessionId): SurfaceActions | undefined {
-    return this.adopted.get(sessionId)?.store.actions
+  private actionsFor(sessionId: SessionId): LiveStore | undefined {
+    const own = this.adopted.get(sessionId)
+    if (own !== undefined) return { sessionId, actions: own.store.actions }
+    const key = this.scope.keyOf(sessionId)
+    for (const [id, adoption] of this.adopted) {
+      if (this.scope.keyOf(id) === key) return { sessionId: id, actions: adoption.store.actions }
+    }
+    return undefined
   }
 
-  private require(): { readonly sessionId: SessionId; readonly actions: SurfaceActions } {
+  private require(): LiveStore {
     // Reads answer for the no-session case (there is nothing expanded), but a
     // write has no session to write to. Callers are UI gestures and tool
     // results, both of which belong to a session that is on screen.
     const sessionId = this.mounted.getSnapshot()
-    const actions = sessionId === undefined ? undefined : this.actionsFor(sessionId)
-    if (sessionId === undefined || actions === undefined) {
+    const live = sessionId === undefined ? undefined : this.actionsFor(sessionId)
+    if (live === undefined) {
       throw new Error('sidebarRight: no session surface is mounted')
     }
-    return { sessionId, actions }
+    return live
   }
 }

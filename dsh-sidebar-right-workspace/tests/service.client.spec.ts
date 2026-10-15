@@ -16,6 +16,7 @@ import { dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-do
 import { createSidebarRightController } from '../src/client/service.ts'
 import { SidebarRightTabRegistry } from '../src/client/tab-registry.ts'
 import { createSidebarRightStore } from '../src/client/stores.ts'
+import { perSessionScope } from '../src/client/surface-scope.ts'
 import { guideDefinition } from '../src/client/tabs/guide/definition.ts'
 
 // The params map is empty in this package; a test-only scheme lets specs hand
@@ -51,7 +52,7 @@ function harness() {
     autoFullscreen: () => false,
     openWithFocus: (_sessionId, open) => { open() },
     closeWithFocus: (_sessionId, _paneId, close) => { close() },
-  })
+  }, perSessionScope())
   const instance = createSidebarRightStore(() => ({ kind: 'guide', title: 'seed' })).create()
   // The runtime mints the Session's store before any seat renders, and the plugin adopts it.
   const unadopt = adopt(SESSION, instance)

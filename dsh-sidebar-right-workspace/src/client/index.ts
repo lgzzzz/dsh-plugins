@@ -24,6 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-shortcuts/client'
 import { observeSidebarFocus } from './focus.ts'
 import { registerSidebarShortcuts } from './shortcuts.ts'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
@@ -42,6 +43,7 @@ import { SidebarSessionViews } from './session-views.ts'
 import { createSidebarRightController, type SidebarRightController } from './service.ts'
 import { SidebarRightTabRegistry } from './tab-registry.ts'
 import { createSidebarRightStore } from './stores.ts'
+import { SidebarSurfaceScope } from './surface-scope.ts'
 import { en, zh } from './locales.ts'
 import { GUIDE_ID, guideDefinition } from './tabs/guide/definition.ts'
 import { guideTabInfoFactory, tabInfoFactory } from './tab-info.ts'
@@ -79,8 +81,8 @@ export type { SidebarRightOpenTab } from './tab-inventory.ts'
 /** This package's copy namespace. */
 const NS = 'sidebarRight'
 
-/** Required browser services: the slot registry, the frame's panel actions, copy, and the resource model. */
-export const inject = ['slots', 'layout', 'locale', 'resources', 'sessions', 'uiSession', 'shortcuts']
+/** Required browser services: the slot registry, the frame's panel actions, copy, the resource model, and Workspace membership. */
+export const inject = ['slots', 'layout', 'locale', 'resources', 'sessions', 'uiSession', 'shortcuts', 'workspaces']
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -108,7 +110,9 @@ export function apply(ctx: ClientContext): void {
   // its own apply top level for the same reason.
   const t = ctx.locale.bind(NS)
   const tabs = new SidebarRightTabRegistry(ctx)
-  const views = new SidebarSessionViews(ctx.sessions)
+  // Which docking surface a Session draws into: its Workspace's, or its own.
+  const scope = new SidebarSurfaceScope(ctx.workspaces)
+  const views = new SidebarSessionViews(ctx.sessions, scope)
   ctx.effect(() => {
     const current = ctx.uiSession.adapter.current
     const sync = (): void => { views.select(current.getSnapshot().key as SessionId | undefined) }
@@ -128,6 +132,7 @@ export function apply(ctx: ClientContext): void {
       openWithFocus: (sessionId, open) => { openWithPaneFocus(document, sessionId, open) },
       closeWithFocus: (sessionId, paneId, close) => { closeWithPaneFocus(document, sessionId, paneId, close) },
     },
+    scope,
   )
   // The Session on screen: the selected one while the Conversation fills the
   // main column. Both sources notify before React renders their change, so the
@@ -166,9 +171,10 @@ export function apply(ctx: ClientContext): void {
   if (typeof document !== 'undefined') ctx.effect(() => observeSidebarFocus(document), 'ui-sidebar-right: focus')
 
   ctx.effect(() => {
-    const handle = createSidebarRightStore(() => defaultSeed(tabs))
-    // Each Session Context generation owns one Store. Background tab actions
-    // use the latest adoption for that Session.
+    const handle = createSidebarRightStore(() => defaultSeed(tabs), scope)
+    // Each Session Context generation owns one Store, and every Session of one
+    // Workspace holds that Workspace's surface. Background tab actions use the
+    // latest adoption for the Session the tab was opened under.
     const adoptions = new Map<SessionId, () => void>()
     const store: typeof handle = {
       ...handle,
@@ -274,6 +280,7 @@ export function apply(ctx: ClientContext): void {
       for (const dispose of disposeTypes.reverse()) dispose()
       for (const release of adoptions.values()) release()
       adoptions.clear()
+      handle.dispose()
     }
   }, 'ui-sidebar-right: seats and shipped tab type')
 }

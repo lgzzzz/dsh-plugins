@@ -1,7 +1,7 @@
 /**
- * The store shell over the docking kit: one surface per session, held as plain
- * data so the kit's pure functions are the only thing that ever computes a
- * layout.
+ * The store shell over the docking kit: one surface per scope key — a
+ * Workspace, or a Session no Workspace accounts for — held as plain data so the
+ * kit's pure functions are the only thing that ever computes a layout.
  *
  * Every action follows the same steps — mint the ids the intent needs, ask the
  * kit's planner what operations carry it out, let the settle planner keep every
@@ -9,6 +9,14 @@
  * session's whole surface back in one go. Nothing here reaches into a draft to
  * edit a layout in place, which is what keeps the kit testable without a store
  * and keeps snapshot identity honest.
+ *
+ * The runtime mints one engine instance per (handle, Session scope), so "one
+ * surface per key" is kept by holding those instances in step rather than by
+ * minting one: whichever instance commits, the new surface becomes the key's,
+ * is persisted under the key, and is mirrored into the key's other instances.
+ * Readers therefore keep addressing their own Session — `bySession[its own
+ * id]` — and never learn that the surface is shared; see
+ * {@link createSidebarRightStore} for the machinery.
  *
  * The settle step is this product's rule, not the kit's: an intent never leaves
  * an expanded column with an empty pane — emptied side panes merge away, and an
@@ -26,7 +34,7 @@
  * into the pane's own — the arriving tab closes and the pane's own is focused.
  * The kit plans none of this; it is decided here before its planners run.
  */
-import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
+import { defineStore, type EngineStoreHandle, type EngineStoreInstance } from '@deepseek-ai/dsh-client-store'
 import { clearSidebarLayout, readSidebarLayout, writeSidebarLayout } from './persistence.ts'
 import type {
   DockMode, DockZone, FloatRect, History, LayoutOp, LayoutState, Mint, PaneId, SplitId, TabId, TabRecord,
@@ -37,6 +45,7 @@ import {
   planSetMode, planSettle, planSplitPane, planUnfloatPane, record, replay, stepBack, stepForward,
 } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { GUIDE_KIND, pageAddress, type SidebarRightSeed } from './contract/seed.ts'
+import { perSessionScope, type SurfaceScopeLike } from './surface-scope.ts'
 
 /** One session's docking surface: the layout, its sequence, and the id counter. */
 export interface SurfaceState {
@@ -255,18 +264,47 @@ function stepped(surface: SurfaceState, step: HistoryStepper): SurfaceState {
   return moved === undefined ? surface : { ...surface, layout: moved.state, history: moved.history }
 }
 
+/** One live engine instance, and the surface key it currently mirrors. */
+interface SurfaceInstance {
+  readonly sessionId: string
+  readonly instance: EngineStoreInstance<SidebarRightState, SidebarRightActions>
+  /** The key this instance is joined to; the resolved scope can move it. */
+  key: string
+}
+
+/** The store handle plus the scope subscription only the plugin retires. */
+export interface SidebarRightStoreHandle extends EngineStoreHandle<SidebarRightState, SidebarRightActions> {
+  /** Stop following scope membership; the plugin's unload path. */
+  dispose(): void
+}
+
 /**
- * Create the Sidebar store handle with per-Session JSON persistence in localStorage.
+ * Create the Sidebar store handle over one shared surface per scope key, with
+ * JSON persistence in localStorage under that key.
+ *
+ * The runtime mints one engine instance per (handle, Session scope), so the
+ * handle keeps those instances in step instead of trying to mint a single one:
+ * every instance holds its key's surface under its own Session id, and a commit
+ * on any of them becomes the key's surface, is persisted, and is mirrored into
+ * the key's other instances. Readers therefore keep addressing their own
+ * Session, and a Workspace's sessions never see a surface change behind their
+ * back. Which key a Session belongs to is re-read on every membership change,
+ * because the Workspace stream can arrive after the Sessions it accounts for.
+ *
+ * A key with no saved layout yet adopts the Session's own record first, which
+ * is where layouts were saved before surfaces were Workspace-bound.
  *
  * The default page arrives as a thunk: a pane is seeded when a split or an
  * expansion of an empty column needs one, which can be long after the store was
  * built and in a language the user has since changed to.
  * @param seed - the registered default page, read at each mint.
- * @returns the handle (spec, type, identity, and factory in one).
+ * @param scope - which surface a Session draws into; without one, every Session keeps its own.
+ * @returns the handle (spec, type, identity, and factory in one), plus the scope subscription's retirement.
  */
 export function createSidebarRightStore(
   seed: () => SidebarRightSeed,
-): EngineStoreHandle<SidebarRightState, SidebarRightActions> {
+  scope: SurfaceScopeLike = perSessionScope(),
+): SidebarRightStoreHandle {
   const handle = defineStore<SidebarRightState, SidebarRightActions>({
     init: (): SidebarRightState => ({ bySession: {} }),
     actions: {
@@ -424,15 +462,114 @@ export function createSidebarRightStore(
       },
     },
   })
-  return { ...handle, create(scopeKey) {
-    const instance = handle.create(scopeKey)
-    if (scopeKey === undefined) return instance
-    const saved = readSidebarLayout(scopeKey)
-    if (saved !== undefined) instance.store.set({ bySession: { [scopeKey]: saved } })
-    instance.subscribe(() => {
-      const surface = instance.getSnapshot().bySession[scopeKey]
-      if (surface !== undefined) writeSidebarLayout(scopeKey, surface)
-    })
-    return { ...instance, clearPersisted: () => { clearSidebarLayout(scopeKey) } }
-  } }
+  // The key's live surface, and the instances currently mirroring it.
+  const surfaces = new Map<string, SurfaceState>()
+  const groups = new Map<string, Set<SurfaceInstance>>()
+  const instances = new Set<SurfaceInstance>()
+
+  const group = (key: string): Set<SurfaceInstance> => {
+    let held = groups.get(key)
+    if (held === undefined) {
+      held = new Set()
+      groups.set(key, held)
+    }
+    return held
+  }
+
+  /** Show one surface to an instance that is not already holding it; the write a peer's commit must not echo. */
+  const mirror = (entry: SurfaceInstance, surface: SurfaceState): void => {
+    if (entry.instance.getSnapshot().bySession[entry.sessionId] === surface) return
+    entry.instance.store.set({ bySession: { [entry.sessionId]: surface } })
+  }
+
+  /**
+   * Accept one instance's commit as its key's surface and show it to its peers.
+   *
+   * The key's surface is replaced before any peer is woken, so a mirror write
+   * never comes back as a commit of its own: every peer finds the very object
+   * the key already holds and stops there.
+   */
+  const publish = (entry: SurfaceInstance, surface: SurfaceState): void => {
+    if (surfaces.get(entry.key) === surface) return
+    surfaces.set(entry.key, surface)
+    writeSidebarLayout(entry.key, surface)
+    for (const peer of group(entry.key)) if (peer !== entry) mirror(peer, surface)
+  }
+
+  /**
+   * Put one instance into a key: adopt that key's surface when it has one, and
+   * otherwise hand it this instance's own — the Session that opens a
+   * Workspace's sidebar is the one that gives the Workspace a surface.
+   */
+  const join = (entry: SurfaceInstance, key: string): void => {
+    entry.key = key
+    group(key).add(entry)
+    const held = surfaces.get(key)
+    const own = entry.instance.getSnapshot().bySession[entry.sessionId]
+    if (held !== undefined) {
+      mirror(entry, held)
+    } else if (own !== undefined) {
+      surfaces.set(key, own)
+      writeSidebarLayout(key, own)
+    }
+  }
+
+  const leave = (entry: SurfaceInstance): void => {
+    const held = groups.get(entry.key)
+    held?.delete(entry)
+    if (held?.size === 0) groups.delete(entry.key)
+  }
+
+  const unsubscribeScope = scope.subscribe(() => {
+    // A membership change moves a Session between surfaces: it leaves the key it
+    // was minted under and joins the one its Workspace owns now. The surface it
+    // arrives with is only the seed of a key that has none.
+    for (const entry of instances) {
+      const key = scope.keyOf(entry.sessionId)
+      if (key === entry.key) continue
+      leave(entry)
+      join(entry, key)
+    }
+  })
+
+  return {
+    ...handle,
+    create(scopeKey) {
+      const instance = handle.create(scopeKey)
+      if (scopeKey === undefined) return instance
+      const entry: SurfaceInstance = { sessionId: scopeKey, instance, key: scopeKey }
+      instances.add(entry)
+      const key = scope.keyOf(scopeKey)
+      if (!surfaces.has(key)) {
+        // A Workspace's first Session may still hold its layout under its own
+        // id: that is where layouts were saved before this scope existed. The
+        // adopted record becomes the key's own from that moment on.
+        const own = readSidebarLayout(key)
+        const legacy = own === undefined && key !== scopeKey ? readSidebarLayout(scopeKey) : undefined
+        const saved = own ?? legacy
+        if (saved !== undefined) {
+          surfaces.set(key, saved)
+          if (legacy !== undefined) writeSidebarLayout(key, saved)
+        }
+      }
+      join(entry, key)
+      instance.subscribe(() => {
+        const surface = instance.getSnapshot().bySession[scopeKey]
+        if (surface !== undefined) publish(entry, surface)
+      })
+      return {
+        ...instance,
+        clearPersisted: () => {
+          instance.clearPersisted()
+          clearSidebarLayout(entry.key)
+        },
+      }
+    },
+    dispose() {
+      unsubscribeScope()
+      instances.clear()
+      groups.clear()
+      surfaces.clear()
+    },
+  }
 }
