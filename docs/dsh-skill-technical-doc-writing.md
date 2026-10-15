@@ -1,6 +1,6 @@
 # dsh-skill-technical-doc-writing
 
-把「通用技术文档与文案标准」技能作为插件自带资产分发：装上插件，宿主就有了 `technical-doc-writing` 技能，模型按需加载、用户也可以用 `/technical-doc-writing` 显式调用。技能正文的唯一来源是插件的 `assets/technical-doc-writing.md`，因此每个安装者拿到的都是同一份内容，不需要再往 `.agents/skills/` 里放 `SKILL.md`。候选以 `source: bundled`、`rank: 600`（`BUNDLED_SKILL_RANK`）注册——注册表按 rank 升序决胜、rank 越小越优先，所以这是兜底档：`.agents/skills/`（工程 100/200）或 `$DSH_HOME/skills`（用户 400/500）下只要存在同名技能，生效的就是那一份，插件这份只在别处都没有该名字时被选中。运行期没有构建步骤，宿主半部 `index.ts` 由 Node Type Stripping 直接加载。
+把「通用技术文档与文案标准」技能作为插件自带资产分发：装上插件，宿主就有了 `technical-doc` 技能，模型按需加载、用户也可以用 `/technical-doc` 显式调用。技能正文的唯一来源是插件的 `assets/technical-doc-writing.md`，因此每个安装者拿到的都是同一份内容，不需要再往 `.agents/skills/` 里放 `SKILL.md`。候选以 `source: bundled`、`rank: 600`（`BUNDLED_SKILL_RANK`）注册——注册表按 rank 升序决胜、rank 越小越优先，所以这是兜底档：`.agents/skills/`（工程 100/200）或 `$DSH_HOME/skills`（用户 400/500）下只要存在同名技能，生效的就是那一份，插件这份只在别处都没有该名字时被选中。运行期没有构建步骤，宿主半部 `index.ts` 由 Node Type Stripping 直接加载。
 
 -----
 
@@ -32,8 +32,8 @@ dsh plugin --profile web add /path/to/dsh-plugins/dsh-skill-technical-doc-writin
 
 重启后：
 
-- 模型侧：技能目录里出现 `technical-doc-writing`，涉及 README、Markdown、代码注释、提示词、CLI/UI 文案的编写与审查时按需加载；
-- 用户侧：在自己的消息里写 `/technical-doc-writing`，正文随后作为 instructions 形式的上下文注入。
+- 模型侧：技能目录里出现 `technical-doc`，涉及 README、Markdown、代码注释、提示词、CLI/UI 文案的编写与审查时按需加载；
+- 用户侧：在自己的消息里写 `/technical-doc`，正文随后作为 instructions 形式的上下文注入。
 
 调用是否成功的判断依据是技能正文里的标准（例如「删减前先数事实主张」「只写当前状态」），而不是插件有没有出现在设置列表里。
 
@@ -51,7 +51,7 @@ dsh plugin --profile web add /path/to/dsh-plugins/dsh-skill-technical-doc-writin
 | 技能名、路由描述、调用策略 | `index.ts` 顶部的 `SKILL_NAME` / `SKILL_DESCRIPTION` / `CANDIDATE` | 需要重启 `dsh web`：这些字段在插件模块加载时就定下来了 |
 | 注册来源或兜底优先级 | `index.ts` 里候选的 `source` / `rank` | 需要重启 `dsh web` |
 
-**同名覆盖**：技能注册表按 rank 升序决胜，越小的 rank 越优先。bundled 档（600）排在工程目录（100/200）与用户目录（400/500）之后，所以任何一处放着 `technical-doc-writing`，加载到的都是那一份，插件的正文只在名字没有本地来源时生效。要让插件这份成为唯一来源，就不能在 `.agents/skills/` 或 `$DSH_HOME/skills` 下再放同名技能。
+**同名覆盖**：技能注册表按 rank 升序决胜，越小的 rank 越优先。bundled 档（600）排在工程目录（100/200）与用户目录（400/500）之后，所以任何一处放着 `technical-doc`，加载到的都是那一份，插件的正文只在名字没有本地来源时生效。要让插件这份成为唯一来源，就不能在 `.agents/skills/` 或 `$DSH_HOME/skills` 下再放同名技能。
 
 改完跑该插件自己的检查：
 

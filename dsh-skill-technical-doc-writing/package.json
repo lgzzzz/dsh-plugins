@@ -1,7 +1,7 @@
 {
   "name": "dsh-skill-technical-doc-writing",
   "version": "1.0.0",
-  "description": "把「通用技术文档与文案标准」技能作为插件自带资产注册进技能注册表（source 为 bundled，rank 取 BUNDLED_SKILL_RANK）：装上插件即获得 technical-doc-writing 技能，不再需要往 .agents/skills/ 放 SKILL.md。",
+  "description": "把「通用技术文档与文案标准」技能作为插件自带资产注册进技能注册表（source 为 bundled，rank 取 BUNDLED_SKILL_RANK）：装上插件即获得 technical-doc 技能，不再需要往 .agents/skills/ 放 SKILL.md。",
   "type": "module",
   "main": "index.ts",
   "exports": {

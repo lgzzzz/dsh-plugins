@@ -22,7 +22,7 @@ export const name = 'dsh-skill-technical-doc-writing'
 export const inject = ['skills']
 
 /** 技能名：模型加载与用户显式调用都按它寻址。 */
-const SKILL_NAME = 'technical-doc-writing'
+const SKILL_NAME = 'technical-doc'
 
 /** 发现阶段给模型看的路由描述。 */
 const SKILL_DESCRIPTION =
