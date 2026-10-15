@@ -11,6 +11,7 @@ $Plugins = @(
   'dsh-git-guard'
   'dsh-header-action-order'
   'dsh-jobs-optimize'
+  'dsh-skill-ste-zh'
   'dsh-skill-technical-doc-writing'
   'dsh-ui-chat-verbose-fold'
   'dsh-ui-css-patches'
