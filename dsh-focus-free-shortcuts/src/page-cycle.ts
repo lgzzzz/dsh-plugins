@@ -46,6 +46,16 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 /** Cordis 增强声明的 Right-Sidebar 面。 */
 type Sidebar = Context['sidebarRight']
 
+/**
+ * 右栏页签 id。
+ *
+ * 上游 0.2.1-alpha.4 起把页签 id 品牌化（dockkit 的 `TabId`），`focus(tabId)` 不再收裸
+ * `string`；品牌只在类型层，运行期仍是同一个字符串。本插件不为它多拉一个 dockkit 类型
+ * 依赖，改从 `focus` 的实参取，随上游签名自动跟随；`tabsIn` / `active()` 给出的记录 id
+ * 就是这个类型，全程不需要断言。
+ */
+type TabId = Parameters<Sidebar['focus']>[0]
+
 /** 一次按键在页面循环中的方向。 */
 export type PageStep = 'previous' | 'next'
 
@@ -248,7 +258,8 @@ export function pageCycleTarget(
 /** 一次解析出的切换：所在 Session 与要聚焦的页。 */
 export interface PageStepTarget {
   readonly sessionId: string
-  readonly nextId: string
+  /** 目标页的 id，取自上游页记录的 `id`（品牌化的 `TabId`，可直接交给 `focus`）。 */
+  readonly nextId: TabId
 }
 
 /**
