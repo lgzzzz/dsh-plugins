@@ -22,7 +22,7 @@
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
 | `dsh-skill-ste-zh` | 把上游 `lemonhall/asd-ste100-skill-zh` 的「受控中文技术写作」技能（`ste-zh`，含规则全集、前后对照例子与 linter）打包成插件自带资产（source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-ste-zh.md) |
-| `dsh-ui-chat-verbose-fold` | Verbose 模式下折叠已完成的轮次 | [说明](dsh-ui-chat-verbose-fold.md) |
+| `dsh-ui-chat` | 官方 `@deepseek-ai/dsh-client-ui-chat` 的源码 fork：Verbose（完全展开）模式下折叠已完成轮次（取代原 `dsh-ui-chat-verbose-fold` 运行时补丁） | [说明](dsh-ui-chat.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |

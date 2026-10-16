@@ -19,7 +19,7 @@ PLUGINS=(
   dsh-sidebar-right-workspace
   dsh-skill-ste-zh
   dsh-skill-technical-doc-writing
-  dsh-ui-chat-verbose-fold
+  dsh-ui-chat
   dsh-ui-css-patches
   dsh-workspace-activity-sort
   dsh-workspace-quick-switch

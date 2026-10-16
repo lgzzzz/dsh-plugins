@@ -44,7 +44,10 @@ const POLICIES: Readonly<Record<TranscriptViewMode, Omit<ChatPresentationPolicy,
   },
   verbose: {
     mode: 'verbose',
-    foldCompletedTurns: false,
+    // 本 fork 的差异:官方为 false,完全展开模式不折叠已完成轮次;这里改为折叠。
+    // 该差异原先由独立插件 dsh-ui-chat-verbose-fold 在运行时改写本策略实现,
+    // 现在直接落在策略表里，运行时不再需要那个补丁。
+    foldCompletedTurns: true,
     stepGrouping: 'none',
     liveProcessDetail: false,
     settledReasoningPreview: true,
