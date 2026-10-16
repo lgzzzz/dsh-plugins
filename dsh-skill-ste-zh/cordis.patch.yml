@@ -1,7 +1,0 @@
-# dsh-skill-ste-zh 的挂载行：随 dsh.profile.bundles 自动挂载。
-# 宿主半部 index.ts（Node Type Stripping 直载，无构建产物）：把 assets/ste-zh.md
-# 作为 bundled 技能注册进技能注册表，使用者不再需要把 SKILL.md 放进 .agents/skills/。
-# 包名 / patch id / patch name / 导出 name / 服务名五者的分工见 docs/plugin-naming.md。
-- insert:
-    - id: dsh-skill-ste-zh
-      name: dsh-skill-ste-zh
