@@ -1,9 +1,0 @@
-# web bundle 补丁：停用 dsh-web-app 里 id 为 ui-sidebar-right 的官方行，改挂本 fork。
-# 本 fork 的包名 / patch id / patch name 同为 dsh-client-ui-sidebar-right-lgz；
-# 五者的分工见 docs/plugin-naming.md。
-- id: ui-sidebar-right
-  disabled: true
-
-- insert:
-    - id: dsh-client-ui-sidebar-right-lgz
-      name: dsh-client-ui-sidebar-right-lgz

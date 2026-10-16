@@ -1,4 +1,4 @@
-﻿# 本文件须保存为 UTF-8 with BOM:PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI(GBK)解码,中文会乱码并吞掉行尾引号。
+# 本文件须保存为 UTF-8 with BOM:PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI(GBK)解码,中文会乱码并吞掉行尾引号。
 # 下面的插件清单与 add-plugins.sh 各存一份,增删插件时两个文件都要改。
 $ErrorActionPreference = 'Stop'
 
@@ -11,10 +11,8 @@ $Plugins = @(
   'dsh-git-guard'
   'dsh-header-action-order'
   'dsh-jobs-optimize'
-  'dsh-sidebar-right-workspace'
   'dsh-skill-ste-zh'
   'dsh-skill-technical-doc-writing'
-  'dsh-ui-chat'
   'dsh-ui-css-patches'
   'dsh-workspace-activity-sort'
   'dsh-workspace-quick-switch'
