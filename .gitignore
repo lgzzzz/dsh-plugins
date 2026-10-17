@@ -20,6 +20,7 @@ dsh-desktop-notify/lib/
 dsh-focus-free-shortcuts/lib/
 dsh-header-action-order/lib/
 dsh-jobs-optimize/lib/
+dsh-ui-chat-verbose-fold/lib/
 dsh-ui-css-patches/lib/
 dsh-workspace-quick-switch/lib/
 

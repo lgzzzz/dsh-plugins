@@ -1,0 +1,11 @@
+{
+  "description": "dsh-ui-chat-verbose-fold 的滚动补偿依赖的上游 DOM 事实：即时折叠写在行上的 hidden=\"until-found\"、流程列与动画折叠作用域、跟底标记、会话滚动口，以及锚点行的 data-* 锚点。check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）；任何一条改名或改走别的路径时，补偿会静默退化或与上游双补，这里把那种退化提前变成显式失败。",
+  "checks": [
+    {"id":"hidden-until-found","plugin":"dsh-ui-chat-verbose-fold","pattern":"setAttribute\\(\\s*\"hidden\"\\s*,\\s*\"until-found\"\\s*\\)","paths":["dsh-client-ui-chat/lib"],"hint":"ui-chat 不再用 hidden=\"until-found\" 收起过程行（例如改成卸载节点）：滚动补偿认不到折叠信号，属性观察永不触发，阅读位置又开始被顶走"},
+    {"id":"anchor-key-attr","plugin":"dsh-ui-chat-verbose-fold","token":"data-chat-anchor-key","paths":["dsh-client-ui-chat/lib"],"hint":"流程行的 data-chat-anchor-key 消失：阅读线上的锚点选不出来，补偿降级为空操作"},
+    {"id":"conversation-scroll-attr","plugin":"dsh-ui-chat-verbose-fold","token":"data-conversation-scroll","paths":["dsh-client-ui-chat/lib","dsh-client-ui-conversation/lib"],"hint":"会话滚动口 data-conversation-scroll 消失：插件只支持共享滚动模式，一个滚动口都枚举不到就什么都不装，补偿整体失效"},
+    {"id":"chat-flow-attr","plugin":"dsh-ui-chat-verbose-fold","token":"data-chat-flow","paths":["dsh-client-ui-chat/lib"],"hint":"流程列 data-chat-flow 消失：插件不再能区分流程行与输入区等无关的 hidden，补偿整体失效"},
+    {"id":"following-tail-attr","plugin":"dsh-ui-chat-verbose-fold","token":"data-chat-following-tail","paths":["dsh-client-ui-chat/lib"],"hint":"跟底标记 data-chat-following-tail 消失：插件在读者贴底时也会尝试补阅读位置，可能把视口拉离底部"},
+    {"id":"motion-scope-attr","plugin":"dsh-ui-chat-verbose-fold","token":"data-chat-motion","paths":["dsh-client-ui-chat/lib"],"hint":"动画折叠作用域 data-chat-motion 消失：插件不再能跳过「下次有新消息时」的折叠，可能与上游 foldDriver 双补滚动位置"}
+  ]
+}
