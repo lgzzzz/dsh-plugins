@@ -21,6 +21,7 @@
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
+| `dsh-ui-chat-verbose-fold` | 让「工作步骤展示 = 完全展开」也遵守「工作步骤收起时机」，保留无组头的逐行步骤呈现，并在收起过程行时保持阅读位置 | [说明](dsh-ui-chat-verbose-fold.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
@@ -40,8 +41,8 @@
 依赖上游 CSS 选择器 / 槽位 / DOM 锚点的插件配了一段**静态校验**（`pnpm check:css`，不挂在
 `pnpm build` 上）：把清单逐条对 DSH 安装产物 grep 一遍，上游改名 / 删 token 时显式失败，
 而不是让补丁在页面上静默失效（选择器落空不报错）。每个插件目录都有自己的 `check-css.mjs`，
-默认读同目录的清单（`css-contract.json`；`dsh-changes-hover-off` 与 `dsh-jobs-optimize` 是
-`contract.json`），可用 `--manifest` 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
+默认读同目录的清单（`css-contract.json`；`dsh-changes-hover-off`、`dsh-jobs-optimize` 与
+`dsh-ui-chat-verbose-fold` 是 `contract.json`），可用 `--manifest` 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
@@ -49,10 +50,11 @@
 | `dsh-focus-free-shortcuts` | [`css-contract.json`](../dsh-focus-free-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-changes-hover-off` | [`contract.json`](../dsh-changes-hover-off/contract.json) | 改动文件卡片锚点 + 悬停延迟 |
 | `dsh-jobs-optimize` | [`contract.json`](../dsh-jobs-optimize/contract.json) | 槽位 / 注册 / 渲染锚点 + 触发器的开合真值与 toggle + 菜单由本控件经 React portal 渲染到 body + 子代理控件（参照物）的两个延迟与点击语义 |
+| `dsh-ui-chat-verbose-fold` | [`contract.json`](../dsh-ui-chat-verbose-fold/contract.json) | 收起行用的 `hidden="until-found"` + 会话滚动口 / 流程列 / 跟底标记 / 动画折叠标记 / 锚点行的 `data-*` 锚点 |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 6 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 7 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
@@ -67,6 +69,20 @@ pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
 
 ./add-plugins.ps1            # 把所有本地插件挂进 web profile(PowerShell 版)
 ./add-plugins.sh             # 同上(bash)
+./add-plugins.cmd            # 同上,不能直接跑 .ps1 的 shell 里用(见下)
+./remove-plugins.ps1         # 把上面这些插件从 web profile 卸下,dsh 未运行时用(PowerShell 版)
+./remove-plugins.sh          # 同上(bash)
+./remove-plugins.cmd         # 同上,不能直接跑 .ps1 的 shell 里用(见下)
 ```
+
+`.cmd` 只是包装：用 `powershell -NoProfile -ExecutionPolicy Bypass -File` 调用同名 `.ps1`，插件清单仍在
+`.ps1` / `.sh` 里。DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效策略是 `RemoteSigned` 也会被拒
+（报「未对文件进行数字签名」或 `AuthorizationManager check failed`；`RemoteSigned` / `Unrestricted` 都拦，只有
+`Bypass` 能过）。这时用 `.cmd`，或手动带参数：
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\remove-plugins.ps1`（当前会话临时放开：
+`Set-ExecutionPolicy -Scope Process Bypass -Force`）。
+
+`remove-plugins` 假定 `dsh` 未在运行：先退出 `dsh web`，跑完再重新启动（运行中的实例不会读到 profile 变更）。它只改
+profile（`dependencies` 与 `dsh.profile.bundles` 由 pnpm 和 `dsh` 重算），不删除本仓库里的插件目录。
 
 新插件挂载后刷新浏览器即可生效。**客户端半部(`lib/client.js`)改动后必须重新构建**；Host 在合成那一刻就把产物字节读进快照(`dsh-client-modules` 的 `initialBundleSnapshot`)，所以重新构建后仅刷新页面可能仍拿到旧字节——还要重启 `dsh web`，或在「设置 → 插件」里关掉再打开本插件，再刷新页面(完整说明见 [`dsh-changes-hover-off.md`](dsh-changes-hover-off.md#挂载与启用))。

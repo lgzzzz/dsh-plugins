@@ -133,4 +133,4 @@ dsh plugin --profile web add <本仓库路径>/dsh-focus-free-shortcuts
 dsh plugin --profile web remove dsh-focus-free-shortcuts
 ```
 
-`add-plugins.sh` / `add-plugins.ps1` 已包含本插件。
+`add-plugins.sh` / `add-plugins.ps1` 已包含本插件;整仓卸下用 `remove-plugins.sh` / `remove-plugins.ps1`(在 `dsh` 未运行时跑,跑完重新启动 `dsh web`)。

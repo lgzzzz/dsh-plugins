@@ -71,3 +71,4 @@ pnpm check
 - [DSH 插件五种「名字」](plugin-naming.md) —— 包名 / patch `id` / patch `name` / 导出 `name` / provider 名各由哪台机器管。
 - [provider 契约测试](../dsh-skill-technical-doc-writing/test/provider.test.mjs) —— rank、正文来源与取消这三条约定的可执行版本。
 - [add-plugins.sh](../add-plugins.sh) —— 整仓挂载脚本，新插件已列入清单。
+- [remove-plugins.sh](../remove-plugins.sh) —— 与之一一对应的整仓卸下脚本(在 `dsh` 未运行时执行)。
