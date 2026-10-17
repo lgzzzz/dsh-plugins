@@ -228,4 +228,44 @@ withFakeDom(({ doc }) => {
   runtime.dispose()
 })
 
+console.log('--- B⑩ 视口被折叠段占满、首条幸存锚点在视口外时不补偿 ---')
+withFakeDom(({ doc }) => {
+  const chat = buildChat()
+  // 过程组 900..1500（600px）从阅读线一直铺到视口下方，回答行 1500..1700 在视口外。
+  chat.group.height = 600
+  chat.body.height = 600
+  chat.answer.contentTop = 1500
+  doc.body.append(chat.scroller)
+  chat.scroller.scrollTop = 1000
+  chat.scroller.scrollWrites.length = 0
+  const runtime = createScrollAnchorRuntime(doc)
+
+  check('回答行折叠前已在视口外', top(chat, chat.answer), 500)
+  chat.group.setAttribute('hidden', 'until-found')
+  check('没有写滚动位置', chat.scroller.scrollWrites, [])
+  checkTrue('过程行照常隐藏', chat.group.hasAttribute('hidden'))
+  check('补偿后重新挂回观察', chat.scroller.observers.length, 1)
+
+  runtime.dispose()
+})
+
+console.log('--- B⑪ 首条幸存锚点只露出视口底边时仍补偿 ---')
+withFakeDom(({ doc }) => {
+  const chat = buildChat()
+  chat.group.height = 600
+  chat.body.height = 600
+  chat.answer.contentTop = 1500
+  doc.body.append(chat.scroller)
+  chat.scroller.scrollTop = 1150
+  chat.scroller.scrollWrites.length = 0
+  const runtime = createScrollAnchorRuntime(doc)
+
+  const answerBefore = top(chat, chat.answer)   // 350：视口底边上方 50px
+  chat.group.setAttribute('hidden', 'until-found')
+  check('写回折叠高度', chat.scroller.scrollTop, 550)
+  check('锚点回到原位置', top(chat, chat.answer), answerBefore)
+
+  runtime.dispose()
+})
+
 finish()

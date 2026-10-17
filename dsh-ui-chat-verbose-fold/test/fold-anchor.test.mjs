@@ -82,13 +82,33 @@ console.log('--- A④ 亚像素抖动不写滚动位置 ---')
   check('没有写入', probe.writes, [])
 }
 
-console.log('--- A⑤ 阅读线上没有可用锚点时降级为空操作 ---')
+console.log('--- A⑤ 阅读线上没有可用锚点时只复原，不做第二次测量 ---')
 {
+  const calls = []
   const probe = {
-    ...makeProbe({ anchor: null, measured: null }),
+    scrollTop: 1000,
+    writes: [],
+    readScrollTop() {
+      return this.scrollTop
+    },
+    writeScrollTop(value) {
+      this.writes.push(value)
+      this.scrollTop = value
+    },
+    pick: () => null,
+    measure: () => {
+      calls.push('measure')
+      return null
+    },
+    reveal: () => {
+      calls.push('reveal')
+      return () => calls.push('restore')
+    },
+    settle: () => calls.push('settle'),
   }
   checkSame('修正量', compensateHidden(probe), null)
   check('没有写入', probe.writes, [])
+  check('显回、测量一次后直接复原', calls, ['reveal', 'settle', 'restore'])
 }
 
 console.log('--- A⑥ 锚点重新测量失败时降级为空操作 ---')

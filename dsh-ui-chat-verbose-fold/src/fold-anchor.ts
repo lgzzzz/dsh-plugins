@@ -7,8 +7,9 @@
  * 的高度当场消失，正在看的内容整体上移。
  *
  * 本模块按折叠前后的几何差把这段高度补回来：先把本批元素显回、量一次阅读线锚点，
- * 再按原样隐藏、量第二次，差值写回滚动位置。原生锚定若已经补过，第二次测量读到
- * 的就是补过的位置，差值为 0，不重复写；折叠发生在阅读线下方时锚点不动，差值也
+ * 再按原样隐藏、量第二次，差值写回滚动位置。锚点必须与视口相交；没有这样的锚点时
+ * 只复原、不做第二次测量，本次不写滚动位置。原生锚定若已经补过，第二次测量读到的
+ * 就是补过的位置，差值为 0，不重复写；折叠发生在阅读线下方时锚点不动，差值也
  * 天然为 0。
  *
  * 全部 DOM 读写都收在 `HiddenBatchProbe` 后面，所以这里的记账（参照点、修正量、
@@ -29,7 +30,7 @@ export interface HiddenBatchProbe {
   readScrollTop(): number
   /** 写入滚动位置；超出滚动范围时由浏览器夹取。 */
   writeScrollTop(value: number): void
-  /** 取阅读线上最近一条可作锚点的行；没有可用行时返回 null。 */
+  /** 取阅读线上最近一条可作锚点、且与视口相交的行；没有可用行时返回 null。 */
   pick(): Anchor | null
   /** 按稳定键重测同一条行；它已被折叠、卸载或清空时返回 null。 */
   measure(key: string): number | null
@@ -53,17 +54,24 @@ export const MIN_DELTA = 0.5
  * 上方内容收掉多少，锚点就上移多少，差值取负写回 `scrollTop`。这个顺序同时把
  * 原生锚定的工作让开——浏览器已经补过的部分不会进入差值。
  *
+ * 没有与视口相交的锚点时只复原本批元素就返回：此时钉住视口外的行只会把视口
+ * 往回滚一整段折叠高度，第二次测量也没有对象可用。
+ *
  * @param probe - 读写滚动位置、显隐本批元素并测量锚点。
- * @returns 本次写入的滚动量；没有可用锚点或锚点不可测时返回 null（降级为空操作）。
+ * @returns 本次写入的滚动量；没有可用锚点（含锚点不在视口内）或锚点不可测时返回
+ *   null（降级为空操作）。
  */
 export function compensateHidden(probe: HiddenBatchProbe): number | null {
   const restore = probe.reveal()
   probe.settle()
   const anchor = probe.pick()
-  const before = anchor?.top ?? null
+  if (anchor === null) {
+    restore()
+    return null
+  }
+  const before = anchor.top
   restore()
   probe.settle()
-  if (anchor === null || before === null) return null
   const after = probe.measure(anchor.key)
   if (after === null) return null
   const delta = after - before

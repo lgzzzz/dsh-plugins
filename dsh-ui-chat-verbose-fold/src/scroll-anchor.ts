@@ -11,11 +11,13 @@
  *   它同时是 `hidden` 的观察根、锚点行的查找根和 `scrollTop` 的写回目标。
  * - 锚点行：`[data-chat-anchor-key]`。阅读线取滚动口顶边下方 1px，与 ui-chat
  *   `capturePosition()` 的取法一致；本批正在隐藏的行及其祖先/后代整批排除，
- *   所以锚点落在折叠段下方第一条仍在的行上。
+ *   并且锚点必须与视口相交——首条幸存行完全落在视口下方时不算锚点。所以锚点落在
+ *   折叠段下方第一条仍在、且至少有一部分可见的行上。
  *
  * 跟底（`[data-chat-following-tail]`）时跳过：此时上游要把视口钉在底部，补阅读
- * 位置反而会把读者拉离底部。没有共享滚动口、没有可用锚点或锚点不可测时都降级为
- * 空操作；上游契约由 `contract.json` / `check-css.mjs` 显式校验。
+ * 位置反而会把读者拉离底部。没有共享滚动口、没有可见锚点（例如视口被折叠段占满）
+ * 或锚点不可测时都降级为空操作；上游契约由 `contract.json` / `check-css.mjs`
+ * 显式校验。
  *
  * 上游锚点与验证方式见 docs/dsh-ui-chat-verbose-fold/04-reading-anchor.md。
  */
@@ -195,20 +197,26 @@ export class FoldAnchorViewport {
   }
 
   /**
-   * 取阅读线上最近一条可作锚点的行。
+   * 取阅读线上最近一条可作锚点、且与视口相交的行。
    *
-   * 跳过已隐藏的行，以及本批正在被即时折叠掉的行。于是锚点落在这批折掉的段
-   * 下方第一条仍在的行上，折叠收上去的空间从上方补回。
+   * 跳过已隐藏的行、本批正在被即时折叠掉的行，以及完全落在视口下方的行。于是
+   * 锚点落在这批折掉的段下方第一条仍在、且至少有一部分可见的行上，折叠收上去的
+   * 空间从上方补回。整屏都被本批占满时没有这样的行，本次不写滚动位置——否则
+   * 钉住视口外的一条行，等于把视口往回滚一整段折叠高度。
    */
   private pick(): Anchor | null {
     const scrollerTop = this.scroller.getBoundingClientRect().top
+    // clientHeight 不含边框与横向滚动条，正好是滚动口内容可视区的下边界。
+    const viewportBottom = scrollerTop + asHtml(this.scroller).clientHeight
     for (const row of this.scroller.querySelectorAll(ANCHOR_SELECTOR)) {
       if (hidden(row) || this.isFolded(row)) continue
       const key = anchorKey(row)
       if (key === null) continue
       const rect = row.getBoundingClientRect()
       if (rect.height === 0) continue
-      if (rect.bottom > scrollerTop + READING_LINE_OFFSET) return { key, top: rect.top - scrollerTop }
+      if (rect.bottom <= scrollerTop + READING_LINE_OFFSET) continue
+      if (rect.top >= viewportBottom) continue
+      return { key, top: rect.top - scrollerTop }
     }
     return null
   }
