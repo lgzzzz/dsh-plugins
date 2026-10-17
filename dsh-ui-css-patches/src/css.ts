@@ -60,6 +60,36 @@ export const CSS = `
   font-size: 1em !important;
 }
 
+/* 计划预览（右栏 PlanPreview）的 Markdown 正文与文档预览同一套字号：代码块 14px / 22px
+   （上游 11px / 19px）、表格与表头 14px / 22px（上游 13px / 22px）、行内代码 1em
+   （上游 .875em，即 12.25px）。PlanPreview 的 Markdown 根节点是只有构建哈希类名的
+   <div class="_markdown_…">，没有 data-*；aria-label 是计划标题、随内容变化，也不能当锚点，
+   所以锚在本节自己的 data-plan-preview 上。行内代码那条用元素类型 section 把特异性提到 (0,1,3)：
+   上游 .markdown :not(pre) > code 是 (0,1,2) 且同样带 !important，仅靠源码顺序在模块样式
+   后注入时会失效；section 是上游渲染的根元素类型，不是位置猜测，由 css-contract.json 的
+   plan-preview-section 钉住。代码块与表格只改令牌、不碰 pre / table 元素：上游分别经
+   --dsl-code-block-content-font 与 font: var(--dsw-font-markdown-table[-head]) 消费这三个令牌。 */
+section[data-plan-preview] {
+  --dsw-font-markdown-code-block: 400 var(--dsh-content-font-size, 14px) / calc(22px + var(--dsh-content-font-delta, 0px)) var(--ds-font-family-code);
+  --dsw-font-markdown-table: var(--dsh-content-font-size, 14px) / calc(22px + var(--dsh-content-font-delta, 0px)) var(--dsw-font-family);
+  --dsw-font-markdown-table-head: 500 var(--dsh-content-font-size, 14px) / calc(22px + var(--dsh-content-font-delta, 0px)) var(--dsw-font-family);
+}
+
+section[data-plan-preview] :not(pre) > code {
+  font-size: 1em !important;
+}
+
+/* 计划卡片（对话里的持久计划卡，data-plan-card）自身与整棵子树 14px。
+   卡片根元素没有 font-size（上游只写 font: inherit），标题 13px、描述 10px、打开按钮 12px
+   各自声明在哈希类名上；根元素与后代都要覆盖，并靠 !important 压过后代自己的声明
+   （上游 <style> 由模块自注入、挂载顺序不归本插件掌握）。
+   锚在 data-plan-card 上：取值是 plan.callId，随每次工具调用变化，所以选择器不带取值；
+   属性名稳定，与 data-plan-artifacts / data-plan-preview 是同一套命名。 */
+[data-plan-card],
+[data-plan-card] * {
+  font-size: var(--dsh-content-font-size, 14px) !important;
+}
+
 /* 卡片内代码块 14px */
 [data-chat-flow-kind] pre,
 [data-chat-flow-kind] pre code {
