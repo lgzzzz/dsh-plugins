@@ -58,4 +58,32 @@ withFakeDom(({ doc }) => {
   check('清理后摘掉观察', chat.scroller.observers.length, 0)
 })
 
+console.log('--- C③ 产物在没有可见锚点时回退到最后一条用户消息 ---')
+withFakeDom(({ doc }) => {
+  const chat = buildChat({ users: 2 })
+  // 折叠段占满视口，回答行在视口外；两条用户消息都在视口上方。
+  chat.group.height = 600
+  chat.body.height = 600
+  chat.answer.contentTop = 1500
+  doc.body.append(chat.scroller)
+  chat.scroller.scrollTop = 1000
+
+  const registration = loadClientArtifact()
+  const plugin = registration.factory(() => {
+    throw new Error('产物要求了外部模块：本插件不应有任何 external')
+  })
+  plugin.apply({
+    get: () => undefined,
+    effect: (run) => {
+      run()
+      return () => {}
+    },
+  })
+
+  chat.group.setAttribute('hidden', 'until-found')
+  check('回退到最后一条用户消息', chat.scroller.scrollTop, 799)
+  const relativeTop = chat.user.getBoundingClientRect().top - chat.scroller.getBoundingClientRect().top
+  check('消息顶边落在阅读线下方', relativeTop, 1)
+})
+
 finish()

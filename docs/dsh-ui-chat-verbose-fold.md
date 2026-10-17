@@ -9,9 +9,9 @@
 | 回答结束后 | 该轮的过程行立即收起，只留可展开的轮次抬头 | 保持收起 |
 | 下次有新消息时 | 最新一轮的过程行保持展开 | 最新一轮收起，更早的轮次保持收起 |
 
-两种时机的收起都不会把正在读的内容顶走：视口未跟底、且阅读线下方有可见锚点时，正在读的内容停在原处；视口被折叠段占满时不补，避免把视口往回滚一屏；视口停在底部跟随时，仍停在底部。策略投影的失败路径是安全 no-op：没有 `slots` 服务时跳过投影，找不到 `conversation.view#chat` 时在有界窗口后告警一次，注入面缺少 `hooks.presentation` 时告警一次并原样返回。滚动补偿独立安装、独立降级，见[第 4 册](dsh-ui-chat-verbose-fold/04-reading-anchor.md)。
+两种时机的收起都不会把正在读的内容顶走：视口未跟底、且阅读线下方有可见锚点时，正在读的内容停在原处；没有可见锚点时（常见于视口被折叠段占满），回退到最后一条用户消息，把它的顶边对齐到阅读线下方；视口停在底部跟随时，仍停在底部。策略投影的失败路径是安全 no-op：没有 `slots` 服务时跳过投影，找不到 `conversation.view#chat` 时在有界窗口后告警一次，注入面缺少 `hooks.presentation` 时告警一次并原样返回。滚动补偿独立安装、独立降级，见[第 4 册](dsh-ui-chat-verbose-fold/04-reading-anchor.md)。
 
-它依赖 `ui-chat` 的内部形状（槽 `conversation.view`、id `chat`、`hooks.presentation`、字段 `mode` / `foldCompletedTurns`）与一组 `data-chat-*` DOM 锚点；这些不是稳定公共契约。上游改形状时补丁退化为 no-op，`check-css.mjs` 会把这类退化提前变成显式失败。
+它依赖 `ui-chat` 的内部形状（槽 `conversation.view`、id `chat`、`hooks.presentation`、字段 `mode` / `foldCompletedTurns`）与一组 `data-chat-*` DOM 锚点，包括用户消息行的 `data-chat-flow-kind="user"`；这些不是稳定公共契约。上游改形状时补丁退化为 no-op，`check-css.mjs` 会把这类退化提前变成显式失败。
 
 -----
 

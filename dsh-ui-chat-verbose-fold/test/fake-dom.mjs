@@ -289,16 +289,18 @@ export function withFakeDom(run) {
 
 /**
  * 建一个与 ui-chat 同构的聊天树（共享滚动口）：
- * 外层 `[data-conversation-scroll]` → 跟底根 → 列表 → 流程列 → 过程组（内含折叠体）
- * + 回答行 + 尾部占位元素。
+ * 外层 `[data-conversation-scroll]` → 跟底根 → 列表 → 流程列 → 用户消息
+ * + 过程组（内含折叠体）+ 回答行 + 尾部占位元素。
  *
- * 布局（内容坐标）：垫高行 850..900、过程组 900..1200、回答行 1200..1400；
- * 滚动位置 1000 时阅读线落在过程组底部与回答行顶部的交界上，回答行的视觉顶边是 200。
+ * 布局（内容坐标）：用户消息 800..850（多条时向前排）、垫高行 850..900、
+ * 过程组 900..1200、回答行 1200..1400；滚动位置 1000 时阅读线落在过程组底部与
+ * 回答行顶部的交界上，回答行的视觉顶边是 200，用户消息在视口上方。
  *
  * @param options - `following` 在跟底根上写 `data-chat-following-tail`；
- *   `motion` 在流程列上写 `data-chat-motion`（模拟「下次有新消息时」的动画折叠）。
+ *   `motion` 在流程列上写 `data-chat-motion`（模拟「下次有新消息时」的动画折叠）；
+ *   `users` 是用户消息条数，最后一条固定在 800..850；传 0 可测没有回退落点的路径。
  */
-export function buildChat({ following = false, motion = false } = {}) {
+export function buildChat({ following = false, motion = false, users = 1 } = {}) {
   const scroller = new FakeElement('div')
   scroller.isScroller = true
   scroller.clientHeight = 400
@@ -316,6 +318,17 @@ export function buildChat({ following = false, motion = false } = {}) {
   column.setAttribute('data-chat-flow', '')
   if (motion) column.setAttribute('data-chat-motion', '')
   list.append(column)
+
+  const userRows = []
+  for (let index = 0; index < users; index += 1) {
+    const user = new FakeElement('div')
+    user.dataset.chatAnchorKey = `user:${index}`
+    user.dataset.chatFlowKind = 'user'
+    user.contentTop = 800 - (users - 1 - index) * 50
+    user.height = 50
+    column.append(user)
+    userRows.push(user)
+  }
 
   const filler = new FakeElement('div')
   filler.dataset.chatAnchorKey = 'filler:9'
@@ -343,7 +356,10 @@ export function buildChat({ following = false, motion = false } = {}) {
   spacer.setAttribute('data-chat-turn-spacer', '')
   list.append(spacer)
 
-  return { scroller, root, list, column, filler, group, body, answer, spacer }
+  return {
+    scroller, root, list, column, users: userRows, user: userRows.at(-1),
+    filler, group, body, answer, spacer,
+  }
 }
 
 /** 以假 `window.__ModuleLoader__` 载入构建产物，返回注册对象。 */

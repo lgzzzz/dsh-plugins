@@ -4,11 +4,12 @@
  * 假 DOM 复刻真实几何关系：行的视觉顶边 = 内容顶边 − 折叠掉的高度 − 滚动位置，
  * 滚动位置按可滚动范围夹取。折叠照 ui-chat 的执行顺序摆：直接给行写 `hidden`
  * （取值 `until-found`），属性观察在同一个微任务里把这一批行临时显回来量一次折叠前的几何、
- * 再按原样隐藏量第二次，并写回滚动位置。
+ * 再按原样隐藏量第二次，并写回滚动位置；没有可见锚点时改为回退到最后一条用户消息。
  */
 import {
   CONVERSATION_SCROLL_SELECTOR,
   DISCOVERY_THROTTLE_MS,
+  USER_MESSAGE_SELECTOR,
   createScrollAnchorRuntime,
 } from '../src/scroll-anchor.ts'
 import { FakeElement, buildChat, withFakeDom } from './fake-dom.mjs'
@@ -205,6 +206,7 @@ withFakeDom(({ doc }) => {
 
   checkTrue('限频值非零', DISCOVERY_THROTTLE_MS > 0)
   check('选择器', CONVERSATION_SCROLL_SELECTOR, '[data-conversation-scroll]')
+  check('用户消息选择器', USER_MESSAGE_SELECTOR, '[data-chat-flow-kind="user"]')
   runtime.dispose()
   check('dispose 摘掉其余观察', second.scroller.observers.length, 0)
 })
@@ -228,9 +230,9 @@ withFakeDom(({ doc }) => {
   runtime.dispose()
 })
 
-console.log('--- B⑩ 视口被折叠段占满、首条幸存锚点在视口外时不补偿 ---')
+console.log('--- B⑩ 视口被折叠段占满、又没有用户消息可回退时不补偿 ---')
 withFakeDom(({ doc }) => {
-  const chat = buildChat()
+  const chat = buildChat({ users: 0 })
   // 过程组 900..1500（600px）从阅读线一直铺到视口下方，回答行 1500..1700 在视口外。
   chat.group.height = 600
   chat.body.height = 600
@@ -264,6 +266,29 @@ withFakeDom(({ doc }) => {
   chat.group.setAttribute('hidden', 'until-found')
   check('写回折叠高度', chat.scroller.scrollTop, 550)
   check('锚点回到原位置', top(chat, chat.answer), answerBefore)
+
+  runtime.dispose()
+})
+
+console.log('--- B⑫ 没有可见锚点时把最后一条用户消息对齐到阅读线下方 ---')
+withFakeDom(({ doc }) => {
+  const chat = buildChat({ users: 2 })
+  // 同 B⑩：折叠段占满视口，首条幸存锚点落在视口外；两条用户消息都在视口上方。
+  chat.group.height = 600
+  chat.body.height = 600
+  chat.answer.contentTop = 1500
+  doc.body.append(chat.scroller)
+  chat.scroller.scrollTop = 1000
+  chat.scroller.scrollWrites.length = 0
+  const runtime = createScrollAnchorRuntime(doc)
+
+  check('回答行折叠前已在视口外', top(chat, chat.answer), 500)
+  chat.group.setAttribute('hidden', 'until-found')
+  check('回退到最后一条用户消息', chat.scroller.scrollTop, 799)
+  check('最后一条消息顶边落在阅读线下方', top(chat, chat.user), 1)
+  check('没有退回更早的用户消息', top(chat, chat.users[0]), -49)
+  checkTrue('过程行照常隐藏', chat.group.hasAttribute('hidden'))
+  check('补偿后重新挂回观察', chat.scroller.observers.length, 1)
 
   runtime.dispose()
 })

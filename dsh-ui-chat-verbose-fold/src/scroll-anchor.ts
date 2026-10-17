@@ -13,9 +13,12 @@
  *   `capturePosition()` 的取法一致；本批正在隐藏的行及其祖先/后代整批排除，
  *   并且锚点必须与视口相交——首条幸存行完全落在视口下方时不算锚点。所以锚点落在
  *   折叠段下方第一条仍在、且至少有一部分可见的行上。
+ * - 回退落点：没有这样的锚点时，取 `[data-chat-flow-kind="user"]` 中最后一条
+ *   可见行，把它的顶边对到阅读线下方。视口被折叠段占满时，读者至少回到本轮
+ *   用户输入的起点。
  *
  * 跟底（`[data-chat-following-tail]`）时跳过：此时上游要把视口钉在底部，补阅读
- * 位置反而会把读者拉离底部。没有共享滚动口、没有可见锚点（例如视口被折叠段占满）
+ * 位置反而会把读者拉离底部。没有共享滚动口、没有可见锚点且没有可对齐的用户消息，
  * 或锚点不可测时都降级为空操作；上游契约由 `contract.json` / `check-css.mjs`
  * 显式校验。
  *
@@ -41,6 +44,9 @@ export const CONVERSATION_SCROLL_SELECTOR = '[data-conversation-scroll]'
 
 /** ui-chat 的流程列；只补偿列内的折叠，忽略输入区等无关的 `hidden`。 */
 export const CHAT_FLOW_SELECTOR = '[data-chat-flow]'
+
+/** 用户发送的消息行；没有可见锚点时回退到其中最后一条。 */
+export const USER_MESSAGE_SELECTOR = '[data-chat-flow-kind="user"]'
 
 /** 视口正处于「跟随底部」状态；此时让上游保持贴底，不补阅读位置。 */
 export const FOLLOWING_TAIL_SELECTOR = '[data-chat-following-tail]'
@@ -163,6 +169,7 @@ export class FoldAnchorViewport {
       },
       pick: () => this.pick(),
       measure: (key) => this.measure(key),
+      fallbackDelta: () => this.fallbackDelta(),
       reveal: () => {
         // 整批记账：这批元素马上又要隐藏，选锚点时必须整批排除，否则会锚到一条
         // 自己马上要隐藏的行上——重新测量时它已 `hidden`，measure 返回 null，整次补偿被放弃。
@@ -197,12 +204,12 @@ export class FoldAnchorViewport {
   }
 
   /**
-   * 取阅读线上最近一条可作锚点、且与视口相交的行。
+   * 按 DOM 顺序取阅读线上第一条可作锚点、且与视口相交的行。
    *
    * 跳过已隐藏的行、本批正在被即时折叠掉的行，以及完全落在视口下方的行。于是
    * 锚点落在这批折掉的段下方第一条仍在、且至少有一部分可见的行上，折叠收上去的
-   * 空间从上方补回。整屏都被本批占满时没有这样的行，本次不写滚动位置——否则
-   * 钉住视口外的一条行，等于把视口往回滚一整段折叠高度。
+   * 空间从上方补回。整屏都被本批占满时没有这样的行，改由 `fallbackDelta()` 钉住
+   * 最后一条用户消息——否则钉住视口外的一条行，等于把视口往回滚一整段折叠高度。
    */
   private pick(): Anchor | null {
     const scrollerTop = this.scroller.getBoundingClientRect().top
@@ -230,6 +237,26 @@ export class FoldAnchorViewport {
       const rect = row.getBoundingClientRect()
       if (rect.height === 0) return null
       return rect.top - scrollerTop
+    }
+    return null
+  }
+
+  /**
+   * 没有可见锚点时的回退落点：最后一条用户消息相对阅读线的偏移。
+   *
+   * 从后往前找 `[data-chat-flow-kind="user"]`，跳过已隐藏和高度为 0 的行，取
+   * 最后一条可用行。它可能落在视口上方（视口被本批折叠段占满的常见形状），
+   * 也可能在下方；修正量会把它的顶边对到滚动口顶边下方 1px 的阅读线上。
+   */
+  private fallbackDelta(): number | null {
+    const scrollerTop = this.scroller.getBoundingClientRect().top
+    const rows = Array.from(this.scroller.querySelectorAll(USER_MESSAGE_SELECTOR))
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const row = rows[index]
+      if (hidden(row)) continue
+      const rect = row.getBoundingClientRect()
+      if (rect.height === 0) continue
+      return rect.top - scrollerTop - READING_LINE_OFFSET
     }
     return null
   }

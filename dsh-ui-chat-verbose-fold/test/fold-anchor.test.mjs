@@ -10,9 +10,9 @@ import { check, checkSame, finish } from './helpers.mjs'
 /**
  * 一个可写的探针：pick/measure 返回预置值，写滚动位置累加进 `writes`。
  *
- * @param options - 阅读线锚点与复原后重测到的位置。
+ * @param options - 阅读线锚点、复原后重测到的位置与无锚点回退修正量。
  */
-function makeProbe({ anchor, measured }) {
+function makeProbe({ anchor, measured, fallback = null }) {
   return {
     scrollTop: 1000,
     writes: [],
@@ -25,6 +25,7 @@ function makeProbe({ anchor, measured }) {
     },
     pick: () => anchor,
     measure: () => measured,
+    fallbackDelta: () => fallback,
     reveal: () => () => {},
     settle: () => {},
   }
@@ -44,6 +45,7 @@ console.log('--- A① 按折叠前后的两次测量补差值 ---')
     },
     pick: () => ({ key: 'answer:3', top: 200 }),
     measure: () => 20,
+    fallbackDelta: () => null,
     reveal: () => {
       calls.push(['reveal'])
       return () => calls.push(['restore'])
@@ -82,7 +84,7 @@ console.log('--- A④ 亚像素抖动不写滚动位置 ---')
   check('没有写入', probe.writes, [])
 }
 
-console.log('--- A⑤ 阅读线上没有可用锚点时只复原，不做第二次测量 ---')
+console.log('--- A⑤ 没有可用锚点时复原后询问用户消息回退，回退也缺席才放弃 ---')
 {
   const calls = []
   const probe = {
@@ -100,6 +102,10 @@ console.log('--- A⑤ 阅读线上没有可用锚点时只复原，不做第二�
       calls.push('measure')
       return null
     },
+    fallbackDelta: () => {
+      calls.push('fallback')
+      return null
+    },
     reveal: () => {
       calls.push('reveal')
       return () => calls.push('restore')
@@ -108,15 +114,60 @@ console.log('--- A⑤ 阅读线上没有可用锚点时只复原，不做第二�
   }
   checkSame('修正量', compensateHidden(probe), null)
   check('没有写入', probe.writes, [])
-  check('显回、测量一次后直接复原', calls, ['reveal', 'settle', 'restore'])
+  check('复原后测量折叠后的回退落点', calls, ['reveal', 'settle', 'restore', 'settle', 'fallback'])
 }
 
-console.log('--- A⑥ 锚点重新测量失败时降级为空操作 ---')
+console.log('--- A⑥ 锚点重新测量失败时降级为空操作，不走用户消息回退 ---')
 {
+  const calls = []
   const probe = {
     ...makeProbe({ anchor: { key: 'answer:3', top: 200 }, measured: null }),
+    fallbackDelta: () => {
+      calls.push('fallback')
+      return -100
+    },
   }
   checkSame('修正量', compensateHidden(probe), null)
+  check('没有写入', probe.writes, [])
+  check('没有回退', calls, [])
+}
+
+console.log('--- A⑦ 没有可见锚点时按用户消息回退量写回滚动位置 ---')
+{
+  const calls = []
+  const probe = {
+    scrollTop: 1000,
+    writes: [],
+    readScrollTop() {
+      return this.scrollTop
+    },
+    writeScrollTop(value) {
+      this.writes.push(value)
+      this.scrollTop = value
+    },
+    pick: () => null,
+    measure: () => null,
+    fallbackDelta: () => {
+      calls.push('fallback')
+      return -201
+    },
+    reveal: () => {
+      calls.push('reveal')
+      return () => calls.push('restore')
+    },
+    settle: () => calls.push('settle'),
+  }
+  check('回退修正量', compensateHidden(probe), -201)
+  check('写入位置', probe.scrollTop, 799)
+  check('顺序', calls, ['reveal', 'settle', 'restore', 'settle', 'fallback'])
+}
+
+console.log('--- A⑧ 用户消息回退量是亚像素抖动时不写 ---')
+{
+  const probe = {
+    ...makeProbe({ anchor: null, measured: null, fallback: MIN_DELTA / 2 }),
+  }
+  check('修正量', compensateHidden(probe), 0)
   check('没有写入', probe.writes, [])
 }
 
