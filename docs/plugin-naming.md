@@ -15,7 +15,7 @@
 
 ## 进一步探索
 
-- [docs/README.md](README.md) —— 本仓库的构建、挂载与校验命令(含把插件挂进 profile 的 `add-plugins` 脚本)。
+- [docs/README.md](README.md) —— 本仓库的构建、挂载与校验命令(含把插件挂进 / 卸出 profile 的 `add-plugins` / `remove-plugins` 脚本)。
 - [示例：函数式插件](../example/normal-plugin/index.ts) —— 最小示例：`export const name` + `export const inject` + `export function apply`。
 - [示例：服务插件](../example/service-plugin/index.ts) —— 最小示例：`export default class X extends Service` 与服务名的落地。
 - [`dsh.client.inject` 完整说明](dsh-client-inject.md) —— 客户端半部的加载顺序由 `external`（模块图）与 cordis 服务 `inject` 保证，与 patch 的 `name` 无关。

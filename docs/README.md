@@ -69,6 +69,20 @@ pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
 
 ./add-plugins.ps1            # 把所有本地插件挂进 web profile(PowerShell 版)
 ./add-plugins.sh             # 同上(bash)
+./add-plugins.cmd            # 同上,不能直接跑 .ps1 的 shell 里用(见下)
+./remove-plugins.ps1         # 把上面这些插件从 web profile 卸下,dsh 未运行时用(PowerShell 版)
+./remove-plugins.sh          # 同上(bash)
+./remove-plugins.cmd         # 同上,不能直接跑 .ps1 的 shell 里用(见下)
 ```
+
+`.cmd` 只是包装：用 `powershell -NoProfile -ExecutionPolicy Bypass -File` 调用同名 `.ps1`，插件清单仍在
+`.ps1` / `.sh` 里。DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效策略是 `RemoteSigned` 也会被拒
+（报「未对文件进行数字签名」或 `AuthorizationManager check failed`；`RemoteSigned` / `Unrestricted` 都拦，只有
+`Bypass` 能过）。这时用 `.cmd`，或手动带参数：
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\remove-plugins.ps1`（当前会话临时放开：
+`Set-ExecutionPolicy -Scope Process Bypass -Force`）。
+
+`remove-plugins` 假定 `dsh` 未在运行：先退出 `dsh web`，跑完再重新启动（运行中的实例不会读到 profile 变更）。它只改
+profile（`dependencies` 与 `dsh.profile.bundles` 由 pnpm 和 `dsh` 重算），不删除本仓库里的插件目录。
 
 新插件挂载后刷新浏览器即可生效。**客户端半部(`lib/client.js`)改动后必须重新构建**；Host 在合成那一刻就把产物字节读进快照(`dsh-client-modules` 的 `initialBundleSnapshot`)，所以重新构建后仅刷新页面可能仍拿到旧字节——还要重启 `dsh web`，或在「设置 → 插件」里关掉再打开本插件，再刷新页面(完整说明见 [`dsh-changes-hover-off.md`](dsh-changes-hover-off.md#挂载与启用))。
