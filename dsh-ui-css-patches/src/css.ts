@@ -19,7 +19,7 @@
  * 锚点与令牌清单、以及构建后校验见 docs/dsh-css-architecture/04-css-patches-relationship.md。
  */
 export const CSS = `
-/* 对话正文撑满可用宽度 */
+/* 对话正文占用100%可用宽度 */
 [data-slot='main.conversation'] [data-conversation-content] {
   --dsh-chat-content-width: 100%;
 }
