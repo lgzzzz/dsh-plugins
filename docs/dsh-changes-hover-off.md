@@ -75,7 +75,7 @@ dsh plugin --profile web add C:\Users\LGZ\dsh-plugins\dsh-changes-hover-off
 
 于是 `#root` 上的合成派发永远收不到该手势 → `onPointerEnter` 不触发 → 定时器根本不建立 → **浮层不出现，对比也不会被读取**（不是「渲染出来再隐藏」）。
 
-`document` 是 `#root` 的祖先，捕获阶段必然先于 `#root` 上的任何监听；这条路径与 `dsh-focus-free-shortcuts` 的审批捕获桥([`approval-keys.ts`](../dsh-focus-free-shortcuts/src/approval-keys.ts) 在 window 捕获阶段抢在卡片自身 React 处理器之前)是同一手法。
+`document` 是 `#root` 的祖先，捕获阶段必然先于 `#root` 上的任何监听；这条路径与 `dsh-keyboard-shortcuts` 的审批捕获桥([`approval-keys.ts`](../dsh-keyboard-shortcuts/src/approval-keys.ts) 在 window 捕获阶段抢在卡片自身 React 处理器之前)是同一手法。
 
 **第 2 层（网兜）**：万一浮层仍被打开（闸门失效，或上游改走别的打开路径），`body` 上的 `MutationObserver` 会在 portal 外壳进入 DOM 的那个微任务里把它置为 `display:none`；MutationObserver 回调早于绘制，所以它不会可见。网兜只隐藏、不删除 React 拥有的节点，卸载时还原。代价：走这条路时对比仍会被读取一次，只是不可见。
 

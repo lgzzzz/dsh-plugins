@@ -1,0 +1,7 @@
+# dsh-keyboard-shortcuts 的 web bundle 挂载行：随 dsh.profile.bundles 自动挂载。
+# 宿主半部按 <name>/package.json 解析；客户端半部由 dsh.client.platform=web + immediately
+# 注册进浏览器 roster。包名 / patch id / patch name / 导出 name 的约定见
+# docs/plugin-naming.md。
+- insert:
+    - id: dsh-keyboard-shortcuts
+      name: dsh-keyboard-shortcuts

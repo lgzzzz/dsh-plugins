@@ -12,10 +12,10 @@ PLUGINS=(
   dsh-changes-hover-off
   dsh-desktop-notify
   dsh-directory-picker-browse
-  dsh-focus-free-shortcuts
   dsh-git-guard
   dsh-header-action-order
   dsh-jobs-optimize
+  dsh-keyboard-shortcuts
   dsh-skill-technical-doc-writing
   dsh-ui-css-patches
   dsh-workspace-activity-sort

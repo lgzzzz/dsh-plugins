@@ -1,0 +1,44 @@
+{
+  "name": "dsh-keyboard-shortcuts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "快捷键插件：把八条快捷键注册成官方快捷键服务的固定行（Ctrl+Alt+N 新会话、Ctrl+Alt+B 左侧栏、Ctrl+Alt+P 在本地打开、Ctrl+Alt+O 右侧栏、Ctrl+Alt+\\ 工作区文件、Ctrl+Alt+L 新建终端、Ctrl+Alt+Enter 面板全屏、Ctrl+Alt+, 关闭当前页面／窗口；macOS 上主修饰键为 ⌘），按键命中后由官方命令注册表执行对应命令；面板全屏与关页在 Web 上焦点不在右栏时回退到活动 dock 面板。另含免聚焦桥接：连按两下 Esc 停止、审批面板 Enter/Esc、提问卡片 Esc、全屏右栏 Esc 关栏、⌘⌥J / Ctrl+Alt+J 聚焦输入框、⌘⌥K / Ctrl+Alt+K 聚焦右栏当前页面（通常是终端）、⌘⌥←/→ 切换右栏页面、⌘↑/↓ 与 ⌘⌥↑/↓ 导航会话、⌘\\ 分屏；终端 .xterm 内的这些按键由 window 捕获阶段接管。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "node test/run-all.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "check:css": "node check-css.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5-alpha.2",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.1-alpha.4",
+    "@deepseek-ai/dsh-client-shortcuts": "^0.2.1-alpha.4",
+    "@deepseek-ai/dsh-client-ui-approval": "^0.2.1-alpha.4",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.2.1-alpha.4",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.1-alpha.4",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "^0.2.1-alpha.4",
+    "@deepseek-ai/dsh-client-ui-user-questions": "^0.2.1-alpha.4",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}
