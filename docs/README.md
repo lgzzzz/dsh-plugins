@@ -21,7 +21,7 @@
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
 | `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效 | [说明](dsh-keyboard-shortcuts.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
-| `dsh-ui-chat-verbose-fold` | 让「工作步骤展示 = 完全展开」也遵守「工作步骤收起时机」，保留无组头的逐行步骤呈现，并在收起过程行时保持阅读位置（无可见锚点时回到最后一条用户消息） | [说明](dsh-ui-chat-verbose-fold.md) |
+| `dsh-ui-chat-verbose-fold` | 让「工作步骤展示 = 完全展开」也遵守「工作步骤收起时机」，保留无组头的逐行步骤呈现；插话轮次按插话消息拆成多个可独立收起的段，每段抬头显示该段耗时，被停止、中断和失败的轮次同样折叠，并在收起过程行时保持阅读位置（无可见锚点时回到最后一条用户消息） | [说明](dsh-ui-chat-verbose-fold.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
@@ -50,7 +50,7 @@
 | `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-changes-hover-off` | [`contract.json`](../dsh-changes-hover-off/contract.json) | 改动文件卡片锚点 + 悬停延迟 |
 | `dsh-jobs-optimize` | [`contract.json`](../dsh-jobs-optimize/contract.json) | 槽位 / 注册 / 渲染锚点 + 触发器的开合真值与 toggle + 菜单由本控件经 React portal 渲染到 body + 子代理控件（参照物）的两个延迟与点击语义 |
-| `dsh-ui-chat-verbose-fold` | [`contract.json`](../dsh-ui-chat-verbose-fold/contract.json) | 收起行用的 `hidden="until-found"` + 会话滚动口 / 流程列 / 跟底标记 / 动画折叠标记 / 锚点行与用户消息行的 `data-*` 锚点 |
+| `dsh-ui-chat-verbose-fold` | [`contract.json`](../dsh-ui-chat-verbose-fold/contract.json) | 收起行用的 `hidden="until-found"` + 会话滚动口 / 流程列 / 跟底标记 / 动画折叠标记 / 锚点行与用户消息行的 `data-*` 锚点 + flow / turn-process / 插话分段适配依赖的槽、hook、过程规格字段、grouped view、插话与终止轮次字段、抬头文案 |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 
