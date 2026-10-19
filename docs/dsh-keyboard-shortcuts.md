@@ -1,6 +1,6 @@
 # dsh-keyboard-shortcuts
 
-Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**的只读固定行，命中后调用官方命令注册表；另一层为内置命令够不着的状态补上免聚焦桥接（连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓` 与 `⌘\` 分屏）。面板全屏与关闭当前页面在 Web 上还会在焦点不在右栏时回退到当前 Session 的活动 dock 面板；消息滚动口内的 PageUp/PageDown 按可见消息带翻页，Space 的原生翻页被吞掉。
+Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**的只读固定行，命中后调用官方命令注册表；另一层为内置命令够不着的状态补上免聚焦桥接（连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`、`⌘\` 分屏，以及 `⌘⌥.` / `Ctrl+Alt+.` 折叠中间步骤）。面板全屏与关闭当前页面在 Web 上还会在焦点不在右栏时回退到当前 Session 的活动 dock 面板；消息滚动口内的 PageUp/PageDown 按可见消息带翻页，Space 的原生翻页被吞掉。
 
 ## 目录
 
@@ -47,8 +47,9 @@ Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**
 | 切换会话 | `⌘↑` / `⌘↓` | 左侧栏前三个工作区当前显示的会话行之间环状导航 |
 | 切换活跃会话 | `⌘⌥↑` / `⌘⌥↓` | 只在行上有状态点的活跃会话之间切换 |
 | 分屏 | `⌘\` | 焦点不在面板内时回退到活动 dock 面板并分屏 |
+| 折叠中间步骤 | `⌘⌥.` / `Ctrl+Alt+.` | 收当前会话所有展开的轮次过程与过程组标题；没有外层展开项时收单步详情。只折叠、不展开，不抢焦点 |
 
-固定键与 `⌘⌥J` / `⌘⌥K` / 切页 / 会话键在终端 `.xterm` 内同样生效：终端会在自己的处理器里 `preventDefault()+stopPropagation()`，所以各桥另挂 window **捕获阶段**监听，在事件进入终端前判定并吞掉这一按，既不误动作，也不把按键当输入送进 shell。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
+固定键与 `⌘⌥J` / `⌘⌥K` / 切页 / 会话键 / 折叠中间步骤在终端 `.xterm` 内同样生效：终端会在自己的处理器里 `preventDefault()+stopPropagation()`，所以各桥另挂 window **捕获阶段**监听，在事件进入终端前判定并吞掉这一按，既不误动作，也不把按键当输入送进 shell。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
 
 ### 消息滚动口翻页
 
@@ -71,14 +72,15 @@ Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行�
 
 ## 工作方式
 
-1. `registerFixed()` 为八个官方命令各注册一条固定行，占用 `primary+alt+…` 组合；另为 `⌘⌥J` / `⌘⌥K` / `⌘⌥←/→` / `⌘↑/↓` / `⌘⌥↑/↓` 注册五条自挂固定行；
+1. `registerFixed()` 为八个官方命令各注册一条固定行，占用 `primary+alt+…` 组合；另为 `⌘⌥J` / `⌘⌥K` / `⌘⌥←/→` / `⌘↑/↓` / `⌘⌥↑/↓` / `⌘⌥.` 注册六条自挂固定行；
 2. `observeFixedInput()` 接收官方适配器投递的本地按键；命中固定组合时先 `consume()`，再调用官方注册表的 `registry.invoke(commandId, context)`，或交给本插件自己的桥执行；
 3. 焦点在终端 `.xterm` 内时，官方固定通道收不到按键（xterm 会截断冒泡），插件另挂 window 捕获阶段的 keydown：命中即 `preventDefault()` + `stopPropagation()`，再走同一条执行路径；
 4. macOS Web 上 `⌘⌥N` 的 Option+N 是死键，官方固定通道会把这一按标成组字中；插件另在捕获阶段认领它，`preventDefault()` + `stopPropagation()` 后直接调 `session.new`（只限 Web，Desktop 由原生键盘桥接处理）；
 5. 长按、输入法组合中、已被前面的处理器消费的按键都不执行；
 6. 面板全屏与关页在 Web 上先走 `sidebarRight.commandTarget()` 的免聚焦回退：焦点不在面板内时解析当前 Session 的活动 dock pane，消费按键后执行与官方命令相同的 `toggleFullscreen()` / `closeTarget()`；
 7. 模态层、区域、目标面板与失败原因由官方命令的 `resolve()` 判断；插件只把 `region / modal / target` 原样交过去；
-8. 消息滚动口另挂一条与固定键无关的 window 捕获监听：PageUp/PageDown 按 `clientHeight - composerHeight - 50` 翻页，并用 rAF 缓动；Space 直接吞掉；输入框、按钮、终端、模态层与内层可滚动区不接管。
+8. 消息滚动口另挂一条与固定键无关的 window 捕获监听：PageUp/PageDown 按 `clientHeight - composerHeight - 50` 翻页，并用 rAF 缓动；Space 直接吞掉；输入框、按钮、终端、模态层与内层可滚动区不接管；
+9. 折叠中间步骤先收展开的轮次过程与过程组标题，没有外层展开项时收单步详情；动作是点击上游标题，点击期间临时屏蔽目标自己的 `focus()`，结束后恢复，键盘留在原处。
 
 `registry` 是官方快捷键服务实例上的内部字段（公开的 `Shortcuts` 接口没有「按 id 调命令」的方法）。插件对它做结构检查：`invoke` 缺席时告警并完全不安装固定行，而不是退回自己调用业务服务。
 
@@ -107,7 +109,7 @@ Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行�
 ```bash
 cd dsh-keyboard-shortcuts
 ../node_modules/.bin/tsdown            # 构建 lib/client.js
-node test/run-all.mjs                  # 28 个测试文件
+node test/run-all.mjs                  # 31 个测试文件
 ../node_modules/.bin/tsc --noEmit      # 类型检查
 node check-css.mjs                     # 上游 DOM 锚点契约校验
 node --check lib/client.js && node --check index.ts
@@ -148,6 +150,8 @@ dsh plugin --profile web remove dsh-keyboard-shortcuts
 | 模态层打开 | 官方 `invoke()` 按命令声明的 `modals` 决定是否执行；插件不越过模态层 |
 | 会话导航候选 | 只取左侧栏此刻渲染出来的会话行；折叠工作区、被「展开更多」挡住的行、归档行、搜索过滤与窄侧栏都不算候选 |
 | 消息滚动口缺少 composer / 滚动口标记 | PageUp/PageDown/Space 不接管，保持原生 | 翻页补偿只在能算出可见消息带时生效；`css-contract.json` 的 `conversation-scroll` / `composer-seat` 兜住锚点 |
+| 折叠中间步骤 | 有展开的工作步骤时点击上游标题收起；没有展开项、或只有运行中 / 被禁用的过程时不动作、不消费 | 只折叠、不展开；一次收所有展开的轮次过程与过程组标题，没有外层展开项时再收单步详情；模态层下让位；不抢焦点 |
+| 折叠中间步骤的 DOM 锚点 | 对应目标收集退化为 no-op 或只剩另一层 | 主会话作用域、轮次过程、过程组标题、单步详情各自独立；`css-contract.json` 的七条锚点兜住这些读数 |
 
 -----
 
@@ -163,3 +167,4 @@ dsh plugin --profile web remove dsh-keyboard-shortcuts
 | [6. 边界与依赖契约](dsh-keyboard-shortcuts/06-boundaries-and-contracts.md) | 与内置命令的对照表；已知边界与失败模式；依赖的非正式契约 |
 | [7. 构建、测试与启用](dsh-keyboard-shortcuts/07-build-test-and-enable.md) | 构建 / 测试命令；源码与测试分组；上游 DOM 锚点契约校验；启用与撤销 |
 | [8. 消息滚动口的翻页补偿](dsh-keyboard-shortcuts/08-chat-paging.md) | PageUp/PageDown 按可见消息带翻页；Space 屏蔽；让位边界、失败模式与验证 |
+| [9. 折叠中间步骤](dsh-keyboard-shortcuts/09-collapse-steps.md) | `⌘⌥.` / `Ctrl+Alt+.` 的两层目标、焦点保持、终端捕获、失败模式与验证 |

@@ -61,11 +61,12 @@ console.log('--- C② 产物装配后调用官方命令 ---')
     const shortcuts = fakeShortcuts()
     const ctx = fakeCtx({ shortcuts })
     plugin.apply(ctx)
-    check('八条固定行', shortcuts.commands.length, 8)
+    check('九条固定行', shortcuts.commands.length, 9)
     check(
       '固定行 id',
       shortcuts.commands.map((command) => command.id),
       [
+        'dsh-keyboard-shortcuts.collapse-steps',
         'dsh-keyboard-shortcuts.session.new',
         'dsh-keyboard-shortcuts.sidebar.left.toggle',
         'dsh-keyboard-shortcuts.workspace.openLocal',

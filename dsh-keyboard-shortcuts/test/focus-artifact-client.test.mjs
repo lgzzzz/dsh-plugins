@@ -221,6 +221,39 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
       dom.restore()
     }
   }
+
+  console.log('--- G⑤ 产物里的折叠中间步骤:⌘⌥. 收展开的轮次过程 ---')
+  {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const main = app.append(new FakeElement('div', { 'data-slot': 'main.conversation' }))
+    const scroll = main.append(new FakeElement('div', { 'data-conversation-scroll': '' }))
+    const turn = scroll.append(new FakeElement('button', { 'data-turn-process': '1', 'aria-expanded': 'true' }))
+    turn.clicks = 0
+    turn.click = () => {
+      turn.clicks += 1
+      turn.setAttribute('aria-expanded', 'false')
+    }
+    const dom = withWindowDom({ root: app })
+    try {
+      const shortcuts = fakeShortcuts({ platform: 'macos', fixedRows: APPROVAL_FIXED_ROWS })
+      const ctx = new FakeCtx({
+        shortcuts,
+        sidebarRight: fakeSidebar(),
+        sessions: fakeSessions({ summary: { s1: session('s1') } }),
+        uiSession: fakeUiSession(),
+        uiWorkspace: fakeSessionNavigation(),
+      })
+      check('折叠键装配无告警', captureWarnings(() => plugin.apply(ctx)), [])
+      checkTrue('产物里折叠固定行已挂载', shortcuts.fixedCatalog.getSnapshot().some((entry) => entry.id === 'dsh-keyboard-shortcuts.collapse-steps'))
+      const press = keydown(gesture('Period', { alt: true, meta: true }), shortcutContext({ target: null }))
+      shortcuts.emit(press.input)
+      check('产物里轮次过程被点击', turn.clicks, 1)
+      check('产物里折叠键被消费', press.consumed.count, 1)
+      check('产物里轮次过程已收起', turn.getAttribute('aria-expanded'), 'false')
+    } finally {
+      dom.restore()
+    }
+  }
 }
 
 finish()

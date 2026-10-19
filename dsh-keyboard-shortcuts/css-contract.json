@@ -4,6 +4,13 @@
     {"id":"approval-key","plugin":"dsh-keyboard-shortcuts","token":"data-approval-key","paths":["dsh-client-ui-approval/lib"],"hint":"审批面板根标记消失：审批桥的让位判定（以及停止桥的让位选择器）落空，焦点在面板内时插件会从面板手里抢答"},
     {"id":"conversation-session","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-session","paths":["dsh-client-ui-conversation/lib"],"hint":"会话根标记消失：停止桥的归属判定恒为假，连按两下 Esc 不再停止回合"},
     {"id":"conversation-scroll","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-scroll","paths":["dsh-client-ui-conversation/lib"],"hint":"消息滚动口标记消失：翻页补偿找不到外层 transcript，PageUp/PageDown 回到按整个滚动口（含 composer）翻页，每页跳过 composerHeight - 40px；Space 也不再被屏蔽"},
+    {"id":"turn-process-control","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-turn-process\":","paths":["dsh-client-ui-chat/lib"],"hint":"轮次过程开合按钮标记消失：折叠键收不到整段「已完成，用时 …」，只能退到单步详情，展开中的工作步骤不会被一次收起"},
+    {"id":"process-group-header","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-process-activity\":","paths":["dsh-client-ui-chat/lib"],"hint":"过程组标题标记消失：折叠键收不到「执行了命令，已读取文件」这类组标题；详细模式下单独展开的组不会随快捷键收起"},
+    {"id":"step-process-root","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-step-process\":\\s*true","paths":["dsh-client-ui-chat/lib"],"hint":"过程组根标记消失：折叠键认不出过程组容器，点不到组标题，也不再限定单步详情的归属"},
+    {"id":"chat-flow-kind","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-chat-flow-kind\":","paths":["dsh-client-ui-chat/lib"],"hint":"聊天流节点种类标记消失：完全展开模式下插件分不清工具 / 助手步骤与系统提示词，单步详情折叠会失效或误折非步骤内容"},
+    {"id":"step-disclosure-row","plugin":"dsh-keyboard-shortcuts","token":"\"data-disclosure-row\":","paths":["dsh-web-frontend/dist/assets"],"hint":"共享折叠行标记消失（思考 / 文件 / 搜索等单步详情）：外层已经收起后再按一次不会收起这些单步详情"},
+    {"id":"step-expandable","plugin":"dsh-keyboard-shortcuts","token":"\"data-expandable\":","paths":["dsh-client-ui-tool/lib"],"hint":"工具行 / 命令输出的可展开标记消失：完全展开模式下展开着的单步详情不会被快捷键收起"},
+    {"id":"main-conversation-slot","plugin":"dsh-keyboard-shortcuts","token":"\"main.conversation\"","paths":["dsh-client-ui-conversation/lib"],"hint":"主会话槽位名变了：折叠键找不到主会话作用域；回退只在全文档恰好有一个消息滚动口时生效，否则不动作（不误折右栏）"},
     {"id":"composer-seat","plugin":"dsh-keyboard-shortcuts","token":"data-composer-seat","paths":["dsh-client-ui-conversation/lib"],"hint":"composer 座位标记消失：翻页补偿算不出可见消息带（clientHeight - composerHeight），退化为 no-op，原生翻页的越界问题回来"},
 
     {"id":"conversation-region","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-region","paths":["dsh-client-ui-conversation/lib"],"hint":"会话输入区标记消失：停止桥取不到 region，连按两下 Esc 不再停止回合"},
