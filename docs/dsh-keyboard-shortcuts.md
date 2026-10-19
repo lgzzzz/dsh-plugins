@@ -65,9 +65,10 @@ Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行�
 1. `registerFixed()` 为八个官方命令各注册一条固定行，占用 `primary+alt+…` 组合；另为 `⌘⌥J` / `⌘⌥K` / `⌘⌥←/→` / `⌘↑/↓` / `⌘⌥↑/↓` 注册五条自挂固定行；
 2. `observeFixedInput()` 接收官方适配器投递的本地按键；命中固定组合时先 `consume()`，再调用官方注册表的 `registry.invoke(commandId, context)`，或交给本插件自己的桥执行；
 3. 焦点在终端 `.xterm` 内时，官方固定通道收不到按键（xterm 会截断冒泡），插件另挂 window 捕获阶段的 keydown：命中即 `preventDefault()` + `stopPropagation()`，再走同一条执行路径；
-4. 长按、输入法组合中、已被前面的处理器消费的按键都不执行；
-5. 面板全屏与关页在 Web 上先走 `sidebarRight.commandTarget()` 的免聚焦回退：焦点不在面板内时解析当前 Session 的活动 dock pane，消费按键后执行与官方命令相同的 `toggleFullscreen()` / `closeTarget()`；
-6. 模态层、区域、目标面板与失败原因由官方命令的 `resolve()` 判断；插件只把 `region / modal / target` 原样交过去。
+4. macOS Web 上 `⌘⌥N` 的 Option+N 是死键，官方固定通道会把这一按标成组字中；插件另在捕获阶段认领它，`preventDefault()` + `stopPropagation()` 后直接调 `session.new`（只限 Web，Desktop 由原生键盘桥接处理）；
+5. 长按、输入法组合中、已被前面的处理器消费的按键都不执行；
+6. 面板全屏与关页在 Web 上先走 `sidebarRight.commandTarget()` 的免聚焦回退：焦点不在面板内时解析当前 Session 的活动 dock pane，消费按键后执行与官方命令相同的 `toggleFullscreen()` / `closeTarget()`；
+7. 模态层、区域、目标面板与失败原因由官方命令的 `resolve()` 判断；插件只把 `region / modal / target` 原样交过去。
 
 `registry` 是官方快捷键服务实例上的内部字段（公开的 `Shortcuts` 接口没有「按 id 调命令」的方法）。插件对它做结构检查：`invoke` 缺席时告警并完全不安装固定行，而不是退回自己调用业务服务。
 
@@ -125,6 +126,7 @@ dsh plugin --profile web remove dsh-keyboard-shortcuts
 | 情况 | 行为 |
 | --- | --- |
 | 焦点在终端 `.xterm` 内 | 由各桥在捕获阶段拦下；不会把 `Ctrl+Alt+…` 当 AltGr 字符送进 shell |
+| macOS Web 的 `⌘⌥N` | Option+N 是死键，浏览器把它报成 `key = "Dead"`；官方固定通道会标成组字中，插件在捕获阶段直接执行 `session.new`，不启动死键组合 |
 | 焦点在页面 / 输入框 | 固定键走官方固定输入通道；免聚焦桥按各自归属判定 |
 | `pane.fullscreen.toggle`（Web） | 焦点不在右栏、右栏展开时回退到活动 dock 面板并 `toggleFullscreen()`；面板已聚焦、右栏折叠、有模态或解析不出面板时交回官方命令 |
 | `page.close`（Web） | 固定键 `⌘⌥,` 在焦点不在右栏时回退到活动 dock 面板并 `closeTarget()`；模态、折叠、不可关或已聚焦时交回官方命令 |

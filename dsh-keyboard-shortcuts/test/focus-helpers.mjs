@@ -433,6 +433,7 @@ export function fakeKeyEvent({
   path = [],
   type = 'keydown',
   code = '',
+  key = code,
   ctrlKey = false,
   altKey = false,
   shiftKey = false,
@@ -443,6 +444,7 @@ export function fakeKeyEvent({
   const event = {
     type,
     code,
+    key,
     ctrlKey,
     altKey,
     shiftKey,

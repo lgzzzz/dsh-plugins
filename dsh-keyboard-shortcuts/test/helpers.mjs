@@ -319,9 +319,10 @@ export function pageKeydown(code, overrides = {}) {
       return null
     },
   }
-  return {
+  const event = {
     type: 'keydown',
     code,
+    key: code,
     ctrlKey: false,
     altKey: false,
     shiftKey: false,
@@ -329,11 +330,16 @@ export function pageKeydown(code, overrides = {}) {
     repeat: false,
     isComposing: false,
     defaultPrevented: false,
-    preventDefault() {},
-    stopPropagation() {},
+    preventDefault() {
+      event.defaultPrevented = true
+    },
+    stopPropagation() {
+      event.stopped = true
+    },
     composedPath() {
       return [element]
     },
     ...overrides,
   }
+  return event
 }

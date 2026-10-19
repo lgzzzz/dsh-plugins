@@ -163,6 +163,35 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
     }
   }
 
+  console.log('--- G③b 产物里的 macOS 死键 ⌘⌥N ---')
+  {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const composer = app.append(new FakeElement('textarea', { class: 'composer' }))
+    const path = [composer, app]
+    const dom = withWindowDom({ root: app, activeElement: composer })
+    try {
+      const shortcuts = fakeShortcuts({ platform: 'macos' })
+      const ctx = new FakeCtx({
+        shortcuts,
+        sidebarRight: fakeSidebar(),
+        sessions: fakeSessions({ summary: { s1: session('s1') } }),
+        uiSession: fakeUiSession(),
+        uiWorkspace: fakeSessionNavigation(),
+      })
+      check('死键捕获装配无告警', captureWarnings(() => plugin.apply(ctx)), [])
+
+      const dead = fakeKeyEvent({ path, key: 'Dead', code: 'KeyN', metaKey: true, altKey: true })
+      dom.window.emit(dead)
+      check('产物里死键 ⌘⌥N 调官方 session.new', shortcuts.invocations.map((entry) => entry.id), ['session.new'])
+      check('产物里死键区域是输入框', shortcuts.invocations[0].context.region, 'editable')
+      check('产物里死键没有模态', shortcuts.invocations[0].context.modal, null)
+      checkTrue('产物里死键目标是 composer', shortcuts.invocations[0].context.target === composer)
+      check('产物里死键被吞', [dead.prevented, dead.stopped], [1, 1])
+    } finally {
+      dom.restore()
+    }
+  }
+
   console.log('--- G④ 产物里的全屏关栏:全屏右栏上的裸 Esc 被吞掉并关栏 ---')
   {
     const app = new FakeElement('div', { 'data-app': '' })

@@ -14,12 +14,15 @@
  *     任何业务动作；
  *   - window 捕获阶段的 `.xterm` 监听：终端会截断冒泡，命中时先吞掉按键再走同一个
  *     `invoke()`，路径与页面焦点完全相同；
+ *   - macOS Web 的 `⌘⌥N` 捕获：Option+N 是死键，官方固定输入会把它标成组字中；
+ *     捕获阶段直接调 `session.new`，补上固定通道让位的那一按；
  *   - 全屏 / 关页免聚焦回退：焦点不在右栏时用 `commandTarget()` 解析活动 dock 面板，
  *     消费按键后直接执行官方命令的同一个动词。
  *
  * 官方服务没有公开的「按 id 调命令」API；`registry` 是服务实例上的内部字段。插件
  * 对它做结构检查，缺席时告警并不安装固定行，而不是退回自己执行动作。
  */
+import { captureContext } from './capture.ts'
 import { name, warn } from './runtime.ts'
 import {
   TARGETS,
@@ -187,6 +190,14 @@ export function installFixedKeyBridge(ctx: ClientContext): void {
       `${name}: fixed input`,
     )
 
+    // 只在 Web 补偿死键：Desktop 的原生键盘桥接自己处理可配置命令，DOM 侧再执行会重复。
+    if (shortcuts.runtime === 'web') {
+      scope.effect(
+        () => installMacosDeadKeyCapture(registry, platform),
+        `${name}: macOS dead-key capture`,
+      )
+    }
+
     scope.effect(() => installTerminalCapture(registry, platform), `${name}: terminal capture`)
   })
 }
@@ -306,6 +317,42 @@ export function handleFixedInput(
     modal: input.context?.modal ?? null,
     target: input.context?.target ?? null,
   })
+}
+
+/**
+ * macOS Web 上 `⌘⌥N` 的捕获阶段补偿。
+ *
+ * Option+N 在 macOS 是死键（tilde）。官方适配器把这一按的 `key` 读成 `"Dead"`，固定
+ * 输入观察者收到的 `gesture.composing` 因此是 `true`，`handleFixedInput()` 会让位；
+ * 而官方可配置的 `session.new` 默认键又被本插件的固定行压成冲突态，于是两条路都不
+ * 动作，快捷键看起来完全失效。官方可配置派发对 `web + macos + ⌘⌥N` 有同样的死键
+ * 特判，这里补上固定通道缺的那一半。
+ *
+ * 只在 Web 安装：Desktop 的原生键盘桥接自己处理可配置命令，DOM 侧再执行会重复。
+ * 落点在 `.xterm` 内时让给终端捕获（终端捕获只读 `isComposing`，不受死键影响）。
+ */
+export function installMacosDeadKeyCapture(
+  registry: RegistryFace,
+  platform: ShortcutPlatform,
+): () => void {
+  if (platform !== 'macos' || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+    return () => {}
+  }
+  const onKeydown = (event: KeyboardEvent): void => {
+    if (event.type !== 'keydown' || event.key !== 'Dead') return
+    if (event.isComposing === true || event.defaultPrevented === true) return
+    const element = composedElement(event)
+    if (element !== null && element.closest('.xterm') !== null) return
+    const target = targetForGesture(platform, gestureFromEvent(event))
+    if (target === undefined || target.id !== 'session.new') return
+    // 先吞掉这一按：不让浏览器开始死键组合，也不让官方固定通道再看到它。
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.repeat === true) return
+    invoke(registry, target.id, captureContext(element))
+  }
+  window.addEventListener('keydown', onKeydown, true)
+  return () => window.removeEventListener('keydown', onKeydown, true)
 }
 
 /**

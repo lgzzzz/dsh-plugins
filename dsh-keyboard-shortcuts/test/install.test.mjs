@@ -141,16 +141,99 @@ console.log('--- B② 固定输入只调官方命令 ---')
 console.log('--- B③ macOS 平台键 ---')
 {
   const previousWindow = globalThis.window
-  globalThis.window = fakeWindow()
+  const window = fakeWindow()
+  globalThis.window = window
   try {
     const shortcuts = fakeShortcuts({ platform: 'macos' })
     const ctx = fakeCtx({ shortcuts })
     apply(ctx)
     check('macOS 键帽', shortcuts.commands[0].keys, ['⌘', '⌥', 'N'])
+    check('macOS Web 额外挂死键捕获', window.listenerCount(), 2)
 
     shortcuts.fire(fixedKeydown('KeyN', { meta: true, alt: true }))
     shortcuts.fire(fixedKeydown('KeyN', { control: true, alt: true }))
     check('只认 ⌘⌥N', shortcuts.invocations.map((entry) => entry.id), ['session.new'])
+  } finally {
+    globalThis.window = previousWindow
+  }
+}
+
+console.log('--- B③b macOS 死键 ⌘⌥N ---')
+{
+  const previousWindow = globalThis.window
+  const window = fakeWindow()
+  globalThis.window = window
+  try {
+    const shortcuts = fakeShortcuts({ platform: 'macos' })
+    const ctx = fakeCtx({ shortcuts })
+    apply(ctx)
+
+    // macOS 的 Option+N 是死键：浏览器把这一按报成 key === "Dead"，
+    // 官方固定输入会把它标成 composing；插件必须在捕获阶段自己补上。
+    const dead = pageKeydown('KeyN', { key: 'Dead', metaKey: true, altKey: true })
+    window.dispatch('keydown', dead)
+    check('死键 ⌘⌥N 调官方 session.new', shortcuts.invocations.map((entry) => entry.id), ['session.new'])
+    check('死键上下文', shortcuts.invocations[0].context, {
+      source: 'keyboard',
+      region: 'page',
+      modal: null,
+      target: dead.composedPath()[0],
+    })
+    checkTrue('死键被 preventDefault', dead.defaultPrevented)
+    checkTrue('死键被 stopPropagation', dead.stopped)
+
+    const before = shortcuts.invocations.length
+    const composing = pageKeydown('KeyN', { key: 'Dead', metaKey: true, altKey: true, isComposing: true })
+    window.dispatch('keydown', composing)
+    check('输入法组字中不动作', shortcuts.invocations.length, before)
+    checkFalse('组字中也不吞掉', composing.defaultPrevented)
+
+    const repeat = pageKeydown('KeyN', { key: 'Dead', metaKey: true, altKey: true, repeat: true })
+    window.dispatch('keydown', repeat)
+    check('长按不重复执行', shortcuts.invocations.length, before)
+    checkTrue('长按仍被吞掉', repeat.defaultPrevented)
+
+    const shifted = pageKeydown('KeyN', { key: 'Dead', metaKey: true, altKey: true, shiftKey: true })
+    window.dispatch('keydown', shifted)
+    check('多按 Shift 不命中', shortcuts.invocations.length, before)
+    checkFalse('多按 Shift 不吞掉', shifted.defaultPrevented)
+
+    ctx.disposeAll()
+    check('卸载后死键监听清空', window.listenerCount(), 0)
+    window.dispatch('keydown', pageKeydown('KeyN', { key: 'Dead', metaKey: true, altKey: true }))
+    check('卸载后死键不动作', shortcuts.invocations.length, before)
+  } finally {
+    globalThis.window = previousWindow
+  }
+}
+
+console.log('--- B③c 非 macOS / Desktop 不装死键补偿 ---')
+{
+  const previousWindow = globalThis.window
+  const linuxWindow = fakeWindow()
+  globalThis.window = linuxWindow
+  try {
+    const shortcuts = fakeShortcuts()
+    const ctx = fakeCtx({ shortcuts })
+    apply(ctx)
+    const dead = pageKeydown('KeyN', { key: 'Dead', ctrlKey: true, altKey: true })
+    linuxWindow.dispatch('keydown', dead)
+    check('Linux 不装死键捕获', linuxWindow.listenerCount(), 1)
+    check('Linux 死键不动作', shortcuts.invocations.length, 0)
+  } finally {
+    globalThis.window = previousWindow
+  }
+
+  const desktopWindow = fakeWindow()
+  globalThis.window = desktopWindow
+  try {
+    const shortcuts = fakeShortcuts({ platform: 'macos', runtime: 'desktop' })
+    const ctx = fakeCtx({ shortcuts })
+    apply(ctx)
+    const dead = pageKeydown('KeyN', { key: 'Dead', metaKey: true, altKey: true })
+    desktopWindow.dispatch('keydown', dead)
+    check('macOS Desktop 不装死键捕获', desktopWindow.listenerCount(), 1)
+    check('macOS Desktop 死键不动作', shortcuts.invocations.length, 0)
   } finally {
     globalThis.window = previousWindow
   }

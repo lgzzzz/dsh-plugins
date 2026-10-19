@@ -30,7 +30,7 @@
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
 
-八条官方固定键、聚焦输入框、聚焦右栏页面、页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。
+八条官方固定键、聚焦输入框、聚焦右栏页面、页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。macOS Web 另有一条只认 `⌘⌥N` 的捕获监听：Option+N 是死键，固定通道会把这一按标成组字中，监听直接认领并执行官方 `session.new`。
 
 > 各捕获路径只在 `.xterm` 内出手，所以它们与冒泡通道互斥、一次按键最多只被处理一次：命中即 `stopPropagation()`，window 冒泡上的固定通道再也看不到这一按。聚焦输入框那条的冒泡准入（`focusComposerEligible`）仍对 `terminal` 区域让位 —— 终端那一半只由捕获路径负责。固定键的终端捕获调用官方命令；八条命令的页面 / 文本控件那一半由固定输入通道处理。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
 
@@ -107,7 +107,8 @@ registry.invoke(target.id, { region, modal, target })
 
 - `targetForGesture` 只认 `primary+alt+<code>` 这一组修饰键，多按或少按 Shift/Control/Meta 都不命中；
 - 全屏与关页先交给 `createFullscreenBridge` / `createPageCloseBridge`：焦点不在右栏、右栏展开且 `commandTarget()` 能解析出活动 dock 面板时，它们消费按键并直接执行官方动词；否则返回 `false`，继续走 `registry.invoke()`；
-- 终端内的同一按由 `installTerminalCapture` 在捕获阶段拦下，同样调用 `registry.invoke()`，`region` 记为 `terminal`。
+- 终端内的同一按由 `installTerminalCapture` 在捕获阶段拦下，同样调用 `registry.invoke()`，`region` 记为 `terminal`；
+- macOS Web 的 `⌘⌥N` 由 `installMacosDeadKeyCapture` 在捕获阶段补上：Option+N 是死键（`key = "Dead"`），官方固定输入把它标成 `composing`，固定行又占住了官方 `session.new` 的默认键，两条路都不动作；捕获监听命中后先 `preventDefault()` + `stopPropagation()`（避免启动死键组合，也避免官方通道再处理一次），再调 `session.new`。只在 Web 安装，Desktop 交给原生键盘桥接；落点在 `.xterm` 内时让给终端捕获。
 
 #### 5.3.2 分屏桥：`handlePaneSplitInput` 逐行
 
