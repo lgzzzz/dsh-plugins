@@ -237,6 +237,28 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
+/* 过程组（data-step-process）展开体改为平铺，取消内层限高滚动口。
+   上游 ChatGroupSeat 在组根下直接渲染 [data-step-process-body]：.…_body 是
+     max-height:min(400px,50vh); overflow-y:auto; scrollbar-gutter:stable
+   的内层滚动口；只有 grouped=false（「完全展开」，或详细模式下轮次仍打开 / 延迟收起）时才追加
+   .…_expandedBody { scrollbar-gutter:auto; max-height:none; overflow:visible }。
+   详细 / 标准 / 简洁模式的分组仍保留限高，展开过程组时内容超过 400px 就要滚内层。
+   这里把上游 expandedBody 的三条声明钉在组根的滚动体上；[data-step-process-body]
+   是组根的直接子元素，展开时可见，收起时由 hidden 属性隐藏。
+   特异性 (0,2,0) 大于上游 .…_body 的 (0,1,0)，不需要 !important。
+   限高去掉后 body 不再垂直溢出，useProcessScroll 的 ResizeObserver 会把 edges 归零，
+   fadeTop / fadeBottom 不再挂上；展开 / 收起动画期间上游 inline overflow/height 优先，
+   本规则不干扰。
+   上游 DOM 没有把「工作步骤展示」模式写成属性（transcriptView 只在设置数据里），
+   因此这条规则对所有分组模式生效；已经处于 expandedBody 状态的组本来就没有限高，规则幂等。
+   锚点消失时规则静默落空，由 css-contract.json 的 step-process-root /
+   step-process-body-attr 在构建后报失效。 */
+[data-step-process] > [data-step-process-body] {
+  max-height: none;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
 /* 改动文件卡片(data-changed-files="true")自身与整棵子树 14px。
    卡片内的字号由上游 ChangedFiles.module.css 各自声明:标题 13px、统计行 10px、文件名行 11px、
    路径 12px、展开按钮 12px;卡片根元素自己反而没有 font-size,所以根元素与后代都要覆盖,
