@@ -3,6 +3,9 @@
   "checks": [
     {"id":"approval-key","plugin":"dsh-keyboard-shortcuts","token":"data-approval-key","paths":["dsh-client-ui-approval/lib"],"hint":"审批面板根标记消失：审批桥的让位判定（以及停止桥的让位选择器）落空，焦点在面板内时插件会从面板手里抢答"},
     {"id":"conversation-session","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-session","paths":["dsh-client-ui-conversation/lib"],"hint":"会话根标记消失：停止桥的归属判定恒为假，连按两下 Esc 不再停止回合"},
+    {"id":"conversation-scroll","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-scroll","paths":["dsh-client-ui-conversation/lib"],"hint":"消息滚动口标记消失：翻页补偿找不到外层 transcript，PageUp/PageDown 回到按整个滚动口（含 composer）翻页，每页跳过 composerHeight - 40px；Space 也不再被屏蔽"},
+    {"id":"composer-seat","plugin":"dsh-keyboard-shortcuts","token":"data-composer-seat","paths":["dsh-client-ui-conversation/lib"],"hint":"composer 座位标记消失：翻页补偿算不出可见消息带（clientHeight - composerHeight），退化为 no-op，原生翻页的越界问题回来"},
+
     {"id":"conversation-region","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-region","paths":["dsh-client-ui-conversation/lib"],"hint":"会话输入区标记消失：停止桥取不到 region，连按两下 Esc 不再停止回合"},
     {"id":"question-key","plugin":"dsh-keyboard-shortcuts","token":"data-question-key","paths":["dsh-client-ui-user-questions/lib"],"hint":"提问卡片根标记消失：Esc 不再能取消 / 关闭提问卡片"},
     {"id":"plan-review-key","plugin":"dsh-keyboard-shortcuts","token":"data-plan-review-key","paths":["dsh-client-ui-user-questions/lib"],"hint":"plan-review 卡片根标记消失：Esc 不再能收起活着的 plan-review，也不再有只读回看的移除路径"},

@@ -78,6 +78,9 @@
 | 活跃池为空 / 只剩当前会话 | 不动作，但消费 | 不退回全部候选；常规导航由另一对会话键负责 |
 | 光标键组合在 Web 上被官方标为保留 | 固定键照常收到 | `bindingIssue` 只限制可配置命令；固定行不受限制 |
 | 上游改了 `data-*` 锚点 | 对应桥退化为 no-op 或候选变空 | `check-css.mjs` 在构建后逐条 grep 上游产物，缺一条就显式失败并写明退化后果 |
+| 消息滚动口缺 `[data-composer-seat]` / composer 高度为 0 | PageUp/PageDown/Space 不接管，保持原生 | 翻页补偿要求可见消息带 `clientHeight - composerHeight > 0`；`conversation-scroll` / `composer-seat` 两条 DOM 契约兜住锚点 |
+| 多栏同时可见、目标与焦点都不在滚动口内 | 不接管 | 只按目标 / 当前焦点解析，或采用页面上唯一可见的滚动口；无法判定时不猜归属 |
+| 消息滚动口内按 Space | 吞掉，不翻页 | 原生 Space 同样按整个滚动口翻页；输入框、按钮、终端、模态层与还能滚动的内层容器保持原生 |
 
 告警前缀统一为 `[dsh-keyboard-shortcuts]`，方便在控制台过滤。
 
@@ -94,7 +97,7 @@
 3. 八条固定行 id 为 `dsh-keyboard-shortcuts.<command.id>`，五条自挂固定行 id 为 `dsh-keyboard-shortcuts.focus-composer` / `.focus-page` / `.page-cycle` / `.session-cycle` / `.session-active-cycle`；它们都通过 `registerFixed()` 声明，存在即预约；
 4. `approval.allow` / `approval.reject` 这两条官方固定行与「预约的组合就是审批决定键」的语义；
 5. `pendingInteraction` 槽位可被别的域复用，因此审批桥运行时确认 `kind === 'approval'`、`key` 为字符串、`answerable === true`、`answer` 为函数；提问桥确认 `kind` 为 `question` 或 `plan-review`、带 `dismiss()`；
-6. DOM 锚点：`[data-conversation-session]` / `[data-conversation-region]`（停止归属）、`[data-approval-key]`（审批面板根与让位）、`[data-question-key]` / `[data-plan-review-key]`（提问卡片根）、`[role="dialog"][aria-modal="true"], [role="menu"]`（模态）、`data-dsh-automatic-focus` 与主题的 `outline:none` 规则（无环聚焦）、`.xterm` / `.xterm-helper-textarea`（终端与输入面）、`[data-sidebar-right-session]` / `[data-sidebar-right-panel="fullscreen"]` / `[data-sidebar-right-open]`（右栏）、`[data-dockkit-pane]` / `[data-dockkit-float]` / `[data-dockkit-pane-active]` / `[data-dockkit-float-active]` / `[data-dockkit-strip-tabs]` / `[data-dockkit-tab]`（dockkit）、`[data-row-key="workspace:…"]` / `[data-row-key="session:…"]` 与归档行的 `aria-description`（侧栏候选）；
+6. DOM 锚点：`[data-conversation-session]` / `[data-conversation-region]`（停止归属）、`[data-approval-key]`（审批面板根与让位）、`[data-question-key]` / `[data-plan-review-key]`（提问卡片根）、`[role="dialog"][aria-modal="true"], [role="menu"]`（模态）、`data-dsh-automatic-focus` 与主题的 `outline:none` 规则（无环聚焦）、`.xterm` / `.xterm-helper-textarea`（终端与输入面）、`[data-sidebar-right-session]` / `[data-sidebar-right-panel="fullscreen"]` / `[data-sidebar-right-open]`（右栏）、`[data-conversation-scroll]` / `[data-composer-seat]`（消息滚动口与 composer 座位）、`[data-dockkit-pane]` / `[data-dockkit-float]` / `[data-dockkit-pane-active]` / `[data-dockkit-float-active]` / `[data-dockkit-strip-tabs]` / `[data-dockkit-tab]`（dockkit）、`[data-row-key="workspace:…"]` / `[data-row-key="session:…"]` 与归档行的 `aria-description`（侧栏候选）；
 7. `retainedBy.mainView` 的语义（与 `UiSession.isMain` 同源）；
 8. `conversation.input.for(scope)` 返回的 `SessionInput.focus()`（光标还原）与 `conversation.cancel()`；
 9. `sidebarRight` 的 `focusedTarget` / `commandTarget` / `isExpanded` / `isTargetCurrent` / `toggleFullscreen` / `split` / `canCloseTarget` / `closeTarget` / `toggleExpanded` / `mounted` / `tabsIn` / `active` / `focus`；
@@ -103,4 +106,5 @@
 12. 官方快捷键服务实例上的内部字段 `registry.invoke(id, context)`；公开接口没有这一项，插件做结构检查，缺席时告警并不安装固定行；
 13. `shortcuts.stopSequenceMs` 作为双按窗口；
 14. `registerFixed` 只按平台规范化 `primary`，不查 Web 保留表，也不与其它固定行判冲突；
-15. `shortcuts.registry.invoke()` 的 `context` 接受 `region` / `modal` / `target` / `source`，命令自己按 `resolve()` 决定是否执行。
+15. `shortcuts.registry.invoke()` 的 `context` 接受 `region` / `modal` / `target` / `source`，命令自己按 `resolve()` 决定是否执行；
+16. 消息滚动口的 `clientHeight` 包含底部 sticky 的 composer；`[data-composer-seat]` 的 `offsetHeight` 就是被遮住的高度，翻页补偿按 `clientHeight - composerHeight - 50` 计算步长。

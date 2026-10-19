@@ -376,7 +376,8 @@ export function fakeDocument({ root, activeElement = null } = {}) {
 }
 
 /**
- * 假 window:只登记捕获 / 冒泡阶段的 keydown 监听,`emit` 按注册顺序调用与 `phase` 相符的那批。
+ * 假 window:登记捕获 / 冒泡阶段的任意事件监听,`emit` 按事件类型和 phase 调用对应那批。
+ * 翻页补偿除 keydown 外还要监听 wheel / touchstart / pointerdown 来取消动画。
  */
 export function fakeWindow() {
   const listeners = new Set()
@@ -384,18 +385,20 @@ export function fakeWindow() {
   return {
     listeners,
     addEventListener(type, listener, options) {
-      if (type !== 'keydown') return
-      listeners.add({ listener, atCapture: capture(options) })
+      listeners.add({ type, listener, atCapture: capture(options) })
     },
     removeEventListener(type, listener) {
-      if (type !== 'keydown') return
       for (const entry of [...listeners]) {
-        if (entry.listener === listener) listeners.delete(entry)
+        if (entry.type === type && entry.listener === listener) listeners.delete(entry)
       }
     },
     emit(event, phase = 'capture') {
+      this.emitType(event?.type ?? 'keydown', event, phase)
+    },
+    /** 派发一个指定类型的事件;没有 `type` 字段的假事件也能走这里。 */
+    emitType(type, event = {}, phase = 'capture') {
       for (const entry of [...listeners]) {
-        if (entry.atCapture === (phase === 'capture')) entry.listener(event)
+        if (entry.type === type && entry.atCapture === (phase === 'capture')) entry.listener(event)
       }
     },
   }

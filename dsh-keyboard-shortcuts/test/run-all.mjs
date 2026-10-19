@@ -39,6 +39,7 @@ const ORDER = [
   'focus-bridge-fullscreen-dismiss.test.mjs',
   'focus-bridge-platform-keys.test.mjs',
   'focus-strip-scroll.test.mjs',
+  'chat-paging.test.mjs',
   'artifact-client.test.mjs',
   'focus-artifact-client.test.mjs',
 ]

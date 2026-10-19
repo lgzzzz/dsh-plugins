@@ -6,8 +6,9 @@
 // 本插件的几处桥接读的是上游没有对外承诺的事实（清单与其含义见
 // docs/dsh-keyboard-shortcuts/06-boundaries-and-contracts.md）：审批面板根、会话根 /
 // 输入区、提问卡片根、模态选择器、「无环聚焦」标记与其样式规则、终端根与输入面、右栏会话根、
-// dockkit 的 pane / chip box / 页面芯片标记、左侧栏行标记与归档标记，以及 dockkit 页签行的
-// scroll-behavior。锚点被改名 / 搬走时桥会退化成 no-op（不误动作），但退化在现场是静默的。
+// dockkit 的 pane / chip box / 页面芯片标记、左侧栏行标记与归档标记、dockkit 页签行的
+// scroll-behavior，以及消息滚动口 / composer 座位。锚点被改名 / 搬走时桥会退化成 no-op
+// （不误动作），但退化在现场是静默的。
 // 本脚本在构建后把清单逐条对上游产物 grep 一遍：缺一条就显式失败，并在提示里写明这条契约
 // 对应的功能会怎样退化。
 //

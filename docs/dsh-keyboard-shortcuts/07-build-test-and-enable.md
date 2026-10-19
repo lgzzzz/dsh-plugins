@@ -34,18 +34,19 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | `src/fullscreen-dismiss.ts` | 全屏右栏上的裸 `Esc` 关栏；同时给审批桥与提问桥判让位（`fullscreenSidebarShown()`） |
 | `src/binding.ts` | 多数桥共用：手势 / 绑定 / 两类快捷键目录行的匹配（纯函数） |
 | `src/capture.ts` | 捕获阶段共用：按键落点、原始手势、归属上下文、终端落点判定 |
+| `src/chat-paging.ts` | 消息滚动口的 PageUp/PageDown 可见带补偿与 Space 屏蔽；纯几何决策 + rAF 动画 + window 捕获监听 |
 | `src/focus-ring.ts` | 审批桥用：拿走按键后打上官方“无环聚焦”标记 |
 | `src/runtime.ts` | 插件名与诊断、固定输入 keydown 窄化、主视图会话判定 |
 | `src/client.ts` | 入口：依次安装各桥，导出 `name` / `inject` / `apply` |
 
 > 这些文件不自行重述上游类型：手势 / 绑定 / 目录行 / 待答审批 / 待答提问 / 会话与服务面都是 `import type` 自上游声明（清单见第 6 册第 8 节），打包时被擦除。
 
-`test/` 共 28 个测试文件，共享装置在 `test/focus-helpers.mjs` 与 `test/helpers.mjs`，runner 是 `test/run-all.mjs`：
+`test/` 共 29 个测试文件，共享装置在 `test/focus-helpers.mjs` 与 `test/helpers.mjs`，runner 是 `test/run-all.mjs`：
 
 - **固定键与判定**：`bridge.test.mjs`（目标表、固定行 id、平台修饰键）、`install.test.mjs`（固定行装配、固定输入、终端捕获、卸载）、`fullscreen.test.mjs`（全屏免聚焦桥）、`page-close.test.mjs`（关页免聚焦回退）、`artifact-client.test.mjs`（`lib/client.js` 的模块 id / 插件名 / `inject` 与八条固定行）；
 - **纯决策**：`focus-decide-binding.test.mjs`（绑定匹配、`enabledBinding`、分屏归属）、`focus-decide-escape.test.mjs`、`focus-decide-ownership.test.mjs`、`focus-decide-stop-sequence.test.mjs`、`focus-decide-approval.test.mjs`、`focus-decide-question.test.mjs`、`focus-decide-focus-composer.test.mjs`、`focus-decide-focus-page.test.mjs`、`focus-decide-page-cycle.test.mjs`、`focus-decide-session-cycle.test.mjs`、`focus-decide-fullscreen-dismiss.test.mjs`；
 - **桥接**：`focus-bridge-pane-split.test.mjs`（分屏回退）、`focus-bridge-stop-sequence.test.mjs`、`focus-bridge-approval-keys.test.mjs`、`focus-bridge-question-keys.test.mjs`、`focus-bridge-focus-composer.test.mjs`、`focus-bridge-focus-page.test.mjs`、`focus-bridge-page-cycle.test.mjs`、`focus-bridge-session-cycle.test.mjs`、`focus-bridge-fullscreen-dismiss.test.mjs`；
-- **端到端与补偿**：`focus-bridge-platform-keys.test.mjs`（macOS / Windows 物理键与键帽）、`focus-strip-scroll.test.mjs`（页签行滚动）、`focus-artifact-client.test.mjs`（真产物装配：固定键、全屏 / 关页回退、停止 / 审批 / 提问、会话导航、终端捕获、全屏关栏）。
+- **端到端与补偿**：`focus-bridge-platform-keys.test.mjs`（macOS / Windows 物理键与键帽）、`focus-strip-scroll.test.mjs`（页签行滚动）、`chat-paging.test.mjs`（翻页步长、边界钳制、Space 屏蔽、rAF 平滑滚动 / 连按 / 取消 / 减少动态效果、内层滚动让位与捕获监听卸载）、`focus-artifact-client.test.mjs`（真产物装配：固定键、全屏 / 关页回退、停止 / 审批 / 提问、会话导航、终端捕获、全屏关栏）。
 
 > `test/run-all.mjs` 的 `ORDER` 先跑固定键层与判定，再跑各桥，最后跑产物与滚动补偿；不在 `ORDER` 里的文件按文件名补在最后。
 
@@ -61,7 +62,7 @@ node check-css.mjs --manifest <清单>      # 换一份清单（默认同目录�
 
 - DSH 根目录解析顺序：`--dsh-root` > `$DSH_ROOT` > `npm root -g` > 常见全局安装路径。
 - 每条 check 是 `{ id, plugin, token | pattern, paths, hint }`：`token` 按子串、`pattern` 按正则（带 `s` 标志）匹配；`paths` 是从 `<DSH>/node_modules/@deepseek-ai/` 起算的搜索目录。
-- 覆盖 24 条锚点：审批面板根、会话根 / 输入区、提问卡片与 plan-review 根、模态选择器、`data-dsh-automatic-focus` 标记与主题规则、终端根类与 `xterm-helper-textarea`、右栏会话根 / 展开标记 / 呈现方式、dockkit 的 pane / 浮动 pane / 活动标记 / chip box / 页面芯片、页签行的 `scroll-behavior:smooth`，以及左侧栏 `data-row-key` 的两个前缀与归档行标记。
+- 覆盖 26 条锚点：审批面板根、会话根 / 输入区、提问卡片与 plan-review 根、模态选择器、`data-dsh-automatic-focus` 标记与主题规则、终端根类与 `xterm-helper-textarea`、右栏会话根 / 展开标记 / 呈现方式、dockkit 的 pane / 浮动 pane / 活动标记 / chip box / 页面芯片、页签行的 `scroll-behavior:smooth`，左侧栏 `data-row-key` 的两个前缀与归档行标记，以及消息滚动口 / composer 座位。
 - 退出码：`0` 全部通过（定位不到 DSH 根目录时只告警也算通过）；`1` 有锚点缺失（**升级 DSH 之后先看这里**）；`2` 清单路径或 JSON 有问题。
 - 它只证明"**有东西可选**"：不解析选择器、不跑 CSS 引擎。运行时行为仍需按第 10 节手测。
 
@@ -88,7 +89,8 @@ dsh plugin --profile web add <本仓库路径>/dsh-keyboard-shortcuts
 - 右侧栏有两张以上页面时，任意焦点位置按 `⌘⌥→` / `⌘⌥←` → 环状切页，键盘落到新页面（终端可直接打字）；焦点在终端里 → 仍能切页；
 - 页签行横向溢出时来回切页 → 相邻来回切时页签行不动、来源页签留在视野里；在 DevTools 里确认 `[data-sidebar-right-session] [data-dockkit-strip-tabs]` 的 `scrollBehavior` 为 `auto`；
 - 展开若干工作区后按 `⌘↓` / `⌘↑` → 在左侧栏前三个工作区当前显示的会话行之间环状切换；按 `⌘⌥↓` / `⌘⌥↑` → 只在活跃会话之间切换；
-- 焦点在终端里按这两对键 → 仍能切会话，且不进 shell；模态弹窗打开或长按重复时 → 消费但不切换。
+- 焦点在终端里按这两对键 → 仍能切会话，且不进 shell；模态弹窗打开或长按重复时 → 消费但不切换；
+- 打开一个有足够历史的消息滚动口，焦点放在消息区：PageDown / PageUp 每次滚动 `滚动口高度 - composer 高度 - 50`，上一页最后 50px 仍可见；动画平滑到位，连按在当前目标上继续翻页，滚轮或其它按键立即停住动画；按 Space 不滚动；焦点在 composer 里按 Space 正常输入空格。
 
 撤销：
 

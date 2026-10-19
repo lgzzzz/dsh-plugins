@@ -130,7 +130,7 @@ console.log('--- O⑥ 失败模式:服务缺失即不装 ---')
   })
   const warnings = captureWarnings(() => applyPlugin(bare))
   checkTrue('缺 observeFixedInput 时提问桥告警', warnings.some((line) => line.includes('question bridge not installed')))
-  check('缺 observeFixedInput 时未装监听', bare.effects.length, 0)
+  check('缺 observeFixedInput 时只装翻页补偿', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging'])
 }
 
 console.log('--- O⑦ dismiss 被拒绝:捕获并告警,按键仍已归属 ---')
