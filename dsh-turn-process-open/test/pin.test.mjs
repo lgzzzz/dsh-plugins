@@ -1,5 +1,5 @@
 /**
- * 锁定器：主会话作用域、seed 键与重试、锁标记、降级点击、可信点击拦截与卸载。
+ * 锁定器：主会话作用域、seed 键与重试、锁标记、降级点击、可信点击拦截、注入样式与卸载。
  *
  * 用假元素 + 假 fiber 链驱动；不依赖真实 DOM / React。
  */
@@ -352,6 +352,31 @@ console.log('--- P⑯ 自检：见过可折标题却始终锁不住 ---')
     controller.dispose()
   })
   check('没有可折标题时不告警', quiet.length, 0)
+}
+
+console.log('--- P⑰ 箭头：隐藏规则门控在锁标记上 ---')
+{
+  // `PIN_CSS` 只有两条规则：指针交互 + 箭头隐藏。把每条规则拆成「选择器 / 声明」再断言，
+  // 这样将来往样式里加规则时，只要有一条没带锁标记就会在这里失败。
+  const rules = PIN_CSS.split('}')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const at = part.indexOf('{')
+      return {
+        selector: part.slice(0, at).replace(/\s+/g, ' ').trim(),
+        body: part.slice(at + 1).trim(),
+      }
+    })
+  check('规则条数', rules.length, 2)
+  checkTrue('每条规则都门控在锁标记上', rules.every((rule) => rule.selector.includes(`[${PIN_ATTRIBUTE}]`)))
+
+  const chevron = rules.filter((rule) => rule.selector.includes('svg') || rule.selector.includes('_chevron'))
+  check('箭头规则只有一条', chevron.length, 1)
+  check('箭头规则隐藏图标', chevron[0].body, 'display: none;')
+  checkTrue('锚点一：标题按钮的直接子 svg', chevron[0].selector.includes('> svg'))
+  checkTrue('锚点二：chevron 局部类名通配符', chevron[0].selector.includes('[class*="_chevron"]'))
+  checkFalse('不带锁标记时规则不命中', rules.some((rule) => /^\s*\[data-turn-process\]\s*>/.test(rule.selector)))
 }
 
 finish()

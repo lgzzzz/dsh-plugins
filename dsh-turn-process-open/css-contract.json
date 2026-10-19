@@ -20,6 +20,24 @@
       "hint": "标题上的 aria-expanded 不再与 data-turn-process 同元素渲染：锁定器认不出可折标题，插件空转（不拦点击），新消息到达时上游照常折叠整轮"
     },
     {
+      "id": "turn-process-chevron-icon",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-turn-process\":[\\s\\S]{0,1100}?IconChevronDownOutlineRegular",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "标题按钮不再把展开箭头图标渲染成自己的子节点：`> svg` 那条锚点落空（`_chevron` 通配符仍可兜底），锁定标题右侧的向上箭头会重新出现"
+    },
+    {
+      "id": "turn-process-chevron-class",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "TurnProcessNodeView_module_css_default\\s*=\\s*\\{[\\s\\S]{0,300}?\"chevron\":\\s*\"[\\w-]+_chevron\"",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "TurnProcessNodeView 的 chevron 局部类名变了（生成名形如 l_V-RG_chevron，构建只换前缀）：[class*=\"_chevron\"] 那条锚点落空，只剩 `> svg` 兜底；两条同时失效时锁定标题右侧的箭头重新出现"
+    },
+    {
       "id": "turn-process-message-count",
       "plugin": "dsh-turn-process-open",
       "pattern": "\"data-turn-process-messages\":",

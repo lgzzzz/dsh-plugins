@@ -117,6 +117,10 @@ console.log('--- A③ 产物里的稳定契约 ---')
   const text = readFileSync(join(pluginRoot, 'lib', 'client.js'), 'utf8')
   checkTrue('产物含标题锚点', text.includes('[data-turn-process]'))
   checkTrue('产物含锁标记', text.includes(PIN_ATTRIBUTE))
+  // 箭头隐藏规则的两条锚点都要进产物：`> svg` 是纯文本，`class*="_chevron"` 里的引号
+  // 会被打包器按外层字符串的引号风格转义（当前产物是 `class*=\"_chevron\"`），故按可选引号匹配。
+  checkTrue('产物含箭头锚点（直接子 svg）', text.includes('[data-turn-process-locked] > svg'))
+  checkTrue('产物含箭头锚点（chevron 局部类名）', /class\*=\\?"?_chevron/.test(text))
   checkTrue('产物含样式标识', text.includes(STYLE_ID))
   checkTrue('产物含 fiber 前缀', text.includes('__reactFiber$'))
   checkTrue('产物含 store 动作名', text.includes('setTurnProcessOpen'))

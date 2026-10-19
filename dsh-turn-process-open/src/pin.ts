@@ -9,7 +9,9 @@
  * 记录只能经 `actions.setTurnProcessOpen` 写（见 `fiber.ts`）。写入成功后给标题打上
  * `data-turn-process-locked`：
  *
- * - CSS 把指针交互与 hover 关掉（`cursor:default; pointer-events:none`）；
+ * - CSS 把指针交互与 hover 关掉（`cursor:default; pointer-events:none`），并隐藏标题右侧的
+ *   展开箭头（`IconChevronDownOutlineRegular`）：锁定后标题恒为展开态、又不可操作，
+ *   那个朝上的箭头只是一个指不动的假控件；
  * - `document` 捕获阶段的 `click` 只拦截可信事件（键盘 / 指针），放行插件降级路径
  *   合成的不可信点击；标题仍是可聚焦按钮，作为“已完成，用时 …”的标签保留；
  * - `dsh-keyboard-shortcuts` 的 `⌘⌥.` 会跳过带这个标记的标题（并把最新一轮封口成
@@ -49,8 +51,24 @@ export const SCROLL_SELECTOR = '[data-conversation-scroll]'
 /** 会话根；标题的会话 id 从最近的这个祖先读取。 */
 export const SESSION_SELECTOR = '[data-conversation-session]'
 
-/** 本插件注入的样式：锁上之后不再有指针交互与 hover 反馈。 */
-export const PIN_CSS = '[data-turn-process][data-turn-process-locked] { cursor: default; pointer-events: none; }'
+/**
+ * 本插件注入的样式：锁上之后不再有指针交互与 hover 反馈，右侧的展开箭头一并隐藏。
+ *
+ * 箭头有两条互相兜底的锚点：
+ *
+ * - 图标今天是标题按钮的直接子 `<svg>`（上游 `children: [label, canCollapse && chevron]`）；
+ * - 同时也按 CSS Module 的 `chevron` 局部类名兜一层：生成名形如 `l_V-RG_chevron`，构建只换
+ *   前缀、`_chevron` 不变（与侧栏时间戳的 `_time` 通配符是同一套写法）。上游把图标包进
+ *   一层容器时第一条落空、第二条仍命中；局部类名改名时第二条落空、第一条仍命中。
+ *
+ * 两条都要求标题带锁标记：锁定失败的标题仍然可点，箭头是它唯一的操作提示，不能藏。
+ * 上游若连图标都不再渲染，规则只是空转，没有副作用。
+ */
+export const PIN_CSS = [
+  '[data-turn-process][data-turn-process-locked] { cursor: default; pointer-events: none; }',
+  '[data-turn-process][data-turn-process-locked] > svg,',
+  '[data-turn-process][data-turn-process-locked] [class*="_chevron"] { display: none; }',
+].join('\n')
 
 /** 注入样式的标识（`data-plugin-css`），便于排查与去重。 */
 export const STYLE_ID = 'dsh-turn-process-open/pin.css'

@@ -10,11 +10,12 @@
 「工作步骤展示 = 详细」时：
 
 - 轮次过程（中间过程，`[data-turn-process]`，标题为“已完成，用时 …”）**锁定为展开**：任何新消息 / 自动收起都不再把它折叠；
+- 标题右侧的展开箭头在锁定后一并隐藏：标题恒为展开态、又不可操作，那个朝上的箭头只是一个指不动的假控件；
 - 过程组（`[data-process-activity]`，“执行了命令，已读取文件”一类）保持上游的默认折叠状态，并且是唯一可开合的一层；
 - `⌘⌥.` / `Ctrl+Alt+.` 不再折叠中间过程；同一按会把最新一轮的**平铺明细即时封口成历史轮次的组头形态**，与“下一条消息发送过来之后”完全一致（见 [09-collapse-steps.md](dsh-keyboard-shortcuts/09-collapse-steps.md#5-封口折叠后的形态对齐)）；
 - 不引入新的滚动跳动；阅读位置补偿沿用 `dsh-keyboard-shortcuts` 的现有逻辑。
 
-验收：新消息到来后上一轮的中间过程保持展开、过程组仍折叠；点中间过程标题（鼠标 / 键盘 / 辅助技术）无反应；过程组标题可正常开合；`⌘⌥.` 只收过程组与单步详情并完成封口；页面加载、切换会话后同样成立。
+验收：新消息到来后上一轮的中间过程保持展开、过程组仍折叠；点中间过程标题（鼠标 / 键盘 / 辅助技术）无反应；标题右侧没有展开箭头；过程组标题可正常开合；`⌘⌥.` 只收过程组与单步详情并完成封口；页面加载、切换会话后同样成立。
 
 ## 2. 现状机制（从上游产物确认）
 
@@ -97,13 +98,14 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 - 写入顺序：优先 `actions.setTurnProcessOpen(turn, answerStep, true)`，否则 `turnProcess.setOpen(true)`（`alwaysOpen` 时是 no-op）。两个入口逐个 `try`，一个抛错就换下一个；都不可用就**不加锁**，告警一次（“写不进去”），标题保持可点，自动折叠照常。
 - **只有观察到 `aria-expanded === 'true'` 才加锁**；标题折叠时移除锁并按上限重试（3 次），耗尽后告警一次、保持不锁（不拦截点击）。
 - 锁标记：`data-turn-process-locked`，值是本实例 id（`pin-<n>`）。卸载时只撤自己加过的锁；开发期重复挂载时，另一个实例接管过的标题不会被误撤。
+- 箭头：锁定后标题恒为展开态、又不可点，右侧朝上的箭头只是假控件，样式里隐掉。两条锚点互相兜底：图标今天是标题按钮的直接子 `<svg>`（上游 `children: [label, canCollapse && chevron]`）；同时也按 CSS Module 的 `chevron` 局部类名通配（生成名形如 `l_V-RG_chevron`，构建只换前缀，与侧栏时间戳的 `_time` 同一套写法）。两条都要求锁标记，锁定失败的标题保留箭头（那是它唯一的操作提示）；上游不再渲染图标时规则只是空转。
 - 自检：连续 30 次同步都“本轮看到可折标题、却始终没锁住任何标题”时告警一次，把“上游结构变了、功能静默失效”变成可发现的问题；一旦锁住过就永久关闭自检。
 - 观察：`document.documentElement` 上 `childList + subtree + attributes`（过滤 `aria-expanded` / `disabled` / 计数属性），回调合并到 16ms 后执行一次同步；观察整棵文档是为了覆盖会话切换后的新滚动口。
 - 卸载：断开观察、移除定时器、移除点击监听、移除样式、只移除本实例加的锁标记。
 
 ### 4.3 点击与降级
 
-- `<style>`：`[data-turn-process][data-turn-process-locked] { cursor: default; pointer-events: none; }`。
+- `<style>`：`[data-turn-process][data-turn-process-locked] { cursor: default; pointer-events: none; }`；同一张样式表再隐藏标题右侧的展开箭头：`… > svg, … [class*="_chevron"] { display: none; }`（两条锚点互相兜底，见 4.2 节最后一条）。
 - `document` 捕获阶段的 `click`：只拦 `isTrusted === true` 且落在带标记标题上的事件。键盘 Space / Enter 派发可信 click，会被拦截；辅助技术可能派发不可信 click，放行给降级 / 可访问性场景。
 - 找不到 fiber：不加锁，改为在标题折叠时合成一次点击（临时置空 `focus()`）重新打开；只告警一次，达到上限后放弃。
 - 写入口都不可用或都抛错：不加锁、不拦点击，告警一次；标题保持原样，新消息到达时仍会被自动折叠。
@@ -128,6 +130,8 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 | --- | --- | --- |
 | `turn-process-control` | `"data-turn-process":` | 认不出标题，插件空转，自动折叠恢复 |
 | `turn-process-aria-expanded` | `"data-turn-process"` 与 `"aria-expanded"` 在同一标题元素上 | 认不出可折标题，插件空转且不拦点击 |
+| `turn-process-chevron-icon` | 标题按钮内仍渲染 `IconChevronDownOutlineRegular` | `> svg` 锚点落空，箭头重新出现（`_chevron` 通配符仍兜底） |
+| `turn-process-chevron-class` | `TurnProcessNodeView` 的 `chevron` 局部类名仍是 `*_chevron` | `[class*="_chevron"]` 锚点落空，箭头重新出现（`> svg` 仍兜底） |
 | `turn-process-message-count` | `"data-turn-process-messages":` | 内容更新不再重新 seed；锁本身仍生效 |
 | `turn-process-tool-calls` | `"data-turn-process-tool-calls":` | 同上 |
 | `turn-process-subagents` | `"data-turn-process-subagents":` | 同上 |
@@ -156,12 +160,13 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 - **卸载**：移除标记 / 监听 / 样式 / observer / 定时器；已写入 store 的展开记录保留到页面刷新或会话 store 重建（无法通过公开接口清除）。
 - **React 内部结构变化**：fiber 找不到 → 合成点击降级；不加标记、不拦点击。
 - **写入口失效（改名 / 抛错）**：该标题不加锁、告警一次，自动折叠照常；不影响其他标题。
+- **箭头锚点失效**：`> svg` 与 `[class*="_chevron"]` 两条同时落空时，锁定标题右侧的向上箭头重新出现（锁定本身不受影响）；`pnpm check:css` 会点名是哪一条失效。锁定失败的标题本来就保留箭头。
 - **自检告警**：连续 30 次同步都看到可折标题、却没锁住任何标题 → 告警一次；看到这条说明上游锚点或写入口已经变了，先跑 `pnpm check:css`。
 - **键盘可达性**：标题仍是可聚焦按钮，但激活被拦截；不改上游 tab 序，属于已知取舍。
 
 ## 7. 手工验证
 
-1. 载入多轮会话（详细 + 下次有新消息时）：所有可折标题 `aria-expanded="true"` 且带 `data-turn-process-locked`；历史轮次的过程组标题有高度、组展开体仍隐藏；成员行不再 `hidden`。
+1. 载入多轮会话（详细 + 下次有新消息时）：所有可折标题 `aria-expanded="true"` 且带 `data-turn-process-locked`；标题右侧没有展开箭头；历史轮次的过程组标题有高度、组展开体仍隐藏；成员行不再 `hidden`。
 2. 鼠标点击中间过程标题：`aria-expanded` 不变、`defaultPrevented` 命中；点击过程组标题：组展开体展开。
 3. `⌘⌥.`：最新一轮立即出现组头、成员行不可见；再按一次不动作；发下一条消息后该轮无位移、无 reveal 动画。
 4. 切换会话再切回：标题重新 seed，过程组保持折叠，滚动位置无漂移。
