@@ -15,8 +15,13 @@
  * - `dsh-keyboard-shortcuts` 的 `⌘⌥.` 会跳过带这个标记的标题（并把最新一轮封口成
  *   历史轮次的组头形态）。
  *
- * 失败路径全部收敛为“不锁”：fiber 找不到、写入无效、标题折叠之后重试耗尽，都会移除
- * 标记、保留可交互，并按需退到合成点击。任何一步失败都只影响该标题。
+ * 失败路径全部收敛为“不锁”：fiber 找不到、写入口不可用或抛错、标题折叠之后重试耗尽，
+ * 都会移除标记、保留可交互，并按需退到合成点击。任何一步失败都只影响该标题。
+ * 如果连续多轮同步都见过可折标题、却始终锁不住任何标题，会告警一次（自检），
+ * 避免上游结构变化后功能静默消失。
+ *
+ * 锁标记的值是本实例 id（`pin-<n>`）：卸载时只撤自己加的锁，开发期重复挂载也不会
+ * 把另一个实例的锁一起清掉。状态里的 records 是 WeakMap，标题元素卸载后不拖住 DOM。
  *
  * 作用域是主会话：`[data-slot="main.conversation"]` 内的 `[data-conversation-scroll]`；
  * 槽位标记缺席且全文档只有一个滚动口时才使用它，避免误锁右栏会话。
@@ -63,6 +68,12 @@ export const OBSERVED_ATTRIBUTES: readonly string[] = [
 /** 同一个 key 重试写入 / 重开的上限；超过就放弃这一代，等 `answerStep` 变化再试。 */
 export const MAX_ATTEMPTS = 3
 
+/** 自检窗口：连续这么多次同步都“有可折标题、却没锁住任何标题”时告警一次。 */
+export const WATCHDOG_ROUNDS = 30
+
+/** 实例序号：锁标记的值写本实例 id，卸载时只撤自己加的锁。 */
+let instanceSeq = 0
+
 /** 每个标题上一次处理过的 key 与重试次数。 */
 export interface HeaderRecord {
   readonly key: string
@@ -71,12 +82,23 @@ export interface HeaderRecord {
 
 /** 插件运行期的缓存；卸载时整体丢弃。 */
 export interface PinState {
-  readonly records: Map<unknown, HeaderRecord>
+  /** 本实例的锁归属标记，写进 `data-turn-process-locked` 的值。 */
+  readonly id: string
+  /** 标题 → 上次处理过的 key 与重试次数；弱引用，元素卸载后不拖住 DOM。 */
+  readonly records: WeakMap<Element, HeaderRecord>
   readonly warned: Set<string>
+  /** 本次安装是否锁住过至少一个标题（自检用）。 */
+  lockedSeen: boolean
+  /** 本轮同步是否看到了可折标题（带 `aria-expanded`）（自检用）。 */
+  foldableThisSync: boolean
+  /** 看到可折标题、但还没锁住任何标题的同步轮次（自检用）。 */
+  unlockedRounds: number
+  /** 自检是否已经下过结论（告警过，或已经不需要）。 */
+  diagnosed: boolean
 }
 
 /** 一次同步里单个标题的结论，供测试与诊断。 */
-export type SeedOutcome = 'skip' | 'pinned' | 'retry' | 'fallback' | 'gave-up' | 'missing'
+export type SeedOutcome = 'skip' | 'pinned' | 'retry' | 'fallback' | 'gave-up' | 'missing' | 'unwritable'
 
 /** 可被本插件读写的标题元素（生产环境是 `HTMLButtonElement`）。 */
 interface HeaderElement extends Element {
@@ -101,7 +123,16 @@ function isHeader(value: unknown): value is HeaderElement {
 
 /** 创建一份空状态。 */
 export function createPinState(): PinState {
-  return { records: new Map(), warned: new Set() }
+  instanceSeq += 1
+  return {
+    id: `pin-${instanceSeq}`,
+    records: new WeakMap(),
+    warned: new Set(),
+    lockedSeen: false,
+    foldableThisSync: false,
+    unlockedRounds: 0,
+    diagnosed: false,
+  }
 }
 
 /**
@@ -136,14 +167,18 @@ function isDisabled(header: HeaderElement): boolean {
   return header.hasAttribute('disabled')
 }
 
-/** 打上锁标记。 */
-function pin(header: HeaderElement): void {
-  if (!header.hasAttribute(PIN_ATTRIBUTE)) header.setAttribute(PIN_ATTRIBUTE, '')
+/**
+ * 打上本实例的锁标记。
+ * 标记值是实例 id：另一个实例接管后会改写它，本实例卸载时便不会误撤。
+ */
+function pin(header: HeaderElement, state: PinState): void {
+  if (header.getAttribute(PIN_ATTRIBUTE) !== state.id) header.setAttribute(PIN_ATTRIBUTE, state.id)
+  state.lockedSeen = true
 }
 
-/** 移除锁标记。 */
-function unpin(header: HeaderElement): void {
-  if (header.hasAttribute(PIN_ATTRIBUTE)) header.removeAttribute(PIN_ATTRIBUTE)
+/** 只移除本实例加的锁标记。 */
+function unpin(header: HeaderElement, state: PinState): void {
+  if (header.getAttribute(PIN_ATTRIBUTE) === state.id) header.removeAttribute(PIN_ATTRIBUTE)
 }
 
 /**
@@ -175,19 +210,26 @@ export type WriteVia = 'actions' | 'setOpen' | null
 
 /**
  * 把“展开”写进 store：优先绕过 `alwaysOpen` 的绑定动作，其次 `turnProcess.setOpen`。
+ *
+ * 两个入口都可能在上游会话卸载 / store 重建的竞态里抛错；这里逐个 try，
+ * 失败就换下一个，绝不把异常抛给同步循环。
  * @param header - 标题元素。
  * @param handle - 该标题的 turn process handle。
- * @returns 实际用到的写入口，或 null。
+ * @returns 实际用到的写入口，或 null（两个入口都不可用 / 都抛错）。
  */
 export function writeOpen(header: Element, handle: TurnProcessHandle): WriteVia {
   const actions = findTurnProcessActions(header)
   if (actions !== null) {
-    actions(handle.turn, handle.answerStep, true)
-    return 'actions'
+    try {
+      actions(handle.turn, handle.answerStep, true)
+      return 'actions'
+    } catch { /* 降级到 setOpen */ }
   }
   if (typeof handle.setOpen === 'function') {
-    handle.setOpen(true)
-    return 'setOpen'
+    try {
+      handle.setOpen(true)
+      return 'setOpen'
+    } catch { /* 两个入口都失败 */ }
   }
   return null
 }
@@ -197,6 +239,15 @@ function warnOnce(state: PinState, key: string, message: string): void {
   if (state.warned.has(key)) return
   state.warned.add(key)
   console.warn(`[dsh-turn-process-open] ${message}`)
+}
+
+/** 写入口不可用时的告警文本：不加锁，自动折叠仍会生效。 */
+function warnUnwritable(state: PinState, key: string, turn: number): void {
+  warnOnce(
+    state,
+    `unwritable|${key}`,
+    `第 ${turn} 轮的展开记录写不进去（setTurnProcessOpen / setOpen 都不可用或抛错），该标题不加锁，新消息到达时仍会被自动折叠`,
+  )
 }
 
 /**
@@ -209,23 +260,24 @@ function warnOnce(state: PinState, key: string, message: string): void {
 export function seedHeader(header: Element, state: PinState): SeedOutcome {
   if (!isHeader(header)) return 'skip'
   if (isDisabled(header)) {
-    unpin(header)
+    unpin(header, state)
     return 'skip'
   }
   // `aria-expanded` 只在有内容时出现；没有它不是可折标题。
   if (!header.hasAttribute('aria-expanded')) {
-    unpin(header)
+    unpin(header, state)
     return 'skip'
   }
+  state.foldableThisSync = true
   const expanded = header.getAttribute('aria-expanded') === 'true'
   const record = state.records.get(header) as HeaderRecord | undefined
 
-  // 已展开且已加锁：这一代不需要再走 fiber。
-  if (record !== undefined && expanded && header.hasAttribute(PIN_ATTRIBUTE)) return 'pinned'
+  // 已展开且带本实例的锁：这一代不需要再走 fiber。
+  if (record !== undefined && expanded && header.getAttribute(PIN_ATTRIBUTE) === state.id) return 'pinned'
 
   const handle = findTurnProcess(header)
   if (handle === null) {
-    unpin(header)
+    unpin(header, state)
     // 结构变化：不拦点击，折叠后合成一次点击把它重新打开。
     if (expanded) return 'missing'
     const key = `missing|${sessionIdOf(header)}`
@@ -252,21 +304,27 @@ export function seedHeader(header: Element, state: PinState): SeedOutcome {
   if (expanded) {
     // 每一代只在第一次展开时写一次；之后由记录维持。
     if (current.attempts === 0) {
+      if (writeOpen(header, handle) === null) {
+        warnUnwritable(state, key, handle.turn)
+        return 'unwritable'
+      }
       current.attempts += 1
-      writeOpen(header, handle)
     }
-    pin(header)
+    pin(header, state)
     return current.attempts > 1 ? 'retry' : 'pinned'
   }
 
-  // 折叠着：先撤锁，再按上限重写。
-  unpin(header)
+  // 折叠着：先撤锁，再按上限重写。写不进去就不加锁，免得按钮被吞掉却仍会折叠。
+  unpin(header, state)
   if (current.attempts >= MAX_ATTEMPTS) {
     warnOnce(state, key, `第 ${handle.turn} 轮写入展开记录后仍被折叠，已放弃锁定（不拦截点击）`)
     return 'gave-up'
   }
+  if (writeOpen(header, handle) === null) {
+    warnUnwritable(state, key, handle.turn)
+    return 'unwritable'
+  }
   current.attempts += 1
-  writeOpen(header, handle)
   return 'retry'
 }
 
@@ -281,11 +339,33 @@ export type SeedCounts = Record<SeedOutcome, number>
  */
 export function syncRoot(root: Element, state: PinState): SeedCounts {
   const counts: SeedCounts = {
-    skip: 0, pinned: 0, retry: 0, fallback: 0, 'gave-up': 0, missing: 0,
+    skip: 0, pinned: 0, retry: 0, fallback: 0, 'gave-up': 0, missing: 0, unwritable: 0,
   }
   if (typeof root.querySelectorAll !== 'function') return counts
   for (const header of root.querySelectorAll(HEADER_SELECTOR)) counts[seedHeader(header, state)] += 1
   return counts
+}
+
+/**
+ * 自检：本轮看到了可折标题、却始终没锁住任何标题时，fiber 读取或 store 写入多半已经失效。
+ * 只在连续多轮同步后告警一次，避免把“首帧还没渲染完”当成故障。
+ * @param state - 运行期缓存。
+ */
+function diagnose(state: PinState): void {
+  if (state.diagnosed) return
+  if (state.lockedSeen) {
+    state.diagnosed = true
+    return
+  }
+  if (!state.foldableThisSync) return
+  state.unlockedRounds += 1
+  if (state.unlockedRounds < WATCHDOG_ROUNDS) return
+  state.diagnosed = true
+  warnOnce(
+    state,
+    'watchdog',
+    `连续 ${WATCHDOG_ROUNDS} 次同步都没能锁定任何轮次过程（本轮仍看到可折标题）：上游锚点或写入口可能已变，功能已退化为官方自动折叠`,
+  )
 }
 
 /** 安装期依赖的最小 document 形状（测试可注入）。 */
@@ -369,7 +449,9 @@ export function installPin(doc: PinDocument | undefined = globalThis.document as
 
   const sync = (): void => {
     if (disposed) return
+    state.foldableThisSync = false
     for (const root of conversationRoots(doc as unknown as Document)) syncRoot(root, state)
+    diagnose(state)
   }
 
   const schedule = (): void => {
@@ -418,9 +500,10 @@ export function installPin(doc: PinDocument | undefined = globalThis.document as
       if (timer !== undefined) clearTimeout(timer)
       doc.removeEventListener?.('click', onClick, true)
       removeStyle?.()
-      // 移除所有锁标记：卸载后标题恢复可交互。
-      for (const header of Array.from(doc.querySelectorAll(PINNED_HEADER_SELECTOR))) header.removeAttribute(PIN_ATTRIBUTE)
-      state.records.clear()
+      // 只撤本实例加的锁：另一个实例接管过的标题（标记值不是本实例 id）保持不动。
+      for (const header of Array.from(doc.querySelectorAll(PINNED_HEADER_SELECTOR))) {
+        if (header.getAttribute(PIN_ATTRIBUTE) === state.id) header.removeAttribute(PIN_ATTRIBUTE)
+      }
       state.warned.clear()
     },
   }

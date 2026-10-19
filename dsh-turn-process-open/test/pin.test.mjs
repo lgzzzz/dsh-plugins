@@ -14,6 +14,7 @@ import {
   sessionIdOf,
   STYLE_ID,
   syncRoot,
+  WATCHDOG_ROUNDS,
   writeOpen,
 } from '../src/pin.ts'
 import {
@@ -87,7 +88,8 @@ console.log('--- P② 展开的标题：写记录并加锁 ---')
   const element = header({ turn: 3, answerStep: 2, record: calls })
   check('结论', seedHeader(element, state), 'pinned')
   check('写入参数', calls, [[3, 2, true]])
-  check('锁标记', element.getAttribute(PIN_ATTRIBUTE), '')
+  check('锁标记', element.getAttribute(PIN_ATTRIBUTE), state.id)
+  checkTrue('状态表是弱引用', state.records instanceof WeakMap)
   check('再次同步不重复写', (seedHeader(element, state), calls.length), 1)
 }
 
@@ -221,7 +223,7 @@ console.log('--- P⑩ installPin：初始同步、观察、样式与卸载 ---')
   FakeObserver.reset()
   const controller = installPin(doc)
   check('初始同步写入', calls.length, 1)
-  check('锁定标题', element.getAttribute(PIN_ATTRIBUTE), '')
+  checkTrue('锁定标题', element.hasAttribute(PIN_ATTRIBUTE))
   check('样式只插一条', doc.head.nodes.length, 1)
   check('样式内容', doc.head.nodes[0]?.textContent, PIN_CSS)
   check('样式标识', doc.head.nodes[0]?.dataset?.pluginCss, STYLE_ID)
@@ -233,7 +235,7 @@ console.log('--- P⑩ installPin：初始同步、观察、样式与卸载 ---')
   scroll.append(late)
   FakeObserver.last()?.emit()
   await new Promise((resolve) => setTimeout(resolve, 40))
-  check('观察回调补 seed', late.getAttribute(PIN_ATTRIBUTE), '')
+  check('观察回调补 seed', late.hasAttribute(PIN_ATTRIBUTE), true)
 
   controller.dispose()
   check('卸载移除锁标记', element.hasAttribute(PIN_ATTRIBUTE), false)
@@ -253,7 +255,7 @@ console.log('--- P⑪ installPin：右栏会话不锁 ---')
   right.append(sideHeader)
   const doc = new FakeDocument({ root: app })
   const controller = installPin(doc)
-  check('主会话锁定', mainHeader.getAttribute(PIN_ATTRIBUTE), '')
+  check('主会话锁定', mainHeader.hasAttribute(PIN_ATTRIBUTE), true)
   check('右栏不锁', sideHeader.hasAttribute(PIN_ATTRIBUTE), false)
   controller.dispose()
 }
@@ -268,6 +270,88 @@ console.log('--- P⑫ syncRoot 计数与无 fiber 的标题 ---')
   let counts
   captureWarnings(() => { counts = syncRoot(scroll, state) })
   check('展开 1 / 无 fiber 1 / 无 aria 1', [counts.pinned, counts.fallback, counts.skip], [1, 1, 1])
+}
+
+console.log('--- P⑬ 写入口不可用：不加锁、只告警一次 ---')
+{
+  const state = createPinState()
+  const warnings = captureWarnings(() => {
+    const element = new FakeElement('button', { 'data-turn-process': '7', 'aria-expanded': 'true' })
+    attachFiber(element, turnProcessProps({ turn: 7 }))
+    check('结论', seedHeader(element, state), 'unwritable')
+    checkFalse('不加锁', element.hasAttribute(PIN_ATTRIBUTE))
+    check('再次同步仍不加锁', (seedHeader(element, state), element.hasAttribute(PIN_ATTRIBUTE)), false)
+  })
+  check('只告警一次', warnings.length, 1)
+}
+
+console.log('--- P⑭ 写入口抛错：退回 setOpen；两个都失败则不加锁 ---')
+{
+  const state = createPinState()
+  const opens = []
+  const element = new FakeElement('button', { 'data-turn-process': '8', 'aria-expanded': 'true' })
+  attachFiber(
+    element,
+    turnProcessProps({ turn: 8, setOpen: (open) => opens.push(open) }),
+    actionsProps(() => { throw new Error('action failed') }),
+  )
+  const warnings = captureWarnings(() => {
+    check('action 抛错后走 setOpen', seedHeader(element, state), 'pinned')
+  })
+  check('setOpen(true)', opens, [true])
+  checkTrue('加锁', element.hasAttribute(PIN_ATTRIBUTE))
+  check('不告警', warnings.length, 0)
+
+  const broken = createPinState()
+  const both = new FakeElement('button', { 'data-turn-process': '9', 'aria-expanded': 'true' })
+  attachFiber(
+    both,
+    turnProcessProps({ turn: 9, setOpen: () => { throw new Error('setOpen failed') } }),
+    actionsProps(() => { throw new Error('action failed') }),
+  )
+  const brokenWarnings = captureWarnings(() => {
+    check('两个入口都抛错', seedHeader(both, broken), 'unwritable')
+  })
+  checkFalse('失败时不加锁', both.hasAttribute(PIN_ATTRIBUTE))
+  check('告警一次', brokenWarnings.length, 1)
+}
+
+console.log('--- P⑮ 多实例：卸载只撤本实例加的锁 ---')
+{
+  const { app, scroll } = page()
+  const element = header({ turn: 1 })
+  scroll.append(element)
+  const doc = new FakeDocument({ root: app, withObserver: true })
+  const first = installPin(doc)
+  const second = installPin(doc)
+  checkTrue('第二个实例接管锁', element.hasAttribute(PIN_ATTRIBUTE))
+  first.dispose()
+  checkTrue('卸载第一个实例不撤第二个的锁', element.hasAttribute(PIN_ATTRIBUTE))
+  second.dispose()
+  checkFalse('第二个实例卸载后撤锁', element.hasAttribute(PIN_ATTRIBUTE))
+}
+
+console.log('--- P⑯ 自检：见过可折标题却始终锁不住 ---')
+{
+  const { app, scroll } = page()
+  scroll.append(new FakeElement('button', { 'data-turn-process': '1', 'aria-expanded': 'true' }))
+  const doc = new FakeDocument({ root: app })
+  const warnings = captureWarnings(() => {
+    const controller = installPin(doc)
+    for (let i = 0; i < WATCHDOG_ROUNDS; i += 1) controller.sync()
+    controller.dispose()
+  })
+  check('只告警一次', warnings.filter((warning) => warning.includes('没能锁定')).length, 1)
+  check('不额外刷屏', warnings.length, 1)
+
+  const emptyApp = new FakeElement('div')
+  const emptyDoc = new FakeDocument({ root: emptyApp })
+  const quiet = captureWarnings(() => {
+    const controller = installPin(emptyDoc)
+    for (let i = 0; i < WATCHDOG_ROUNDS; i += 1) controller.sync()
+    controller.dispose()
+  })
+  check('没有可折标题时不告警', quiet.length, 0)
 }
 
 finish()

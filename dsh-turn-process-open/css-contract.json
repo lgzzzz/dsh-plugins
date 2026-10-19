@@ -1,5 +1,5 @@
 {
-  "description": "dsh-turn-process-open 依赖的上游事实：轮次过程标题的 DOM 锚点、Chat 渲染器的 turnProcess / actions 写入口，以及主会话作用域标记。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）：这些事实被改名 / 搬走时，插件会静默退化成 no-op 或合成点击；这里把那种退化提前变成一次显式失败，并在 hint 里写明后果。",
+  "description": "dsh-turn-process-open 依赖的上游事实：轮次过程标题的 DOM 锚点（含 aria-expanded 同元素渲染）、Chat 渲染器的 turnProcess / actions 写入口，以及主会话槽位锚点与会话作用域标记。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）：这些事实被改名 / 搬走时，插件会静默退化成 no-op 或合成点击；这里把那种退化提前变成一次显式失败，并在 hint 里写明后果。",
   "checks": [
     {
       "id": "turn-process-control",
@@ -9,6 +9,15 @@
         "dsh-client-ui-chat/lib"
       ],
       "hint": "轮次过程标题标记消失：锁定器认不出标题，插件空转——新消息到达时上游照常折叠整轮"
+    },
+    {
+      "id": "turn-process-aria-expanded",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-turn-process\":[\\s\\S]{0,600}\"aria-expanded\"",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "标题上的 aria-expanded 不再与 data-turn-process 同元素渲染：锁定器认不出可折标题，插件空转（不拦点击），新消息到达时上游照常折叠整轮"
     },
     {
       "id": "turn-process-message-count",
@@ -81,6 +90,15 @@
         "dsh-client-ui-conversation/lib"
       ],
       "hint": "主会话槽位名变了：锁定器找不到主会话作用域；回退只在全文档恰好有一个消息滚动口时生效，否则不动作（不误锁右栏）"
+    },
+    {
+      "id": "slot-anchor-wraps-content",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-slot\":[\\s\\S]{0,240}children:",
+      "paths": [
+        "dsh-client-ui-renderer/lib"
+      ],
+      "hint": "槽位锚点不再包裹槽位内容：main.conversation 的元素不再包含会话 DOM，锁定器找不到滚动口；回退只在全文档恰好有一个滚动口时生效，否则不动作"
     },
     {
       "id": "conversation-scroll",

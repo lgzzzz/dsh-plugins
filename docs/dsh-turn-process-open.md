@@ -93,18 +93,20 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 `src/pin.ts`：
 
 - 作用域：`[data-slot="main.conversation"]` 内的 `[data-conversation-scroll]`；槽位缺席且全文档只有一个滚动口时用它（不猜右栏）。
-- 每个标题的 key：`${sessionId}|${turn}|${answerStep}`。key 变了才写；展开且已加锁时直接早退，不再走 fiber。
-- 写入顺序：优先 `actions.setTurnProcessOpen(turn, answerStep, true)`，否则 `turnProcess.setOpen(true)`（`alwaysOpen` 时是 no-op）。
+- 每个标题的 key：`${sessionId}|${turn}|${answerStep}`。key 变了才写；展开且带本实例锁标记时直接早退，不再走 fiber。状态表是 `WeakMap`，标题元素卸载后不会拖住旧 DOM。
+- 写入顺序：优先 `actions.setTurnProcessOpen(turn, answerStep, true)`，否则 `turnProcess.setOpen(true)`（`alwaysOpen` 时是 no-op）。两个入口逐个 `try`，一个抛错就换下一个；都不可用就**不加锁**，告警一次（“写不进去”），标题保持可点，自动折叠照常。
 - **只有观察到 `aria-expanded === 'true'` 才加锁**；标题折叠时移除锁并按上限重试（3 次），耗尽后告警一次、保持不锁（不拦截点击）。
-- 锁标记：`data-turn-process-locked`。
+- 锁标记：`data-turn-process-locked`，值是本实例 id（`pin-<n>`）。卸载时只撤自己加过的锁；开发期重复挂载时，另一个实例接管过的标题不会被误撤。
+- 自检：连续 30 次同步都“本轮看到可折标题、却始终没锁住任何标题”时告警一次，把“上游结构变了、功能静默失效”变成可发现的问题；一旦锁住过就永久关闭自检。
 - 观察：`document.documentElement` 上 `childList + subtree + attributes`（过滤 `aria-expanded` / `disabled` / 计数属性），回调合并到 16ms 后执行一次同步；观察整棵文档是为了覆盖会话切换后的新滚动口。
-- 卸载：断开观察、移除定时器、移除点击监听、移除样式、移除所有锁标记。
+- 卸载：断开观察、移除定时器、移除点击监听、移除样式、只移除本实例加的锁标记。
 
 ### 4.3 点击与降级
 
 - `<style>`：`[data-turn-process][data-turn-process-locked] { cursor: default; pointer-events: none; }`。
 - `document` 捕获阶段的 `click`：只拦 `isTrusted === true` 且落在带标记标题上的事件。键盘 Space / Enter 派发可信 click，会被拦截；辅助技术可能派发不可信 click，放行给降级 / 可访问性场景。
 - 找不到 fiber：不加锁，改为在标题折叠时合成一次点击（临时置空 `focus()`）重新打开；只告警一次，达到上限后放弃。
+- 写入口都不可用或都抛错：不加锁、不拦点击，告警一次；标题保持原样，新消息到达时仍会被自动折叠。
 - 任何一步失败都只影响该标题，不影响其他轮次或过程组。
 
 ### 4.4 与 `⌘⌥.` 折叠的配合（封口）
@@ -125,6 +127,7 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 | id | 校验的上游事实 | 失效后的退化 |
 | --- | --- | --- |
 | `turn-process-control` | `"data-turn-process":` | 认不出标题，插件空转，自动折叠恢复 |
+| `turn-process-aria-expanded` | `"data-turn-process"` 与 `"aria-expanded"` 在同一标题元素上 | 认不出可折标题，插件空转且不拦点击 |
 | `turn-process-message-count` | `"data-turn-process-messages":` | 内容更新不再重新 seed；锁本身仍生效 |
 | `turn-process-tool-calls` | `"data-turn-process-tool-calls":` | 同上 |
 | `turn-process-subagents` | `"data-turn-process-subagents":` | 同上 |
@@ -133,6 +136,7 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 | `turn-process-set-open` | `setOpen(open: boolean)` | `setOpen` 降级路径不可用 |
 | `turn-process-store-action` | `setTurnProcessOpen` | 无法绕过 `alwaysOpen`，退化为 `setOpen` / 合成点击 |
 | `main-conversation-slot` | `"main.conversation"` | 找不到主会话作用域；只有唯一滚动口时回退 |
+| `slot-anchor-wraps-content` | 槽位锚点仍把内容渲染在自己内部 | 主会话 DOM 不再被槽位锚点包住，找不到滚动口（回退条件同上） |
 | `conversation-scroll` | `data-conversation-scroll` | 找不到标题集合，空转（不误锁右栏） |
 | `conversation-session` | `data-conversation-session` | key 的 sessionId 退化为空串，仍锁定 |
 
@@ -151,6 +155,8 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 - **封口后用户展开某个组**：CSS 按 `aria-expanded` 恢复组体，可正常收合。
 - **卸载**：移除标记 / 监听 / 样式 / observer / 定时器；已写入 store 的展开记录保留到页面刷新或会话 store 重建（无法通过公开接口清除）。
 - **React 内部结构变化**：fiber 找不到 → 合成点击降级；不加标记、不拦点击。
+- **写入口失效（改名 / 抛错）**：该标题不加锁、告警一次，自动折叠照常；不影响其他标题。
+- **自检告警**：连续 30 次同步都看到可折标题、却没锁住任何标题 → 告警一次；看到这条说明上游锚点或写入口已经变了，先跑 `pnpm check:css`。
 - **键盘可达性**：标题仍是可聚焦按钮，但激活被拦截；不改上游 tab 序，属于已知取舍。
 
 ## 7. 手工验证
@@ -160,6 +166,7 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 3. `⌘⌥.`：最新一轮立即出现组头、成员行不可见；再按一次不动作；发下一条消息后该轮无位移、无 reveal 动画。
 4. 切换会话再切回：标题重新 seed，过程组保持折叠，滚动位置无漂移。
 5. 卸载插件后硬刷新：自动折叠恢复，平铺形态恢复。
+6. 控制台没有 `[dsh-turn-process-open]` 告警（尤其 `没能锁定` / `写不进去`）；有告警就先跑 `pnpm check:css`。
 
 ## 8. 假设
 

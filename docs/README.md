@@ -48,7 +48,7 @@
 | --- | --- | --- |
 | `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + `role` / `aria-label` 文案（含一条反向的 `forbid`）+ CSS 变量 + 槽位键 |
 | `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
-| `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点 + fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话作用域 |
+| `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点（含 `aria-expanded` 同元素）+ fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话槽位锚点与会话作用域 |
 | `dsh-changes-hover-off` | [`contract.json`](../dsh-changes-hover-off/contract.json) | 改动文件卡片锚点 + 悬停延迟 |
 | `dsh-jobs-optimize` | [`contract.json`](../dsh-jobs-optimize/contract.json) | 槽位 / 注册 / 渲染锚点 + 触发器的开合真值与 toggle + 菜单由本控件经 React portal 渲染到 body + 子代理控件（参照物）的两个延迟与点击语义 |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
