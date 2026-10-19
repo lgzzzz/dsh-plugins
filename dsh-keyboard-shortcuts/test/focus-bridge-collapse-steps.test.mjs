@@ -42,6 +42,20 @@ function clickable(element) {
   return element
 }
 
+/** 摆一个带 top / height 的假盒子；读取时取当前值。 */
+function place(element, top, height) {
+  element.rect = { top, height }
+  element.getBoundingClientRect = () => ({
+    top: element.rect.top,
+    bottom: element.rect.top + element.rect.height,
+    height: element.rect.height,
+    left: 0,
+    right: 800,
+    width: 800,
+  })
+  return element
+}
+
 /** 装配桥接并返回各部件。 */
 function bridgeHarness({ platform = 'windows', root } = {}) {
   const shortcuts = fakeShortcuts({ platform })
@@ -290,6 +304,54 @@ console.log('--- E⑩ macOS 口径：只认 ⌘⌥.，Ctrl+Alt+. 留给终端 --
     dom.window.emit(meta)
     check('macOS 上 ⌘⌥. 折叠', turn.clicks, 1)
     check('macOS 上 ⌘⌥. 被吞', [meta.prevented, meta.stopped], [1, 1])
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- E⑪ 折叠后按阅读线补偿滚动 ---')
+{
+  const { app, scroll } = mainScroll()
+  place(scroll, 100, 500)
+  scroll.clientTop = 0
+  scroll.clientHeight = 500
+  scroll.scrollHeight = 2000
+  scroll.scrollTop = 700
+  const seat = scroll.append(new FakeElement('div', { 'data-composer-seat': '' }))
+  place(seat, 550, 100)
+  place(scroll.append(new FakeElement('div', {
+    'data-chat-flow-key': 'user',
+    'data-chat-flow-kind': 'user',
+    'data-chat-turn': '1',
+  })), 20, 70)
+  const process = scroll.append(new FakeElement('div', { 'data-chat-flow-key': 'process', 'data-chat-turn': '1' }))
+  place(process, 90, 30)
+  const turn = process.append(new FakeElement('button', { 'data-turn-process': '1', 'aria-expanded': 'true' }))
+  const hidden = scroll.append(new FakeElement('div', { 'data-chat-flow-key': 'hidden', 'data-chat-turn': '1' }))
+  place(hidden, 130, 100)
+  const anchor = scroll.append(new FakeElement('div', {
+    'data-chat-flow-key': 'answer',
+    'data-chat-flow-kind': 'assistant-step',
+    'data-chat-turn': '1',
+  }))
+  place(anchor, 240, 200)
+  turn.click = () => {
+    turn.setAttribute('aria-expanded', 'false')
+    hidden.setAttribute('hidden', '')
+    hidden.rect.height = 0
+    anchor.rect.top = 140
+  }
+
+  const dom = withWindowDom({ root: app })
+  try {
+    const { shortcuts } = bridgeHarness()
+    const press = keydown(gesture('Period', { control: true, alt: true }), shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    check('补偿延到微任务', scroll.scrollTop, 700)
+    await Promise.resolve()
+    check('这一按仍被消费', press.consumed.count, 1)
+    check('折叠已生效', turn.getAttribute('aria-expanded'), 'false')
+    check('锚点换到折叠后的屏幕位置', scroll.scrollTop, 600)
   } finally {
     dom.restore()
   }

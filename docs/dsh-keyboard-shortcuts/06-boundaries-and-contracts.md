@@ -85,7 +85,11 @@
 | 折叠中间步骤时模态层打开 | 不动作、不消费 | 入参与其它桥一致：模态层比工作步骤更近，按键归弹窗 |
 | 折叠中间步骤时没有展开项 | 不动作、不消费 | 目标收集为空；按键留给页面 / 输入控件 / 终端 |
 | 运行中或没有内容的工作步骤 | 不占外层名额 | 上游把轮次过程按钮标成 `disabled`；过程组标题带 `aria-disabled` 时同样跳过。单步详情仍可在外层全部收起后收起 |
-| 工作步骤的 DOM 锚点改名 | 对应目标收集退化为空或只剩另一层 | `css-contract.json` 的 `turn-process-control` / `process-group-header` / `step-process-root` / `chat-flow-kind` / `step-disclosure-row` / `step-expandable` / `main-conversation-slot` 七条契约在构建后显式校验 |
+| 折叠时没有仍可见的锚点 | 不补偿、不回退 | 阅读线以下没有“下一行”时不做猜测；折叠照常完成 |
+| 折叠时跟随尾部 | 不补偿 | 会话在底部时折叠应留在底部；`[data-chat-following-tail]` 存在即跳过 |
+| 折叠时上游动画在跑 | 由上游帧补偿接管 | `[data-chat-motion="collapse"]` / `[data-chat-motion="reveal"]` 存在即跳过，避免二次滚动 |
+| 工作步骤的 DOM 锚点改名 | 对应目标收集退化为空或只剩另一层 | `css-contract.json` 的 `turn-process-control` / `process-group-header` / `step-process-root` / `chat-flow-kind` / `step-disclosure-row` / `step-expandable` / `main-conversation-slot` / `chat-flow-row` / `chat-flow-turn` / `chat-following-tail` / `chat-motion` 十一条契约在构建后显式校验 |
+| 阅读位置的行 / 轮次锚点改名 | 阅读补偿退化为直接折叠 | 锚点行用 `[data-chat-flow-key]`，轮次归属用 `[data-chat-turn]`；缺任一条只影响补偿，不影响折叠目标收集 |
 
 告警前缀统一为 `[dsh-keyboard-shortcuts]`，方便在控制台过滤。
 
@@ -102,7 +106,7 @@
 3. 八条固定行 id 为 `dsh-keyboard-shortcuts.<command.id>`，六条自挂固定行 id 为 `dsh-keyboard-shortcuts.focus-composer` / `.focus-page` / `.page-cycle` / `.session-cycle` / `.session-active-cycle` / `.collapse-steps`；它们都通过 `registerFixed()` 声明，存在即预约；
 4. `approval.allow` / `approval.reject` 这两条官方固定行与「预约的组合就是审批决定键」的语义；
 5. `pendingInteraction` 槽位可被别的域复用，因此审批桥运行时确认 `kind === 'approval'`、`key` 为字符串、`answerable === true`、`answer` 为函数；提问桥确认 `kind` 为 `question` 或 `plan-review`、带 `dismiss()`；
-6. DOM 锚点：`[data-conversation-session]` / `[data-conversation-region]`（停止归属）、`[data-approval-key]`（审批面板根与让位）、`[data-question-key]` / `[data-plan-review-key]`（提问卡片根）、`[role="dialog"][aria-modal="true"], [role="menu"]`（模态）、`data-dsh-automatic-focus` 与主题的 `outline:none` 规则（无环聚焦）、`.xterm` / `.xterm-helper-textarea`（终端与输入面）、`[data-sidebar-right-session]` / `[data-sidebar-right-panel="fullscreen"]` / `[data-sidebar-right-open]`（右栏）、`[data-conversation-scroll]` / `[data-composer-seat]`（消息滚动口与 composer 座位）、`[data-slot="main.conversation"]` / `[data-turn-process]` / `[data-step-process]` / `[data-process-activity]` / `[data-chat-flow-kind]` / `[data-disclosure-row]` / `[data-expandable]`（主会话作用域与工作步骤开合标记）、`[data-dockkit-pane]` / `[data-dockkit-float]` / `[data-dockkit-pane-active]` / `[data-dockkit-float-active]` / `[data-dockkit-strip-tabs]` / `[data-dockkit-tab]`（dockkit）、`[data-row-key="workspace:…"]` / `[data-row-key="session:…"]` 与归档行的 `aria-description`（侧栏候选）；
+6. DOM 锚点：`[data-conversation-session]` / `[data-conversation-region]`（停止归属）、`[data-approval-key]`（审批面板根与让位）、`[data-question-key]` / `[data-plan-review-key]`（提问卡片根）、`[role="dialog"][aria-modal="true"], [role="menu"]`（模态）、`data-dsh-automatic-focus` 与主题的 `outline:none` 规则（无环聚焦）、`.xterm` / `.xterm-helper-textarea`（终端与输入面）、`[data-sidebar-right-session]` / `[data-sidebar-right-panel="fullscreen"]` / `[data-sidebar-right-open]`（右栏）、`[data-conversation-scroll]` / `[data-composer-seat]` / `[data-chat-following-tail]` / `[data-chat-motion]`（消息滚动口、composer 座位、跟随尾部与上游折叠动画）、`[data-slot="main.conversation"]` / `[data-turn-process]` / `[data-step-process]` / `[data-process-activity]` / `[data-chat-flow-kind]` / `[data-disclosure-row]` / `[data-expandable]` / `[data-chat-flow-key]` / `[data-chat-turn]`（主会话作用域、工作步骤开合标记与阅读补偿的行 / 轮次锚点）、`[data-dockkit-pane]` / `[data-dockkit-float]` / `[data-dockkit-pane-active]` / `[data-dockkit-float-active]` / `[data-dockkit-strip-tabs]` / `[data-dockkit-tab]`（dockkit）、`[data-row-key="workspace:…"]` / `[data-row-key="session:…"]` 与归档行的 `aria-description`（侧栏候选）；
 7. `retainedBy.mainView` 的语义（与 `UiSession.isMain` 同源）；
 8. `conversation.input.for(scope)` 返回的 `SessionInput.focus()`（光标还原）与 `conversation.cancel()`；
 9. `sidebarRight` 的 `focusedTarget` / `commandTarget` / `isExpanded` / `isTargetCurrent` / `toggleFullscreen` / `split` / `canCloseTarget` / `closeTarget` / `toggleExpanded` / `mounted` / `tabsIn` / `active` / `focus`；
@@ -115,3 +119,4 @@
 16. 消息滚动口的 `clientHeight` 包含底部 sticky 的 composer；`[data-composer-seat]` 的 `offsetHeight` 就是被遮住的高度，翻页补偿按 `clientHeight - composerHeight - 50` 计算步长；
 17. 工作步骤标题的 click 负责开合，`[data-turn-process]` / `[data-process-activity]` 的 `aria-expanded` 反映当前开合态；折叠键只点击这些标题，不写上游 store；
 18. 主会话滚动口的槽位名是 `main.conversation`，工作步骤的展开标记是 `aria-expanded="true"`，不可操作的外层用 `disabled` / `aria-disabled="true"` 表示。
+19. 阅读线取滚动口 `getBoundingClientRect().top + clientTop + 1`；可见带下边界取 `[data-composer-seat]` 的顶，没有 composer 时取滚动口底；锚点行按文档顺序取阅读线以下第一个折叠后仍可见的 `[data-chat-flow-key]` / 详情行。

@@ -1,6 +1,6 @@
 # 折叠中间步骤
 
-> 本文件是 [dsh-keyboard-shortcuts 说明](../dsh-keyboard-shortcuts.md) 的第 9 册：`⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，以及两层目标、焦点保持与失败边界。
+> 本文件是 [dsh-keyboard-shortcuts 说明](../dsh-keyboard-shortcuts.md) 的第 9 册：`⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，以及两层目标、阅读位置补偿、焦点保持与失败边界。
 
 -----
 
@@ -10,13 +10,15 @@
 
 动作分两层：先收所有展开的轮次过程与过程组标题；没有可收的外层时，再收展开着的单步详情。这样一次按键先把整段过程收起，不会在外层还开着时逐个去点被它遮住的详情。
 
+折叠前后还做一次**阅读位置补偿**：以会话视口上边界下 1px 为阅读线，折叠后让阅读线以下第一个仍可见的行保持原来的屏幕位置；这个锚点原本在视口外时，改为把触发该轮工作的用户消息放到阅读线下 3px。
+
 -----
 
 ## 1. 行为
 
 | 键（macOS / Windows·Linux） | 落在主会话 | 没有可折的展开项 |
 |---|---|---|
-| `⌘⌥.` / `Ctrl+Alt+.` | 折叠所有展开的轮次过程与过程组标题；没有外层展开项时折叠单步详情 | 不动作、不消费 |
+| `⌘⌥.` / `Ctrl+Alt+.` | 折叠所有展开的轮次过程与过程组标题；没有外层展开项时折叠单步详情，并保持阅读位置 | 不动作、不消费 |
 
 - 只作用于**主会话**：`[data-slot="main.conversation"]` 内的 `[data-conversation-scroll]`。槽位标记缺席时，只在全文档恰好有一个消息滚动口时使用它；多个滚动口且没有槽位时不猜。
 - 外层目标：
@@ -31,15 +33,46 @@
 
 -----
 
-## 2. 实现
+## 2. 阅读位置补偿
 
-固定行由 `src/collapse-steps.ts` 注册（group `application`，键帽 `⌘⌥.` / `Ctrl+Alt+.`）。固定输入观察者先判准入与 `fixedRowOwns`，再收集目标；确认至少有一个目标可折时才 `consume()`，然后逐个点击。终端捕获复用同一份准入、目标收集和点击逻辑。
+阅读线是**会话显示区视口的上边界下 1px**（滚动口的 `getBoundingClientRect().top + clientTop + 1`）。视口下边界取 composer 座位 `[data-composer-seat]` 的顶；没有 composer 时取滚动口底。夹在 composer 后面的行不算在视口内。
+
+折叠前按文档顺序记下阅读线以下、折叠前可见的每一行（`top` 为视口坐标）：
+
+- 聊天流行：`[data-chat-flow-key]`，含过程组行与嵌套在过程组里的成员行；
+- 单步详情行：`[data-disclosure-row]` / `[data-expandable]`，且落在与折叠目标相同的 `[data-step-process]` / `tool-call` / `assistant-step` / `turn-process` 范围里。
+
+折叠后按同一顺序取**第一个仍然可见的行**作为锚点。被 `[hidden]` 祖先藏起来、或被虚拟化到高度 0 的行跳过。
+
+- **锚点折叠前在视口内**：写回滚动位置，让锚点的屏幕 `top` 与折叠前一致。滚动位置夹在 `[0, scrollHeight - clientHeight]`。
+- **锚点折叠前在视口外**：先取“轮次范围包含阅读线”的那一轮——轮次范围是同一 `[data-chat-turn]` 下所有可见行的并集，包含展开在标题之外的步骤，所以标题行已经滚出阅读线时仍认得出这一轮；没有这样的轮次时，取可见区域内最靠上的折叠标题所属轮次；最后取轮次范围与可见区域相交的那一轮。把这一轮的用户消息顶部放到阅读线下 3px；找不到用户消息时退到同一轮次的 `turn-trigger` 通知行，同样放在阅读线下 3px。
+- **没有仍可见的锚点**：不补偿，也不回退。没有“下一行”时不做猜测。
+- **点击没有改变布局**：锚点仍在原位；即使它原本在视口外也不回退，避免目标没有真正收起时把视图拉走。
+- 上游正在跑折叠动画（`[data-chat-motion="collapse"]` / `"reveal"`）时不补偿：上游自己的帧补偿已经在保持阅读位置，再补一次会叠加成二次滚动。
+- 会话处于跟随尾部（`[data-chat-following-tail]`）时不补偿：此时应留在底部，而不是把视图拉回阅读线。
+- 补偿只写滚动口的 `scrollTop`；不插入占位元素、不改上游 store、不抢焦点。读不到几何（假 DOM、已卸载的滚动口）时直接跳过，折叠照常完成。
+
+实现分两步，顺序不能反：
 
 ```ts
-const targets = currentCollapseTargets()
-if (targets.length === 0) return
+const plan = planReadingAnchor(root, targets) // 点击前：记下阅读线以下的行与回退行
+collapseSteps(targets)                       // 点击上游标题
+queueMicrotask(() => applyReadingAnchor(plan)) // 上游提交布局后：按锚点或回退行补 scrollTop
+```
+
+点击后行会被隐藏或重排；如果等点击后再找锚点，就只能看到新几何，无法知道它折叠前在哪。上游对合成点击的 React 提交发生在当前事件处理器返回之后，所以补偿排进微任务，等布局落定再量。补偿抛错或单行点击抛错都只告警，不影响已经完成的那部分折叠。
+
+-----
+
+## 3. 实现
+
+固定行由 `src/collapse-steps.ts` 注册（group `application`，键帽 `⌘⌥.` / `Ctrl+Alt+.`），阅读位置规则在 `src/reading-anchor.ts`。固定输入观察者先判准入与 `fixedRowOwns`，再按滚动口收集目标批次；确认至少有一个目标可折时才 `consume()`，然后逐批点击并补偿。终端捕获复用同一份准入、目标收集与折叠逻辑。
+
+```ts
+const batches = currentCollapseBatches()
+if (!batches.some((batch) => batch.targets.length > 0)) return
 input.consume()
-collapseSteps(targets)
+collapseBatches(batches)
 ```
 
 点击使用 `element.click()`，让上游的 React `onClick` 正常执行：
@@ -59,10 +92,11 @@ try {
 - `element.click()` 派发的是普通点击，上游无需额外分支；DOM 顺序与真实点击一致。
 - `focus` 覆盖只发生在点击期间，且只覆盖目标元素自己的属性，不改原型，不影响其它元素。
 - 单个目标点击抛错时捕获并告警，继续处理后面的目标。
+- 每个滚动口独立采集与补偿；一份批次的折叠不影响另一份的阅读位置。
 
 -----
 
-## 3. 失败模式与 DOM 契约
+## 4. 失败模式与 DOM 契约
 
 | 情况 | 行为 |
 |---|---|
@@ -72,21 +106,32 @@ try {
 | `[data-disclosure-row]` / `[data-expandable]` 改名 | 外层都收起后，单步详情不再被折叠；外层那一按不受影响 |
 | `[data-chat-flow-kind]` 改名 | “完全展开”模式下分不清工作步骤与系统提示词，单步详情折叠不接管 |
 | 主会话槽位 / 滚动口标记消失 | 找不到作用域；只有全文档恰好一个滚动口时才回退 |
+| `[data-chat-flow-key]` 改名 | 阅读位置补偿找不到行锚点，退化为 no-op；折叠本身仍生效 |
+| `[data-chat-turn]` 改名 | 回退目标认不出阅读线所在的轮次，也找不到该轮的用户消息，回退滚动退化为 no-op |
+| 轮次过程标题滚出阅读线、展开步骤仍在读 | 回退目标按同一 `[data-chat-turn]` 的行范围识别，不要求标题行仍在视口里 |
+| `[data-composer-seat]` 消失 | 视口下边界退回滚动口底；被 composer 盖住的行可能被误判在视口内 |
+| `[data-chat-following-tail]` 消失 | 在会话底部折叠时也会做阅读线补偿，可能把视图从底部拉开 |
+| `[data-chat-motion]` 消失 | 认不出上游正在做帧补偿，可能和它的阅读位置保持叠加成二次滚动 |
+| 滚动口没有几何 | 跳过补偿，折叠照常完成 |
+| 没有仍可见的锚点 | 不补偿、不回退；按键仍然消费 |
+| 补偿目标越过滚动范围 | 夹到 `0` 或最大滚动位置，只能尽量接近锚点原位 |
 | 上游标题的 click 不再切换开合 | 按键会点击，但没有视觉变化；插件的目标收集仍会消费这一按 |
 | 模态层打开 | 让给弹窗，不动作、不消费 |
-| 运行中的轮次过程 | 上游 `disabled`，跳过；单步详情仍可在第二层收起 |
+| 运行中的轮次过程 | 上游 `disabled`，跳过；过程组与单步详情仍可按各自规则收起 |
+| 上游折叠动画在跑 | 由上游帧补偿接管；本插件不补 |
 | 插件卸载 | 固定行、观察者与捕获监听随 scope 释放，按键恢复原状 |
 
-`css-contract.json` 的 `turn-process-control`、`process-group-header`、`step-process-root`、`chat-flow-kind`、`step-disclosure-row`、`step-expandable` 与 `main-conversation-slot` 七条契约在构建后校验这些锚点；缺一条时 `check-css.mjs` 显式失败并写明退化后果。
+`css-contract.json` 的 `turn-process-control`、`process-group-header`、`step-process-root`、`chat-flow-kind`、`step-disclosure-row`、`step-expandable`、`main-conversation-slot`、`chat-flow-row`、`chat-flow-turn`、`chat-following-tail`、`chat-motion` 与已有的 `composer-seat` / `conversation-scroll` 契约一起在构建后校验这些锚点；缺一条时 `check-css.mjs` 显式失败并写明退化后果。
 
 -----
 
-## 4. 验证
+## 5. 验证
 
 ```bash
 node test/focus-decide-collapse-steps.test.mjs   # 准入、两层目标、作用域、去重
-node test/focus-bridge-collapse-steps.test.mjs   # 固定行、消费边界、焦点保持、终端捕获、卸载
+node test/focus-decide-collapse-reading.test.mjs # 阅读线、锚点、回退、夹紧与跳过边界
+node test/focus-bridge-collapse-steps.test.mjs   # 固定行、消费边界、焦点保持、终端捕获、阅读补偿、卸载
 node check-css.mjs                               # DOM 锚点契约
 ```
 
-手测：打开一个有多轮历史的会话，展开若干“已完成，用时 …”过程与其中的工具行；焦点放在 composer 或终端里按 `⌘⌥.` / `Ctrl+Alt+.`，所有轮次过程与过程组标题收起，焦点不移动；再按一次，若仍有展开的单步详情则收起；没有展开项时按键不产生动作；在模态弹窗打开或长按该组合时不折叠。
+手测：打开一个有多轮历史的会话，把视图滚到一段展开的过程中间，确认阅读线落在过程内部后按 `⌘⌥.` / `Ctrl+Alt+.`。若折叠后阅读线下方仍有可见行，该行应停在原来的屏幕位置；若整屏都被折叠内容占满，这一轮的用户消息顶部应落在阅读线下 3px。再验证三种边界：在会话底部跟随尾部时折叠，视图留在底部；焦点放在 composer 或终端里，焦点不移动；模态弹窗打开或长按组合时不折叠、不消费。

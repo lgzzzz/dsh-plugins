@@ -12,6 +12,10 @@
     {"id":"step-expandable","plugin":"dsh-keyboard-shortcuts","token":"\"data-expandable\":","paths":["dsh-client-ui-tool/lib"],"hint":"工具行 / 命令输出的可展开标记消失：完全展开模式下展开着的单步详情不会被快捷键收起"},
     {"id":"main-conversation-slot","plugin":"dsh-keyboard-shortcuts","token":"\"main.conversation\"","paths":["dsh-client-ui-conversation/lib"],"hint":"主会话槽位名变了：折叠键找不到主会话作用域；回退只在全文档恰好有一个消息滚动口时生效，否则不动作（不误折右栏）"},
     {"id":"composer-seat","plugin":"dsh-keyboard-shortcuts","token":"data-composer-seat","paths":["dsh-client-ui-conversation/lib"],"hint":"composer 座位标记消失：翻页补偿算不出可见消息带（clientHeight - composerHeight），退化为 no-op，原生翻页的越界问题回来"},
+    {"id":"chat-flow-row","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-chat-flow-key\":","paths":["dsh-client-ui-chat/lib"],"hint":"聊天行标记消失：折叠后的阅读线找不到行锚点，锚点滚动补偿退化为 no-op（折叠本身仍生效）"},
+    {"id":"chat-flow-turn","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-chat-turn\":","paths":["dsh-client-ui-chat/lib"],"hint":"轮次归属标记消失：锚点在视口外时找不到触发该轮的用户消息，回退滚动退化为 no-op"},
+    {"id":"chat-following-tail","plugin":"dsh-keyboard-shortcuts","token":"data-chat-following-tail","paths":["dsh-client-ui-chat/lib"],"hint":"跟随尾部标记消失：在会话底部折叠时也会做阅读线补偿，把视图从底部拉开"},
+    {"id":"chat-motion","plugin":"dsh-keyboard-shortcuts","token":"data-chat-motion","paths":["dsh-client-ui-chat/lib"],"hint":"上游折叠动画标记消失：插件认不出上游正在做帧补偿，可能和它的阅读位置保持叠加成二次滚动"},
 
     {"id":"conversation-region","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-region","paths":["dsh-client-ui-conversation/lib"],"hint":"会话输入区标记消失：停止桥取不到 region，连按两下 Esc 不再停止回合"},
     {"id":"question-key","plugin":"dsh-keyboard-shortcuts","token":"data-question-key","paths":["dsh-client-ui-user-questions/lib"],"hint":"提问卡片根标记消失：Esc 不再能取消 / 关闭提问卡片"},

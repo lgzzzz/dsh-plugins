@@ -236,4 +236,4 @@ return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallba
 1. `fixedRowOwns()` 确认这一按属于插件自己的固定行 `dsh-keyboard-shortcuts.collapse-steps`；
 2. 主会话滚动口里能收集到至少一个展开目标（轮次过程 / 过程组标题 / 单步详情）。
 
-长按、输入法组合、已被前面的处理器消费、模态层打开时不动作、也不消费。目标收集与两层优先级见 [第 9 册](09-collapse-steps.md)，固定输入通道里的位置见 [第 3 册第 5.7 节](03-fixed-input-and-pane-keys.md)。
+长按、输入法组合、已被前面的处理器消费、模态层打开时不动作、也不消费。点击完成后，插件按阅读线补滚动口 `scrollTop`；补偿只改滚动位置，不参与归属判定，也不会再消费额外的键。目标收集、两层优先级与阅读线规则见 [第 9 册](09-collapse-steps.md)，固定输入通道里的位置见 [第 3 册第 5.7 节](03-fixed-input-and-pane-keys.md)。

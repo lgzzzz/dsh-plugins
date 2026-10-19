@@ -25,6 +25,7 @@ const ORDER = [
   'focus-decide-question.test.mjs',
   'focus-decide-focus-composer.test.mjs',
   'focus-decide-collapse-steps.test.mjs',
+  'focus-decide-collapse-reading.test.mjs',
   'focus-decide-focus-page.test.mjs',
   'focus-decide-page-cycle.test.mjs',
   'focus-decide-session-cycle.test.mjs',

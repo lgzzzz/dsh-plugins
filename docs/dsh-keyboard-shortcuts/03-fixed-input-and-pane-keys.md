@@ -281,17 +281,17 @@ function focusPageTarget(shortcuts, sidebar, gesture, context) {
 
 ### 5.7 折叠中间步骤键桥接：`handleCollapseStepsInput`
 
-`⌘⌥.`（macOS）/ `Ctrl+Alt+.`（Windows/Linux）是插件自己挂的固定行（`dsh-keyboard-shortcuts.collapse-steps`，group `application`）。动作是点击当前主会话里已展开的上游标题：一次收所有展开的轮次过程与过程组标题，没有外层展开项时才收单步详情。准入只排除长按、组字、已被消费与模态层；页面、文本控件、终端都放行。
+`⌘⌥.`（macOS）/ `Ctrl+Alt+.`（Windows/Linux）是插件自己挂的固定行（`dsh-keyboard-shortcuts.collapse-steps`，group `application`）。动作是点击当前主会话里已展开的上游标题：一次收所有展开的轮次过程与过程组标题，没有外层展开项时才收单步详情。点击前后按阅读线保持阅读位置。准入只排除长按、组字、已被消费与模态层；页面、文本控件、终端都放行。
 
 ```ts
 function handleCollapseStepsInput(shortcuts, input) {
   if (!collapseStepsEligible(input.gesture, input.context)) return
   if (!fixedRowOwns(shortcuts.fixedCatalog.getSnapshot(), COLLAPSE_STEPS_ID, input.gesture)) return
-  const targets = currentCollapseTargets()
-  if (targets.length === 0) return     // 没有可折的展开项：不消费
+  const batches = currentCollapseBatches()
+  if (!batches.some((batch) => batch.targets.length > 0)) return // 没有可折的展开项：不消费
   input.consume()
-  collapseSteps(targets)
+  collapseBatches(batches)             // 每批：点击前采集阅读位置，微任务里补 scrollTop
 }
 ```
 
-点击用 `element.click()`，并在点击期间临时把目标自己的 `focus` 覆盖成空函数：上游标题的 `onClick` 会先聚焦自己，快捷键路径不应把键盘从 composer / 终端抢走。点击结束后按原属性恢复。目标收集、两层优先级与 DOM 锚点见 [第 9 册](09-collapse-steps.md)。
+点击用 `element.click()`，并在点击期间临时把目标自己的 `focus` 覆盖成空函数：上游标题的 `onClick` 会先聚焦自己，快捷键路径不应把键盘从 composer / 终端抢走。点击结束后按原属性恢复。阅读位置补偿只写滚动口 `scrollTop`，不改变归属与消费判断。目标收集、两层优先级、阅读线规则与 DOM 锚点见 [第 9 册](09-collapse-steps.md)。
