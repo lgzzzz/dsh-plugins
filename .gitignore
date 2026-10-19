@@ -20,6 +20,7 @@ dsh-desktop-notify/lib/
 dsh-header-action-order/lib/
 dsh-jobs-optimize/lib/
 dsh-keyboard-shortcuts/lib/
+dsh-turn-process-open/lib/
 dsh-ui-css-patches/lib/
 dsh-workspace-quick-switch/lib/
 

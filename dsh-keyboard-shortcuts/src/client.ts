@@ -8,7 +8,8 @@
  * 免聚焦桥接组处理内置命令够不着的状态与键位：连按两下 `Esc` 停止、审批面板
  * `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、
  * `⌘⌥K` 聚焦右栏当前页面、`⌘⌥←/→` 切换右栏页面、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、
- * `⌘\` 分屏，以及 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤并按阅读线保持阅读位置。它们各自
+ * `⌘\` 分屏，以及 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤、把最新一轮
+ * 平铺明细封口成历史轮次的组头形态，并按阅读线保持阅读位置。它们各自
  * 打开固定输入观察者，在可配置派发之前消费按键；落在 `.xterm` 内的按键由各桥的
  * 捕获阶段监听接管。
  *
@@ -19,6 +20,7 @@
  */
 import { installApprovalBridge } from './approval-keys.ts'
 import { installChatPaging } from './chat-paging.ts'
+import { installCollapseSeal } from './collapse-seal.ts'
 import { installCollapseStepsBridge } from './collapse-steps.ts'
 import { installFixedKeyBridge, type ClientContext } from './fixed-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
@@ -47,6 +49,7 @@ export function apply(ctx: Context): void {
   installQuestionBridge(ctx)
   installFullscreenDismissBridge(ctx)
   installFocusComposerBridge(ctx)
+  installCollapseSeal(ctx)
   installCollapseStepsBridge(ctx)
   installFocusPageBridge(ctx)
   installPageCycleBridge(ctx)

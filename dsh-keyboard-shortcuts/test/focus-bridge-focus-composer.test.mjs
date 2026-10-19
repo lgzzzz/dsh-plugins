@@ -117,7 +117,7 @@ console.log('--- K⑤ 失败模式:缺 sessions / 缺 observeFixedInput 即不�
   })
   const warnings = captureWarnings(() => applyPlugin(bare))
   checkTrue('缺 observeFixedInput 时聚焦桥告警', warnings.some((line) => line.includes('focus-composer key not installed')))
-  check('缺 observeFixedInput 时只装翻页补偿', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging'])
+  check('缺 observeFixedInput 时只装不依赖固定键的部分', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging', 'dsh-keyboard-shortcuts: collapse seal style'])
 }
 
 console.log('--- K⑥ 卸载:固定行与监听一起释放 ---')

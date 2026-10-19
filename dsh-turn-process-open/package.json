@@ -1,0 +1,37 @@
+{
+  "name": "dsh-turn-process-open",
+  "version": "1.0.0",
+  "private": true,
+  "description": "把已结束轮次的中间过程（“已完成，用时 …”）锁定为展开：通过 React fiber 取到上游 Chat 的 setTurnProcessOpen，向 per-session store 预写展开记录，使新消息 / 自动收起不再折叠整轮；过程组仍按上游默认折叠、可正常开合。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}

@@ -734,6 +734,12 @@ export class FakeCtx {
     this.pending = []
     for (const entry of waiting) this.inject(entry.deps, entry.callback)
   }
+  /** 顶层 effect：与本插件 client.apply 里 installCollapseSeal 的用法一致。 */
+  effect(execute, label) {
+    const dispose = execute()
+    this.effects.push({ label, dispose })
+    return { dispose }
+  }
   inject(deps, callback) {
     if (deps.some((name) => this.services[name] === undefined)) {
       // 服务缺席时 Cordis 让这段逻辑停在等待中,服务到齐后再跑(见 provide)。

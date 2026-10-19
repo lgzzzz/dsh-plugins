@@ -16,6 +16,10 @@
  * `stopPropagation()`），因此与其它桥一样另装捕获阶段的 window `keydown`，在事件进入
  * 终端前判定并吞掉。两条路径共用同一份准入与目标收集。
  *
+ * 装了 `dsh-turn-process-open` 时，轮次过程标题带锁标记、不参与折叠；同一按还会把
+ * 最新一轮的平铺明细**封口**成立即呈现的历史轮次组头形态（见 `collapse-seal.ts`），
+ * 使折叠结果与“下一条消息发送过来之后”完全一致。
+ *
  * 折叠前先在滚动口上采集阅读位置，点击后按 `reading-anchor.ts` 的规则补滚动：阅读线
  * （视口上边界下 1px）以下第一个仍可见的行保持原位；它原本在视口外时，改为把触发这一轮
  * 工作的用户消息放到阅读线下 3px。上游折叠动画在跑或会话跟随尾部时不做补偿。
@@ -25,6 +29,7 @@
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
 import { bindingKeycaps, fixedRowOwns } from './binding.ts'
+import { LOCK_ATTRIBUTE, sealGroups, sealableGroups } from './collapse-seal.ts'
 import {
   applyReadingAnchor,
   planReadingAnchor,
@@ -72,7 +77,11 @@ export function collapseStepsEligible(gesture: ShortcutGesture, context: Shortcu
     && context.modal === null
 }
 
-/** 轮次级过程控制：`data-turn-process` 只出现在它的开合按钮上。 */
+/**
+ * 轮次级过程控制：`data-turn-process` 只出现在它的开合按钮上。
+ * 装了 `dsh-turn-process-open` 后标题带 `data-turn-process-locked`，由锁定器维护，
+ * 这里跳过它们（否则刚折就被重新打开，会闪一下）。
+ */
 const TURN_PROCESS_SELECTOR = '[data-turn-process]'
 
 /** 过程组标题：`data-process-activity` 只出现在组标题按钮上。 */
@@ -96,6 +105,8 @@ function isDisabled(element: Element): boolean {
 function openOuterSteps(root: ParentNode): Element[] {
   const found = new Set<Element>()
   for (const element of root.querySelectorAll(TURN_PROCESS_SELECTOR)) {
+    // 锁定展开的标题不归快捷键管：折了也会被锁定器重新展开。
+    if (element.hasAttribute(LOCK_ATTRIBUTE)) continue
     if (isExpanded(element) && !isDisabled(element)) found.add(element)
   }
   for (const element of root.querySelectorAll(PROCESS_GROUP_SELECTOR)) {
@@ -139,15 +150,26 @@ export function conversationRoots(): Element[] {
   return scrolls.length === 1 ? scrolls : []
 }
 
-/** 一个主会话滚动口和它这次要折叠的目标。 */
+/** 一个主会话滚动口和它这次要折叠 / 封口的对象。 */
 export interface CollapseBatch {
   readonly root: Element
   readonly targets: readonly Element[]
+  /** 本次要封口（平铺 → 历史轮次组头形态）的过程组根。 */
+  readonly seals: readonly Element[]
+}
+
+/** 这一批是否有事情可做：有展开项要折，或有平铺轮次要封口。 */
+export function batchHasWork(batch: CollapseBatch): boolean {
+  return batch.targets.length > 0 || (batch.seals?.length ?? 0) > 0
 }
 
 /** 当前主会话里的折叠批次：每个滚动口一份，目标已按 DOM 去重。 */
 export function currentCollapseBatches(): CollapseBatch[] {
-  return conversationRoots().map((root) => ({ root, targets: collapseStepTargets(root) }))
+  return conversationRoots().map((root) => ({
+    root,
+    targets: collapseStepTargets(root),
+    seals: sealableGroups(root),
+  }))
 }
 
 /** 当前主会话里本次要折叠的目标，已按 DOM 去重。 */
@@ -206,19 +228,22 @@ export function collapseSteps(targets: readonly Element[]): number {
  * 折叠一份批次，并在折叠后按阅读线补偿滚动。
  *
  * 阅读位置必须在点击前采集：点击后行会被隐藏/重排，按新几何再找锚点就晚了。
- * 补偿延到微任务：上游对合成点击的 React 提交发生在当前事件处理器返回之后，
- * 同步读几何还会看到折叠前的布局，量不到位移。补偿失败只告警，不影响已经完成的折叠。
+ * 封口（把最新一轮从平铺切成组头形态）与点击在同一批里完成，也参与补偿：封口本身
+ * 会明显改变高度，只补偿点击会让阅读位置漂移。补偿延到微任务：上游对合成点击的
+ * React 提交发生在当前事件处理器返回之后，同步读几何还会看到折叠前的布局。
+ * 补偿失败只告警，不影响已经完成的折叠与封口。
  */
 function collapseBatch(batch: CollapseBatch): number {
-  if (batch.targets.length === 0) return 0
+  if (!batchHasWork(batch)) return 0
   let plan: ReadingPlan | null = null
   try {
     plan = planReadingAnchor(batch.root, batch.targets)
   } catch (error) {
     warn('采集折叠前的阅读位置失败：', error)
   }
+  const sealed = sealGroups(batch.seals ?? [])
   const collapsed = collapseSteps(batch.targets)
-  if (collapsed === 0 || plan === null) return collapsed
+  if ((collapsed === 0 && sealed === 0) || plan === null) return collapsed
   const captured = plan
   const compensate = (): void => {
     try {
@@ -249,7 +274,7 @@ function handleCollapseStepsInput(shortcuts: Shortcuts, input: KeydownInput): vo
   if (!collapseStepsEligible(input.gesture, input.context)) return
   if (!fixedRowOwns(shortcuts.fixedCatalog.getSnapshot(), COLLAPSE_STEPS_ID, input.gesture)) return
   const batches = currentCollapseBatches()
-  if (!batches.some((batch) => batch.targets.length > 0)) return
+  if (!batches.some(batchHasWork)) return
   // 先消费再动作：避免该按键再被页面内的输入控件处理。
   input.consume()
   collapseBatches(batches)
@@ -289,7 +314,7 @@ export function installCollapseStepsBridge(ctx: Context): void {
         if (!collapseStepsEligible(gesture, captureContext(element))) return
         if (!fixedRowOwns(shortcuts.fixedCatalog.getSnapshot(), COLLAPSE_STEPS_ID, gesture)) return
         const batches = currentCollapseBatches()
-        if (!batches.some((batch) => batch.targets.length > 0)) return
+        if (!batches.some(batchHasWork)) return
         event.preventDefault()
         event.stopPropagation()
         collapseBatches(batches)

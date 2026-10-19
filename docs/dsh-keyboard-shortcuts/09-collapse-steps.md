@@ -1,6 +1,6 @@
 # 折叠中间步骤
 
-> 本文件是 [dsh-keyboard-shortcuts 说明](../dsh-keyboard-shortcuts.md) 的第 9 册：`⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，以及两层目标、阅读位置补偿、焦点保持与失败边界。
+> 本文件是 [dsh-keyboard-shortcuts 说明](../dsh-keyboard-shortcuts.md) 的第 9 册：`⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤、把最新一轮封口成历史轮次的组头形态，以及两层目标、阅读位置补偿、焦点保持与失败边界。
 
 -----
 
@@ -10,6 +10,8 @@
 
 动作分两层：先收所有展开的轮次过程与过程组标题；没有可收的外层时，再收展开着的单步详情。这样一次按键先把整段过程收起，不会在外层还开着时逐个去点被它遮住的详情。
 
+装了 `dsh-turn-process-open` 时，轮次过程标题带 `data-turn-process-locked`、不参与折叠；同一按会把**最新一轮的平铺明细封口**成历史轮次的组头形态，使折叠结果与“下一条消息发送过来之后”完全一致（第 5 节）。
+
 折叠前后还做一次**阅读位置补偿**：以会话视口上边界下 1px 为阅读线，折叠后让阅读线以下第一个仍可见的行保持原来的屏幕位置；这个锚点原本在视口外时，改为把触发该轮工作的用户消息放到阅读线下 3px。
 
 -----
@@ -18,11 +20,11 @@
 
 | 键（macOS / Windows·Linux） | 落在主会话 | 没有可折的展开项 |
 |---|---|---|
-| `⌘⌥.` / `Ctrl+Alt+.` | 折叠所有展开的轮次过程与过程组标题；没有外层展开项时折叠单步详情，并保持阅读位置 | 不动作、不消费 |
+| `⌘⌥.` / `Ctrl+Alt+.` | 折叠所有展开的轮次过程（带锁标记的除外）与过程组标题；把最新一轮封口成组头形态；没有外层展开项时折叠单步详情，并保持阅读位置 | 不动作、不消费 |
 
 - 只作用于**主会话**：`[data-slot="main.conversation"]` 内的 `[data-conversation-scroll]`。槽位标记缺席时，只在全文档恰好有一个消息滚动口时使用它；多个滚动口且没有槽位时不猜。
 - 外层目标：
-  - `[data-turn-process][aria-expanded="true"]`：轮次过程按钮；
+  - `[data-turn-process][aria-expanded="true"]`：轮次过程按钮；带 `data-turn-process-locked` 的跳过（由 `dsh-turn-process-open` 维护）；
   - `[data-step-process]` 内的 `[data-process-activity][aria-expanded="true"]`：过程组标题。
 - 单步详情：`[data-disclosure-row]` 与 `[data-expandable]` 中 `aria-expanded="true"` 的元素，并且必须落在 `[data-step-process]` 或 `[data-chat-flow-kind="tool-call" | "assistant-step" | "turn-process"]` 容器里。系统提示词、上下文注入、提问卡片等非工作步骤的折叠行不收。
 - 被上游标记为不可操作的外层（运行中 / 没有内容时的 `disabled`，或 `aria-disabled="true"`）跳过，不占外层名额。
@@ -66,14 +68,16 @@ queueMicrotask(() => applyReadingAnchor(plan)) // 上游提交布局后：按锚
 
 ## 3. 实现
 
-固定行由 `src/collapse-steps.ts` 注册（group `application`，键帽 `⌘⌥.` / `Ctrl+Alt+.`），阅读位置规则在 `src/reading-anchor.ts`。固定输入观察者先判准入与 `fixedRowOwns`，再按滚动口收集目标批次；确认至少有一个目标可折时才 `consume()`，然后逐批点击并补偿。终端捕获复用同一份准入、目标收集与折叠逻辑。
+固定行由 `src/collapse-steps.ts` 注册（group `application`，键帽 `⌘⌥.` / `Ctrl+Alt+.`），阅读位置规则在 `src/reading-anchor.ts`，封口在 `src/collapse-seal.ts`。固定输入观察者先判准入与 `fixedRowOwns`，再按滚动口收集目标批次；确认至少有一个目标可折或可封口时才 `consume()`，然后逐批封口、点击并补偿。终端捕获复用同一份准入、目标收集与折叠逻辑。
 
 ```ts
 const batches = currentCollapseBatches()
-if (!batches.some((batch) => batch.targets.length > 0)) return
+if (!batches.some(batchHasWork)) return
 input.consume()
 collapseBatches(batches)
 ```
+
+每批的顺序是 `planReadingAnchor` → `sealGroups(batch.seals)` → `collapseSteps(batch.targets)` → 微任务补偿；封口与点击都可能改变高度，共用同一份阅读位置。
 
 点击使用 `element.click()`，让上游的 React `onClick` 正常执行：
 
@@ -118,19 +122,70 @@ try {
 | 上游标题的 click 不再切换开合 | 按键会点击，但没有视觉变化；插件的目标收集仍会消费这一按 |
 | 模态层打开 | 让给弹窗，不动作、不消费 |
 | 运行中的轮次过程 | 上游 `disabled`，跳过；过程组与单步详情仍可按各自规则收起 |
+| 锁标记 `data-turn-process-locked` 消失 | 锁定器未装或失效：轮次过程重新参与折叠；封口不启用（不误藏内容） |
+| `data-group-expanded-mode` 改名 / 消失 | 封口认不出平铺轮次；折叠后保持平铺，不丢内容 |
+| `data-step-process-body` 改名 / 消失 | 封口的隐藏成员规则落空；组头显示、成员仍平铺（退化，不丢内容） |
+| `:has()` 不支持 | 跳过封口，只告警一次；平铺形态不变 |
 | 上游折叠动画在跑 | 由上游帧补偿接管；本插件不补 |
 | 插件卸载 | 固定行、观察者与捕获监听随 scope 释放，按键恢复原状 |
 
-`css-contract.json` 的 `turn-process-control`、`process-group-header`、`step-process-root`、`chat-flow-kind`、`step-disclosure-row`、`step-expandable`、`main-conversation-slot`、`chat-flow-row`、`chat-flow-turn`、`chat-following-tail`、`chat-motion` 与已有的 `composer-seat` / `conversation-scroll` 契约一起在构建后校验这些锚点；缺一条时 `check-css.mjs` 显式失败并写明退化后果。
+`css-contract.json` 的 `turn-process-control`、`process-group-header`、`step-process-root`、`chat-flow-kind`、`step-disclosure-row`、`step-expandable`、`main-conversation-slot`、`chat-flow-row`、`chat-flow-turn`、`chat-following-tail`、`chat-motion`、`group-expanded-mode`、`step-process-body` 与已有的 `composer-seat` / `conversation-scroll` 契约一起在构建后校验这些锚点；缺一条时 `check-css.mjs` 显式失败并写明退化后果。
 
 -----
 
-## 5. 验证
+## 5. 封口：折叠后的形态对齐
+
+“详细”模式下，最新一轮的中间过程是**平铺**的（组根带 `data-group-expanded-mode`，组头普通 `hidden`，组体可见），更早的轮次是**分组**的（组头可见、组体 `hidden="until-found"`）。加锁之后，上一轮在新消息到达时保持展开，于是“折叠样式”就是分组形态。
+
+### 5.1 目标
+
+按 `⌘⌥.` 后，最新一个**带锁且展开**的轮次立即呈现成分组形态：轮次过程标题仍展开，其下出现折叠着的过程组标题，成员行不可见；与“下一条消息发送过来之后”的 DOM 状态和几何一致。
+
+### 5.2 动作与顺序
+
+`src/collapse-seal.ts`：
+
+1. 找最后一个 `[data-turn-process][data-turn-process-locked][aria-expanded="true"]`，取它所在行（`[data-chat-turn]`）的轮次；没有锁标记时整段空转。
+2. 取该轮次下仍平铺（`data-group-expanded-mode`）、尚未封口（`data-dsh-collapse-sealed`）、且组头容器里确有 `[data-process-activity]` 的 `[data-step-process]` 组根。
+3. 组根写 `data-dsh-collapse-sealed`；移除组头容器的 `hidden`。
+4. 一条受限 CSS 隐藏组体；组头 `aria-expanded=true` 时放回组体。
+
+顺序固定为：采集阅读位置 → 封口 → 点击折叠目标 → 微任务补偿滚动。封口本身会明显改变高度，必须参与补偿；只折点击会让阅读位置漂移。
+
+### 5.3 为什么移除组头 `hidden`
+
+上游 `useMotionHidden` 在 `hidden` 翻成 false 时，只有元素**还带** `hidden` 属性才会跑一次高度 reveal 动画。封口时把它移除，下一条消息到达、真正进入分组态时就不会再“从 0 高度长出来”，折叠前后无位移、无闪烁。
+
+### 5.4 CSS
+
+```css
+[data-step-process][data-group-expanded-mode][data-dsh-collapse-sealed]:has(> div > [data-process-activity]) > [data-step-process-body] { display: none !important; }
+[data-step-process][data-group-expanded-mode][data-dsh-collapse-sealed]:has(> div > [data-process-activity][aria-expanded="true"]) > [data-step-process-body] { display: block !important; }
+[data-step-process][data-group-expanded-mode][data-dsh-collapse-sealed] > div[hidden]:has([data-process-activity]) { display: block !important; }
+```
+
+三段都要求「平铺 + 已封口」：下一条消息到达、`data-group-expanded-mode` 消失后自动失效，交回上游。前两段要求组头容器里存在 `[data-process-activity]`——上游结构变化时只会退化成“不封口”，不会出现“组头看不见、内容又被藏起来”。
+
+### 5.5 边界
+
+- 没有锁标记（未装 `dsh-turn-process-open`）：不封口，行为与未装本模块相同。
+- 运行中的轮次：没有轮次过程标题，不封口。
+- 没有过程组 / 组头不可用：没有可封口组根。
+- 右栏会话：只在主会话滚动口内封口。
+- 封口后再按一次：没有可折项、没有可封口组，不消费。
+- `:has()` 不支持：跳过封口并告警一次；平铺形态不变。
+- 卸载：仍平铺的组写回组头 `hidden`、移除标记与 `<style>`。
+- 封口期间组体用 `display:none`，浏览器“在页面中查找”暂时找不到组内文本；真正分组态用 `hidden="until-found"` 可被 beforematch 找到。组根也不会补 `data-chat-paging-anchor`（锁定轮次不会跑上游折叠落点）。两者不影响视觉形态。
+
+-----
+
+## 6. 验证
 
 ```bash
 node test/focus-decide-collapse-steps.test.mjs   # 准入、两层目标、作用域、去重
 node test/focus-decide-collapse-reading.test.mjs # 阅读线、锚点、回退、夹紧与跳过边界
 node test/focus-bridge-collapse-steps.test.mjs   # 固定行、消费边界、焦点保持、终端捕获、阅读补偿、卸载
+node test/collapse-seal.test.mjs                  # 封口目标、组头显示、幂等、清理与样式单例
 node check-css.mjs                               # DOM 锚点契约
 ```
 

@@ -6,11 +6,14 @@
  * 不装桥、不发按键，只验证选择与让位规则。
  */
 import {
+  collapseBatches,
   collapseStepTargets,
+  currentCollapseBatches,
   currentCollapseTargets,
   conversationRoots,
   collapseStepsEligible,
 } from '../src/collapse-steps.ts'
+import { LOCK_ATTRIBUTE, SEAL_ATTRIBUTE } from '../src/collapse-seal.ts'
 import {
   FakeElement,
   check,
@@ -182,6 +185,37 @@ console.log('--- D⑦ 多份主会话目标去重 ---')
     const targets = currentCollapseTargets()
     check('去重后每份控件只出现一次', new Set(targets).size, targets.length)
     check('两份主会话的目标都收', targets.length, 2)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- D⑧ 锁定标题跳过；平铺轮次封口 ---')
+{
+  const { app, scroll } = mainScroll()
+  // 带锁的轮次过程标题：即使展开也不进目标。
+  const turnRow = scroll.append(new FakeElement('div', { 'data-chat-turn': '1', 'data-chat-flow-kind': 'turn-process' }))
+  const locked = turnRow.append(openControl({ 'data-turn-process': '1', [LOCK_ATTRIBUTE]: '' }, true))
+  // 同一轮的平铺过程组：组头隐藏、组体可见。
+  const groupRoot = scroll.append(new FakeElement('div', {
+    'data-step-process': '',
+    'data-chat-turn': '1',
+    'data-group-expanded-mode': 'true',
+  }))
+  const groupHeader = groupRoot.append(new FakeElement('div', { hidden: '' }))
+  groupHeader.append(new FakeElement('button', { 'data-process-activity': 'commands', 'aria-expanded': 'false' }))
+  groupRoot.append(new FakeElement('div', { 'data-step-process-body': '' }))
+
+  const dom = withWindowDom({ root: app })
+  try {
+    check('锁定标题不是折叠目标', collapseStepTargets(scroll).includes(locked), false)
+    const before = currentCollapseBatches()
+    check('批次里有一个封口目标', before[0]?.seals.length, 1)
+    check('没有可点击的目标', before[0]?.targets.length, 0)
+    collapseBatches(before)
+    check('组根写了封口标记', groupRoot.hasAttribute(SEAL_ATTRIBUTE), true)
+    check('组头 hidden 被移除', groupHeader.hasAttribute('hidden'), false)
+    check('第二次没有封口目标（幂等）', currentCollapseBatches()[0]?.seals.length, 0)
   } finally {
     dom.restore()
   }

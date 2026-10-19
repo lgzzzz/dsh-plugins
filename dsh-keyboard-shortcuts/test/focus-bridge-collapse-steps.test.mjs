@@ -8,6 +8,7 @@ import {
   collapseStepsCommand,
   installCollapseStepsBridge,
 } from '../src/collapse-steps.ts'
+import { LOCK_ATTRIBUTE, SEAL_ATTRIBUTE } from '../src/collapse-seal.ts'
 import {
   captureWarnings,
   check,
@@ -352,6 +353,43 @@ console.log('--- E⑪ 折叠后按阅读线补偿滚动 ---')
     check('这一按仍被消费', press.consumed.count, 1)
     check('折叠已生效', turn.getAttribute('aria-expanded'), 'false')
     check('锚点换到折叠后的屏幕位置', scroll.scrollTop, 600)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- E⑪ 只有封口目标（最新一轮平铺）时也消费并封口 ---')
+{
+  const { app, scroll } = mainScroll()
+  // 已结束、带锁、展开的轮次过程标题：不归快捷键折叠。
+  const turnRow = scroll.append(new FakeElement('div', { 'data-chat-turn': '1', 'data-chat-flow-kind': 'turn-process' }))
+  clickable(turnRow.append(new FakeElement('button', {
+    'data-turn-process': '1',
+    'aria-expanded': 'true',
+    [LOCK_ATTRIBUTE]: '',
+  })))
+  // 同一轮的平铺过程组：组头隐藏、组体可见。
+  const groupRoot = scroll.append(new FakeElement('div', {
+    'data-step-process': '',
+    'data-chat-turn': '1',
+    'data-group-expanded-mode': 'true',
+  }))
+  const groupHeader = groupRoot.append(new FakeElement('div', { hidden: '' }))
+  groupHeader.append(new FakeElement('button', { 'data-process-activity': 'commands', 'aria-expanded': 'false' }))
+  groupRoot.append(new FakeElement('div', { 'data-step-process-body': '' }))
+
+  const dom = withWindowDom({ root: app })
+  try {
+    const { shortcuts } = bridgeHarness()
+    const press = keydown(gesture('Period', { control: true, alt: true }), shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    check('封口生效', groupRoot.hasAttribute(SEAL_ATTRIBUTE), true)
+    check('组头显示', groupHeader.hasAttribute('hidden'), false)
+    check('这一按被消费', press.consumed.count, 1)
+
+    const again = keydown(gesture('Period', { control: true, alt: true }), shortcutContext({ target: null }))
+    shortcuts.emit(again.input)
+    check('再按一次没有可做的事', again.consumed.count, 0)
   } finally {
     dom.restore()
   }

@@ -248,8 +248,9 @@ console.log('--- S⑥ 经插件装配:装上,释放全部 effect 后摘掉 ---')
   withStyleDocument((document) => {
     const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1' })
     const { ctx } = harness({ sidebar })
-    check('装配后插入了规则标签', document.head.children.length, 1)
-    check('标签内容就是规则', document.head.children[0].textContent, STRIP_SCROLL_CSS)
+    const tag = document.head.children.find((element) => element.dataset.pluginCss === STRIP_SCROLL_STYLE_ID)
+    checkTrue('装配后插入了规则标签', tag !== undefined)
+    check('标签内容就是规则', tag?.textContent, STRIP_SCROLL_CSS)
     for (const effect of ctx.effects) {
       if (typeof effect.dispose === 'function') effect.dispose()
     }

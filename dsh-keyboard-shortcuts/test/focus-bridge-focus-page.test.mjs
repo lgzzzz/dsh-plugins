@@ -127,7 +127,7 @@ console.log('--- X⑥ 失败模式:缺 sidebarRight / 缺 observeFixedInput 即�
   })
   const warnings = captureWarnings(() => applyPlugin(bare))
   checkTrue('缺 observeFixedInput 时聚焦右栏页面桥告警', warnings.some((line) => line.includes('focus-page key not installed')))
-  check('缺 observeFixedInput 时只装翻页补偿', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging'])
+  check('缺 observeFixedInput 时只装不依赖固定键的部分', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging', 'dsh-keyboard-shortcuts: collapse seal style'])
 }
 
 console.log('--- X⑦ 卸载:固定行与监听一起释放 ---')

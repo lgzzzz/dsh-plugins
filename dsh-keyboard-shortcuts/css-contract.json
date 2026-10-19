@@ -38,6 +38,9 @@
     {"id":"row-key","plugin":"dsh-keyboard-shortcuts","token":"data-row-key","paths":["dsh-client-ui-workspace/lib"],"hint":"侧栏行标记消失：会话导航的候选恒为空，两对会话键不动作、不消费"},
     {"id":"row-key-workspace","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-row-key\":\\s*`workspace:","paths":["dsh-client-ui-workspace/lib"],"hint":"工作区分组行的 data-row-key 前缀变了：分组一个也认不出来，会话行归属归零，候选恒为空"},
     {"id":"row-key-session","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-row-key\":\\s*`session:","paths":["dsh-client-ui-workspace/lib"],"hint":"会话行的 data-row-key 前缀变了：一行会话也认不出来，两对会话键不动作"},
-    {"id":"archived-marker","plugin":"dsh-keyboard-shortcuts","pattern":"\"aria-description\":[\\s\\S]{0,80}archived","paths":["dsh-client-ui-workspace/lib"],"hint":"归档行的 aria-description 标记变了：归档行回到候选里（按下去只弹一次『已归档，不可打开』提示、不切换）"}
+    {"id":"archived-marker","plugin":"dsh-keyboard-shortcuts","pattern":"\"aria-description\":[\\s\\S]{0,80}archived","paths":["dsh-client-ui-workspace/lib"],"hint":"归档行的 aria-description 标记变了：归档行回到候选里（按下去只弹一次『已归档，不可打开』提示、不切换）"},
+
+    {"id":"group-expanded-mode","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-group-expanded-mode\":","paths":["dsh-client-ui-chat/lib"],"hint":"平铺模式标记消失：⌘⌥. 封口认不出最新一轮的平铺组，折叠后保持平铺（不丢内容；与下一条消息到达时的形态不一致）"},
+    {"id":"step-process-body","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-step-process-body\":\\s*true","paths":["dsh-client-ui-chat/lib"],"hint":"过程组滚动体标记消失：封口的隐藏成员规则落空，只显示组头 / 成员仍平铺（退化，不丢内容）"}
   ]
 }

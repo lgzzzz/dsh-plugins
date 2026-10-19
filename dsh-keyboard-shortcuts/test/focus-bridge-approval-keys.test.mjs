@@ -164,7 +164,7 @@ console.log('--- I⑤ 失败模式:固定行缺失 / 服务缺失即不装 ---')
   })
   const warnings = captureWarnings(() => applyPlugin(bare))
   checkTrue('缺 observeFixedInput 时审批桥告警', warnings.some((line) => line.includes('approval bridge not installed')))
-  check('缺 observeFixedInput 时只装翻页补偿', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging'])
+  check('缺 observeFixedInput 时只装不依赖固定键的部分', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging', 'dsh-keyboard-shortcuts: collapse seal style'])
 }
 
 console.log('--- I⑥ answer 被拒绝:捕获并告警,按键仍已归属 ---')
