@@ -1,59 +1,55 @@
 ﻿# 本文件须保存为 UTF-8 with BOM:PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI(GBK)解码,中文会乱码并吞掉行尾引号。
-# 插件清单与 add-plugins.ps1 / add-plugins.sh / remove-plugins.sh 各存一份,增删插件时四个文件都要改。
+# 只把本仓库的插件从 web profile 卸下:按 profile 的 dependencies 里指向本仓库的 link:/file: 路径识别,
+# 目录已删除后遗留的条目也能清理;不维护插件名单。
 # 默认在 dsh 未运行时执行:先退出 dsh web,再跑本脚本,完成后重新启动 dsh web(运行中的实例不会读到 profile 的变更)。
-# 只把插件从 web profile 卸下(pnpm 重算 package.json 的 dependencies 与 dsh.profile.bundles),不删除本仓库里的插件目录。
-# 已卸下的插件打印"跳过(未安装)"并继续,不计失败:本脚本可以重复执行。
+# 只改 profile(pnpm 重算 dependencies 与 dsh.profile.bundles),不删除本仓库里的插件目录。
+# 本脚本可以重复执行:没有可卸载的条目时直接结束。
 $ErrorActionPreference = 'Stop'
 
 $Base = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+$Base = [IO.Path]::GetFullPath($Base)
 $ProfileName = 'web'
 $DshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
 $Manifest = Join-Path (Join-Path (Join-Path $DshHome 'profiles') $ProfileName) 'package.json'
-$Plugins = @(
-  'dsh-changes-hover-off'
-  'dsh-desktop-notify'
-  'dsh-directory-picker-browse'
-  'dsh-git-guard'
-  'dsh-header-action-order'
-  'dsh-jobs-optimize'
-  'dsh-keyboard-shortcuts'
-  'dsh-skill-technical-doc-writing'
-  'dsh-ui-css-patches'
-  'dsh-workspace-activity-sort'
-  'dsh-workspace-quick-switch'
-)
 
-# 已挂载 = profile 的 package.json 在 dependencies 里写了这个包:挂载传的是目录,pnpm 记的键是包名。
-$installed = @{}
+$names = @()
 if (Test-Path -LiteralPath $Manifest) {
   $doc = Get-Content -LiteralPath $Manifest -Raw -Encoding UTF8 | ConvertFrom-Json
+  $profileDir = Split-Path -Parent $Manifest
+  $trimChars = [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $prefix = $Base.TrimEnd($trimChars) + [IO.Path]::DirectorySeparatorChar
   if ($doc.dependencies) {
-    foreach ($dep in $doc.dependencies.PSObject.Properties) { $installed[$dep.Name] = $true }
+    foreach ($dep in $doc.dependencies.PSObject.Properties) {
+      $value = [string]$dep.Value
+      if ($value -notmatch '^(?:link|file):(.+)$') { continue }
+      $relative = $Matches[1]
+      $target = if ([IO.Path]::IsPathRooted($relative)) {
+        [IO.Path]::GetFullPath($relative)
+      } else {
+        [IO.Path]::GetFullPath((Join-Path $profileDir $relative))
+      }
+      if ($target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -and
+          $target.Substring($prefix.Length) -notmatch '[\\/]') {
+        $names += [string]$dep.Name
+      }
+    }
   }
 } else {
   Write-Host "未找到 profile 清单,按全部未安装处理: $Manifest"
+  exit 0
+}
+
+$names = @($names | Sort-Object -Unique)
+if ($names.Count -eq 0) {
+  Write-Host '未找到本仓库的插件;无需卸载。'
+  exit 0
 }
 
 $failed = @()
-foreach ($name in $Plugins) {
-  # 包名以插件自己的 package.json 为准(挂载时 pnpm 读的就是它),清单项只是沿用目录名。
-  $packageName = $name
-  $packageFile = Join-Path (Join-Path $Base $name) 'package.json'
-  if (Test-Path -LiteralPath $packageFile) {
-    try {
-      $declared = (Get-Content -LiteralPath $packageFile -Raw -Encoding UTF8 | ConvertFrom-Json).name
-      if ($declared) { $packageName = [string]$declared }
-    } catch {
-      Write-Host "读取包名失败,按清单项处理: $packageFile"
-    }
-  }
-  if (-not $installed.ContainsKey($packageName)) {
-    Write-Host "跳过(未安装): $packageName"
-    continue
-  }
-  Write-Host "==> dsh plugin --profile $ProfileName remove $packageName"
-  dsh plugin --profile $ProfileName remove $packageName
-  if ($LASTEXITCODE -ne 0) { $failed += $packageName }
+foreach ($name in $names) {
+  Write-Host "==> dsh plugin --profile $ProfileName remove $name"
+  dsh plugin --profile $ProfileName remove $name
+  if ($LASTEXITCODE -ne 0) { $failed += $name }
 }
 
 if ($failed.Count -gt 0) {

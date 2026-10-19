@@ -67,16 +67,23 @@ pnpm -r typecheck            # 类型检查
 pnpm -r test                 # 跑有 test 脚本的插件(各插件的 node test/run-all.mjs)
 pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
 
-./add-plugins.ps1            # 把所有本地插件挂进 web profile(PowerShell 版)
+./add-plugins.ps1            # 挂载仓库根下所有 dsh-* 插件(PowerShell 版)
 ./add-plugins.sh             # 同上(bash)
 ./add-plugins.cmd            # 同上,不能直接跑 .ps1 的 shell 里用(见下)
-./remove-plugins.ps1         # 把上面这些插件从 web profile 卸下,dsh 未运行时用(PowerShell 版)
+./remove-plugins.ps1         # 卸下 profile 里指向本仓库的插件,dsh 未运行时用(PowerShell 版)
 ./remove-plugins.sh          # 同上(bash)
 ./remove-plugins.cmd         # 同上,不能直接跑 .ps1 的 shell 里用(见下)
 ```
 
-`.cmd` 只是包装：用 `powershell -NoProfile -ExecutionPolicy Bypass -File` 调用同名 `.ps1`，插件清单仍在
-`.ps1` / `.sh` 里。DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效策略是 `RemoteSigned` 也会被拒
+`.cmd` 只是包装：用 `powershell -NoProfile -ExecutionPolicy Bypass -File` 调用同名 `.ps1`。两个脚本都不维护
+插件清单：
+
+- `add-plugins` 运行时发现仓库根下所有 `dsh-*` 目录，`example/` 等非 `dsh-*` 目录不参与；新增插件只要建好
+  目录，删除插件只要删掉目录。
+- `remove-plugins` 从 profile 的 `dependencies` 中挑出指向本仓库的 `link:` / `file:` 条目来卸载，因此插件目录
+  删除后遗留的注册项也能清掉。
+
+DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效策略是 `RemoteSigned` 也会被拒
 （报「未对文件进行数字签名」或 `AuthorizationManager check failed`；`RemoteSigned` / `Unrestricted` 都拦，只有
 `Bypass` 能过）。这时用 `.cmd`，或手动带参数：
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\remove-plugins.ps1`（当前会话临时放开：

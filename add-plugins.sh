@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 插件清单与 add-plugins.ps1 / remove-plugins.ps1 / remove-plugins.sh 各存一份,增删插件时四个文件都要改。
+# 自动发现仓库根下所有 dsh-* 插件目录并逐个挂进 web profile;增删插件只需增删目录,不维护名单。
+# example/ 等非 dsh-* 目录不参与整仓挂载。
 set -u
 
 if [ -n "$0" ] && [ -d "$(dirname "$0")" ]; then
@@ -8,25 +9,22 @@ else
   BASE="$PWD"
 fi
 [ -n "$BASE" ] || BASE="$PWD"
-PLUGINS=(
-  dsh-changes-hover-off
-  dsh-desktop-notify
-  dsh-directory-picker-browse
-  dsh-git-guard
-  dsh-header-action-order
-  dsh-jobs-optimize
-  dsh-keyboard-shortcuts
-  dsh-skill-technical-doc-writing
-  dsh-ui-css-patches
-  dsh-workspace-activity-sort
-  dsh-workspace-quick-switch
-)
+
+shopt -s nullglob
+dirs=("$BASE"/dsh-*/)
+shopt -u nullglob
+
+if [ ${#dirs[@]} -eq 0 ]; then
+  echo "未找到插件目录: $BASE/dsh-*"
+  exit 1
+fi
 
 failed=()
-for name in "${PLUGINS[@]}"; do
-  dir="$BASE/$name"
-  if [ ! -d "$dir" ]; then
-    echo "跳过(目录不存在): $dir"
+for dir in "${dirs[@]}"; do
+  dir="${dir%/}"
+  name="${dir##*/}"
+  if [ ! -f "$dir/package.json" ]; then
+    echo "跳过(缺少 package.json): $dir"
     failed+=("$name")
     continue
   fi

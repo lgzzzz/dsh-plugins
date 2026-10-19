@@ -28,7 +28,7 @@
 dsh plugin --profile web add /path/to/dsh-plugins/dsh-skill-technical-doc-writing
 ```
 
-`./add-plugins.sh`（Windows：`./add-plugins.ps1`）已经把这个插件列进清单，整仓挂载时会被一起装进去。插件是宿主半部，**挂载后要重启 `dsh web` 才生效**，刷新页面不够——新插件没有热加载路径。
+`./add-plugins.sh`（Windows：`./add-plugins.ps1`）会自动发现并挂载本插件目录，整仓挂载时会被一起装进去。插件是宿主半部，**挂载后要重启 `dsh web` 才生效**，刷新页面不够——新插件没有热加载路径。
 
 重启后：
 
@@ -70,5 +70,5 @@ pnpm check
 - [技能正文资产](../dsh-skill-technical-doc-writing/assets/technical-doc-writing.md) —— 插件实际分发的标准全文。
 - [DSH 插件五种「名字」](plugin-naming.md) —— 包名 / patch `id` / patch `name` / 导出 `name` / provider 名各由哪台机器管。
 - [provider 契约测试](../dsh-skill-technical-doc-writing/test/provider.test.mjs) —— rank、正文来源与取消这三条约定的可执行版本。
-- [add-plugins.sh](../add-plugins.sh) —— 整仓挂载脚本，新插件已列入清单。
+- [add-plugins.sh](../add-plugins.sh) —— 整仓挂载脚本，按目录自动发现本插件。
 - [remove-plugins.sh](../remove-plugins.sh) —— 与之一一对应的整仓卸下脚本(在 `dsh` 未运行时执行)。

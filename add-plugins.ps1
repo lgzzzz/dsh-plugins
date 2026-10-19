@@ -1,27 +1,25 @@
 ﻿# 本文件须保存为 UTF-8 with BOM:PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI(GBK)解码,中文会乱码并吞掉行尾引号。
-# 插件清单与 add-plugins.sh / remove-plugins.ps1 / remove-plugins.sh 各存一份,增删插件时四个文件都要改。
+# 自动发现仓库根下所有 dsh-* 插件目录并逐个挂进 web profile;增删插件只需增删目录,不维护名单。
+# example/ 等非 dsh-* 目录不参与整仓挂载。
 $ErrorActionPreference = 'Stop'
 
 $Base = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 $Plugins = @(
-  'dsh-changes-hover-off'
-  'dsh-desktop-notify'
-  'dsh-directory-picker-browse'
-  'dsh-git-guard'
-  'dsh-header-action-order'
-  'dsh-jobs-optimize'
-  'dsh-keyboard-shortcuts'
-  'dsh-skill-technical-doc-writing'
-  'dsh-ui-css-patches'
-  'dsh-workspace-activity-sort'
-  'dsh-workspace-quick-switch'
+  Get-ChildItem -LiteralPath $Base -Directory |
+    Where-Object { $_.Name -like 'dsh-*' } |
+    Sort-Object Name
 )
+if ($Plugins.Count -eq 0) {
+  Write-Host "未找到插件目录: $(Join-Path $Base 'dsh-*')"
+  exit 1
+}
 
 $failed = @()
-foreach ($name in $Plugins) {
-  $dir = Join-Path $Base $name
-  if (-not (Test-Path -LiteralPath $dir)) {
-    Write-Host "跳过(目录不存在): $dir"
+foreach ($plugin in $Plugins) {
+  $name = $plugin.Name
+  $dir = $plugin.FullName
+  if (-not (Test-Path -LiteralPath (Join-Path $dir 'package.json'))) {
+    Write-Host "跳过(缺少 package.json): $dir"
     $failed += $name
     continue
   }
