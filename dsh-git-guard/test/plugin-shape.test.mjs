@@ -32,6 +32,7 @@ for (const [label, text] of [
 ]) {
   assert.match(text, /git push/, `${label}：区段提及 git push`)
   assert.match(text, /git commit/, `${label}：区段提及 git commit`)
+  assert.match(text, /git checkout/, `${label}：区段提及 git checkout`)
   assert.match(text, /用户许可/, `${label}：区段声明需要用户许可`)
   assert.match(text, /git push --force|rebase/, `${label}：区段提及破坏性操作同样须获许可`)
 }

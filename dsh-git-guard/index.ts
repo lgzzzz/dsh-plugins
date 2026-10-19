@@ -3,7 +3,7 @@
  *
  * 两条通路各管一半:
  *   - `systemPrompt` 区段(`git-guard:push-policy`,与 TEAM_POLICY 同序)要求模型在 commit /
- *     push 与破坏性历史改写之前取得用户许可;
+ *     push、checkout 与破坏性历史改写之前取得用户许可;
  *   - `tools/pre-execute` 钩子解析命令里的 git 子命令,命中即返回 `kind: 'ask'`。
  *
  * 命令判定是保守的启发式解析:只认能静态解析出 git 子命令的形态。解析不出(自定义包装器、
@@ -30,12 +30,12 @@ interface ShellArguments {
   readonly command?: unknown
 }
 
-const PUSH_POLICY_TEXT =
-  '`git commit` 与 `git push` 均须获得用户许可后才能执行; ' +
-  '破坏性历史改写与远程改写操作(如 `git rebase`、`git merge`、`git cherry-pick`、' +
-  '`git revert`、`git reset --hard`、`git push --force`)同样须先获得用户许可, ' +
+const GUARD_POLICY_TEXT =
+  '`git commit`、`git push` 与 `git checkout` 均须获得用户许可后才能执行; ' +
+  '破坏性历史改写、远程改写与工作区覆盖操作(如 `git rebase`、`git merge`、`git cherry-pick`、' +
+  '`git revert`、`git reset --hard`、`git checkout --force`、`git push --force`)同样须先获得用户许可, ' +
   '未获明确许可不得执行; 这些操作会以授权请求的形式征求你的用户同意, 不得自行绕过. ' +
-  '若用户拒绝了某次代码提交或代码推送, 请停止, 不得再次尝试提交或推送; ' +
+  '若用户拒绝了某次代码提交、推送或检出, 请停止, 不得再次尝试; ' +
   '也不要以命令替换、别名、脚本包装等任何间接形式绕过. ' +
   '如需继续, 请等待用户的明确指示.'
 
@@ -316,6 +316,19 @@ const FORCE_FLAGS = new Set(['--force', '-f', '--force-with-lease', '--force-if-
 /** 破坏性重置的旗标:`--soft` / `--mixed` 只动 HEAD 与索引、不碰工作区,故不在此列。 */
 const RESET_DESTRUCTIVE = new Set(['--hard', '--merge', '--keep'])
 
+/** 强切工作区的 checkout 旗标。 */
+const CHECKOUT_FORCE_FLAGS = new Set(['-f', '--force'])
+
+/**
+ * checkout 是否会覆盖工作区:`-f` / `--force` 强切,或 `--` 之后跟着路径的还原形态。
+ * 只认这两种明确的写法,不猜「哪个 token 是路径名」——其余 checkout 一律按普通形态请许可。
+ */
+function overwritesWorktreeOnCheckout(args: string[]): boolean {
+  if (args.some(flag => CHECKOUT_FORCE_FLAGS.has(flag))) return true
+  const separator = args.indexOf('--')
+  return separator >= 0 && separator < args.length - 1
+}
+
 const ASK_SUFFIX = '需要你的许可。请审核后批准或拒绝.'
 
 const ASK_SUBCOMMANDS: Record<string, string> = {
@@ -355,6 +368,20 @@ function decideGit(subcommand: string, args: string[]): AskDecision | undefined 
   }
   if (subcommand === 'commit') {
     return { kind: 'ask', reason: `git commit ${ASK_SUFFIX}`, destructive: false }
+  }
+  if (subcommand === 'checkout') {
+    if (overwritesWorktreeOnCheckout(args)) {
+      return {
+        kind: 'ask',
+        reason: `git checkout --force 或按路径还原会覆盖工作区改动, ${ASK_SUFFIX}`,
+        destructive: true,
+      }
+    }
+    return {
+      kind: 'ask',
+      reason: `git checkout 会切换分支或按路径还原文件, ${ASK_SUFFIX}`,
+      destructive: false,
+    }
   }
   if (subcommand === 'reset') {
     if (args.some(flag => RESET_DESTRUCTIVE.has(flag))) {
@@ -430,7 +457,7 @@ export function apply(ctx: Context): void {
       name: 'git-guard:push-policy',
       order: promptCtx.systemPrompt.getSectionOrder('TEAM_POLICY'),
       text: assembleContext =>
-        isFullAccess(promptCtx, assembleContext.agent?.session) ? '' : PUSH_POLICY_TEXT,
+        isFullAccess(promptCtx, assembleContext.agent?.session) ? '' : GUARD_POLICY_TEXT,
     })
   })
 

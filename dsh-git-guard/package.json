@@ -1,7 +1,7 @@
 {
   "name": "dsh-git-guard",
-  "version": "2.4.0",
-  "description": "拦截任意 shell 工具发起的敏感 git 操作(git commit、git push 含强制推送、rebase、merge、cherry-pick、reset --hard、revert、am、filter-branch/filter-repo)并要求用户许可,同时注入说明这些操作需授权的系统提示词区段;会话生效沙箱模式为 danger-full-access 时不介入。",
+  "version": "2.5.0",
+  "description": "拦截任意 shell 工具发起的敏感 git 操作(git commit、git push 含强制推送、git checkout、rebase、merge、cherry-pick、reset --hard、revert、am、filter-branch/filter-repo)并要求用户许可,同时注入说明这些操作需授权的系统提示词区段;会话生效沙箱模式为 danger-full-access 时不介入。",
   "type": "module",
   "main": "index.ts",
   "dsh": {

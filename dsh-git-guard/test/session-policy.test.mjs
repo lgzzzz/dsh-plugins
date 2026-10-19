@@ -18,6 +18,8 @@ for (const command of [
   'git push origin main',
   'git push --force',
   'git push --force-with-lease',
+  'git checkout main',
+  'git checkout --force main',
   'git rebase -i HEAD~3',
   'git merge feature',
   'git cherry-pick abc123',
@@ -45,6 +47,7 @@ state.defaultMode = 'workspace-write'
 
 assert.equal((await decide('git commit -m x', { session: workspaceSession }))?.kind, 'ask')
 assert.equal((await decide('git push --force', { session: workspaceSession }))?.kind, 'ask')
+assert.equal((await decide('git checkout main', { session: workspaceSession }))?.kind, 'ask')
 
 const readOnlySession = { id: 'session-read-only' }
 sessionModes.set(readOnlySession, 'read-only')

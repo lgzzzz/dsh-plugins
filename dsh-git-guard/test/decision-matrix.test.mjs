@@ -1,5 +1,5 @@
 /**
- * 判定矩阵:commit / push / 破坏性操作都要求用户许可,混合与多语句命令优先
+ * 判定矩阵:commit / push / checkout / 破坏性操作都要求用户许可,混合与多语句命令优先
  * 提示破坏性操作,不产生 deny,其余命令放行。
  *
  * 运行:`node test/decision-matrix.test.mjs`(或 pnpm test 跑全部)。
@@ -45,6 +45,25 @@ for (const command of [
 }
 
 for (const command of [
+  'git checkout main',
+  'git checkout -b feature/x',
+  'git checkout --quiet main',
+  'git checkout --force main',
+  'git checkout -f',
+  'git checkout -- src/index.ts',
+  'git checkout -- .',
+  'git checkout .',
+  'git add . && git checkout main',
+  'sudo git checkout main',
+  'bash -c "git checkout main"',
+  'git -C /repo checkout main',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(checkout): ${command}`)
+  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知检出需用户许可')
+}
+
+for (const command of [
   'git push --force',
   'git push -f',
   'git push --force-with-lease',
@@ -80,6 +99,7 @@ for (const command of [
   'git reset --hard HEAD~1',
   'git revert abc123',
   'git filter-branch -- --all',
+  'git checkout main',
 ]) {
   const decision = await decide(command)
   assert.notEqual(decision?.kind, 'deny', `不再产生 deny: ${command}`)
@@ -101,6 +121,11 @@ for (const command of [
   const decision = await decide('bash -c "git push --force"')
   assert.equal(decision?.kind, 'ask')
   assert.match(decision?.reason ?? '', /--force/, 'shell 负载内的破坏性操作同样优先提示')
+}
+{
+  const decision = await decide('git commit -m x && git checkout --force main')
+  assert.equal(decision?.kind, 'ask', '普通操作与强切 checkout 混合仍是 ask')
+  assert.match(decision?.reason ?? '', /覆盖工作区/, '强切 checkout 的文案优先于普通操作')
 }
 
 for (const command of [
