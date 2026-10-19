@@ -19,9 +19,35 @@
  * 锚点与令牌清单、以及构建后校验见 docs/dsh-css-architecture/04-css-patches-relationship.md。
  */
 export const CSS = `
-/* 对话正文占用100%可用宽度 */
+/* 对话正文 = 宽度拖拽手柄能达到的最大宽度,不再占满可用宽度。
+   上游把正文宽度收在一个 CSS 变量里:.…_body 上
+     --dsh-chat-content-width: var(--dsh-chat-user-width, clamp(680px, calc(var(--dsh-conversation-column-width,0px) * .64), 920px))
+   拖拽手柄的可达上限不是这里的 920px,而是上游 JS 里 resolveContentWidth() 的 clamp 上限
+     max(CONTENT_MIN, 列宽 − CONTENT_EDGE_BUDGET) = max(640px, 列宽 − 176px)
+   其中「列宽」由上游每次布局 / ResizeObserver 实测后发布成 --dsh-conversation-column-width
+   (写在 [data-conversation-content] 的父元素上,向下继承,单位已是 px),所以这里能纯 CSS 复刻同一个上限:
+   窗口或侧栏变宽 / 变窄时该变量跟着更新,正文宽度自动重算,与「拖到最大」后上游对偏好重新 clamp 的行为一致。
+   CONTENT_MIN / CONTENT_EDGE_BUDGET 是 JS 常量而不是 CSS 令牌,名字与取值由 css-contract.json 的
+   width-min / width-edge-budget 两条契约钉住;它们变了本规则不会报错,只会让正文宽度不再逐像素等于拖拽上限。
+   --dsh-conversation-column-width 缺席时(例如 widthControls 工厂被别的插件替换掉)回落到 920px,
+   得到 744px:既不缩到 640px 下限,也不溢出。正文的消费方(对话列 max-width、用户气泡、
+   approval / user-questions / goal 卡片、--dsh-composer-card-max-width = 内容宽 + 32px)都跟随这一个变量,
+   所以 hero(新建会话首页)与 settling 阶段也用同一个上限 —— 与上游「拖到最大后持久化偏好」的效果一致。
+   特异性 (0,2,0) 大于上游 .…_body 的 (0,1,0),不需要 !important;该变量只有这一处样式表声明,
+   上游 inline 写的只有 --dsh-chat-user-width,覆盖后不会反过来干扰。 */
 [data-slot='main.conversation'] [data-conversation-content] {
-  --dsh-chat-content-width: 100%;
+  --dsh-chat-content-width: max(640px, calc(var(--dsh-conversation-column-width, 920px) - 176px));
+}
+
+/* 隐藏正文两侧的宽度拖拽手柄:宽度已钉在拖拽上限,留下手柄只会是一个拖了没反应的假控件
+   (拖拽写的是 --dsh-chat-user-width,已被上面的规则覆盖)。
+   手柄是 body 的直接子元素,锚在它自己的 data-width-handle 上,只在 active 阶段渲染;
+   不能只靠负宽度:手柄宽度是 min(10px, calc((100% - var(--dsh-chat-content-width)) / 2 - 48px)),
+   正文占满 100% 时它算成负值、在计算值阶段失效、实际 0 宽,而正文改成 px 值后手柄会恢复 10px 宽并重新出现。
+   隐藏后失去的是 col-resize 指针、hover 竖线,以及手柄区域(正文两侧各约 54px)的滚轮滚动正文。
+   锚点消失时本规则落空、手柄重新出现,由 css-contract.json 的 width-handle-attr 兜住。 */
+[data-slot='main.conversation'] [data-width-handle] {
+  display: none;
 }
 
 /* 右栏 tab 固定 100px 宽 */
