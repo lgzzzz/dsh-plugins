@@ -52,6 +52,9 @@
     {"id":"jobs-panel-margin","pattern":"margin:0 8px 8px\\}","paths":["dsh-client-ui-jobs/lib"],"hint":"命令行/实时输出面板的左右 8px 外边距变了，476 = 500 − 2×4 − 2×8 这条推导失效：钉住的框宽不再等于上游默认框宽（框会显得比上游窄或宽），548 = 476 + 2×36 与 36px 空隙也要重算"},
     {"id":"jobs-terminal-attr","pattern":"\"data-terminal\":","paths":["dsh-web-frontend/dist/assets"],"hint":"TerminalBlock 根不再输出 data-terminal，钉宽 + 居中的那条规则整条落空：框回到面板的满宽（548 菜单里 524px 宽），两侧空隙缩回上游的 12px"},
     {"id":"session-row-key-anchor","pattern":"\"data-row-key\":\\s*`session:","paths":["dsh-client-ui-workspace/lib"],"hint":"侧栏会话行不再用 data-row-key=\"session:<会话 id>\" 作行锚点（工作区行是 workspace:<key>、溢出提示行是 overflow:<key>、新建会话占位行是 empty），[data-row-key^=\"session:\"] 落空：会话行时间戳字号从 13px 变为上游 10px"},
-    {"id":"session-time-class","pattern":"\"time\":\\s*\"\\w+_time\"","paths":["dsh-client-ui-workspace/lib"],"hint":"会话行时间戳失去 CSS Module 的 time 局部类名（生成名形如 YDXeBa_time；[hash] 前缀随构建变化不影响该通配符，局部名变化才影响），[class*=\"_time\"] 落空：字号从 13px 变为上游 10px"}
+    {"id":"session-time-class","pattern":"\"time\":\\s*\"\\w+_time\"","paths":["dsh-client-ui-workspace/lib"],"hint":"会话行时间戳失去 CSS Module 的 time 局部类名（生成名形如 YDXeBa_time；[hash] 前缀随构建变化不影响该通配符，局部名变化才影响），[class*=\"_time\"] 落空：字号从 13px 变为上游 10px"},
+    {"id":"question-key-attr","pattern":"\"data-question-key\":\\s*pending\\.key","paths":["dsh-client-ui-user-questions/lib"],"hint":"提问卡片根不再输出 data-question-key：整条 header 的折叠热区规则落空，只剩 24px 箭头按钮可点"},
+    {"id":"question-header-structure","pattern":"\"data-question-key\":\\s*pending\\.key,[\\s\\S]{0,800}?jsxs?\\)\\(\"header\"","paths":["dsh-client-ui-user-questions/lib"],"hint":"header 不再直接渲染在提问卡片根下（或 header 元素被换掉）：[data-question-key] > section > header 与绝对定位基准落空，热区不扩大"},
+    {"id":"question-collapse-expanded","pattern":"\"aria-label\": t\\(minimized \\? \"nav\\.maximize\" : \"nav\\.minimize\"\\),[\\s\\S]{0,300}?\"aria-expanded\":","paths":["dsh-client-ui-user-questions/lib"],"hint":"折叠按钮不再同时带 nav.minimize/maximize 标签与 aria-expanded：伪元素挂不到开合按钮上，只有 24px 箭头按钮可点"}
   ]
 }

@@ -285,4 +285,44 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
 [data-row-key^="session:"] [class*="_time"] {
   font-size: 13px;
 }
+
+/* 提问卡片(ask_user_question 的 composer 顶替卡片)的折叠热区:右侧 24px 箭头按钮 → 整条标题栏。
+   上游 header 里只有箭头按钮(button[aria-expanded])自己绑了开合 onClick;eyebrow、标题与空白处
+   都是纯文本 / 空 flex 间隙,不响应点击。本规则只放大这个按钮的命中区,不改组件与状态:
+     - header 设为定位祖先,箭头按钮钉成 position:static(上游以后即使给它加 position,包含块仍是 header);
+     - 按钮的透明 ::after 绝对定位、inset:0,盖住 header 的 padding box;伪元素属于按钮本身,
+       命中即派发按钮自己的 click,React 的 setMinimized 照旧翻转;
+     - header 里的其余按钮(X 关闭、计时卡的「花点时间」)抬到 z-index:1,仍在伪元素之上,
+       关闭 / 继续等待先收到点击;没有交互的状态文字留在伪元素下面,点它同样开合。
+   锚点:[data-question-key] 只属于这张提问卡片(plan-review 卡片是 data-plan-review-key,且没有
+   折叠按钮,不在范围;已定局回复气泡的 toggle 本来就是整宽,也不受影响),section > header 是上游
+   渲染结构,button[aria-expanded] 是折叠按钮的稳定语义属性。
+   代价:标题文字被伪元素覆盖,鼠标不能再选中 / 复制;悬停整条 header 会触发箭头按钮的 :hover 与
+   title 提示,这正好是「整条 header 即按钮」的反馈。计时卡上点 header 会让答案输入框失焦、倒计时
+   恢复,与今天点箭头按钮完全一致。
+   本组选择器特异性为 (0,1,2) 到 (0,2,4),均高于上游 .…_header 与 .…_iconButton 的
+   (0,1,0),不需要 !important。
+   上游改掉 data-question-key / header 结构 / aria-expanded 时规则整条落空,由 css-contract.json 的
+   question-key-attr / question-header-structure / question-collapse-expanded 三条契约在构建后报失效。
+   已知边界:若上游把 headerActions 或别的中间层改成定位元素,伪元素的包含块会缩小到那一层,
+   热区随之变小;当前 header 与 headerActions 都没有定位,按钮自身由本规则显式钉成 static。 */
+[data-question-key] > section > header {
+  position: relative;
+}
+
+[data-question-key] > section > header button[aria-expanded] {
+  position: static;
+}
+
+[data-question-key] > section > header button[aria-expanded]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
+[data-question-key] > section > header button:not([aria-expanded]) {
+  position: relative;
+  z-index: 1;
+}
 `
