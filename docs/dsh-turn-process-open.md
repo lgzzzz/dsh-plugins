@@ -1,7 +1,8 @@
 # 中间过程锁定展开
 
 > 状态：**已实施**（2026-10-19）。插件目录 [`dsh-turn-process-open/`](../dsh-turn-process-open)。本文是插件说明：
-> 上游机制、选定方案、契约、失败模式与验证方式。原计划里的纯 CSS 分析与实测数据保留在第 3 节。
+> 上游机制、选定方案、契约、失败模式与验证方式。原计划里的纯 CSS 分析与实测数据保留在第 3 节；
+> `⌘⌥.` / `Ctrl+Alt+.` 折叠与阅读位置补偿的完整规则见 [第 1 册](dsh-turn-process-open/01-collapse-steps.md)。
 
 -----
 
@@ -12,10 +13,10 @@
 - 轮次过程（中间过程，`[data-turn-process]`，标题为“已完成，用时 …”）**锁定为展开**：任何新消息 / 自动收起都不再把它折叠；
 - 标题右侧的展开箭头在锁定后一并隐藏：标题恒为展开态、又不可操作，那个朝上的箭头只是一个指不动的假控件；
 - 过程组（`[data-process-activity]`，“执行了命令，已读取文件”一类）保持上游的默认折叠状态，并且是唯一可开合的一层；
-- `⌘⌥.` / `Ctrl+Alt+.` 不再折叠中间过程；同一按会把最新一轮的**平铺明细即时封口成历史轮次的组头形态**，与“下一条消息发送过来之后”完全一致（见 [09-collapse-steps.md](dsh-keyboard-shortcuts/09-collapse-steps.md#5-封口折叠后的形态对齐)）；
-- 不引入新的滚动跳动；阅读位置补偿沿用 `dsh-keyboard-shortcuts` 的现有逻辑。
+- 插件自己注册固定行 `dsh-turn-process-open.collapse-steps`（`⌘⌥.` / `Ctrl+Alt+.`）：一次收所有展开的轮次过程（带锁的除外）与过程组标题，没有外层展开项时再收单步详情；同一按把最新一轮的**平铺明细即时封口成历史轮次的组头形态**，与“下一条消息发送过来之后”完全一致；
+- 折叠后按阅读线补偿滚动：第一个仍可见的行保持原来的屏幕位置；视口内没有这样的行时，向前找到第一个不会被折叠的行，把它放到阅读线下 3px（见 [第 1 册](dsh-turn-process-open/01-collapse-steps.md)）。
 
-验收：新消息到来后上一轮的中间过程保持展开、过程组仍折叠；点中间过程标题（鼠标 / 键盘 / 辅助技术）无反应；标题右侧没有展开箭头；过程组标题可正常开合；`⌘⌥.` 只收过程组与单步详情并完成封口；页面加载、切换会话后同样成立。
+验收：新消息到来后上一轮的中间过程保持展开、过程组仍折叠；点中间过程标题（鼠标 / 键盘 / 辅助技术）无反应；标题右侧没有展开箭头；过程组标题可正常开合；`⌘⌥.` 只收过程组与单步详情、完成封口并按阅读线保持位置；页面加载、切换会话后同样成立。
 
 ## 2. 现状机制（从上游产物确认）
 
@@ -76,7 +77,7 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 
 **没有可靠的纯 CSS 方案。** 强行 CSS 化的结果是“看起来展开、状态仍折叠、折叠瞬间仍跳 150px、组头可能点不开”。
 
-需求 N 的封口是**另一类** CSS：它不改变任何开合状态，只隐藏已经渲染的组体、放出上游自己的组头；组头的 `aria-expanded` 与点击语义保持正确。它用 `:has(> div > [data-process-activity])` 做结构守卫，结构变化时只会“不封口”，不会把内容藏没。见第 4.4 节。
+封口是**另一类** CSS：它不改变任何开合状态，只隐藏已经渲染的组体、放出上游自己的组头；组头的 `aria-expanded` 与点击语义保持正确。它用 `:has(> div > [data-process-activity])` 做结构守卫，结构变化时只会“不封口”，不会把内容藏没。见第 4.4 节。
 
 ## 4. 实现
 
@@ -111,9 +112,9 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 - 写入口都不可用或都抛错：不加锁、不拦点击，告警一次；标题保持原样，新消息到达时仍会被自动折叠。
 - 任何一步失败都只影响该标题，不影响其他轮次或过程组。
 
-### 4.4 与 `⌘⌥.` 折叠的配合（封口）
+### 4.4 封口：折叠后的形态对齐
 
-`dsh-keyboard-shortcuts` 的 `src/collapse-seal.ts`：
+本插件的 `src/collapse-seal.ts`：
 
 - 目标：最新一个带 `data-turn-process-locked` 且 `aria-expanded="true"` 的标题所属轮次；只处理该轮次下仍平铺（`data-group-expanded-mode`）、尚未封口、且组头容器里有 `[data-process-activity]` 的组根。
 - 动作：组根写 `data-dsh-collapse-sealed`；移除组头容器的 `hidden`（避免下一条消息到达时触发 reveal 动画）；一条受限 CSS 隐藏组体、组头展开时放回组体。
@@ -128,7 +129,7 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 
 | id | 校验的上游事实 | 失效后的退化 |
 | --- | --- | --- |
-| `turn-process-control` | `"data-turn-process":` | 认不出标题，插件空转，自动折叠恢复 |
+| `turn-process-control` | `"data-turn-process":` | 锁定器与折叠键都认不出标题：锁定空转、自动折叠恢复，折叠键收不到整段过程 |
 | `turn-process-aria-expanded` | `"data-turn-process"` 与 `"aria-expanded"` 在同一标题元素上 | 认不出可折标题，插件空转且不拦点击 |
 | `turn-process-chevron-icon` | 标题按钮内仍渲染 `IconChevronDownOutlineRegular` | `> svg` 锚点落空，箭头重新出现（`_chevron` 通配符仍兜底） |
 | `turn-process-chevron-class` | `TurnProcessNodeView` 的 `chevron` 局部类名仍是 `*_chevron` | `[class*="_chevron"]` 锚点落空，箭头重新出现（`> svg` 仍兜底） |
@@ -143,14 +144,27 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 | `slot-anchor-wraps-content` | 槽位锚点仍把内容渲染在自己内部 | 主会话 DOM 不再被槽位锚点包住，找不到滚动口（回退条件同上） |
 | `conversation-scroll` | `data-conversation-scroll` | 找不到标题集合，空转（不误锁右栏） |
 | `conversation-session` | `data-conversation-session` | key 的 sessionId 退化为空串，仍锁定 |
+| `process-group-header` | `"data-process-activity":` | 折叠键收不到过程组标题；详细模式下单独展开的组不会随快捷键收起 |
+| `step-process-root` | `"data-step-process": true` | 折叠键认不出过程组容器，也不再限定单步详情的归属 |
+| `chat-flow-kind` | `"data-chat-flow-kind":` | 完全展开模式下分不清工具 / 助手步骤与系统提示词，单步详情折叠失效或误折 |
+| `step-disclosure-row` | `"data-disclosure-row":` | 外层收起后再按一次不会收起共享折叠行 |
+| `step-expandable` | `"data-expandable":` | 工具行 / 命令输出在完全展开模式下不会被收起 |
+| `composer-seat` | `data-composer-seat` | 阅读补偿算不出可见带下边界，composer 后面的行可能被误判在视口内 |
+| `chat-flow-row` | `"data-chat-flow-key":` | 阅读线找不到行锚点，补偿退化为 no-op（折叠本身仍生效） |
+| `chat-flow-turn` | `"data-chat-turn":` | 封口认不出最新锁轮次；折叠本身仍生效 |
+| `chat-following-tail` | `data-chat-following-tail` | 在会话底部折叠时也做阅读线补偿，把视图从底部拉开 |
+| `chat-motion` | `data-chat-motion` | 认不出上游帧补偿，可能与其叠加成二次滚动 |
+| `group-expanded-mode` | `"data-group-expanded-mode":` | 封口认不出平铺组，折叠后保持平铺（不丢内容） |
+| `step-process-body` | `"data-step-process-body": true` | 封口的隐藏成员规则落空，组头显示、成员仍平铺（不丢内容） |
 
-跨插件契约：`data-turn-process-locked` 由本插件写入；`dsh-keyboard-shortcuts` 用它跳过折叠并触发封口。缺席时封口不启用（单独使用快捷键的行为不变）。
+锁标记 `data-turn-process-locked` 由本插件写入、同一插件的折叠桥读取：带锁标题不参与折叠，并由封口模块切换成历史轮次的组头形态。锁定失败时不写标记，轮次过程重新参与折叠，封口不启用（不误藏内容）。
 
 ## 6. 边界与失败模式
 
 - **详细 + 下次有新消息时（推荐设置）**：完全无折叠；上一轮在新消息到来时保持展开，过程组转为折叠并显示组标题。
 - **详细 + 回答结束后**：运行中通过 `actions` 预写展开记录，正常也不会折；若最终 `answerStep` 恰在“关闭”那次提交里才变化，可能出现一帧折叠后再展开。
 - **最新一轮在“下次有新消息时”下**：按 `⌘⌥.` 后立即封口成历史轮次的组头形态；发下一条消息后形态不变。
+- **折叠后的阅读位置**：仍可见的锚点保持屏幕位置；视口内没有锚点时，向前第一个不会被折叠的行落在阅读线下 3px；跟随尾部或上游折叠动画期间不补偿。
 - **完全展开模式**：没有带 `aria-expanded` 的可折标题，插件空转；过程组本来就平铺。
 - **已停止 / 出错 / 中断的轮次**：上游 `alwaysOpen`，本来就不折；`disabled` 的标题跳过。
 - **右栏会话**：不锁、不封口。
@@ -168,14 +182,23 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 
 1. 载入多轮会话（详细 + 下次有新消息时）：所有可折标题 `aria-expanded="true"` 且带 `data-turn-process-locked`；标题右侧没有展开箭头；历史轮次的过程组标题有高度、组展开体仍隐藏；成员行不再 `hidden`。
 2. 鼠标点击中间过程标题：`aria-expanded` 不变、`defaultPrevented` 命中；点击过程组标题：组展开体展开。
-3. `⌘⌥.`：最新一轮立即出现组头、成员行不可见；再按一次不动作；发下一条消息后该轮无位移、无 reveal 动画。
-4. 切换会话再切回：标题重新 seed，过程组保持折叠，滚动位置无漂移。
-5. 卸载插件后硬刷新：自动折叠恢复，平铺形态恢复。
-6. 控制台没有 `[dsh-turn-process-open]` 告警（尤其 `没能锁定` / `写不进去`）；有告警就先跑 `pnpm check:css`。
+3. `⌘⌥.`：最新一轮立即出现组头、成员行不可见；焦点在 composer / 终端里时不移动；再按一次不动作；发下一条消息后该轮无位移、无 reveal 动画。
+4. 把视图滚到一段展开过程内部再按 `⌘⌥.`：阅读线下方仍有可见行时，该行停在原屏幕位置；整屏都被折叠内容占满时，向前第一个不会被折叠的行落在阅读线下 3px。
+5. 切换会话再切回：标题重新 seed，过程组保持折叠，滚动位置无漂移。
+6. 卸载插件后硬刷新：自动折叠恢复，平铺形态恢复，固定行与折叠键一起消失。
+7. 控制台没有 `[dsh-turn-process-open]` 告警（尤其 `没能锁定` / `写不进去`）；有告警就先跑 `pnpm check:css`。
 
 ## 8. 假设
 
 - 只作用于主会话；右栏会话不锁、不封口。
 - 接受用 React fiber 读取渲染器 props 作为唯一能改上游开合状态的手段（有降级与构建期契约）。
-- 封口依赖 `dsh-keyboard-shortcuts` 写入的锁标记；不修改上游设置值，也不改写会话数据。
+- 折叠与封口都读本插件自己写入的锁标记；不修改上游设置值，也不改写会话数据。
 - 不新增配置项；插件在 profile 里即开启，移除即关闭。
+
+-----
+
+## 分册目录
+
+| 分册 | 内容 |
+|---|---|
+| [1. 折叠中间步骤](dsh-turn-process-open/01-collapse-steps.md) | `⌘⌥.` / `Ctrl+Alt+.` 的两层目标、封口（折叠形态对齐）、阅读位置补偿、焦点保持、终端捕获、失败模式与验证 |

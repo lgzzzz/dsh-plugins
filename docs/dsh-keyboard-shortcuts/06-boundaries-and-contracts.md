@@ -40,7 +40,6 @@
 | 按 `⌘⌥←/→` / `Ctrl+Alt+←/→` | 无命令占用 | 切换右栏页面，并把键盘交给新页面 |
 | 按 `⌘↑/↓` / `Ctrl+↑/↓` | 无命令占用 | 在左侧栏前三个工作区当前显示的会话行之间切换 |
 | 按 `⌘⌥↑/↓` / `Ctrl+Alt+↑/↓` | 无命令占用 | 只在活跃会话（行上有状态点）之间切换 |
-| 按 `⌘⌥.` / `Ctrl+Alt+.` | 无命令占用 | 点击当前主会话已展开的工作步骤标题；一次收所有展开的轮次过程与过程组标题，没有外层展开项时收单步详情；没有展开项不动作、不消费 |
 
 -----
 
@@ -48,10 +47,10 @@
 
 | 情况 | 行为 | 机制与失败表现 |
 |---|---|---|
-| `shortcuts.registry` 缺席 | 八条官方固定键完全不安装并告警一次；六条自挂键仍安装 | `registry` 是官方快捷键服务实例上的内部字段，公开接口没有「按 id 调命令」。插件做结构检查，缺席时告警而不是自己执行动作 |
+| `shortcuts.registry` 缺席 | 八条官方固定键完全不安装并告警一次；五条自挂键仍安装 | `registry` 是官方快捷键服务实例上的内部字段，公开接口没有「按 id 调命令」。插件做结构检查，缺席时告警而不是自己执行动作 |
 | `shortcuts.observeFixedInput` 缺席 | 各桥各告警一次、不安装 | 固定输入是这些桥唯一的投递通道 |
-| `sidebarRight` 服务缺席 | 全屏 / 关页 / 分屏 / 聚焦右栏页面 / 页面循环与全屏关栏的侧栏相关部分不安装；停止、审批、提问、聚焦输入框、会话导航、折叠中间步骤照常 | 这些桥通过 `ctx.inject([... 'sidebarRight'])` 等侧栏服务；服务不到，回调不运行 |
-| Desktop 运行时 | 全屏 / 关页的免聚焦回退不创建，分屏桥告警跳过；固定行仍注册，停止、审批、提问、J/K/箭头、折叠中间步骤照常 | Desktop 的可配置键位由 Electron 原生桥派发，DOM 侧再执行一次会让全屏 / 关页 / 分屏各发生两次 |
+| `sidebarRight` 服务缺席 | 全屏 / 关页 / 分屏 / 聚焦右栏页面 / 页面循环与全屏关栏的侧栏相关部分不安装；停止、审批、提问、聚焦输入框、会话导航照常 | 这些桥通过 `ctx.inject([... 'sidebarRight'])` 等侧栏服务；服务不到，回调不运行 |
+| Desktop 运行时 | 全屏 / 关页的免聚焦回退不创建，分屏桥告警跳过；固定行仍注册，停止、审批、提问、J/K/箭头照常 | Desktop 的可配置键位由 Electron 原生桥派发，DOM 侧再执行一次会让全屏 / 关页 / 分屏各发生两次 |
 | Web/Linux 上的内置默认绑定 | 分屏、内置 `page.close`、`session.search` 等没有默认绑定；固定键不受影响 | 上游默认键位表按 `desktop\|web` × `macos\|windows\|linux` 六档声明，缺档即未绑定；`registerFixed` 不查这张表 |
 | 固定键与官方默认可配置键重叠 | `session.new`、`sidebar.left.toggle`、`pane.fullscreen.toggle` 的固定键与默认键相同；`workspace.openLocal` 的固定键占 `Ctrl+Alt+P`（原属 `workspace.files`）；`sidebar.right.toggle` 的固定键占 `Ctrl+Alt+O`（原属 `workspace.add`）；`page.close` 的固定键占 `Ctrl+Alt+,`（原属 `settings.open`） | 与固定行重叠的可配置命令进入冲突态：`workspace.files` / `workspace.add` / `settings.open` 等需要另用按钮或在设置里改绑。固定行只读；要改键位只能改 `src/shortcuts.ts` 后重新构建 |
 | `⌘⌥K` 与 `session.search` 撞键 | `session.search` 显示冲突、按键不再打开搜索 | 固定行是唯一够得着终端交棒那一格的通道；删除 `focus-page` 固定行或给搜索改绑即恢复。上游「恢复全部默认」的校验也建立在冲突表上，有冲突时会以 `conflict` 失败 |
@@ -82,14 +81,6 @@
 | 消息滚动口缺 `[data-composer-seat]` / composer 高度为 0 | PageUp/PageDown/Space 不接管，保持原生 | 翻页补偿要求可见消息带 `clientHeight - composerHeight > 0`；`conversation-scroll` / `composer-seat` 两条 DOM 契约兜住锚点 |
 | 多栏同时可见、目标与焦点都不在滚动口内 | 不接管 | 只按目标 / 当前焦点解析，或采用页面上唯一可见的滚动口；无法判定时不猜归属 |
 | 消息滚动口内按 Space | 吞掉，不翻页 | 原生 Space 同样按整个滚动口翻页；输入框、按钮、终端、模态层与还能滚动的内层容器保持原生 |
-| 折叠中间步骤时模态层打开 | 不动作、不消费 | 入参与其它桥一致：模态层比工作步骤更近，按键归弹窗 |
-| 折叠中间步骤时没有展开项 | 不动作、不消费 | 目标收集为空；按键留给页面 / 输入控件 / 终端 |
-| 运行中或没有内容的工作步骤 | 不占外层名额 | 上游把轮次过程按钮标成 `disabled`；过程组标题带 `aria-disabled` 时同样跳过。单步详情仍可在外层全部收起后收起 |
-| 折叠时没有仍可见的锚点 | 不补偿、不回退 | 阅读线以下没有“下一行”时不做猜测；折叠照常完成 |
-| 折叠时跟随尾部 | 不补偿 | 会话在底部时折叠应留在底部；`[data-chat-following-tail]` 存在即跳过 |
-| 折叠时上游动画在跑 | 由上游帧补偿接管 | `[data-chat-motion="collapse"]` / `[data-chat-motion="reveal"]` 存在即跳过，避免二次滚动 |
-| 工作步骤的 DOM 锚点改名 | 对应目标收集退化为空或只剩另一层 | `css-contract.json` 的 `turn-process-control` / `process-group-header` / `step-process-root` / `chat-flow-kind` / `step-disclosure-row` / `step-expandable` / `main-conversation-slot` / `chat-flow-row` / `chat-flow-turn` / `chat-following-tail` / `chat-motion` 十一条契约在构建后显式校验 |
-| 阅读位置的行 / 轮次锚点改名 | 阅读补偿退化为直接折叠 | 锚点行用 `[data-chat-flow-key]`，轮次归属用 `[data-chat-turn]`；缺任一条只影响补偿，不影响折叠目标收集 |
 
 告警前缀统一为 `[dsh-keyboard-shortcuts]`，方便在控制台过滤。
 
@@ -103,10 +94,10 @@
 
 1. 八条官方命令 id：`session.new`、`sidebar.left.toggle`、`workspace.openLocal`、`sidebar.right.toggle`、`workspace.files`、`terminal.new`、`pane.fullscreen.toggle`、`page.close`；
 2. `page.close` 的 `modals` 包含 `settings` / `shortcuts` / `other`，弹窗下它的语义是关掉最上面那层；
-3. 八条固定行 id 为 `dsh-keyboard-shortcuts.<command.id>`，六条自挂固定行 id 为 `dsh-keyboard-shortcuts.focus-composer` / `.focus-page` / `.page-cycle` / `.session-cycle` / `.session-active-cycle` / `.collapse-steps`；它们都通过 `registerFixed()` 声明，存在即预约；
+3. 八条固定行 id 为 `dsh-keyboard-shortcuts.<command.id>`，五条自挂固定行 id 为 `dsh-keyboard-shortcuts.focus-composer` / `.focus-page` / `.page-cycle` / `.session-cycle` / `.session-active-cycle`；它们都通过 `registerFixed()` 声明，存在即预约；
 4. `approval.allow` / `approval.reject` 这两条官方固定行与「预约的组合就是审批决定键」的语义；
 5. `pendingInteraction` 槽位可被别的域复用，因此审批桥运行时确认 `kind === 'approval'`、`key` 为字符串、`answerable === true`、`answer` 为函数；提问桥确认 `kind` 为 `question` 或 `plan-review`、带 `dismiss()`；
-6. DOM 锚点：`[data-conversation-session]` / `[data-conversation-region]`（停止归属）、`[data-approval-key]`（审批面板根与让位）、`[data-question-key]` / `[data-plan-review-key]`（提问卡片根）、`[role="dialog"][aria-modal="true"], [role="menu"]`（模态）、`data-dsh-automatic-focus` 与主题的 `outline:none` 规则（无环聚焦）、`.xterm` / `.xterm-helper-textarea`（终端与输入面）、`[data-sidebar-right-session]` / `[data-sidebar-right-panel="fullscreen"]` / `[data-sidebar-right-open]`（右栏）、`[data-conversation-scroll]` / `[data-composer-seat]` / `[data-chat-following-tail]` / `[data-chat-motion]`（消息滚动口、composer 座位、跟随尾部与上游折叠动画）、`[data-slot="main.conversation"]` / `[data-turn-process]` / `[data-step-process]` / `[data-process-activity]` / `[data-chat-flow-kind]` / `[data-disclosure-row]` / `[data-expandable]` / `[data-chat-flow-key]` / `[data-chat-turn]`（主会话作用域、工作步骤开合标记与阅读补偿的行 / 轮次锚点）、`[data-dockkit-pane]` / `[data-dockkit-float]` / `[data-dockkit-pane-active]` / `[data-dockkit-float-active]` / `[data-dockkit-strip-tabs]` / `[data-dockkit-tab]`（dockkit）、`[data-row-key="workspace:…"]` / `[data-row-key="session:…"]` 与归档行的 `aria-description`（侧栏候选）；
+6. DOM 锚点：`[data-conversation-session]` / `[data-conversation-region]`（停止归属）、`[data-approval-key]`（审批面板根与让位）、`[data-question-key]` / `[data-plan-review-key]`（提问卡片根）、`[role="dialog"][aria-modal="true"], [role="menu"]`（模态）、`data-dsh-automatic-focus` 与主题的 `outline:none` 规则（无环聚焦）、`.xterm` / `.xterm-helper-textarea`（终端与输入面）、`[data-sidebar-right-session]` / `[data-sidebar-right-panel="fullscreen"]` / `[data-sidebar-right-open]`（右栏）、`[data-conversation-scroll]` / `[data-composer-seat]`（消息滚动口与 composer 座位）、`[data-dockkit-pane]` / `[data-dockkit-float]` / `[data-dockkit-pane-active]` / `[data-dockkit-float-active]` / `[data-dockkit-strip-tabs]` / `[data-dockkit-tab]`（dockkit）、`[data-row-key="workspace:…"]` / `[data-row-key="session:…"]` 与归档行的 `aria-description`（侧栏候选）；
 7. `retainedBy.mainView` 的语义（与 `UiSession.isMain` 同源）；
 8. `conversation.input.for(scope)` 返回的 `SessionInput.focus()`（光标还原）与 `conversation.cancel()`；
 9. `sidebarRight` 的 `focusedTarget` / `commandTarget` / `isExpanded` / `isTargetCurrent` / `toggleFullscreen` / `split` / `canCloseTarget` / `closeTarget` / `toggleExpanded` / `mounted` / `tabsIn` / `active` / `focus`；
@@ -117,6 +108,3 @@
 14. `registerFixed` 只按平台规范化 `primary`，不查 Web 保留表，也不与其它固定行判冲突；
 15. `shortcuts.registry.invoke()` 的 `context` 接受 `region` / `modal` / `target` / `source`，命令自己按 `resolve()` 决定是否执行；
 16. 消息滚动口的 `clientHeight` 包含底部 sticky 的 composer；`[data-composer-seat]` 的 `offsetHeight` 就是被遮住的高度，翻页补偿按 `clientHeight - composerHeight - 50` 计算步长；
-17. 工作步骤标题的 click 负责开合，`[data-turn-process]` / `[data-process-activity]` 的 `aria-expanded` 反映当前开合态；折叠键只点击这些标题，不写上游 store；
-18. 主会话滚动口的槽位名是 `main.conversation`，工作步骤的展开标记是 `aria-expanded="true"`，不可操作的外层用 `disabled` / `aria-disabled="true"` 表示。
-19. 阅读线取滚动口 `getBoundingClientRect().top + clientTop + 1`；可见带下边界取 `[data-composer-seat]` 的顶，没有 composer 时取滚动口底；锚点行按文档顺序取阅读线以下第一个折叠后仍可见的 `[data-chat-flow-key]` / 详情行。

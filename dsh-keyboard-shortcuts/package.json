@@ -2,7 +2,7 @@
   "name": "dsh-keyboard-shortcuts",
   "version": "1.0.0",
   "private": true,
-  "description": "快捷键插件：把八条快捷键注册成官方快捷键服务的固定行（Ctrl+Alt+N 新会话、Ctrl+Alt+B 左侧栏、Ctrl+Alt+P 在本地打开、Ctrl+Alt+O 右侧栏、Ctrl+Alt+\\ 工作区文件、Ctrl+Alt+L 新建终端、Ctrl+Alt+Enter 面板全屏、Ctrl+Alt+, 关闭当前页面／窗口；macOS 上主修饰键为 ⌘，⌘⌥N 另由捕获阶段补偿 Option+N 死键），按键命中后由官方命令注册表执行对应命令；面板全屏与关页在 Web 上焦点不在右栏时回退到活动 dock 面板。另含免聚焦桥接：连按两下 Esc 停止、审批面板 Enter/Esc、提问卡片 Esc、全屏右栏 Esc 关栏、⌘⌥J / Ctrl+Alt+J 聚焦输入框、⌘⌥K / Ctrl+Alt+K 聚焦右栏当前页面（通常是终端）、⌘⌥←/→ 切换右栏页面、⌘↑/↓ 与 ⌘⌥↑/↓ 导航会话、⌘\\ 分屏、⌘⌥. / Ctrl+Alt+. 折叠当前会话已展开的工作步骤（一次收所有展开的轮次过程与过程组标题，没有外层时再收单步详情；折叠后按阅读线保持阅读位置；不抢焦点）；终端 .xterm 内的这些按键由 window 捕获阶段接管。另含消息滚动口的 PageUp/PageDown 可见带翻页补偿、rAF 缓动与 Space 原生翻页屏蔽。",
+  "description": "快捷键插件：把八条快捷键注册成官方快捷键服务的固定行（Ctrl+Alt+N 新会话、Ctrl+Alt+B 左侧栏、Ctrl+Alt+P 在本地打开、Ctrl+Alt+O 右侧栏、Ctrl+Alt+\\ 工作区文件、Ctrl+Alt+L 新建终端、Ctrl+Alt+Enter 面板全屏、Ctrl+Alt+, 关闭当前页面／窗口；macOS 上主修饰键为 ⌘，⌘⌥N 另由捕获阶段补偿 Option+N 死键），按键命中后由官方命令注册表执行对应命令；面板全屏与关页在 Web 上焦点不在右栏时回退到活动 dock 面板。另含免聚焦桥接：连按两下 Esc 停止、审批面板 Enter/Esc、提问卡片 Esc、全屏右栏 Esc 关栏、⌘⌥J / Ctrl+Alt+J 聚焦输入框、⌘⌥K / Ctrl+Alt+K 聚焦右栏当前页面（通常是终端）、⌘⌥←/→ 切换右栏页面、⌘↑/↓ 与 ⌘⌥↑/↓ 导航会话、⌘\\ 分屏；终端 .xterm 内的这些按键由 window 捕获阶段接管。另含消息滚动口的 PageUp/PageDown 可见带翻页补偿、rAF 缓动与 Space 原生翻页屏蔽。",
   "type": "module",
   "exports": {
     ".": {

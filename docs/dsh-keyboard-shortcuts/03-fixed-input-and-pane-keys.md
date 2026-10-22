@@ -9,7 +9,7 @@
 插件挂两层固定键，共十四条只读行：
 
 - **八条官方命令固定键**（`fixed-keys.ts`）：`session.new`、`sidebar.left.toggle`、`workspace.openLocal`、`sidebar.right.toggle`、`workspace.files`、`terminal.new`、`pane.fullscreen.toggle`、`page.close`。它们占住 `primary+alt+…` 组合，命中后调用官方命令注册表的 `registry.invoke()`；面板全屏与关页在 Web 上先走 `sidebarRight.commandTarget()` 的免聚焦回退。
-- **六条本插件自挂固定键**：聚焦输入框（`focus-composer`）、聚焦右栏页面（`focus-page`）、页面循环（`page-cycle`）、全部会话导航（`session-cycle`）、活跃会话导航（`session-active-cycle`）与折叠中间步骤（`collapse-steps`）。其中 `focus-page`（`⌘⌥K` / `Ctrl+Alt+K`）**有意占用** Web 上内置 `session.search` 的默认键位（见 [第 5.6 节](03-fixed-input-and-pane-keys.md)）。固定键与可配置命令是两套目录。
+- **五条本插件自挂固定键**：聚焦输入框（`focus-composer`）、聚焦右栏页面（`focus-page`）、页面循环（`page-cycle`）、全部会话导航（`session-cycle`）与活跃会话导航（`session-active-cycle`）。其中 `focus-page`（`⌘⌥K` / `Ctrl+Alt+K`）**有意占用** Web 上内置 `session.search` 的默认键位（见 [第 5.6 节](03-fixed-input-and-pane-keys.md)）。固定键与可配置命令是两套目录。
 
 除分屏外，其余内置命令不再由插件跟随生效绑定：固定行只按命令 id 转交，键位改绑 / 解绑 / 冲突都不影响固定行。用户要改这些键位，只能修改 `src/shortcuts.ts` 的 `TARGETS` 后重新构建。
 
@@ -25,19 +25,18 @@
 | 聚焦输入框 | 同一条"主视图持有的会话"的 scope，经 `conversation.input.for(scope)` 取到 composer 输入面 | 该输入面的 `focus()`（光标位置一并还原）；焦点在终端里时由捕获钩子投递同一判定（见第 4 节） |
 | 页面切换 | `sidebar.mounted`（右侧栏正在画的会话）的页面列表 `tabsIn` 与当前页 `active()` | `focus(tabId)` 切页（与点击芯片同一操作，记入布局历史）；切页后在**下一帧**执行 `focusShownPage` 把键盘交给新显示的页面，页面自聚焦（如终端）则不抢。页签行另有两处补偿：注入一条作用域限定在右侧栏的样式规则消掉"先回到最左、再迅速滑过去"的动画，并在切页前后保持观察窗口（切页前记下 chip box 的位置，下一帧先还回去、只有目标不在窗口里时才最小推移）（见第 5.4 节） |
 | 聚焦右栏页面（`⌘⌥K` / `Ctrl+Alt+K`） | 插件自己的固定行 `dsh-keyboard-shortcuts.focus-page` 占用这一按（`fixedRowOwns`），且右栏展开、`sidebar.mounted` 有会话 | `focusShownPage(sessionId)`：与页面切换键共用同一条交棒判定（页面自持键盘就不抢，否则聚焦可见 pane 并下探页面自己的输入面，终端即 `.xterm-helper-textarea`）；不换页 |
-| 折叠中间步骤（`⌘⌥.` / `Ctrl+Alt+.`） | 插件自己的固定行 `dsh-keyboard-shortcuts.collapse-steps` 占用这一按；主会话滚动口内存在展开的轮次过程 / 过程组标题 / 单步详情 | 点击上游标题，一次收所有展开的轮次过程与过程组标题；没有外层展开项时收单步详情；不改消息数据、不维护折叠状态、不抢焦点（见 [第 9 册](09-collapse-steps.md)） |
 | 会话导航 | 左侧栏此刻渲染出来的会话行：`[data-row-key="workspace:…"]` / `session:…` 两类行里取前三个工作区的会话行；当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出，活跃与否读 `uiSession.sessionStatus` | `uiWorkspace.openSession(id)`（与点击侧栏那一行同一操作）；`⌘↑/↓`（macOS）/ `Ctrl+↑/↓`（Windows/Linux）（`session-cycle`）在全部候选里环状走，`⌘⌥↑/↓`（macOS）/ `Ctrl+Alt+↑/↓`（Windows/Linux）（`session-active-cycle`）只走候选里带状态点的活跃会话（运行中 / 待交互 / 已完成未读） |
 | 全屏右栏关栏（`Esc`） | DOM 上 `[data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]` 与 `sidebarRight.isExpanded()` 同时成立，且焦点不在终端、不在右栏自己的文本控件里 | `toggleExpanded()`（与面板自带的折叠按钮同一个动词）；只关栏、不重置记录的模式，所以再次展开仍回到全屏。面板全屏时待答审批与提问卡片也不在这一按上作答——它们被这块浮层盖住（见第 5.11 节） |
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
 
-八条官方固定键、聚焦输入框、聚焦右栏页面、页面切换、会话导航与折叠中间步骤另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。macOS Web 另有一条只认 `⌘⌥N` 的捕获监听：Option+N 是死键，固定通道会把这一按标成组字中，监听直接认领并执行官方 `session.new`。
+八条官方固定键、聚焦输入框、聚焦右栏页面、页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。macOS Web 另有一条只认 `⌘⌥N` 的捕获监听：Option+N 是死键，固定通道会把这一按标成组字中，监听直接认领并执行官方 `session.new`。
 
 > 各捕获路径只在 `.xterm` 内出手，所以它们与冒泡通道互斥、一次按键最多只被处理一次：命中即 `stopPropagation()`，window 冒泡上的固定通道再也看不到这一按。聚焦输入框那条的冒泡准入（`focusComposerEligible`）仍对 `terminal` 区域让位 —— 终端那一半只由捕获路径负责。固定键的终端捕获调用官方命令；八条命令的页面 / 文本控件那一半由固定输入通道处理。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
 
 全屏右栏关栏另有一条**不挑落点**的捕获监听：右栏全屏呈现时它认领整页的裸 `Esc`（终端与右栏自己的文本控件除外），命中即吞掉这一按再折叠右栏。它不注册固定行、也不开观察者，两条投递路径都不经过固定通道（见 [第 5.11 节](05-approval-key-bridge.md)）。
 
-下面逐条展开：固定键与分屏桥见 [第 5.3 节](03-fixed-input-and-pane-keys.md)，页签行的滚动补偿见 [第 5.4 节](03-fixed-input-and-pane-keys.md)，关页回退见 [第 5.5 节](03-fixed-input-and-pane-keys.md)，聚焦右栏页面键见 [第 5.6 节](03-fixed-input-and-pane-keys.md)，折叠中间步骤见 [第 5.7 节](03-fixed-input-and-pane-keys.md)；停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键、提问卡片与全屏关栏见 [第 5 册](05-approval-key-bridge.md)；各固定键的行为对照与边界见 [第 6 册](06-boundaries-and-contracts.md)。
+下面逐条展开：固定键与分屏桥见 [第 5.3 节](03-fixed-input-and-pane-keys.md)，页签行的滚动补偿见 [第 5.4 节](03-fixed-input-and-pane-keys.md)，关页回退见 [第 5.5 节](03-fixed-input-and-pane-keys.md)，聚焦右栏页面键见 [第 5.6 节](03-fixed-input-and-pane-keys.md)；停止序列见 [第 4 册](04-stop-sequence-bridge.md)，审批键、提问卡片与全屏关栏见 [第 5 册](05-approval-key-bridge.md)；各固定键的行为对照与边界见 [第 6 册](06-boundaries-and-contracts.md)。
 
 -----
 
@@ -278,20 +277,3 @@ function focusPageTarget(shortcuts, sidebar, gesture, context) {
 终端那一半与另外两条桥同形：落在 `.xterm` 内的 keydown 到不了 window 上的 fixed-input 监听（终端在自己的 textarea 处理器里 `stopPropagation()`），所以本桥另装 window **捕获阶段**的 keydown，在事件进入终端前判定。命中即 `preventDefault() + stopPropagation()`：交棒此时是无操作（键盘本来就在终端里），但这一按不再被 xterm 翻译成终端输入送进 shell。未命中就放行，事件原样交给 xterm。
 
 **这条键位是有意"挤掉"内置会话搜索的**：Web 上 `session.search` 的默认键位就是 `primary+alt+K`（Desktop 上是 `primary+K`），固定行一挂上，那一行在快捷键目录里就变成冲突（`effectiveShortcuts` 把固定行算进 `conflicts`），按键不再打开搜索、设置里会给搜索项亮红，需要用户自行给搜索改绑。之所以仍然选它：固定行是唯一够得着终端那一格的通道（机制见 [第 4 节](03-fixed-input-and-pane-keys.md)），而"聚焦右栏页面"的主要用场正是终端。
-
-### 5.7 折叠中间步骤键桥接：`handleCollapseStepsInput`
-
-`⌘⌥.`（macOS）/ `Ctrl+Alt+.`（Windows/Linux）是插件自己挂的固定行（`dsh-keyboard-shortcuts.collapse-steps`，group `application`）。动作是点击当前主会话里已展开的上游标题：一次收所有展开的轮次过程与过程组标题，没有外层展开项时才收单步详情。点击前后按阅读线保持阅读位置。准入只排除长按、组字、已被消费与模态层；页面、文本控件、终端都放行。
-
-```ts
-function handleCollapseStepsInput(shortcuts, input) {
-  if (!collapseStepsEligible(input.gesture, input.context)) return
-  if (!fixedRowOwns(shortcuts.fixedCatalog.getSnapshot(), COLLAPSE_STEPS_ID, input.gesture)) return
-  const batches = currentCollapseBatches()
-  if (!batches.some((batch) => batch.targets.length > 0)) return // 没有可折的展开项：不消费
-  input.consume()
-  collapseBatches(batches)             // 每批：点击前采集阅读位置，微任务里补 scrollTop
-}
-```
-
-点击用 `element.click()`，并在点击期间临时把目标自己的 `focus` 覆盖成空函数：上游标题的 `onClick` 会先聚焦自己，快捷键路径不应把键盘从 composer / 终端抢走。点击结束后按原属性恢复。阅读位置补偿只写滚动口 `scrollTop`，不改变归属与消费判断。目标收集、两层优先级、阅读线规则与 DOM 锚点见 [第 9 册](09-collapse-steps.md)。

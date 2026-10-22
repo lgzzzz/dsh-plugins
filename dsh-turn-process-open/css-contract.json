@@ -1,5 +1,5 @@
 {
-  "description": "dsh-turn-process-open 依赖的上游事实：轮次过程标题的 DOM 锚点（含 aria-expanded 同元素渲染）、Chat 渲染器的 turnProcess / actions 写入口，以及主会话槽位锚点与会话作用域标记。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）：这些事实被改名 / 搬走时，插件会静默退化成 no-op 或合成点击；这里把那种退化提前变成一次显式失败，并在 hint 里写明后果。",
+  "description": "dsh-turn-process-open 依赖的上游事实：轮次过程标题的 DOM 锚点（含 aria-expanded 同元素渲染）、Chat 渲染器的 turnProcess / actions 写入口、主会话槽位与会话作用域标记，以及折叠工作步骤与阅读位置补偿读取的聊天行 / 轮次 / 跟随尾部 / 上游动画 / 封口锚点。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）：这些事实被改名 / 搬走时，插件会静默退化成 no-op、合成点击或直接折叠；这里把那种退化提前变成一次显式失败，并在 hint 里写明后果。",
   "checks": [
     {
       "id": "turn-process-control",
@@ -8,7 +8,7 @@
       "paths": [
         "dsh-client-ui-chat/lib"
       ],
-      "hint": "轮次过程标题标记消失：锁定器认不出标题，插件空转——新消息到达时上游照常折叠整轮"
+      "hint": "轮次过程标题标记消失：锁定器与折叠键都认不出标题，插件空转（自动折叠恢复，折叠键收不到整段过程）"
     },
     {
       "id": "turn-process-aria-expanded",
@@ -107,7 +107,7 @@
       "paths": [
         "dsh-client-ui-conversation/lib"
       ],
-      "hint": "主会话槽位名变了：锁定器找不到主会话作用域；回退只在全文档恰好有一个消息滚动口时生效，否则不动作（不误锁右栏）"
+      "hint": "主会话槽位名变了：锁定器与折叠键找不到主会话作用域；回退只在全文档恰好有一个消息滚动口时生效，否则不动作（不误锁右栏）"
     },
     {
       "id": "slot-anchor-wraps-content",
@@ -135,6 +135,114 @@
         "dsh-client-ui-conversation/lib"
       ],
       "hint": "会话根标记消失：去重键里的 sessionId 退化为空串；切换会话后同一 turn/answerStep 的标题可能被当成同一代而跳过重写，锁定延迟到标题再次折叠才恢复"
+    },
+    {
+      "id": "process-group-header",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-process-activity\":",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "过程组标题标记消失：折叠键收不到「执行了命令，已读取文件」这类组标题；详细模式下单独展开的组不会随快捷键收起"
+    },
+    {
+      "id": "step-process-root",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-step-process\":\\s*true",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "过程组根标记消失：折叠键认不出过程组容器，点不到组标题，也不再限定单步详情的归属"
+    },
+    {
+      "id": "chat-flow-kind",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-chat-flow-kind\":",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "聊天流节点种类标记消失：完全展开模式下分不清工具 / 助手步骤与系统提示词，单步详情折叠会失效或误折非步骤内容"
+    },
+    {
+      "id": "step-disclosure-row",
+      "plugin": "dsh-turn-process-open",
+      "token": "\"data-disclosure-row\":",
+      "paths": [
+        "dsh-web-frontend/dist/assets"
+      ],
+      "hint": "共享折叠行标记消失（思考 / 文件 / 搜索等单步详情）：外层已经收起后再按一次不会收起这些单步详情"
+    },
+    {
+      "id": "step-expandable",
+      "plugin": "dsh-turn-process-open",
+      "token": "\"data-expandable\":",
+      "paths": [
+        "dsh-client-ui-tool/lib"
+      ],
+      "hint": "工具行 / 命令输出的可展开标记消失：完全展开模式下展开着的单步详情不会被快捷键收起"
+    },
+    {
+      "id": "composer-seat",
+      "plugin": "dsh-turn-process-open",
+      "token": "data-composer-seat",
+      "paths": [
+        "dsh-client-ui-conversation/lib"
+      ],
+      "hint": "composer 座位标记消失：阅读位置补偿算不出可见带下边界，夹在 composer 后面的行可能被误判在视口内"
+    },
+    {
+      "id": "chat-flow-row",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-chat-flow-key\":",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "聊天行标记消失：折叠后的阅读线找不到行锚点，锚点滚动补偿退化为 no-op（折叠本身仍生效）"
+    },
+    {
+      "id": "chat-flow-turn",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-chat-turn\":",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "轮次归属标记消失：封口认不出最新锁轮次，锚点也分不清行属于哪一轮；折叠本身仍生效"
+    },
+    {
+      "id": "chat-following-tail",
+      "plugin": "dsh-turn-process-open",
+      "token": "data-chat-following-tail",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "跟随尾部标记消失：在会话底部折叠时也会做阅读线补偿，把视图从底部拉开"
+    },
+    {
+      "id": "chat-motion",
+      "plugin": "dsh-turn-process-open",
+      "token": "data-chat-motion",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "上游折叠动画标记消失：认不出上游正在做帧补偿，可能和它的阅读位置保持叠加成二次滚动"
+    },
+    {
+      "id": "group-expanded-mode",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-group-expanded-mode\":",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "平铺模式标记消失：封口认不出最新一轮的平铺组，折叠后保持平铺（不丢内容；与下一条消息到达时的形态不一致）"
+    },
+    {
+      "id": "step-process-body",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-step-process-body\":\\s*true",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "过程组滚动体标记消失：封口的隐藏成员规则落空，只显示组头 / 成员仍平铺（退化，不丢内容）"
     }
   ]
 }

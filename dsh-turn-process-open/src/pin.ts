@@ -14,8 +14,8 @@
  *   那个朝上的箭头只是一个指不动的假控件；
  * - `document` 捕获阶段的 `click` 只拦截可信事件（键盘 / 指针），放行插件降级路径
  *   合成的不可信点击；标题仍是可聚焦按钮，作为“已完成，用时 …”的标签保留；
- * - `dsh-keyboard-shortcuts` 的 `⌘⌥.` 会跳过带这个标记的标题（并把最新一轮封口成
- *   历史轮次的组头形态）。
+ * - 同一插件的 `⌘⌥.` 折叠桥（`collapse-steps.ts`）会跳过带这个标记的标题，并把
+ *   最新一轮封口成历史轮次的组头形态（`collapse-seal.ts`）。
  *
  * 失败路径全部收敛为“不锁”：fiber 找不到、写入口不可用或抛错、标题折叠之后重试耗尽，
  * 都会移除标记、保留可交互，并按需退到合成点击。任何一步失败都只影响该标题。
@@ -36,7 +36,7 @@ import type { TurnProcessHandle } from './fiber.ts'
 /** 轮次过程标题按钮；`data-turn-process` 只出现在它的开合按钮上。 */
 export const HEADER_SELECTOR = '[data-turn-process]'
 
-/** 标题上的锁标记；由本插件写入，`dsh-keyboard-shortcuts` 与样式读取它。 */
+/** 标题上的锁标记；由本插件写入，折叠桥、封口逻辑与样式读取它。 */
 export const PIN_ATTRIBUTE = 'data-turn-process-locked'
 
 /** 已锁定标题的选择器（点击拦截用）。 */

@@ -22,7 +22,7 @@ import {
   gesture,
   shortcutContext,
   withWindowDom,
-} from './focus-helpers.mjs'
+} from './collapse-helpers.mjs'
 
 /** 一个主会话滚动口：`main.conversation` 槽位 → 滚动口。 */
 function mainScroll() {

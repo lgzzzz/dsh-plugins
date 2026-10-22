@@ -22,7 +22,7 @@ import {
   keydown,
   shortcutContext,
   withWindowDom,
-} from './focus-helpers.mjs'
+} from './collapse-helpers.mjs'
 
 /** 一个带主会话槽位与滚动口的假页面。 */
 function mainScroll() {
@@ -67,7 +67,7 @@ function bridgeHarness({ platform = 'windows', root } = {}) {
 
 console.log('--- E① 固定行：id、键帽、绑定与分组 ---')
 {
-  check('固定行 id', COLLAPSE_STEPS_ID, 'dsh-keyboard-shortcuts.collapse-steps')
+  check('固定行 id', COLLAPSE_STEPS_ID, 'dsh-turn-process-open.collapse-steps')
   check('Windows 键帽', collapseStepsCommand('windows').keys, ['Ctrl', 'Alt', '.'])
   check('macOS 键帽', collapseStepsCommand('macos').keys, ['⌘', '⌥', '.'])
   check('行标签', collapseStepsCommand('linux').label(), '折叠中间步骤')
@@ -358,7 +358,7 @@ console.log('--- E⑪ 折叠后按阅读线补偿滚动 ---')
   }
 }
 
-console.log('--- E⑪ 只有封口目标（最新一轮平铺）时也消费并封口 ---')
+console.log('--- E⑫ 只有封口目标（最新一轮平铺）时也消费并封口 ---')
 {
   const { app, scroll } = mainScroll()
   // 已结束、带锁、展开的轮次过程标题：不归快捷键折叠。

@@ -61,12 +61,11 @@ console.log('--- C② 产物装配后调用官方命令 ---')
     const shortcuts = fakeShortcuts()
     const ctx = fakeCtx({ shortcuts })
     plugin.apply(ctx)
-    check('九条固定行', shortcuts.commands.length, 9)
+    check('八条固定行', shortcuts.commands.length, 8)
     check(
       '固定行 id',
       shortcuts.commands.map((command) => command.id),
       [
-        'dsh-keyboard-shortcuts.collapse-steps',
         'dsh-keyboard-shortcuts.session.new',
         'dsh-keyboard-shortcuts.sidebar.left.toggle',
         'dsh-keyboard-shortcuts.workspace.openLocal',
@@ -82,48 +81,6 @@ console.log('--- C② 产物装配后调用官方命令 ---')
     check('命令上下文', shortcuts.invocations[0].context.region, 'page')
   } finally {
     globalThis.window = previousWindow
-  }
-}
-
-console.log('--- C③ 封口样式随装配注入、卸载移除 ---')
-{
-  const previousWindow = globalThis.window
-  const previousDocument = globalThis.document
-  const doc = {
-    head: {
-      nodes: [],
-      append(node) {
-        this.nodes.push(node)
-        node.parent = this
-      },
-    },
-    createElement(tag) {
-      return {
-        tag,
-        dataset: {},
-        textContent: '',
-        removed: false,
-        remove() { this.removed = true },
-      }
-    },
-    querySelector() { return null },
-    querySelectorAll() { return [] },
-  }
-  globalThis.document = doc
-  globalThis.window = fakeWindow()
-  try {
-    const ctx = fakeCtx({ shortcuts: fakeShortcuts() })
-    plugin.apply(ctx)
-    check('注入一条封口样式', doc.head.nodes.length, 1)
-    check('样式标识', doc.head.nodes[0]?.dataset?.pluginCss, 'dsh-keyboard-shortcuts/collapse-seal.css')
-    checkTrue('样式含封口标记', String(doc.head.nodes[0]?.textContent).includes('data-dsh-collapse-sealed'))
-    ctx.disposeAll()
-    check('卸载移除样式', doc.head.nodes[0]?.removed, true)
-  } finally {
-    if (previousWindow === undefined) delete globalThis.window
-    else globalThis.window = previousWindow
-    if (previousDocument === undefined) delete globalThis.document
-    else globalThis.document = previousDocument
   }
 }
 

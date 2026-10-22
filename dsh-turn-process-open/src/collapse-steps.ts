@@ -12,24 +12,25 @@
  * 不需要抢走 composer / 终端里的键盘，所以点击期间临时把目标元素的 `focus()` 置空，
  * 结束后恢复原属性（不是改原型）。
  *
- * 落在 `.xterm` 内的按键到不了固定输入通道（终端在自己的 textarea 处理器里
- * `stopPropagation()`），因此与其它桥一样另装捕获阶段的 window `keydown`，在事件进入
- * 终端前判定并吞掉。两条路径共用同一份准入与目标收集。
+ * 本插件同时维护轮次过程的锁标记（`data-turn-process-locked`，见 `pin.ts`）：
+ * 带锁的标题不参与折叠；同一按还会把最新一轮的平铺明细**封口**成立即呈现的历史轮次
+ * 组头形态（见 `collapse-seal.ts`），使折叠结果与“下一条消息发送过来之后”完全一致。
  *
- * 装了 `dsh-turn-process-open` 时，轮次过程标题带锁标记、不参与折叠；同一按还会把
- * 最新一轮的平铺明细**封口**成立即呈现的历史轮次组头形态（见 `collapse-seal.ts`），
- * 使折叠结果与“下一条消息发送过来之后”完全一致。
+ * 落在 `.xterm` 内的按键到不了固定输入通道（终端在自己的 textarea 处理器里
+ * `stopPropagation()`），因此另装捕获阶段的 window `keydown`，在事件进入终端前判定并
+ * 吞掉。两条路径共用同一份准入与目标收集。
  *
  * 折叠前先在滚动口上采集阅读位置，点击后按 `reading-anchor.ts` 的规则补滚动：阅读线
- * （视口上边界下 1px）以下第一个仍可见的行保持原位；它原本在视口外时，改为把触发这一轮
- * 工作的用户消息放到阅读线下 3px。上游折叠动画在跑或会话跟随尾部时不做补偿。
+ * （视口上边界下 1px）以下第一个折叠后仍可见的行保持原位；它原本在视口外时，把它本身
+ * 放到阅读线下 3px。上游折叠动画在跑或会话跟随尾部时不做补偿。
  *
- * 上游锚点与已知边界见 docs/dsh-keyboard-shortcuts.md 与
- * docs/dsh-keyboard-shortcuts/03-fixed-input-and-pane-keys.md。
+ * 上游锚点与已知边界见 docs/dsh-turn-process-open.md 与
+ * docs/dsh-turn-process-open/01-collapse-steps.md。
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
 import { bindingKeycaps, fixedRowOwns } from './binding.ts'
-import { LOCK_ATTRIBUTE, sealGroups, sealableGroups } from './collapse-seal.ts'
+import { PIN_ATTRIBUTE, conversationRoots } from './pin.ts'
+import { sealGroups, sealableGroups } from './collapse-seal.ts'
 import {
   applyReadingAnchor,
   planReadingAnchor,
@@ -46,8 +47,10 @@ import type {
 import type { ShortcutCommandId, ShortcutPlatform } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type { Context } from '@deepseek-ai/cordis'
 
+export { conversationRoots }
+
 /** 本桥挂载并跟随的固定行 id。 */
-export const COLLAPSE_STEPS_ID: ShortcutCommandId = 'dsh-keyboard-shortcuts.collapse-steps' as ShortcutCommandId
+export const COLLAPSE_STEPS_ID: ShortcutCommandId = 'dsh-turn-process-open.collapse-steps' as ShortcutCommandId
 
 /** `primary+alt+.`（macOS 上即 `⌘⌥.`，Windows/Linux 上即 `Ctrl+Alt+.`）。 */
 export const COLLAPSE_STEPS_BINDING: ShortcutFixedCommand['bindings'][number] = {
@@ -79,8 +82,8 @@ export function collapseStepsEligible(gesture: ShortcutGesture, context: Shortcu
 
 /**
  * 轮次级过程控制：`data-turn-process` 只出现在它的开合按钮上。
- * 装了 `dsh-turn-process-open` 后标题带 `data-turn-process-locked`，由锁定器维护，
- * 这里跳过它们（否则刚折就被重新打开，会闪一下）。
+ * 标题带 `data-turn-process-locked` 时由锁定器维护，这里跳过它们
+ * （否则刚折就被重新打开，会闪一下）。
  */
 const TURN_PROCESS_SELECTOR = '[data-turn-process]'
 
@@ -106,7 +109,7 @@ function openOuterSteps(root: ParentNode): Element[] {
   const found = new Set<Element>()
   for (const element of root.querySelectorAll(TURN_PROCESS_SELECTOR)) {
     // 锁定展开的标题不归快捷键管：折了也会被锁定器重新展开。
-    if (element.hasAttribute(LOCK_ATTRIBUTE)) continue
+    if (element.hasAttribute(PIN_ATTRIBUTE)) continue
     if (isExpanded(element) && !isDisabled(element)) found.add(element)
   }
   for (const element of root.querySelectorAll(PROCESS_GROUP_SELECTOR)) {
@@ -136,18 +139,6 @@ function openStepDetails(root: ParentNode): Element[] {
 export function collapseStepTargets(root: ParentNode): Element[] {
   const outer = openOuterSteps(root)
   return outer.length > 0 ? outer : openStepDetails(root)
-}
-
-/**
- * 当前主会话的滚动口（可多个）。优先取 `main.conversation` 槽位内的那份；槽位标记
- * 缺席时只在全文档恰好有一个滚动口时使用它，避免误折右栏里的会话。
- */
-export function conversationRoots(): Element[] {
-  if (typeof document === 'undefined') return []
-  const scrolls = [...document.querySelectorAll('[data-conversation-scroll]')]
-  const scoped = scrolls.filter((element) => element.closest('[data-slot="main.conversation"]') !== null)
-  if (scoped.length > 0) return scoped
-  return scrolls.length === 1 ? scrolls : []
 }
 
 /** 一个主会话滚动口和它这次要折叠 / 封口的对象。 */
@@ -237,7 +228,7 @@ function collapseBatch(batch: CollapseBatch): number {
   if (!batchHasWork(batch)) return 0
   let plan: ReadingPlan | null = null
   try {
-    plan = planReadingAnchor(batch.root, batch.targets)
+    plan = planReadingAnchor(batch.root)
   } catch (error) {
     warn('采集折叠前的阅读位置失败：', error)
   }

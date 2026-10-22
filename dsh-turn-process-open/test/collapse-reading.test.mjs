@@ -1,5 +1,6 @@
 /**
- * 折叠后的阅读位置：阅读线、锚点、回退到用户消息（阅读线下 3px），以及几何 / 跟随尾部 / 上游动画边界。
+ * 折叠后的阅读位置：阅读线、锚点、向前找第一个不被折叠的行（阅读线下 3px），以及
+ * 几何 / 跟随尾部 / 上游动画边界。
  *
  * 假 DOM 的几何由测试直接摆：滚动口在 y=100、高 500；composer 顶在 y=550；
  * 阅读线因此是 101。行按文档顺序排布，点击折叠时由替身 `click` 自己改高度 / 隐藏标记。
@@ -14,7 +15,7 @@ import {
   checkTrue,
   FakeElement,
   finish,
-} from './focus-helpers.mjs'
+} from './collapse-helpers.mjs'
 
 /** 一个带 top / bottom / height 的盒子。 */
 function box(top, height) {
@@ -48,7 +49,7 @@ function readingScroll() {
   place(scroll, 100, 500)
   scroll.clientTop = 0
   scroll.clientHeight = 500
-  scroll.scrollHeight = 2000
+  scroll.scrollHeight = 3000
   scroll.scrollTop = 700
   const seat = scroll.append(new FakeElement('div', { 'data-composer-seat': '' }))
   place(seat, 550, 100)
@@ -96,10 +97,10 @@ function scene({ anchorTop = 240, anchorAfter = 140, hideAnchor = false, keep = 
   return { app, main, scroll, seat, user, process, target, hidden, anchor }
 }
 
-console.log('--- R① 阅读线、候选行与回退行 ---')
+console.log('--- R① 阅读线、候选行与锚点 ---')
 {
-  const { scroll, user, target, hidden, anchor } = scene()
-  const plan = planReadingAnchor(scroll, [target])
+  const { scroll, target, hidden, anchor } = scene()
+  const plan = planReadingAnchor(scroll)
   check('采集到阅读位置', plan !== null, true)
   check('阅读线 = 滚动口上边界 + 1', plan.line, 101)
   check('可见带下边界取 composer 顶', plan.bottom, 550)
@@ -107,7 +108,6 @@ console.log('--- R① 阅读线、候选行与回退行 ---')
   checkTrue('第一个候选是会被隐藏的过程行', plan.rows[0].element === hidden)
   check('第一个候选的折叠前位置', plan.rows[0].top, 130)
   checkTrue('第二个候选是答案行', plan.rows[1].element === anchor)
-  checkTrue('回退锚定到该轮的用户消息', plan.fallback === user)
 }
 
 console.log('--- R② 锚点在视口内：折叠后保持锚点屏幕位置 ---')
@@ -121,31 +121,31 @@ console.log('--- R② 锚点在视口内：折叠后保持锚点屏幕位置 ---
   check('滚动补偿 100', scroll.scrollTop, 600)
 }
 
-console.log('--- R③ 锚点在视口外：用户消息顶到阅读线下 3px ---')
+console.log('--- R③ 视口内没有锚点：向前找到的答案行顶到阅读线下 3px ---')
 {
   const { scroll, target } = scene({ anchorTop: 600, anchorAfter: 400 })
   const collapsed = collapseBatches([{ root: scroll, targets: [target] }])
-  check('回退也延到微任务', scroll.scrollTop, 700)
+  check('补偿也延到微任务', scroll.scrollTop, 700)
   await Promise.resolve()
   check('折叠目标被点击', collapsed, 1)
-  check('回退滚动量 = 用户消息顶 - (阅读线 + 3)', scroll.scrollTop, 616)
+  check('向前滚动量 = 答案行顶 - (阅读线 + 3)', scroll.scrollTop, 996)
 }
 
-console.log('--- R④ composer 顶以下也算视口外 ---')
+console.log('--- R④ composer 顶以下也算视口外：同样向前对齐 ---')
 {
   const { scroll, target } = scene({ anchorTop: 560, anchorAfter: 400 })
-  const plan = planReadingAnchor(scroll, [target])
+  const plan = planReadingAnchor(scroll)
   target.click()
   check('锚点在 composer 下面仍被采集', plan.rows[1].top, 560)
-  check('走回退分支', applyReadingAnchor(plan), 'fallback')
-  check('用户消息对齐后的滚动位置', scroll.scrollTop, 616)
+  check('走 forward 分支', applyReadingAnchor(plan), 'forward')
+  check('答案行对齐后的滚动位置', scroll.scrollTop, 996)
 }
 
 console.log('--- R⑤ 跟随尾部时不做补偿 ---')
 {
   const { scroll, target } = scene()
   scroll.append(new FakeElement('div', { 'data-chat-following-tail': '' }))
-  const plan = planReadingAnchor(scroll, [target])
+  const plan = planReadingAnchor(scroll)
   target.click()
   check('跟随尾部走 none', applyReadingAnchor(plan), 'none')
   check('滚动位置没动', scroll.scrollTop, 700)
@@ -154,7 +154,7 @@ console.log('--- R⑤ 跟随尾部时不做补偿 ---')
 console.log('--- R⑥ 上游折叠动画在跑时不做二次补偿 ---')
 {
   const { scroll, target } = scene({ keep: { 'data-chat-motion': 'collapse' } })
-  const plan = planReadingAnchor(scroll, [target])
+  const plan = planReadingAnchor(scroll)
   target.click()
   check('上游动画走 none', applyReadingAnchor(plan), 'none')
   check('滚动位置没动', scroll.scrollTop, 700)
@@ -163,20 +163,19 @@ console.log('--- R⑥ 上游折叠动画在跑时不做二次补偿 ---')
 console.log('--- R⑦ 所有候选都被隐藏：没有锚点也不回退 ---')
 {
   const { scroll, target } = scene({ hideAnchor: true })
-  const plan = planReadingAnchor(scroll, [target])
+  const plan = planReadingAnchor(scroll)
   target.click()
   check('没有仍可见的候选', applyReadingAnchor(plan), 'none')
   check('滚动位置没动', scroll.scrollTop, 700)
 }
 
-console.log('--- R⑧ 滚动目标越界时夹到 0 ---')
+console.log('--- R⑧ 向前滚动越过下边界时夹到最大滚动位置 ---')
 {
-  const { scroll, target } = scene({ anchorAfter: 0 })
-  const plan = planReadingAnchor(scroll, [target])
-  scroll.scrollTop = 50
+  const { scroll, target } = scene({ anchorTop: 600, anchorAfter: 2900 })
+  const plan = planReadingAnchor(scroll)
   target.click()
-  applyReadingAnchor(plan)
-  check('向上补偿夹到 0', scroll.scrollTop, 0)
+  check('走 forward 分支', applyReadingAnchor(plan), 'forward')
+  check('夹到 scrollHeight - clientHeight', scroll.scrollTop, 2500)
 }
 
 console.log('--- R⑨ 没有几何的假 DOM：折叠照常，补偿跳过 ---')
@@ -204,7 +203,7 @@ console.log('--- R⑩ 阅读行：过程组内的详情行认，组外的不认 
   const expandable = place(tool.append(new FakeElement('div', { 'data-expandable': '', 'aria-expanded': 'false' })), 260, 24)
   const outside = place(scroll.append(new FakeElement('div', { 'data-disclosure-row': '', 'aria-expanded': 'false' })), 300, 24)
   const system = chatRow(scroll, { 'data-chat-flow-key': 'system', 'data-chat-flow-kind': 'system-prompt', 'data-chat-turn': '1' }, 340, 60)
-  const plan = planReadingAnchor(scroll, [])
+  const plan = planReadingAnchor(scroll)
   const elements = plan.rows.map((row) => row.element)
   check('行数 = 工具行 + 组内两条详情 + 系统行', plan.rows.length, 4)
   checkTrue('工具行在阅读行里', elements.includes(tool))
@@ -214,22 +213,27 @@ console.log('--- R⑩ 阅读行：过程组内的详情行认，组外的不认 
   check('系统提示词行仍在阅读行里', elements.includes(system), true)
 }
 
-console.log('--- R⑪ 没有用户消息时回退到触发通知行 ---')
+console.log('--- R⑪ 向前跳过的前几行都被隐藏时，取下一个仍可见的行 ---')
 {
-  const { scroll } = readingScroll()
-  const trigger = chatRow(scroll, {
-    'data-chat-flow-key': 'trigger',
-    'data-chat-flow-kind': 'turn-trigger',
+  const { scroll, target, hidden, anchor } = scene()
+  const first = chatRow(scroll, { 'data-chat-flow-key': 'first', 'data-chat-turn': '1' }, 600, 40)
+  const second = chatRow(scroll, {
+    'data-chat-flow-key': 'second',
+    'data-chat-flow-kind': 'user',
     'data-chat-turn': '2',
-  }, 120, 40)
-  const process = chatRow(scroll, {
-    'data-chat-flow-key': 'process',
-    'data-chat-turn': '2',
-  }, 180, 30)
-  const target = process.append(new FakeElement('button', { 'data-turn-process': '2', 'aria-expanded': 'true' }))
-  place(target, 180, 30)
-  const plan = planReadingAnchor(scroll, [target])
-  checkTrue('回退到 turn-trigger 行', plan.fallback === trigger)
+  }, 700, 80)
+  target.click = () => {
+    target.setAttribute('aria-expanded', 'false')
+    for (const row of [hidden, anchor, first]) {
+      row.setAttribute('hidden', '')
+      row.rect.height = 0
+    }
+    second.rect.top = 500
+  }
+  const plan = planReadingAnchor(scroll)
+  target.click()
+  check('前几行隐藏后取仍可见的第二行', applyReadingAnchor(plan), 'forward')
+  check('仍可见行顶到阅读线下 3px', scroll.scrollTop, 700 + 500 - 104)
 }
 
 console.log('--- R⑫ 点击没有改变布局时不回退 ---')
@@ -240,13 +244,13 @@ console.log('--- R⑫ 点击没有改变布局时不回退 ---')
     hidden.setAttribute('hidden', '')
     hidden.rect.height = 0
   }
-  const plan = planReadingAnchor(scroll, [target])
+  const plan = planReadingAnchor(scroll)
   target.click()
-  check('锚点没动时不回退', applyReadingAnchor(plan), 'none')
+  check('锚点没动时不动', applyReadingAnchor(plan), 'none')
   check('滚动位置没动', scroll.scrollTop, 700)
 }
 
-console.log('--- R⑬ 多个轮次：回退到阅读线附近那一轮的用户消息 ---')
+console.log('--- R⑬ 跨轮次：取阅读线下方第一个仍可见的行，不回到本轮用户消息 ---')
 {
   const { scroll } = readingScroll()
   const user1 = chatRow(scroll, {
@@ -254,35 +258,33 @@ console.log('--- R⑬ 多个轮次：回退到阅读线附近那一轮的用户�
     'data-chat-flow-kind': 'user',
     'data-chat-turn': '1',
   }, 5, 70)
-  const process1 = chatRow(scroll, {
-    'data-chat-flow-key': 'process-1',
-    'data-chat-turn': '1',
-  }, 80, 30)
+  const process1 = chatRow(scroll, { 'data-chat-flow-key': 'process-1', 'data-chat-turn': '1' }, 80, 30)
   const target1 = process1.append(new FakeElement('button', { 'data-turn-process': '1', 'aria-expanded': 'true' }))
   place(target1, 80, 30)
+  const step1 = chatRow(scroll, { 'data-chat-flow-key': 'step-1', 'data-chat-turn': '1' }, 200, 300)
   const user2 = chatRow(scroll, {
     'data-chat-flow-key': 'user-2',
     'data-chat-flow-kind': 'user',
     'data-chat-turn': '2',
-  }, 130, 70)
-  const process2 = chatRow(scroll, {
-    'data-chat-flow-key': 'process-2',
-    'data-chat-turn': '2',
-  }, 200, 30)
-  const target2 = process2.append(new FakeElement('button', { 'data-turn-process': '2', 'aria-expanded': 'true' }))
-  place(target2, 200, 30)
-  const first = planReadingAnchor(scroll, [target1, target2])
-  checkTrue('阅读线穿过第一轮的过程块时取第一轮', first.fallback === user1)
-  process1.rect.height = 20
-  process1.rect.top = 20
-  const second = planReadingAnchor(scroll, [target1, target2])
-  checkTrue('第一轮整块在阅读线上方时取第二轮', second.fallback === user2)
+  }, 650, 70)
+  target1.click = () => {
+    step1.setAttribute('hidden', '')
+    step1.rect.height = 0
+    user2.rect.top = 400
+  }
+  const plan = planReadingAnchor(scroll)
+  target1.click()
+  check('第一个仍可见行是下一轮用户消息', plan.rows.find((row) => row.element === user2)?.top, 650)
+  check('走 forward 分支', applyReadingAnchor(plan), 'forward')
+  check('下一轮用户消息顶到阅读线下 3px', scroll.scrollTop, 700 + 400 - 104)
+  check('没有回到上一轮用户消息', scroll.scrollTop !== 700 + 5 - 104, true)
+  void user1
 }
 
-console.log('--- R⑭ 标题行滚出阅读线，展开内容仍在读：回退仍取该轮 ---')
+console.log('--- R⑭ 标题滚出阅读线、展开内容仍在读：同样向前找 ---')
 {
   const { scroll } = readingScroll()
-  const user = chatRow(scroll, {
+  chatRow(scroll, {
     'data-chat-flow-key': 'user',
     'data-chat-flow-kind': 'user',
     'data-chat-turn': '1',
@@ -300,68 +302,23 @@ console.log('--- R⑭ 标题行滚出阅读线，展开内容仍在读：回退�
     'data-chat-turn': '1',
     'data-turn-process-member': 'true',
   }, 105, 100)
-  const answer = chatRow(scroll, {
+  chatRow(scroll, {
     'data-chat-flow-key': 'answer',
     'data-chat-flow-kind': 'assistant-step',
     'data-chat-turn': '1',
   }, 600, 200)
   target.click = () => {
-    target.setAttribute('aria-expanded', 'false')
     hidden.setAttribute('hidden', '')
     hidden.rect.height = 0
-    answer.rect.top = 300
+    for (const row of scroll.querySelectorAll('[data-chat-flow-key]')) {
+      if (row.getAttribute('data-chat-flow-key') !== 'answer') continue
+      row.rect.top = 300
+    }
   }
-  const plan = planReadingAnchor(scroll, [target])
-  check('标题行在阅读线上方，不在候选里', plan.rows.some((row) => row.element === process), false)
-  checkTrue('回退仍取该轮用户消息', plan.fallback === user)
   const collapsed = collapseBatches([{ root: scroll, targets: [target] }])
   check('折叠目标被点击', collapsed, 1)
   await Promise.resolve()
-  check('走回退分支', scroll.scrollTop, 196)
-  check('用户消息在阅读线下 3px', user.rect.top - (scroll.scrollTop - 700), 104)
-}
-
-console.log('--- R⑮ 阅读线在上一轮展开内容里时，优先上一轮 ---')
-{
-  const { scroll } = readingScroll()
-  const user1 = chatRow(scroll, {
-    'data-chat-flow-key': 'user-1',
-    'data-chat-flow-kind': 'user',
-    'data-chat-turn': '1',
-  }, -400, 70)
-  const process1 = chatRow(scroll, {
-    'data-chat-flow-key': 'process-1',
-    'data-chat-flow-kind': 'turn-process',
-    'data-chat-turn': '1',
-  }, 80, 20)
-  const target1 = process1.append(new FakeElement('button', { 'data-turn-process': '1', 'aria-expanded': 'true' }))
-  place(target1, 80, 20)
-  chatRow(scroll, {
-    'data-chat-flow-key': 'step',
-    'data-chat-flow-kind': 'tool-call',
-    'data-chat-turn': '1',
-    'data-turn-process-member': 'true',
-  }, 105, 100)
-  chatRow(scroll, {
-    'data-chat-flow-key': 'answer-1',
-    'data-chat-flow-kind': 'assistant-step',
-    'data-chat-turn': '1',
-  }, 600, 200)
-  const user2 = chatRow(scroll, {
-    'data-chat-flow-key': 'user-2',
-    'data-chat-flow-kind': 'user',
-    'data-chat-turn': '2',
-  }, 150, 40)
-  const process2 = chatRow(scroll, {
-    'data-chat-flow-key': 'process-2',
-    'data-chat-flow-kind': 'turn-process',
-    'data-chat-turn': '2',
-  }, 300, 20)
-  const target2 = process2.append(new FakeElement('button', { 'data-turn-process': '2', 'aria-expanded': 'true' }))
-  place(target2, 300, 20)
-  const plan = planReadingAnchor(scroll, [target1, target2])
-  checkTrue('回退取第一轮而不是第二轮', plan.fallback === user1)
-  check('第二轮用户消息不是回退行', plan.fallback === user2, false)
+  check('向前把答案行放到阅读线下 3px', scroll.scrollTop, 700 + 300 - 104)
 }
 
 finish()

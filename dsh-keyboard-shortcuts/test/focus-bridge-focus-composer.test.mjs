@@ -107,7 +107,7 @@ console.log('--- K④ 失败模式:无 scope / 缺 conversation.input / for 抛�
 console.log('--- K⑤ 失败模式:缺 sessions / 缺 observeFixedInput 即不装 ---')
 {
   const noSessions = harness({ withSessions: false })
-  check('缺 sessions 时只装不依赖它的桥', noSessions.shortcuts.listenerCount(), 5)
+  check('缺 sessions 时只装不依赖它的桥', noSessions.shortcuts.listenerCount(), 4)
 
   const bare = new FakeCtx({
     shortcuts: { ...fakeShortcuts(), observeFixedInput: undefined },
@@ -117,7 +117,7 @@ console.log('--- K⑤ 失败模式:缺 sessions / 缺 observeFixedInput 即不�
   })
   const warnings = captureWarnings(() => applyPlugin(bare))
   checkTrue('缺 observeFixedInput 时聚焦桥告警', warnings.some((line) => line.includes('focus-composer key not installed')))
-  check('缺 observeFixedInput 时只装不依赖固定键的部分', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging', 'dsh-keyboard-shortcuts: collapse seal style'])
+  check('缺 observeFixedInput 时只装不依赖固定键的部分', bare.effects.map((effect) => effect.label), ['dsh-keyboard-shortcuts: chat paging'])
 }
 
 console.log('--- K⑥ 卸载:固定行与监听一起释放 ---')

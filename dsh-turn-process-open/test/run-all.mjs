@@ -15,6 +15,10 @@ const here = dirname(fileURLToPath(import.meta.url))
 const ORDER = [
   'fiber.test.mjs',
   'pin.test.mjs',
+  'collapse-targets.test.mjs',
+  'collapse-seal.test.mjs',
+  'collapse-reading.test.mjs',
+  'collapse-bridge.test.mjs',
   'artifact-client.test.mjs',
 ]
 

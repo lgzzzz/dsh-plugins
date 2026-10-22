@@ -2,7 +2,7 @@
  * 封口：目标轮次判定、组头显示、组体恢复、幂等与清理。
  *
  * 只构造假 DOM；不装桥、不发按键。封口的 CSS 语义由 `SEAL_CSS` 文本断言，真实几何
- * 由 docs/dsh-keyboard-shortcuts/09-collapse-steps.md 里的 CDP 验证覆盖。
+ * 由 docs/dsh-turn-process-open/01-collapse-steps.md 里的 CDP 验证覆盖。
  */
 import {
   clearSeals,
@@ -16,7 +16,7 @@ import {
   STYLE_ID,
   supportsSeal,
 } from '../src/collapse-seal.ts'
-import { check, checkTrue, FakeElement, finish } from './focus-helpers.mjs'
+import { check, checkTrue, FakeElement, finish } from './collapse-helpers.mjs'
 
 /** 一个过程组：组头容器 + 组体；`activity=false` 时没有组标题按钮。 */
 function group({ turn = '1', flat = true, sealed = false, hidden = true, activity = true, expanded = 'false' } = {}) {
@@ -187,8 +187,8 @@ console.log('--- S⑧ 样式：只插一条、共用、卸载移除并清封口 
     check('样式标识', doc.head.nodes[0]?.dataset?.pluginCss, STYLE_ID)
     check('样式内容', doc.head.nodes[0]?.textContent, SEAL_CSS)
     check('effect 标签', effects.map((item) => item.label), [
-      'dsh-keyboard-shortcuts: collapse seal style',
-      'dsh-keyboard-shortcuts: collapse seal style',
+      'dsh-turn-process-open: collapse seal style',
+      'dsh-turn-process-open: collapse seal style',
     ])
 
     effects[0].disposer()

@@ -7,14 +7,13 @@
  *   组体可见、成员逐行平铺；
  * - 更早的轮次分组：没有 `data-group-expanded-mode`，组头可见、组体 `hidden="until-found"`。
  *
- * 发下一条消息后，上一轮从前者变成后者；在 `dsh-turn-process-open` 把轮次过程锁成展开
- * 之后，那正是用户看到的“折叠样式”。本模块让快捷键在折叠的同一批动作里**立即**把
- * 最新一轮切换成同一形态，而不是等下一轮消息。
+ * 发下一条消息后，上一轮从前者变成后者；在 `pin.ts` 把轮次过程锁成展开之后，那正是
+ * 用户看到的“折叠样式”。本模块让快捷键在折叠的同一批动作里**立即**把最新一轮切换成
+ * 同一形态，而不是等下一轮消息。
  *
  * 纯展示层，不改 React 状态、store、设置或消息数据：
  *
- * 1. 只对“最新一个带锁标记的轮次”生效（锁由 `dsh-turn-process-open` 写在标题上；
- *    插件缺席时本模块完全空转，单独使用快捷键的行为不变）；
+ * 1. 只对“最新一个带锁标记的轮次”生效（锁由 `pin.ts` 写在标题上）；
  * 2. 组根写 `data-dsh-collapse-sealed`，移除组头容器的 `hidden`（避免下一条消息到达时
  *    `useMotionHidden` 把它当成“从隐藏到显示”跑一次 reveal 动画）；
  * 3. 一条受限 CSS 把组体 `display:none`，组头 `aria-expanded=true` 时再放回组体——
@@ -29,16 +28,17 @@
  * 与阅读位置补偿的配合：先在封口前采集 `planReadingAnchor`，再 `sealGroups`、点击标题，
  * 最后在微任务里补 `scrollTop`——封口本身会明显改变高度，必须参与补偿。
  *
- * 上游锚点与失败模式见 docs/dsh-keyboard-shortcuts/09-collapse-steps.md。
+ * 上游锚点与失败模式见 docs/dsh-turn-process-open/01-collapse-steps.md。
  */
+import { PIN_ATTRIBUTE } from './pin.ts'
 import { name } from './runtime.ts'
 import type { Context } from '@deepseek-ai/cordis'
 
 /** 封口标记；写在 `[data-step-process]` 组根上。 */
 export const SEAL_ATTRIBUTE = 'data-dsh-collapse-sealed'
 
-/** 由 `dsh-turn-process-open` 写在轮次过程标题上的锁标记。 */
-export const LOCK_ATTRIBUTE = 'data-turn-process-locked'
+/** 由 `pin.ts` 写在轮次过程标题上的锁标记（保留旧名，便于阅读折叠逻辑）。 */
+export const LOCK_ATTRIBUTE = PIN_ATTRIBUTE
 
 /** 平铺模式的组根标记；分组态没有它。 */
 export const FLAT_ATTRIBUTE = 'data-group-expanded-mode'
@@ -56,7 +56,7 @@ export const ACTIVITY_SELECTOR = '[data-process-activity]'
 export const GROUP_BODY_SELECTOR = '[data-step-process-body]'
 
 /** 注入样式的标识（`data-plugin-css`）。 */
-export const STYLE_ID = 'dsh-keyboard-shortcuts/collapse-seal.css'
+export const STYLE_ID = 'dsh-turn-process-open/collapse-seal.css'
 
 /**
  * 封口样式。三段都要求「平铺 + 已封口」：

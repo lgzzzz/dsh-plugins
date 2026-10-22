@@ -64,6 +64,10 @@ export function finish() {
 function matchesSelector(element, selector) {
   const part = selector.trim()
   if (part === '') return false
+  if (part.startsWith('.')) {
+    const className = element.getAttribute?.('class') ?? ''
+    return className.split(/\s+/).includes(part.slice(1))
+  }
   const tag = /^([a-zA-Z][\w-]*)/.exec(part)?.[1] ?? null
   if (tag !== null && element.tag !== tag) return false
   const predicates = [...part.matchAll(/\[([a-zA-Z0-9_-]+)(?:="([^"]*)")?\]/g)]
