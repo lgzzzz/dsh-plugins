@@ -30,7 +30,7 @@
     "test": "node test/run-all.mjs"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.0.5",
+    "@deepseek-ai/cordis": "~4.0.6-alpha.1",
     "tsdown": "^0.22.2",
     "typescript": "^5.9.3"
   }
