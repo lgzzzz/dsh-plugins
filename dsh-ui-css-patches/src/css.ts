@@ -172,8 +172,8 @@ section[data-plan-preview] :not(pre) > code {
    都是 translucent,类名带构建哈希),而菜单的全部内容仍在这个 <ul> 子树里,所以宽度经 :has() 锚到
    「内含该 <ul> 的容器」上:锚点与关系都是语义的,不用类名通配符、也不数元素位置。
    :has() 的参数不带 >,上游在容器与 <ul> 之间加一层 viewport 包裹时这条规则不必跟着改。
-   上游是 width:500px + max-width:min(560px,100vw - 32px):max-width 也一并覆盖,菜单宽度才不跟着
-   上游那个上限走(上游调小它时,菜单会跟着缩、空隙静默变小)。
+   上游是 width:500px + max-width:min(560px, calc(100vw - 32px), var(--dsh-anchored-max-width,100vw)):
+   max-width 也一并覆盖,菜单宽度才不跟着上游那些上限走(上游调小它时,菜单会跟着缩、空隙静默变小)。
    菜单的 left/top 由上游按实测 offsetWidth 算(menuRef 指向容器),加宽后它经 ResizeObserver
    重算,仍会把菜单拉回视口内 */
 div[data-menu-material="translucent"]:has(ul[aria-label="后台任务"]),
