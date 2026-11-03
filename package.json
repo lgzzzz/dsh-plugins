@@ -11,7 +11,7 @@
     "test": "pnpm -r test"
   },
   "devDependencies": {
-    "tsdown": "^0.22.2",
-    "lightningcss": "^1.32.0"
+    "tsdown": "^0.23.4",
+    "lightningcss": "^1.33.0"
   }
 }

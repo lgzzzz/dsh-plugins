@@ -38,7 +38,7 @@
     "@deepseek-ai/dsh-client-ui-session": "^0.2.2-alpha.3",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "^0.2.2-alpha.3",
     "@deepseek-ai/dsh-client-ui-user-questions": "^0.2.2-alpha.3",
-    "tsdown": "^0.22.2",
+    "tsdown": "^0.23.4",
     "typescript": "^5.9.3"
   }
 }

@@ -229,6 +229,10 @@ export function clientBundle(id, options = {}) {
       alwaysBundle: specifier => !isBuiltin(specifier) && !isRequested(specifier),
     },
     inputOptions: {
+      // tsdown 0.23 起 cjs 格式默认把 rolldown 的 platform 钉成 node(顶层 platform 被忽略),
+      // 但本产物是给 DSH 客户端模块加载器在浏览器里执行的 CJS 工厂:browser 条件与字段仍要生效,
+      // 所以这里显式覆盖回来。顶层 platform 保留,供 deps 插件按浏览器语义判定内联/外置。
+      platform: 'browser',
       // 双模式库(如 lexical:exports 带 development/production/node 条件,node 入口
       // 用了 CJS bundle 承载不了的顶层 await)必须解析到静态形态。把环境条件排在最前
       // 即可选中它:条件顺序就是解析器的优先级,否则默认条件集里的 `node` 会胜出。
