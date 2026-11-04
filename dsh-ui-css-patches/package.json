@@ -29,7 +29,7 @@
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "devDependencies": {
-    "tsdown": "^0.23.4",
+    "tsdown": "^0.23.5",
     "typescript": "^5.9.3"
   }
 }

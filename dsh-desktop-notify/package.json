@@ -30,16 +30,16 @@
     "test": "node test/run-all.mjs"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.0.6-alpha.2",
-    "@deepseek-ai/dsh-api-session-controller": "^0.2.2-alpha.3",
-    "@deepseek-ai/dsh-client-ui-approval": "^0.2.2-alpha.3",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-alpha.3",
-    "@deepseek-ai/dsh-client-ui-session": "^0.2.2-alpha.3",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.2.2-alpha.3",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-alpha.3",
-    "@deepseek-ai/dsh-client-ui-user-questions": "^0.2.2-alpha.3",
-    "@types/react": "~18.3.1",
-    "tsdown": "^0.23.4",
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-approval": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-user-questions": "^0.2.2-rc.1",
+    "@types/react": "^18.3.31",
+    "tsdown": "^0.23.5",
     "typescript": "^5.9.3"
   }
 }
