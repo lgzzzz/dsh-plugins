@@ -19,6 +19,7 @@
 | `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
+| `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
 | `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
@@ -42,8 +43,8 @@
 依赖上游 CSS 选择器 / 槽位 / DOM 锚点的插件配了一段**静态校验**（`pnpm check:css`，不挂在
 `pnpm build` 上）：把清单逐条对 DSH 安装产物 grep 一遍，上游改名 / 删 token 时显式失败，
 而不是让补丁在页面上静默失效（选择器落空不报错）。每个插件目录都有自己的 `check-css.mjs`，
-默认读同目录的清单（`css-contract.json`；`dsh-changes-hover-off`、`dsh-jobs-optimize` 与
-`dsh-changes-review-wrap` 是 `contract.json`），可用 `--manifest` 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
+默认读同目录的清单（`css-contract.json`；`dsh-changes-hover-off`、`dsh-jobs-optimize`、
+`dsh-stats-ttft` 与 `dsh-changes-review-wrap` 是 `contract.json`），可用 `--manifest` 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
@@ -52,11 +53,12 @@
 | `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点（含 `aria-expanded` 同元素）+ 标题右侧箭头的图标与 `chevron` 局部类名 + fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话槽位与会话作用域 + 折叠目标 / 聊天行 / 轮次 / 跟随尾部 / 上游动画 / 封口锚点 |
 | `dsh-changes-hover-off` | [`contract.json`](../dsh-changes-hover-off/contract.json) | 改动文件卡片锚点 + 悬停延迟 |
 | `dsh-jobs-optimize` | [`contract.json`](../dsh-jobs-optimize/contract.json) | 槽位 / 注册 / 渲染锚点 + 触发器的开合真值与 toggle + 菜单由本控件经 React portal 渲染到 body + 子代理控件（参照物）的两个延迟与点击语义 |
+| `dsh-stats-ttft` | [`contract.json`](../dsh-stats-ttft/contract.json) | `conversation.composer.dock` 槽与 `activity` 注册 / order + 同 id 遮蔽规则 + 渲染期读取条目 component + `stats.counts` 键与调用 + 两个时长单位与上游取整规则 + `sessionStats` 的 TTFT 字段 + `useProjection` / `useChat` 标准 props |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-changes-review-wrap` | [`contract.json`](../dsh-changes-review-wrap/contract.json) | 审查根 / 正文 / 换行按钮 / 换行态锚点 + review store 的默认 `wrap:false` + `toggledWrap` + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 8 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 9 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 

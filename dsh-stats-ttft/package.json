@@ -1,0 +1,39 @@
+{
+  "name": "dsh-stats-ttft",
+  "version": "1.0.0",
+  "private": true,
+  "description": "在输入框下方的「性能」统计按钮上直接显示会话平均首 token 时长：按 id 遮蔽 conversation.composer.dock 槽里的 activity 条目，包装上游 ActivityPill 并只改写 stats.counts 的译文，使按钮读数从「N 轮 N 步 · X tok/s」变成「N 轮 N 步 · 2.3秒 · X tok/s」。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}

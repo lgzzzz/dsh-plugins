@@ -1,0 +1,117 @@
+{
+  "description": "dsh-stats-ttft 依赖的 DSH 客户端事实：统计按钮所在的槽与注册 id/order、slots 的同 id 遮蔽规则、渲染器在渲染期读取条目 component；按钮第一段与时长格式化所用的字典键和上游取整规则；以及取值依赖的 sessionStats 投影字段与两个标准 props。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：任一条改名或改走别的路径，包装层要么静默拿不到 TTFT、要么追加文本消失或格式分叉，这里把那种退化提前变成一次显式失败，并在 hint 里写明会退化成什么。",
+  "checks": [
+    {
+      "id": "dock-slot",
+      "plugin": "dsh-stats-ttft",
+      "token": "conversation.composer.dock",
+      "paths": ["dsh-client-ui-conversation/lib"],
+      "hint": "统计按钮所在的槽键消失：slots.inject 永远等不到声明，遮蔽项无处注册，TTFT 完全不显示"
+    },
+    {
+      "id": "dock-render",
+      "plugin": "dsh-stats-ttft",
+      "pattern": "renderSlot\\(\\s*\"conversation\\.composer\\.dock\"",
+      "paths": ["dsh-client-ui-conversation/lib"],
+      "hint": "输入框下方不再渲染 composer.dock 出口：即使槽键还在，遮蔽项也不会被渲染，TTFT 不显示"
+    },
+    {
+      "id": "activity-id",
+      "plugin": "dsh-stats-ttft",
+      "pattern": "id: \"activity\",\\s*order: 0",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "性能统计按钮的注册 id/order 改了：账本上找不到源项，自检窗口走完后告警一次「未找到」，按钮保持原读数"
+    },
+    {
+      "id": "counts-key",
+      "plugin": "dsh-stats-ttft",
+      "token": "\"stats.counts\"",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "按钮第一段的字典键改名：包装层拦截不到，TTFT 静默不显示"
+    },
+    {
+      "id": "counts-call",
+      "plugin": "dsh-stats-ttft",
+      "pattern": "t\\(\"stats\\.counts\", \\{\\s*turns: stats\\.turns,\\s*steps: stats\\.steps",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "统计按钮不再用 t(\"stats.counts\") 拼第一段：追加目标不存在，TTFT 静默不显示"
+    },
+    {
+      "id": "reading-shares-counts",
+      "plugin": "dsh-stats-ttft",
+      "pattern": "reading\\(counts, speed\\)",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "按钮读数不再由 counts 与 speed 组成：即使 counts 被改写，也不一定进按钮，TTFT 可能只出现在气泡标题里"
+    },
+    {
+      "id": "seconds-unit",
+      "plugin": "dsh-stats-ttft",
+      "token": "\"duration.compactSeconds\"",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "秒级时长单位键改名：追加文本会变成裸键名或空串，按钮读数不可读"
+    },
+    {
+      "id": "minutes-unit",
+      "plugin": "dsh-stats-ttft",
+      "token": "\"duration.compactMinutes\"",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "分级时长单位键改名：超过 1 分钟的 TTFT 会变成裸键名或空串，按钮读数不可读"
+    },
+    {
+      "id": "duration-round-seconds",
+      "plugin": "dsh-stats-ttft",
+      "pattern": "Math\\.round\\(s \\* 10\\) / 10",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "上游 formatDuration 的秒级取整规则变了：本插件的显示格式将与气泡里的 TTFT 行分叉"
+    },
+    {
+      "id": "duration-round-minutes",
+      "plugin": "dsh-stats-ttft",
+      "pattern": "minutes: Math\\.floor\\(whole / 60\\),\\s*seconds: whole % 60",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "上游 formatDuration 的分级取整规则变了：本插件的显示格式将与气泡里的 TTFT 行分叉"
+    },
+    {
+      "id": "shadow-rule",
+      "plugin": "dsh-stats-ttft",
+      "token": "register at a different priority to shadow it (lowest renders)",
+      "paths": ["dsh-web-frontend/dist/assets"],
+      "hint": "list 槽的同 id 遮蔽规则变了（同 id 可能直接抛错，或不再以 priority 最小者渲染）：注册遮蔽项时会告警「遮蔽 activity 失败」，TTFT 不显示"
+    },
+    {
+      "id": "component-read",
+      "plugin": "dsh-stats-ttft",
+      "token": "const Comp = entry.component;",
+      "paths": ["dsh-client-ui-renderer/lib"],
+      "hint": "渲染器不再在渲染期读取条目的 component：遮蔽注册仍然成功（因此没有任何告警），但包装层不会被渲染，TTFT 静默不显示"
+    },
+    {
+      "id": "stats-projection",
+      "plugin": "dsh-stats-ttft",
+      "token": "sessionStats",
+      "paths": ["dsh-session-stats/lib"],
+      "hint": "sessionStats 投影单元改名：包装层读不到投影，只能在有窗口节点时走兜底折叠，历史轮次的数据会缺失"
+    },
+    {
+      "id": "ttft-fields",
+      "plugin": "dsh-stats-ttft",
+      "token": "ttftSteps",
+      "paths": ["dsh-session-stats/lib"],
+      "hint": "投影的 ttftMs/ttftSteps 字段改名：包装层算不出平均 TTFT，按钮保持原读数"
+    },
+    {
+      "id": "projection-prop",
+      "plugin": "dsh-stats-ttft",
+      "token": "useProjection",
+      "paths": ["dsh-client-ui-session/lib"],
+      "hint": "会话作用域不再向 slot 注入 useProjection：包装层读不到投影，只剩窗口兜底（或完全没有 TTFT）"
+    },
+    {
+      "id": "chat-hook",
+      "plugin": "dsh-stats-ttft",
+      "pattern": "hooks: \\[\"chat\"\\]",
+      "paths": ["dsh-client-ui-chat/lib"],
+      "hint": "ui-chat 不再提供 chat 标准 hook：包装层拿不到 useChat，窗口兜底失效；投影仍在时按钮仍显示，但历史分页后的兜底会缺失"
+    }
+  ]
+}
