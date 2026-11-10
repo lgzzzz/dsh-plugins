@@ -93,7 +93,10 @@ pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
 `cordis.patch.yml` 按裸包名挂载它们，而本仓库的插件一律以 `link:` 装进 profile —— pnpm 不会安装 `link:`
 目标的依赖，所以这两行在全新机器上会解析失败，选项卡静默显示空状态。版本取自 `dsh --version`，让它们与
 运行中的 dsh 保持同一版本族（它们的 `peerDependencies` 钉着 cordis / dsh-agent / dsh-tools 等）。没有
-`dsh-browser-view` 目录时这一步自动跳过；`remove-plugins` 不会移除它们。
+`dsh-browser-view` 目录时这一步自动跳过。
+
+`remove-plugins` 对称地处理：**本次卸下了 `dsh-browser-view`** 时，顺带卸掉这两个仍装着的浏览器控制包；
+没卸 `dsh-browser-view` 时不动它们，所以独立安装过这两个包的用户不受影响。
 
 DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效策略是 `RemoteSigned` 也会被拒
 （报「未对文件进行数字签名」或 `AuthorizationManager check failed`；`RemoteSigned` / `Unrestricted` 都拦，只有
