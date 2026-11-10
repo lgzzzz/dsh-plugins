@@ -1288,6 +1288,12 @@ interface QoderAdapterOptions {
   observe?: (modelId: string) => QoderProbeRecord | undefined;
   /** Configured queue-wait budget in ms, read per call to size the idle window. */
   queueBudgetMs?: () => number;
+  /**
+   * Map a delegated child's session to the root conversation whose turn it bills
+   * against, so a subagent tree shares the spawning turn's usage record. Absent,
+   * every conversation keeps its own run.
+   */
+  resolveRunSession?: (sessionId: string) => string | undefined;
 }
 /** What {@link createQoderAdapter} hands back. */
 interface QoderAdapter {

@@ -236,6 +236,12 @@ function registerQoderAuthRoute(ctx, deps, key) {
 * message id this run has not claimed yet therefore opens a turn; appended context
 * joins the open one. A model switch inside a turn keeps the same record.
 *
+* Auxiliary calls (title generation, compaction) join the conversation's open run
+* when one exists, so a turn's whole cost lands on one usage record; only without
+* an open run do they fall back to their own short grouping window. Delegated
+* children resolve against their root ancestor's session, so a subagent tree's
+* requests bill onto the turn that spawned it.
+*
 * @module dsh-qoder-connect/qoder/transport/wire/turn-identity
 */
 /** Longest label the panel renders; the official client uses ten characters. */
@@ -247,22 +253,18 @@ const defaultIdleSessionTtlMs = 36e5;
 /** Auxiliary calls (title, compaction) group in a short fixed window. */
 const defaultAuxiliaryWindowTtlMs = 3e5;
 /**
-* Window scope for auxiliary calls, or undefined when a call must stand alone.
+* Window scope for auxiliary calls with no open turn to join.
 *
-* A window groups one conversation's own auxiliary calls and nothing else.
-* Two conversations must not share one: `requestSetId` is the upstream queue
+* A window groups one conversation's own idle-time auxiliary calls and nothing
+* else. Two conversations must not share one: `requestSetId` is the upstream queue
 * key, so a shared window makes each consumer poll — and read the grant of —
-* the other's queue entry, and bills both onto one usage record. A call that
-* named no conversation has nothing to group by, so it stands alone rather
-* than borrowing an unrelated caller's key.
+* the other's queue entry, and bills both onto one usage record.
 *
-* @param kind - whether the call is auxiliary or an ordinary conversation.
-* @param sessionId - the conversation the caller named, when it named one.
-* @returns the key this call's window is stored under, or undefined for none.
+* @param runSession - the conversation whose run serves this call.
+* @returns the key this call's fallback window is stored under.
 */
-function windowScope(kind, sessionId) {
-	if (kind !== "auxiliary") return void 0;
-	return sessionId === void 0 || sessionId.length === 0 ? void 0 : `auxiliary:${sessionId}`;
+function windowScope(runSession) {
+	return `auxiliary:${runSession}`;
 }
 /** Whether one message is human input rather than host-injected context. */
 function isHumanPrompt(message) {
@@ -332,6 +334,7 @@ var QoderTurnTracker = class {
 	idleSessionTtlMs;
 	auxiliaryWindowTtlMs;
 	now;
+	resolveRunSession;
 	sessions = /* @__PURE__ */ new Map();
 	auxiliary = /* @__PURE__ */ new Map();
 	constructor(options = {}) {
@@ -339,6 +342,23 @@ var QoderTurnTracker = class {
 		this.idleSessionTtlMs = options.idleSessionTtlMs ?? defaultIdleSessionTtlMs;
 		this.auxiliaryWindowTtlMs = options.auxiliaryWindowTtlMs ?? defaultAuxiliaryWindowTtlMs;
 		this.now = options.now ?? (() => Date.now());
+		this.resolveRunSession = options.resolveRunSession ?? (() => void 0);
+	}
+	/**
+	* The conversation whose run state serves this session.
+	*
+	* The resolver maps a delegated child to its root ancestor; a blank answer or
+	* a resolver failure falls back to the session itself so a broken lineage can
+	* never bill onto an unrelated conversation.
+	*/
+	runSessionOf(sessionId) {
+		let resolved;
+		try {
+			resolved = this.resolveRunSession(sessionId);
+		} catch {
+			return sessionId;
+		}
+		return resolved === void 0 || resolved.length === 0 ? sessionId : resolved;
 	}
 	/**
 	* Resolve the identity for one request.
@@ -351,28 +371,37 @@ var QoderTurnTracker = class {
 	resolve(sessionId, messages, kind) {
 		const now = this.now();
 		const prompts = humanPrompts(messages);
-		if (kind === "auxiliary" || sessionId === void 0 || sessionId.length === 0) {
-			const scope = windowScope(kind, sessionId);
-			if (scope === void 0) return this.standaloneIdentity(prompts, now);
-			return this.windowIdentity(scope, prompts, now);
+		if (sessionId === void 0 || sessionId.length === 0) return this.standaloneIdentity(prompts, now);
+		const runSession = this.runSessionOf(sessionId);
+		const delegated = runSession !== sessionId;
+		if (kind === "auxiliary") {
+			const open = this.sessions.get(runSession);
+			if (open !== void 0 && now - open.lastTouchedAt < this.idleSessionTtlMs) return {
+				requestSetId: open.businessId,
+				businessId: open.businessId,
+				beginAt: open.beginAt,
+				stage: open.started ? "processing" : "start",
+				businessName: open.businessName
+			};
+			return this.windowIdentity(windowScope(runSession), prompts, now);
 		}
-		const state = this.sessions.get(sessionId);
+		const state = this.sessions.get(runSession);
 		if (state === void 0) {
-			const opened = this.openRun(prompts, now);
-			this.sessions.set(sessionId, opened);
+			const opened = this.openRun(delegated ? [] : prompts, now, delegated ? prompts[0]?.text : void 0);
+			this.sessions.set(runSession, opened);
 			return this.startIdentity(opened);
 		}
 		state.lastTouchedAt = now;
-		this.sessions.delete(sessionId);
-		this.sessions.set(sessionId, state);
+		this.sessions.delete(runSession);
+		this.sessions.set(runSession, state);
 		let opening;
-		for (const prompt of prompts) {
+		if (!delegated) for (const prompt of prompts) {
 			if (state.claimed.has(prompt.key)) continue;
 			opening ??= prompt;
 		}
 		if (opening !== void 0) {
 			const opened = this.openRun(prompts, now, opening.text);
-			this.sessions.set(sessionId, opened);
+			this.sessions.set(runSession, opened);
 			return this.startIdentity(opened);
 		}
 		const stage = state.started ? "processing" : "start";
@@ -1195,7 +1224,7 @@ function createQoderAdapter(options) {
 			auth: INERT_AUTH,
 			resolveApiKey: async () => shim.token(),
 			...resolveAttachments === void 0 ? {} : { resolveAttachments }
-		}),
+		}, options.resolveRunSession),
 		invalidate: () => {
 			profiles = /* @__PURE__ */ new Map([[providerId, profile]]);
 		}
@@ -1264,12 +1293,15 @@ var QoderPiAiAdapter = class QoderPiAiAdapter extends PiAiAdapter {
 	* usage record per `business.id`. Resolving the run here — where the request's
 	* durable messages still carry their ids and producer kinds — is what keeps a
 	* whole turn on one record; pi-ai's own `Context` has already dropped both by
-	* the time a provider sees it.
+	* the time a provider sees it. Auxiliary calls join the open turn, and a
+	* delegated child resolves to the root conversation, so the whole tree shares
+	* the spawning turn's record.
 	*/
-	turns = new QoderTurnTracker();
-	constructor(catalog, options) {
+	turns;
+	constructor(catalog, options, resolveRunSession) {
 		super(options);
 		this.catalog = catalog;
+		this.turns = new QoderTurnTracker(resolveRunSession === void 0 ? {} : { resolveRunSession });
 	}
 	/** Run identity for one request, resolved from its messages and its purpose. */
 	turnFor(options) {
@@ -1672,6 +1704,42 @@ function createQueueHint(options) {
 		}
 		updateQueueHint(row.session, row.commandId, text);
 		onDiag?.(`hint update session=${sessionId} attempt=${info.attempt} id=${row.commandId}`);
+	};
+}
+//#endregion
+//#region src/turn-lineage.ts
+/** Hard stop for a corrupted or hostile lineage chain; real delegation is far shallower. */
+const MAX_LINEAGE_DEPTH = 64;
+/**
+* Build a synchronous child→root resolver over the host session store.
+*
+* The store is read per call (never captured), because the sessions service may
+* mount after this plugin. A missing store, a missing session, a self-parent, or
+* a cycle stops the walk at the last resolvable id — never at an unrelated
+* conversation, and never with an exception on the request path.
+*
+* @param store - resolves the live session store, when the host has one.
+* @returns a resolver mapping a session id to its root ancestor, or undefined
+*   when the session has no parent (it already is its own run key).
+*/
+function createRunSessionResolver(store) {
+	return (sessionId) => {
+		const sessions = store();
+		if (sessions === void 0) return void 0;
+		let current = sessionId;
+		const seen = /* @__PURE__ */ new Set([current]);
+		for (let depth = 0; depth < MAX_LINEAGE_DEPTH; depth++) {
+			let parent;
+			try {
+				parent = sessions.get(current)?.header?.parentSession;
+			} catch {
+				break;
+			}
+			if (parent === void 0 || parent.length === 0 || seen.has(parent)) break;
+			seen.add(parent);
+			current = parent;
+		}
+		return current === sessionId ? void 0 : current;
 	};
 }
 //#endregion
@@ -3040,7 +3108,8 @@ async function startVariant(ctx, runtime, seedCatalog) {
 			catalog,
 			resolveAttachments: () => ctx.get("attachments"),
 			observe: (modelId) => probeService.recordFor(modelId),
-			queueBudgetMs: runtime.queueBudgetMs
+			queueBudgetMs: runtime.queueBudgetMs,
+			resolveRunSession: createRunSessionResolver(() => ctx.get("sessions"))
 		});
 		runtime.invalidate = () => {
 			qoder.invalidate();
