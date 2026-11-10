@@ -1,0 +1,22 @@
+{
+  "description": "dsh-agent-auto-retry 依赖的上游事实：agent loop 在失败请求上派发 agent/request-error waterfall、它的载荷与决定形状（kind: 'retry'）、下游放弃时返回 undefined、以及会话格式校验器对 llm/retry 编号连续性与坐标的硬约束——这几条一旦变了，本插件要么不再被调用，要么写出日志校验器会拒绝的事件。另外还锚定客户端与计量侧对这两个事件的消费点：客户端按 retry===1 开启一条链、按 retry-started 推进状态，token 计量按 retry-started 关闭上一次尝试的用量槽；以及本插件不使用、但靠 policyKey 与它隔离的上游执行器 dsh-llm-retry。",
+  "checks": [
+    {"id":"request-error-dispatch","plugin":"dsh-agent-auto-retry","pattern":"waterfall\\(\"agent/request-error\"","paths":["dsh-agent-loop/lib"],"hint":"agent loop 不再派发 agent/request-error：本插件的监听器永远不会被调用，自动重试静默失效"},
+    {"id":"retry-action-shape","plugin":"dsh-agent-auto-retry","pattern":"action\\?\\.kind !== \"retry\"","paths":["dsh-agent-loop/lib"],"hint":"loop 不再认 { kind: 'retry' } 这个决定形状：本插件返回的重试决定被当成失败，回合照样终止"},
+    {"id":"payload-failure","plugin":"dsh-agent-auto-retry","pattern":"failure: finish\\.failure","paths":["dsh-agent-loop/lib"],"hint":"载荷里的 failure 换了来源或形状：失败码判定读到 undefined，策略退化成全部不重试"},
+    {"id":"payload-retry-policy","plugin":"dsh-agent-auto-retry","pattern":"retryPolicy: preparedCall\\?\\.retryPolicy","paths":["dsh-agent-loop/lib"],"hint":"载荷不再带提供方的 retryPolicy：本插件不靠它判定（只做下游优先），但下游优先级的前提变了，需要重新确认顺序语义"},
+    {"id":"downstream-default","plugin":"dsh-agent-auto-retry","pattern":"\\(\\) => Promise\\.resolve\\(void 0\\)","paths":["dsh-agent-loop/lib"],"hint":"waterfall 的默认决定不再是 undefined：下游「没有策略」与「放弃」不再可区分，本插件可能抢在别的恢复者之前重试"},
+    {"id":"retry-action-type","plugin":"dsh-agent-auto-retry","token":"Action returned by a listener that owns model-request recovery.","paths":["dsh-agent/lib/types"],"hint":"RequestErrorAction 的类型文档消失或改名：本插件依赖的公开契约需要重新核对（类型仍在，构建期 typecheck 也会先失败）"},
+    {"id":"retry-event-typing","plugin":"dsh-agent-auto-retry","pattern":"'llm/retry': LlmRetryEventData","paths":["dsh-llm-retry/lib/types"],"hint":"llm/retry 事件的公开载荷声明换了名字或位置：本插件按结构写的事件可能不再被识别为规范重试记录"},
+    {"id":"retry-event-mode","plugin":"dsh-agent-auto-retry","pattern":"mode: 'normal'","paths":["dsh-llm-retry/lib/types"],"hint":"载荷不再有 normal/always 两种模式：本插件写的 mode: 'normal' 与 maxRetries 可能被校验器判为多余或缺失字段"},
+    {"id":"format-same-step","plugin":"dsh-agent-auto-retry","pattern":"llm/retry does not match the current turn and step","paths":["dsh-session-format-v3-to-v4/lib"],"hint":"格式校验器对「重试必须落在当前 turn/step」的约束变了：本插件写入的坐标不再被接受，会话可能无法 resume"},
+    {"id":"format-provider-match","plugin":"dsh-agent-auto-retry","pattern":"llm/retry provider does not match the open request/header","paths":["dsh-session-format-v3-to-v4/lib"],"hint":"格式校验器不再要求 provider 与当前 request/header 一致：本插件从载荷取 provider 的前提变了（影响极小，但契约需重新确认）"},
+    {"id":"format-retry-sequence","plugin":"dsh-agent-auto-retry","pattern":"llm/retry skips its policy attempt sequence","paths":["dsh-session-format-v3-to-v4/lib"],"hint":"格式校验器不再要求编号连续：本插件仍会从日志接续编号，但 crash/resume 后跳号的风险约束变了，需重新评估是否还要持久计数"},
+    {"id":"format-one-retry-id","plugin":"dsh-agent-auto-retry","pattern":"llm/retry must keep one retryId per policy chain","paths":["dsh-session-format-v3-to-v4/lib"],"hint":"格式校验器不再要求一条链只有一个 retryId：本插件沿用旧 retryId 的做法不再被校验，客户端可能把同一条链渲染成多条"},
+    {"id":"format-started-pairs","plugin":"dsh-agent-auto-retry","pattern":"llm/retry-started pairs no prior scheduled attempt","paths":["dsh-session-format-v3-to-v4/lib"],"hint":"llm/retry-started 与排定事件的配对规则变了：本插件的两次 append 顺序必须重新核对"},
+    {"id":"client-chain-start","plugin":"dsh-agent-auto-retry","pattern":"role: event\\.data\\.retry === 1 \\? \"start\" : \"update\"","paths":["dsh-client-ui-chat/lib"],"hint":"客户端不再按 retry===1 开启重试链：编号从 1 起的约定失效，重试行可能不显示或串行"},
+    {"id":"client-started-state","plugin":"dsh-agent-auto-retry","token":"llm/retry-started","paths":["dsh-client-ui-chat/lib"],"hint":"客户端不再消费 llm/retry-started：重试行会一直停在「等待重试」，看不到已开始"},
+    {"id":"meter-closes-slot","plugin":"dsh-agent-auto-retry","pattern":"llm/retry-started","paths":["dsh-token-meter/lib"],"hint":"token 计量不再按 retry-started 关闭上一次尝试的用量槽：重试的用量可能被少计或重复计入"},
+    {"id":"upstream-executor-policy-key","plugin":"dsh-agent-auto-retry","pattern":"function retryPolicyKey\\(policy\\)","paths":["dsh-llm-retry/lib"],"hint":"上游执行器的策略键算法变了：本插件的 policyKey（带 dsh-agent-auto-retry 前缀）与它隔离的前提需要重新确认，否则两套链可能撞键、编号互相污染"}
+  ]
+}

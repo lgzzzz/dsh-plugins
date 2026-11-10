@@ -1,0 +1,35 @@
+{
+  "name": "dsh-agent-auto-retry",
+  "version": "1.0.0",
+  "private": true,
+  "description": "模型请求失败、且所有下游恢复策略都放弃之后，在同一个回合里自动重试：按策略判定失败码、指数退避（服从提供方的 Retry-After）、按 step 限次，并以与上游同形的 llm/retry / llm/retry-started 事件把每次重试持久化，让客户端能看到「等待重试模型请求（n/m）」。",
+  "type": "module",
+  "main": "index.ts",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node test/run-all.mjs",
+    "check": "node --check index.ts && node --check src/policy.ts && node --check src/chain.ts && node --check src/events.ts",
+    "check:css": "node check-css.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-agent": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-llm": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-session": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-session-projection": "^0.2.2-rc.1",
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
+  }
+}

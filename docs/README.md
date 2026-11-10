@@ -17,6 +17,7 @@
 | --- | --- | --- |
 | `dsh-workspace-quick-switch` | 两张浮层：`⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows）按左侧栏顺序列出工作区、`Enter` 在该工作区新建会话；`⌘⌥I` / `Ctrl+Alt+I` 按左侧栏「单列表 + 最近更新 + 隐藏已归档」的顺序列出会话、`Enter` 打开该会话。都是一屏 10 个、窗口连续滑动（滚轮滚一格 1–10 → 2–11、`←/→` 滑一整屏、`↑/↓` 移选中行，两端停住）；鼠标点一行即确认（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
 | `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动、任务完成，或大模型请求重试耗尽的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
+| `dsh-agent-auto-retry` | 宿主半部：模型请求失败、下游恢复策略都放弃之后，在同一个回合里自动重试（按失败码判定、指数退避、服从 `Retry-After`、按 step 限次），每次重试以与上游同形的 `llm/retry` / `llm/retry-started` 事件持久化 | [说明](dsh-agent-auto-retry.md) |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
 | `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |
@@ -41,11 +42,13 @@
 
 ## 上游契约校验
 
-依赖上游 CSS 选择器 / 槽位 / DOM 锚点的插件配了一段**静态校验**（`pnpm check:css`，不挂在
-`pnpm build` 上）：把清单逐条对 DSH 安装产物 grep 一遍，上游改名 / 删 token 时显式失败，
-而不是让补丁在页面上静默失效（选择器落空不报错）。每个插件目录都有自己的 `check-css.mjs`，
-默认读同目录的清单（`css-contract.json`；`dsh-changes-hover-off`、`dsh-jobs-optimize`、
-`dsh-stats-ttft` 与 `dsh-changes-review-wrap` 是 `contract.json`），可用 `--manifest` 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
+依赖上游 CSS 选择器 / 槽位 / DOM 锚点，或依赖上游事件与接线契约的插件配了一段**静态校验**
+（`pnpm check:css`，不挂在 `pnpm build` 上）：把清单逐条对 DSH 安装产物 grep 一遍，上游改名 /
+删 token 时显式失败，而不是让补丁在页面上静默失效（选择器落空不报错），或让插件写出格式校验
+器会拒绝的会话事件。每个插件目录都有自己的 `check-css.mjs`，默认读同目录的清单
+（`css-contract.json`；`dsh-changes-hover-off`、`dsh-jobs-optimize`、`dsh-stats-ttft`、
+`dsh-changes-review-wrap` 与 `dsh-agent-auto-retry` 是 `contract.json`），可用 `--manifest`
+换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
@@ -58,8 +61,9 @@
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-changes-review-wrap` | [`contract.json`](../dsh-changes-review-wrap/contract.json) | 审查根 / 正文 / 换行按钮 / 换行态锚点 + review store 的默认 `wrap:false` + `toggledWrap` + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
+| `dsh-agent-auto-retry` | [`contract.json`](../dsh-agent-auto-retry/contract.json) | `agent/request-error` 的派发 / 载荷 / 决定形状 / 下游默认值 + `llm/retry` 的编号连续性、坐标、`retryId` 唯一性与 `retry-started` 配对 + 客户端与 token 计量的消费点 + 上游执行器的策略键算法 |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 9 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 10 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
