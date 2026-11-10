@@ -122,8 +122,8 @@ export interface PaletteStore {
   /** 选中某一行;越界时不做动作。 */
   select(index: number): void
   /**
-   * 相对位移选中行(`delta` 为 ±1),到两端环状回头;没有候选时不动。
-   * 跨页时页跟着走 —— 选中行永远在当前页里,不会「选中了却看不见」。
+   * 相对位移选中行(`delta` 为 ±1),**只在本页内**环状回头;没有候选时不动。
+   * 翻页只由 {@link PaletteStore.turn} 触发,`move` 不会改页。
    */
   move(delta: number): void
   /** 翻一页(`delta` 为 ±1),到两端环状回头;单页时不动。 */
@@ -179,6 +179,9 @@ export function clampIndex(index: number, length: number): number {
 
 /**
  * 环状步进后的下标:从 `activeIndex` 走 `delta` 步,到头绕回另一端。
+ *
+ * 步进范围是**整个候选列表**(不像 {@link moveWithinPage} 那样只在本页内走),供不分的
+ * 场景与测试直接使用;浮层的 ↑/↓ 走的是页内版本。
  * @param activeIndex - 当前下标(可以是 -1/越界,按 `clampIndex` 收敛)。
  * @param delta - 位移,通常为 ±1。
  * @param length - 候选数量。
@@ -190,6 +193,37 @@ export function moveIndex(activeIndex: number, delta: number, length: number): n
   const steps = Number.isFinite(delta) ? Math.trunc(delta) : 1
   const next = (current + steps) % length
   return next < 0 ? next + length : next
+}
+
+/**
+ * 在**当前页内**环状步进的下标:走到本页第一行再 ↑ 就绕到本页最后一行,反之亦然。
+ *
+ * 跨页只由 ←/→ 触发,所以 ↑/↓ **不会**把选中行挪到别的页上 —— 否则「↑/↓ 选着选着页
+ * 自己翻了」,翻页就不再是左右键的专属动作。
+ * @param activeIndex - 当前下标(可以是 -1/越界,按 `clampIndex` 收敛)。
+ * @param delta - 位移,通常为 ±1。
+ * @param length - 候选数量(决定最后一页剩几行)。
+ * @param page - 当前页号(越界按 `clampPage` 收敛)。
+ * @param size - 一页几行。
+ * @returns 新下标;没有候选时为 -1。
+ */
+export function moveWithinPage(
+  activeIndex: number,
+  delta: number,
+  length: number,
+  page: number,
+  size: number = PAGE_SIZE,
+): number {
+  if (length <= 0) return -1
+  const span = Math.max(0, Math.trunc(size))
+  if (span === 0) return clampIndex(activeIndex, length)
+  const current = clampPage(page, length, size)
+  const start = current * span
+  // 最后一页可能不满:本页的行数是候选总长与页起点之差,夹在 [0, span] 内。
+  const rows = Math.max(0, Math.min(span, length - start))
+  if (rows === 0) return -1
+  const local = clampIndex(activeIndex - start, rows)
+  return start + moveIndex(local, delta, rows)
 }
 
 /**
@@ -317,8 +351,10 @@ export function createPaletteStore(): PaletteStore {
     },
     move(delta) {
       if (state.entries.length === 0) return
-      const activeIndex = moveIndex(state.activeIndex, delta, state.entries.length)
-      commit({ ...state, activeIndex, page: pageOf(activeIndex) })
+      // 只在当前页内走:跨页归 ←/→,↑/↓ 不翻页。
+      const page = clampPage(state.page, state.entries.length)
+      const activeIndex = moveWithinPage(state.activeIndex, delta, state.entries.length, page)
+      commit({ ...state, activeIndex, page })
     },
     turn(delta) {
       if (state.entries.length === 0) return

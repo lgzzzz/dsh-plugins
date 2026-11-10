@@ -187,6 +187,44 @@ console.log('--- C⑤ 工作区超过 10 个:一屏 10 行,← / → 翻到后�
   uninstall()
 }
 
+console.log('--- C⑤ᵃ ↑/↓ 只在当前页内走,不翻页(只有 ←/→ 翻页)---')
+{
+  const many = Array.from({ length: 12 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
+  const { shortcuts, peek, store } = setup({ workspaces: many, current: undefined })
+  const uninstall = installPaletteKeys(store, dom.document)
+  const page = () => store.getSnapshot().page
+  const titles = () => peek().rows.map((row) => row.title)
+
+  openViaShortcut(shortcuts)
+  check('起点在第一页', [page(), store.getSnapshot().activeIndex], [0, 0])
+
+  // 连按 ↓ 走完第一页:绕回第一页第一行,页始终是 0。
+  for (let step = 0; step < 10; step += 1) dom.pressKey('ArrowDown')
+  check('连按 10 次 ↓ 仍停在第 0 页', page(), 0)
+  check('并绕回第一页第一行', store.getSnapshot().activeIndex, 0)
+  check('页内容没变', titles(), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
+
+  // 从第一行再按 ↑:绕到第一页最后一行(W10),不跳到别的页。
+  dom.pressKey('ArrowUp')
+  check('第一页第一行按 ↑ 绕到本页最后一行', store.getSnapshot().activeIndex, 9)
+  check('仍停在第 0 页', page(), 0)
+  check('选中的是 W10', peek().rows.map((row) => row.selected).indexOf('true'), 9)
+
+  // 到第二页上重复同样的动作:只在「W11 / W12」之间绕。
+  dom.pressKey('ArrowRight')
+  check('→ 才翻页', [page(), store.getSnapshot().activeIndex], [1, 10])
+  dom.pressKey('ArrowDown')
+  check('第二页 ↓', store.getSnapshot().activeIndex, 11)
+  dom.pressKey('ArrowDown')
+  check('第二页最后一行再 ↓ 绕回本页第一行', store.getSnapshot().activeIndex, 10)
+  check('仍是第二页', page(), 1)
+  dom.pressKey('ArrowUp')
+  check('第二页第一行再 ↑ 绕到本页最后一行', store.getSnapshot().activeIndex, 11)
+  check('仍是第二页', page(), 1)
+
+  uninstall()
+}
+
 console.log('--- C⑤ᵇ 第二页上 Enter 命中的是第 11 个工作区 ---')
 {
   const many = Array.from({ length: 12 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))

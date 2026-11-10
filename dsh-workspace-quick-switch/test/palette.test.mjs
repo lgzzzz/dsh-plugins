@@ -10,6 +10,7 @@ import {
   createPaletteStore,
   inRange,
   moveIndex,
+  moveWithinPage,
   PAGE_SIZE,
   pageCount,
   pageOf,
@@ -70,6 +71,29 @@ console.log('--- A④ 环状步进 ---')
   check('末尾前进绕回开头', moveIndex(2, 1, 3), 0)
   check('开头后退绕到末尾', moveIndex(0, -1, 3), 2)
   check('越界下标先收敛', moveIndex(9, 1, 3), 0)
+}
+
+console.log('--- A④ᵃ 页内环状步进:↑/↓ 不出本页 ---')
+{
+  // 25 个候选 = 3 页(10 / 10 / 5)。
+  check('本页中间前进', moveWithinPage(0, 1, 25, 0), 1)
+  check('本页最后一行前进绕回本页第一行', moveWithinPage(9, 1, 25, 0), 0)
+  check('本页第一行后退绕到本页最后一行', moveWithinPage(0, -1, 25, 0), 9)
+  check('第二页内前进', moveWithinPage(10, 1, 25, 1), 11)
+  check('第二页最后一行绕回第二页第一行', moveWithinPage(19, 1, 25, 1), 10)
+  check('第二页不会前进到第三页', moveWithinPage(19, 1, 25, 1) < 20, true)
+
+  // 最后一页只有 5 行:绕回的是第 21 行,不是第 31 行。
+  check('末页最后一行绕回末页第一行', moveWithinPage(24, 1, 25, 2), 20)
+  check('末页第一行后退绕到末页最后一行', moveWithinPage(20, -1, 25, 2), 24)
+  check('末页不会退到第二页', moveWithinPage(20, -1, 25, 2) >= 20, true)
+
+  // 页边界与异常输入。
+  check('页号越界按最后一页算', moveWithinPage(24, 1, 25, 9), 20)
+  check('没有候选时为 -1', moveWithinPage(0, 1, 0, 0), -1)
+  check('单页内环状', moveWithinPage(2, 1, 3, 0), 0)
+  check('页大小为 1 时原地', moveWithinPage(3, 1, 25, 3, 1), 3)
+  check('空标题语言无关:12 个 = 2 页', [moveWithinPage(9, 1, 12, 0), moveWithinPage(11, 1, 12, 1)], [0, 10])
 }
 
 console.log('--- A④ᵇ 分页:页数、收敛、环状翻页、切片 ---')
@@ -159,7 +183,7 @@ console.log('--- A⑥ store.open 可以指定初始行 ---')
   check('不指定则回到第一行', store.getSnapshot().activeIndex, 0)
 }
 
-console.log('--- A⑦ store 分页:翻页、跨页移动、页跟随选中行 ---')
+console.log('--- A⑦ store 分页:翻页只走 turn,↑/↓ 不出本页 ---')
 {
   const many = Array.from({ length: 25 }, (_, index) => ({ workspaceId: `ws-${index + 1}`, title: `W${index + 1}`, path: `/w${index + 1}` }))
   const store = createPaletteStore()
@@ -178,16 +202,23 @@ console.log('--- A⑦ store 分页:翻页、跨页移动、页跟随选中行 --
   store.turn(-1)
   check('第一页 ← 绕到最后一页', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 20])
 
-  // 跨页移动:选中行永远留在当前页里。
+  // ↑/↓ 只在当前页内环状走,任何一次都不会翻页。
   store.move(1)
   check('最后一页继续 ↓ 落在本页下一行', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 21])
   store.select(24)
   store.move(1)
-  check('整个列表最后一行再 ↓ 才绕回第一页第一行', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 0])
+  check('本页最后一行再 ↓ 绕回本页第一行(不翻页)', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 20])
+  store.move(-1)
+  check('本页第一行再 ↑ 绕到本页最后一行(不翻页)', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 24])
+
+  // 第一页最后一行继续 ↓:绕回本页第一行,页仍是第一页。
   store.select(9)
-  check('选到第一页最后一行仍在第一页', store.getSnapshot().page, 0)
+  check('第一页最后一行仍在第一页', store.getSnapshot().page, 0)
   store.move(1)
-  check('再 ↓ 跨到第二页第一行', [store.getSnapshot().page, store.getSnapshot().activeIndex], [1, 10])
+  check('第一页最后一行再 ↓ 绕回第一页第一行(不翻页)', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 0])
+  store.move(-1)
+  check('第一页第一行再 ↑ 绕到本页最后一行(不翻页)', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 9])
+
   store.select(20)
   check('直接选中第三页的行,页跟着走', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 20])
 
