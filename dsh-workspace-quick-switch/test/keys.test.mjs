@@ -1,6 +1,6 @@
 /**
- * 按键解码:浮层只认没有修饰键的 Escape / Enter / ArrowUp / ArrowDown,组合中、已被消费、
- * 长按重复的确认键都放行。纯函数,不碰 DOM。
+ * 按键解码:浮层只认没有修饰键的 Escape / Enter / ↑ / ↓(选行)与 ← / →(翻页),
+ * 组合中、已被消费、长按重复的确认键都放行。纯函数,不碰 DOM。
  *
  * 运行:`node test/keys.test.mjs`(或 pnpm test 跑全部)。
  */
@@ -10,18 +10,25 @@ import { check, checkTrue, checkUndefined, finish } from './helpers.mjs'
 
 const key = (name, overrides = {}) => ({ key: name, ...overrides })
 
-console.log('--- B① 归浮层管的四个键 ---')
+console.log('--- B① 归浮层管的六个键 ---')
 {
   check('Escape 关闭', paletteAction(key('Escape')), 'close')
   check('Enter 确认', paletteAction(key('Enter')), 'confirm')
   check('ArrowDown 下一行', paletteAction(key('ArrowDown')), 'next')
   check('ArrowUp 上一行', paletteAction(key('ArrowUp')), 'previous')
+  check('ArrowRight 下一页', paletteAction(key('ArrowRight')), 'page-next')
+  check('ArrowLeft 上一页', paletteAction(key('ArrowLeft')), 'page-previous')
 }
 
 console.log('--- B② 带修饰键一律放行(不抢 Ctrl+↑ / Shift+↑ 这类有主的键)---')
 {
   checkUndefined('Ctrl+ArrowUp', paletteAction(key('ArrowUp', { ctrlKey: true })))
   checkUndefined('Alt+ArrowDown', paletteAction(key('ArrowDown', { altKey: true })))
+  // 带修饰键的 ←/→ 有主(Ctrl+← / Ctrl+→ 是词的跳转、⌘← 是行首),浮层不抢。
+  checkUndefined('Ctrl+ArrowRight', paletteAction(key('ArrowRight', { ctrlKey: true })))
+  checkUndefined('Shift+ArrowLeft', paletteAction(key('ArrowLeft', { shiftKey: true })))
+  checkUndefined('Alt+ArrowRight', paletteAction(key('ArrowRight', { altKey: true })))
+  checkUndefined('Meta+ArrowLeft', paletteAction(key('ArrowLeft', { metaKey: true })))
   checkUndefined('Shift+Enter', paletteAction(key('Enter', { shiftKey: true })))
   checkUndefined('Meta+Escape', paletteAction(key('Escape', { metaKey: true })))
 }
@@ -33,6 +40,8 @@ console.log('--- B③ 组合输入、已消费、长按重复 ---')
   checkUndefined('长按 Enter(避免一次长按连开好几个会话)', paletteAction(key('Enter', { repeat: true })))
   checkUndefined('长按 Escape', paletteAction(key('Escape', { repeat: true })))
   check('按住不放的 ↓ 仍然可以连翻', paletteAction(key('ArrowDown', { repeat: true })), 'next')
+  check('按住不放的 → 仍然可以连续翻页', paletteAction(key('ArrowRight', { repeat: true })), 'page-next')
+  check('按住不放的 ← 同样', paletteAction(key('ArrowLeft', { repeat: true })), 'page-previous')
 }
 
 console.log('--- B④ 其它键不归它 ---')

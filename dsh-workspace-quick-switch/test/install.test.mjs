@@ -166,14 +166,49 @@ console.log('--- C④ 没有当前会话时默认选第一行 ---')
   check('第一行被选中', peek().rows.map((row) => row.selected), ['true', 'false'])
 }
 
-console.log('--- C⑤ 工作区超过 10 个时只列前 10 个 ---')
+console.log('--- C⑤ 工作区超过 10 个:一屏 10 行,← / → 翻到后面的页 ---')
 {
   const many = Array.from({ length: 12 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
-  const { shortcuts, peek } = setup({ workspaces: many, current: undefined })
+  const { shortcuts, peek, store } = setup({ workspaces: many, current: undefined })
+  const uninstall = installPaletteKeys(store, dom.document)
+
   openViaShortcut(shortcuts)
   const rows = peek().rows
-  check('只列 10 个', rows.length, 10)
+  check('一屏 10 行', rows.length, 10)
   check('顺序照抄', rows.map((row) => row.title), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
+
+  // → 翻到第二页:剩下两个工作区也能看到、也能选。
+  dom.pressKey('ArrowRight')
+  check('→ 翻到第二页', peek().rows.map((row) => row.title), ['W11', 'W12'])
+  check('翻页后选中本页第一行', peek().rows.map((row) => row.selected), ['true', 'false'])
+  dom.pressKey('ArrowLeft')
+  check('← 翻回第一页', peek().rows.map((row) => row.title), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
+
+  uninstall()
+}
+
+console.log('--- C⑤ᵇ 第二页上 Enter 命中的是第 11 个工作区 ---')
+{
+  const many = Array.from({ length: 12 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
+  const { shortcuts, peek, store, startCalls } = setup({ workspaces: many, current: undefined })
+  const uninstall = installPaletteKeys(store, dom.document)
+  openViaShortcut(shortcuts)
+  dom.pressKey('ArrowRight')
+  check('落在第二页', peek().rows.map((row) => row.title), ['W11', 'W12'])
+  dom.pressKey('Enter')
+  check('Enter 在第二页选中的工作区新建会话', startCalls, ['ws-11'])
+  check('浮层关闭', peek().open, false)
+
+  // 重新打开回到第一页:页不跨次留存。
+  openViaShortcut(shortcuts)
+  check('重新打开回到第一页', peek().rows[0].title, 'W1')
+
+  // 两页时连续按 → 环状绕回第一页(12 个工作区 = 2 页)。
+  dom.pressKey('ArrowRight')
+  check('一次 → 到第二页', peek().rows.map((row) => row.title), ['W11', 'W12'])
+  dom.pressKey('ArrowRight')
+  check('再按 → 绕回第一页', peek().rows.map((row) => row.title), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
+  uninstall()
 }
 
 console.log('--- C⑥ 按键与动作端到端(捕获监听 + 固定行 + uiWorkspace)---')

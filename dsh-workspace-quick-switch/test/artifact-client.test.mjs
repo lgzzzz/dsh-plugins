@@ -112,6 +112,36 @@ console.log('--- D② 产物装配后固定行与浮层生效 ---')
   check('产物导出了 paletteAction', typeof plugin.paletteAction, 'function')
   check('Escape → close', plugin.paletteAction({ key: 'Escape' }), 'close')
   check('源码与产物的解码一致', paletteAction({ key: 'Enter' }) === plugin.paletteAction({ key: 'Enter' }), true)
+  // 翻页键同样随产物发布:产物漏掉 ←/→ 时用户看到的仍是「10 个封顶」的旧行为。
+  check('产物认 →', plugin.paletteAction({ key: 'ArrowRight' }), 'page-next')
+  check('产物认 ←', plugin.paletteAction({ key: 'ArrowLeft' }), 'page-previous')
+}
+
+console.log('--- D②ᵇ 产物里一屏 10 行、← / → 翻页 ---')
+{
+  const many = Array.from({ length: 23 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
+  const slots = fakeSlots()
+  const shortcuts = fakeShortcuts()
+  const ctx = fakeCtx({
+    slots,
+    shortcuts,
+    workspaces: { list: fakeWorkspaces(many) },
+    sessions: fakeSessions({}),
+    uiWorkspace: { startSession() {} },
+  })
+  plugin.apply(ctx)
+  const overlay = slots.registered[0]
+  const store = overlay.options.inject().store
+  shortcuts.fire(fixedKeydown())
+  check('第一页 10 行', parseRows(slots).length, 10)
+  check('第一页首个是 W1', parseRows(slots)[0].title, 'W1')
+
+  // 直接驱动产物里的 store 翻页(按键通路已在 C⑤ᵇ 端到端覆盖)。
+  store.turn(1)
+  check('第二页首个是 W11', parseRows(slots)[0].title, 'W11')
+  store.turn(1)
+  check('第三页只剩 3 个', parseRows(slots).map((row) => row.title), ['W21', 'W22', 'W23'])
+  ctx.dispose()
 }
 
 console.log('--- D③ 依赖缺失时产物只是不安装,不抛 ---')

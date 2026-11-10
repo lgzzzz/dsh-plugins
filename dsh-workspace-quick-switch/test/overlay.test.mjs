@@ -11,7 +11,15 @@ import * as React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { createPaletteStore, paletteEntries } from '../src/palette.ts'
-import { installPaletteKeys, PaletteOverlay, PALETTE_OPTION_ATTR, PALETTE_ROOT_ATTR } from '../src/client.ts'
+import {
+  installPaletteKeys,
+  keepOptionVisible,
+  PALETTE_CSS,
+  PaletteOverlay,
+  optionDomId,
+  PALETTE_OPTION_ATTR,
+  PALETTE_ROOT_ATTR,
+} from '../src/client.ts'
 import { check, checkTrue, finish, installDom, workspace } from './helpers.mjs'
 
 const dom = installDom()
@@ -40,8 +48,19 @@ function parseOptions(html) {
       selected,
       current: body.includes('dsh-workspace-quick-switch-current'),
       title: /dsh-workspace-quick-switch-name">([^<]*)</.exec(body)?.[1],
+      index: /dsh-workspace-quick-switch-index">([^<]*)</.exec(body)?.[1],
     }),
   )
+}
+
+/** 标题右侧的计数字样(含页码)。 */
+function countText(html) {
+  return /dsh-workspace-quick-switch-count">([^<]*)</.exec(html)?.[1]
+}
+
+/** 底栏的提示条目。 */
+function footHints(html) {
+  return [...html.matchAll(/<span[^>]*>(↑ ↓ 选择|← → 翻页|Enter 新建会话|Esc 关闭)<\/span>/g)].map(([, text]) => text)
 }
 
 /**
@@ -208,6 +227,84 @@ console.log('--- E⑤ Enter 用的是当下的选中行 ---')
   check('Enter 落在移动后的行', picked, ['ws-2'])
   check('行标记常量', PALETTE_OPTION_ATTR, 'data-workspace-quick-switch-option')
   checkTrue('浮层关闭', store.getSnapshot().open === false)
+}
+
+console.log('--- E⑥ 高度策略:面板不再被固定上限截断 ---')
+{
+  // 修复前是 `max-height: min(70vh, 560px)`:面板在任何窗口里都被截到 560px,而 10 行 × 50px
+  // 需要 526px 的列表,于是第 10 行永远在滚动区外。现在面板只受浮层层高度约束。
+  const css = PALETTE_CSS
+  checkTrue('面板不设固定像素上限', !/^\s*max-height:\s*(?:min\(|\d+px)/m.test(css))
+  checkTrue('面板吃满浮层留给它的高度', css.includes('max-height: 100%;'))
+  checkTrue('矮窗口靠媒体查询收紧内边距(而不是截断高度)', /@media \(max-height: \d+px\)/.test(css))
+  checkTrue('列表自己滚动、不再撑破面板', /\.dsh-workspace-quick-switch-list \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;/s.test(css))
+  checkTrue('顶部内边距仍给 macOS 红绿灯 / Windows 标题栏让位', css.includes('var(--dsh-frame-overlay-top, 24px)'))
+}
+
+console.log('--- E⑦ 一屏 10 行、← / → 翻页、序号与页码跟着走 ---')
+{
+  const many = Array.from({ length: 25 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
+  const store = createPaletteStore()
+  store.sync(paletteEntries(many, 'ws-13'))
+  store.open(() => {}, 12)
+
+  // 打开时「当前」在第二页:浮层直接开在那一页,而不是停在第 1 行让人自己翻。
+  const second = render(store)
+  check('开在当前工作区所在页', second.rows.map((row) => row.title), [
+    'W11', 'W12', 'W13', 'W14', 'W15', 'W16', 'W17', 'W18', 'W19', 'W20',
+  ])
+  check('序号是全局序号(不是页内序号)', second.rows.map((row) => row.index), [
+    '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
+  ])
+  check('选中当前工作区那一行', second.rows.map((row) => row.selected).indexOf('true'), 2)
+  check('页码文案', countText(second.html), '25 个工作区 · 第 2 / 3 页')
+  check('多页时底栏提示 ← → 翻页', footHints(second.html), ['↑ ↓ 选择', '← → 翻页', 'Enter 新建会话', 'Esc 关闭'])
+
+  // → 翻到下一页。
+  store.turn(1)
+  const third = render(store)
+  check('→ 后是第三页', third.rows.map((row) => row.title), ['W21', 'W22', 'W23', 'W24', 'W25'])
+  check('最后一页只渲染剩余的 5 行', third.rows.length, 5)
+  check('最后一页序号继续', third.rows.map((row) => row.index), ['21', '22', '23', '24', '25'])
+  check('页码跟到第三页', countText(third.html), '25 个工作区 · 第 3 / 3 页')
+
+  // ← 回第二页;选中行落在这一页第一行。
+  store.turn(-1)
+  const back = render(store)
+  check('← 回到第二页', back.rows.map((row) => row.title)[0], 'W11')
+  check('翻页后选中本页第一行', back.rows.map((row) => row.selected), [
+    'true', 'false', 'false', 'false', 'false', 'false', 'false', 'false', 'false', 'false',
+  ])
+
+  // 单页:不显示翻页提示,页码也不出现。
+  const few = createPaletteStore()
+  few.sync(paletteEntries(many.slice(0, 4), undefined))
+  few.open(() => {})
+  check('单页页码文案只有总数', countText(render(few).html), '4 个工作区')
+  check('单页没有翻页提示', footHints(render(few).html), ['↑ ↓ 选择', 'Enter 新建会话', 'Esc 关闭'])
+}
+
+console.log('--- E⑧ 选中行滚进可见区 ---')
+{
+  const seen = []
+  const option = {
+    scrollIntoView(init) {
+      seen.push(init)
+    },
+  }
+  keepOptionVisible(option)
+  check('按 nearest 滚动', seen, [{ block: 'nearest' }])
+  // 没有 scrollIntoView 的替身(以及 null)不能让浮层报错。
+  keepOptionVisible({})
+  keepOptionVisible(null)
+  keepOptionVisible(undefined)
+  check('缺席时静默跳过', seen.length, 1)
+
+  // 组件按「选中行的 DOM id」查找:这个 id 必须就是渲染出来的那一行,否则滚不动。
+  const rendered = render(makeStore({ active: 'ws-3', selected: 2 }))
+  check('选中行按 id 查找', optionDomId(2), 'dsh-workspace-quick-switch-option-2')
+  checkTrue('渲染结果里存在这个 id', rendered.html.includes('id="dsh-workspace-quick-switch-option-2"'))
+  checkTrue('选中的正是那一行', rendered.rows[2].selected === 'true')
 }
 
 finish()

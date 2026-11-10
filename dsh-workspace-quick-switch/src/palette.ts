@@ -11,8 +11,8 @@
  * 加载,测试可以只驱动规则本身。
  */
 
-/** 浮层最多列出的工作区数量。 */
-export const WORKSPACE_LIMIT = 10
+/** 浮层一页最多列出的工作区数量;更多工作区用 ← / → 翻页。 */
+export const PAGE_SIZE = 10
 
 /** 本插件挂载的固定行 id(占用 `⌘⌥M` / `Ctrl+Alt+M`,并出现在快捷键目录里)。 */
 export const QUICK_SWITCH_ID = 'dsh-workspace-quick-switch.quick-switch'
@@ -96,14 +96,16 @@ export interface PaletteEntry {
 /**
  * 浮层状态快照。
  *
- * `entries` 由渲染方从上游快照投影而来(见 `paletteEntries`),`activeIndex` 是选中行
- * 在 `entries` 里的下标;`entries` 为空时 `activeIndex` 固定为 -1。
+ * `entries` 由渲染方从上游快照投影而来(见 `paletteEntries`),**是全部工作区**、不截断;
+ * `activeIndex` 是选中行在 `entries` 里的下标(`entries` 为空时固定为 -1);`page` 是当前
+ * 显示第几页(0 起),一页 {@link PAGE_SIZE} 行、由 ← / → 翻页。
  * `binding` 是本次打开时的动作:Enter / 点击都是「在选中工作区新建会话」。
  */
 export interface PaletteState {
   readonly open: boolean
   readonly entries: readonly PaletteEntry[]
   readonly activeIndex: number
+  readonly page: number
   readonly binding: (() => void) | null
 }
 
@@ -119,26 +121,31 @@ export interface PaletteStore {
   close(): void
   /** 选中某一行;越界时不做动作。 */
   select(index: number): void
-  /** 相对位移选中行(`delta` 为 ±1),到两端环状回头;没有候选时不动。 */
+  /**
+   * 相对位移选中行(`delta` 为 ±1),到两端环状回头;没有候选时不动。
+   * 跨页时页跟着走 —— 选中行永远在当前页里,不会「选中了却看不见」。
+   */
   move(delta: number): void
-  /** 同步渲染方投影出来的候选;选中下标越出候选范围时退回第一行。 */
+  /** 翻一页(`delta` 为 ±1),到两端环状回头;单页时不动。 */
+  turn(delta: number): void
+  /** 同步渲染方投影出来的候选;选中下标越出候选范围时退回第一行,页跟着选中行收敛。 */
   sync(entries: readonly PaletteEntry[]): void
 }
 
 /**
- * 投影浮层候选:按给定顺序取前 `limit` 个,并把「当前工作区」标出来。
+ * 投影浮层候选:整份工作区按给定顺序排出(不截断),并把「当前工作区」标出来。
+ *
+ * 一屏只放 {@link PAGE_SIZE} 行,切片由 {@link pageSlice} 在渲染时做 —— 候选本身保留
+ * 完整长度,← / → 才能翻到后面的工作区。
  * @param workspaces - 上游工作区,已经是左侧栏显示顺序。
  * @param activeId - 当前会话所属的工作区 id;没有则为 undefined。
- * @param limit - 最多取几个。
  * @returns 浮层候选行。
  */
 export function paletteEntries(
   workspaces: readonly HostWorkspace[],
   activeId: string | undefined,
-  limit: number = WORKSPACE_LIMIT,
 ): PaletteEntry[] {
-  const capped = limit > 0 ? workspaces.slice(0, limit) : []
-  return capped.map((workspace) => {
+  return workspaces.map((workspace) => {
     if (activeId === undefined || activeId === '' || workspace.workspaceId !== activeId) {
       return { workspaceId: workspace.workspaceId, title: workspace.title, path: workspace.path }
     }
@@ -185,9 +192,79 @@ export function moveIndex(activeIndex: number, delta: number, length: number): n
   return next < 0 ? next + length : next
 }
 
+/**
+ * 候选总共有几页。
+ * @param length - 候选数量。
+ * @param size - 一页几行(默认 {@link PAGE_SIZE})。
+ * @returns 页数;没有候选时为 0。
+ */
+export function pageCount(length: number, size: number = PAGE_SIZE): number {
+  if (!Number.isFinite(length) || length <= 0) return 0
+  if (!Number.isFinite(size) || size <= 0) return 0
+  return Math.ceil(length / size)
+}
+
+/**
+ * 把页号收进合法范围:非整数取 0,越界取最近的边界;没有候选固定为 0。
+ * @param page - 待收敛的页号。
+ * @param length - 候选数量。
+ * @param size - 一页几行。
+ * @returns 合法页号。
+ */
+export function clampPage(page: number, length: number, size: number = PAGE_SIZE): number {
+  const last = pageCount(length, size) - 1
+  if (last < 0) return 0
+  if (!Number.isInteger(page)) return 0
+  if (page < 0) return 0
+  if (page > last) return last
+  return page
+}
+
+/**
+ * 环状翻页后的页号:到头绕回另一端。
+ * @param page - 当前页号(可以是越界值,按 `clampPage` 收敛)。
+ * @param delta - 位移,通常为 ±1。
+ * @param length - 候选数量。
+ * @param size - 一页几行。
+ * @returns 新页号;没有候选时为 0。
+ */
+export function turnPage(page: number, delta: number, length: number, size: number = PAGE_SIZE): number {
+  const total = pageCount(length, size)
+  if (total <= 1) return 0
+  const current = clampPage(page, length, size)
+  const steps = Number.isFinite(delta) ? Math.trunc(delta) : 1
+  const next = (current + steps) % total
+  return next < 0 ? next + total : next
+}
+
+/**
+ * 一个下标落在第几页。
+ * @param index - 候选下标。
+ * @param size - 一页几行。
+ * @returns 页号;负下标归第 0 页。
+ */
+export function pageOf(index: number, size: number = PAGE_SIZE): number {
+  if (!Number.isInteger(index) || index < 0) return 0
+  if (!Number.isFinite(size) || size <= 0) return 0
+  return Math.floor(index / size)
+}
+
+/**
+ * 当前页在候选里的那一段(渲染一屏用它)。
+ * @param entries - 全部候选。
+ * @param page - 页号(越界按 `clampPage` 收敛)。
+ * @param size - 一页几行。
+ * @returns 这一页的候选;超出范围的部分自然被 `slice` 截掉。
+ */
+export function pageSlice<T>(entries: readonly T[], page: number, size: number = PAGE_SIZE): T[] {
+  const window = Math.max(0, Math.trunc(size))
+  const start = clampPage(page, entries.length, size) * window
+  return entries.slice(start, start + window)
+}
+
 /** 空状态:关闭、没有候选、没有动作。 */
 function emptyState(): PaletteState {
-  return { open: false, entries: [], activeIndex: -1, binding: null }
+  return { open: false, entries: [], activeIndex: -1, page: 0, binding: null }
 }
 
 /**
@@ -226,22 +303,34 @@ export function createPaletteStore(): PaletteStore {
     },
     open(binding, index) {
       const wanted = index === undefined ? 0 : index
-      commit({ ...state, open: true, binding, activeIndex: clampIndex(wanted, state.entries.length) })
+      const activeIndex = clampIndex(wanted, state.entries.length)
+      // 打开时选中行可能落在后面的页上(当前会话在第 12 个工作区):页要跟着它。
+      commit({ ...state, open: true, binding, activeIndex, page: pageOf(activeIndex) })
     },
     close() {
       commit({ ...state, open: false, binding: null })
     },
     select(index) {
       if (index === state.activeIndex) return
-      commit({ ...state, activeIndex: clampIndex(index, state.entries.length) })
+      const activeIndex = clampIndex(index, state.entries.length)
+      commit({ ...state, activeIndex, page: pageOf(activeIndex) })
     },
     move(delta) {
       if (state.entries.length === 0) return
-      commit({ ...state, activeIndex: moveIndex(state.activeIndex, delta, state.entries.length) })
+      const activeIndex = moveIndex(state.activeIndex, delta, state.entries.length)
+      commit({ ...state, activeIndex, page: pageOf(activeIndex) })
+    },
+    turn(delta) {
+      if (state.entries.length === 0) return
+      const page = turnPage(state.page, delta, state.entries.length)
+      if (page === state.page) return
+      // 翻页后选中行落在这一页的第一行:↑/↓ 与 Enter 都接着新的一页走。
+      commit({ ...state, page, activeIndex: page * PAGE_SIZE })
     },
     sync(entries) {
       const keep = inRange(state.activeIndex, entries.length)
-      commit({ ...state, entries, activeIndex: keep ? state.activeIndex : entries.length > 0 ? 0 : -1 })
+      const activeIndex = keep ? state.activeIndex : entries.length > 0 ? 0 : -1
+      commit({ ...state, entries, activeIndex, page: pageOf(activeIndex) })
     },
   }
 }

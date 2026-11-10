@@ -15,7 +15,7 @@
 
 | 目录 | 作用 | 文档 |
 | --- | --- | --- |
-| `dsh-workspace-quick-switch` | `⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows） 弹出浮层，按左侧栏顺序列出前 10 个工作区，`↑/↓` 选、`Enter` 在该工作区新建会话（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
+| `dsh-workspace-quick-switch` | `⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows） 弹出浮层，按左侧栏顺序列出工作区（一屏 10 个，`←/→` 翻页），`↑/↓` 选、`Enter` 在该工作区新建会话（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
 | `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |

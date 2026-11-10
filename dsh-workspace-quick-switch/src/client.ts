@@ -5,10 +5,12 @@
  * 在 Windows/Linux 上展开成 `control+alt`(Ctrl+Alt),所以同一份声明在两端各是各的键。
  *
  * 浮层列出的候选**就是左侧栏那一份**:上游 Workspace 控制器的 `list` 快照按宿主持久
- * 显示顺序排列(`dsh-workspace-activity-sort` 之类改的正是这份顺序),取前
- * {@link WORKSPACE_LIMIT} 个即可。浮层开着的时候候选继续跟随快照(顺序变了、工作区被
- * 删了,列表跟着变),选中行按原下标保留(候选变短到装不下这个下标时回到第一行)。
- * 会话目录能读到主视图会话时,它所属的工作区会标上「当前」,并作为打开时的初始选中行。
+ * 显示顺序排列(`dsh-workspace-activity-sort` 之类改的正是这份顺序)。一屏只渲染
+ * {@link PAGE_SIZE} 行,更多工作区用 `←` / `→` 翻页(页标题旁显示「第 2 / 3 页」);
+ * 候选本身保留完整长度,所以翻页能一直翻到最后。浮层开着的时候候选继续跟随快照(顺序变了、
+ * 工作区被删了,列表跟着变),选中行按原下标保留(候选变短到装不下这个下标时回到第一行)。
+ * 会话目录能读到主视图会话时,它所属的工作区会标上「当前」,并作为打开时的初始选中行
+ * —— 它在后面的页上时,浮层直接开在那一页。
  *
  * 四条通路:
  *
@@ -20,8 +22,8 @@
  *   - **浮层**注册进 `shell.overlay`(加法式列表槽)。候选由本插件直接订阅工作区快照
  *     得来(槽只给框架标准 props,容器与其注入面在 `ctx.inject` 的 scope 里造好),
  *     所以工作区一变就重渲。
- *   - **浮层内的按键**由本插件在 document 捕获阶段取走(`Escape` / `Enter` /
- *     `↑` / `↓`):浮层一开它就先于任何本地控件看到按键,关掉后立即放行。
+ *   - **浮层内的按键**由本插件在 document 捕获阶段取走(`Escape` / `Enter` / `↑` / `↓`
+ *     与翻页的 `←` / `→`):浮层一开它就先于任何本地控件看到按键,关掉后立即放行。
  *   - **终端内的打开键**由本插件在 window 捕获阶段取走:落在 `.xterm` 里的 keydown 到不了
  *     固定通道(终端在自己的 textarea 处理器里 `stopPropagation()`),所以另挂一个捕获监听,
  *     早于事件进入终端判定,命中即吞掉这一按并开同一张浮层(判定与固定通道共用 `quickSwitchOwns`)。
@@ -41,11 +43,14 @@
 import * as React from 'react'
 import { name } from './runtime.ts'
 import {
+  PAGE_SIZE,
   QUICK_SWITCH_BINDING,
   QUICK_SWITCH_ID,
-  WORKSPACE_LIMIT,
   clampIndex,
+  clampPage,
   createPaletteStore,
+  pageCount,
+  pageSlice,
   paletteEntries,
   quickSwitchKeys,
   quickSwitchPress,
@@ -60,8 +65,19 @@ export { name }
 /** 浮层依赖的两个客户端服务;任一缺席就整体不安装。 */
 export const inject = ['slots', 'shortcuts']
 
-/** 浮层自己注入的样式(随本插件的 fiber 卸载一起移除)。 */
-const PALETTE_CSS = `
+/**
+ * 浮层自己注入的样式(随本插件的 fiber 卸载一起移除)。
+ *
+ * 高度预算:面板不设固定上限,只吃满浮层这一层留给它的空间(`max-height: 100%` —— 浮层是
+ * `inset: 0` 的定长容器,上下各留一层内边距,百分比因此有确定参照)。10 行候选在常规密度下
+ * 约 613px 高,窗口够高时整份候选一次看全;视口高度不足 860px 时末尾那组 `@media` 收紧内边距,
+ * 把这份高度压到约 561px,常见笔记本窗口(视口 ≥ 800px)同样一次看全。只有更矮的窗口才由
+ * 列表内部滚动兜底,那时选中行靠 `scrollIntoView({ block: 'nearest' })` 跟着走。
+ *
+ * 曾经的写法是 `max-height: min(70vh, 560px)`:面板在任何窗口里都被截到 560px,而候选列表
+ * 需要 526px 放 10 行 × 50px,于是第 10 行永远在滚动区外。
+ */
+export const PALETTE_CSS = `
 .dsh-workspace-quick-switch-overlay {
   pointer-events: none;
   position: fixed;
@@ -70,7 +86,7 @@ const PALETTE_CSS = `
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: max(24px, var(--dsh-frame-overlay-top, 24px)) 24px;
+  padding: max(24px, var(--dsh-frame-overlay-top, 24px)) 24px 24px;
   font-family: var(--dsw-font-family);
 }
 .dsh-workspace-quick-switch-backdrop {
@@ -87,7 +103,7 @@ const PALETTE_CSS = `
   display: flex;
   flex-direction: column;
   width: min(520px, 100%);
-  max-height: min(70vh, 560px);
+  max-height: 100%;
   overflow: hidden;
   border-radius: var(--dsw-radius-lg, 16px);
   background: var(--dsw-alias-bg-layer-2, #ffffff);
@@ -97,6 +113,7 @@ const PALETTE_CSS = `
   outline: none;
 }
 .dsh-workspace-quick-switch-head {
+  flex: none;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -113,6 +130,8 @@ const PALETTE_CSS = `
   color: var(--dsw-alias-label-tertiary, #81858c);
 }
 .dsh-workspace-quick-switch-list {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -198,12 +217,40 @@ const PALETTE_CSS = `
   color: var(--dsw-alias-label-tertiary, #81858c);
 }
 .dsh-workspace-quick-switch-foot {
+  flex: none;
   display: flex;
   gap: 14px;
   padding: 10px 18px 14px;
   border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
   font-size: 11px;
   color: var(--dsw-alias-label-tertiary, #81858c);
+}
+/*
+ * 视口高度不足 860px 时收紧内部留白与行高,保证一页 10 行在常见笔记本窗口(视口 ≥ 800px)
+ * 里一次看全;更矮的窗口仍由列表内部滚动兜底。
+ *
+ * 行高要显式写死:候选行是「名称 + 路径」两行文字,默认值 line-height: normal 会按字体
+ * 给不同高度(中文 / 日文字体比拉丁字体高 2~3px/行,10 行累计差 20~30px,足以让第 10 行
+ * 掉出视口)。写死之后一页高度与标题语言无关。
+ *
+ * 只改内部间距,不动浮层根节点的顶部内边距 —— 那个值要让开 macOS 红绿灯 / Windows 标题栏。
+ */
+@media (max-height: 860px) {
+  .dsh-workspace-quick-switch-head {
+    padding: 12px 18px 8px;
+  }
+  .dsh-workspace-quick-switch-option {
+    padding: 5px 10px;
+  }
+  .dsh-workspace-quick-switch-name {
+    line-height: 18px;
+  }
+  .dsh-workspace-quick-switch-path {
+    line-height: 15px;
+  }
+  .dsh-workspace-quick-switch-foot {
+    padding: 8px 18px 10px;
+  }
 }
 `
 
@@ -213,8 +260,19 @@ export const PALETTE_ROOT_ATTR = 'data-workspace-quick-switch'
 /** 一行候选项的 DOM 标记。 */
 export const PALETTE_OPTION_ATTR = 'data-workspace-quick-switch-option'
 
+/**
+ * 把选中行滚进可见区(`nearest`:已经可见的行不动)。
+ *
+ * 窗口够高时 10 行全部可见,这里什么都不做;窗口矮到列表内部滚动时,键盘把选中行移出
+ * 视口就等于「看不见」,所以每次选中行变化后都要补一次。
+ * @param option - 选中行元素;缺席(浮层未开、空候选、测试替身)时静默跳过。
+ */
+export function keepOptionVisible(option: Element | null | undefined): void {
+  option?.scrollIntoView?.({ block: 'nearest' })
+}
+
 /** 浮层内一个按键解出的动作。 */
-export type PaletteAction = 'close' | 'confirm' | 'next' | 'previous'
+export type PaletteAction = 'close' | 'confirm' | 'next' | 'previous' | 'page-next' | 'page-previous'
 
 /** `paletteAction` 读到的按键事实(KeyboardEvent 结构上满足它)。 */
 export interface PaletteEventLike {
@@ -324,8 +382,8 @@ function installStyleTag(): () => void {
 /**
  * 一次按键解码出的动作。
  *
- * 只认没有修饰键的 `Escape` / `Enter` / `ArrowDown` / `ArrowUp`;组合中、已被别的
- * 处理器消费、或带修饰键的按键统统放行(浮层不抢 `Ctrl+↑`、`Shift+↑` 这类有主的键)。
+ * 只认没有修饰键的 `Escape` / `Enter` / `↑` / `↓`(选行)与 `←` / `→`(翻页);组合中、
+ * 已被别的处理器消费、或带修饰键的按键统统放行(浮层不抢 `Ctrl+↑`、`Shift+←` 这类有主的键)。
  * @param event - 按键事实。
  * @returns 动作,或不属于浮层时的 undefined。
  */
@@ -333,12 +391,14 @@ export function paletteAction(event: PaletteEventLike): PaletteAction | undefine
   if (event.defaultPrevented === true) return undefined
   if (event.isComposing === true) return undefined
   if (event.ctrlKey === true || event.altKey === true || event.metaKey === true || event.shiftKey === true) return undefined
-  // 按住不放的重复:选择键可以连按,取消与确认不行(避免一次长按连开好几个会话)。
+  // 按住不放的重复:选择与翻页可以连按,取消与确认不行(避免一次长按连开好几个会话)。
   if (event.repeat === true && (event.key === 'Enter' || event.key === 'Escape')) return undefined
   if (event.key === 'Escape') return 'close'
   if (event.key === 'Enter') return 'confirm'
   if (event.key === 'ArrowDown') return 'next'
   if (event.key === 'ArrowUp') return 'previous'
+  if (event.key === 'ArrowRight') return 'page-next'
+  if (event.key === 'ArrowLeft') return 'page-previous'
   return undefined
 }
 
@@ -380,6 +440,8 @@ export function installPaletteKeys(store: PaletteStore, target: PaletteKeyTarget
     event.stopPropagation()
     if (action === 'close') store.close()
     else if (action === 'confirm') confirmActive(store)
+    else if (action === 'page-next') store.turn(1)
+    else if (action === 'page-previous') store.turn(-1)
     else store.move(action === 'next' ? 1 : -1)
   }
   target.addEventListener('keydown', onKeyDown, true)
@@ -396,19 +458,33 @@ export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
   const store = props.store
   const state = React.useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
+  const listRef = React.useRef<HTMLDivElement | null>(null)
   const open = state.open
   const entries = state.entries
+  const activeIndex = clampIndex(state.activeIndex, entries.length)
+  // 一屏只渲染 PAGE_SIZE 行;页号越界(候选变短)按当前候选收敛,渲染与按键读的是同一个值。
+  const page = clampPage(state.page, entries.length)
+  const pages = pageCount(entries.length)
+  const offset = page * PAGE_SIZE
+  const visible = pageSlice(entries, page)
 
   React.useEffect(() => {
     if (!open) return
     panelRef.current?.focus()
   }, [open])
 
+  // 选中行必须留在可见范围:窗口不够高时列表只在内部滚动,键盘把选中行移出视口等于「看不见」。
+  // 打开时(初始选中行可能就是第 10 行)与每次 ↑/↓ 之后都把它滚进来。
+  React.useEffect(() => {
+    if (!open) return
+    const list = listRef.current
+    keepOptionVisible(activeIndex < 0 ? null : list?.querySelector(`#${optionDomId(activeIndex)}`))
+  }, [open, activeIndex])
+
   React.useEffect(() => installPaletteKeys(store, document), [store])
 
   if (!open) return null
 
-  const activeIndex = clampIndex(state.activeIndex, entries.length)
   const children: React.ReactNode[] = [
     React.createElement('div', { key: 'backdrop', className: 'dsh-workspace-quick-switch-backdrop' }),
     React.createElement(
@@ -429,7 +505,7 @@ export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
         React.createElement(
           'span',
           { key: 'count', className: 'dsh-workspace-quick-switch-count' },
-          entries.length === 0 ? '左侧栏还没有工作区' : `前 ${entries.length} 个工作区`,
+          entries.length === 0 ? '左侧栏还没有工作区' : countLabel(entries.length, page, pages),
         ),
       ),
       entries.length === 0
@@ -442,17 +518,21 @@ export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
             'div',
             {
               key: 'list',
+              ref: listRef,
               className: 'dsh-workspace-quick-switch-list',
               role: 'listbox',
               'aria-label': '工作区',
               'aria-activedescendant': optionDomId(activeIndex),
             },
-            entries.map((entry, index) => optionElement(store, entry, index, index === activeIndex)),
+            visible.map((entry, index) => optionElement(store, entry, offset + index, offset + index === activeIndex)),
           ),
       React.createElement(
         'div',
         { key: 'foot', className: 'dsh-workspace-quick-switch-foot' },
         React.createElement('span', { key: 'move' }, '↑ ↓ 选择'),
+        pages > 1
+          ? React.createElement('span', { key: 'page' }, '← → 翻页')
+          : null,
         React.createElement('span', { key: 'enter' }, 'Enter 新建会话'),
         React.createElement('span', { key: 'esc' }, 'Esc 关闭'),
       ),
@@ -466,8 +546,19 @@ export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
   )
 }
 
-/** 一行候选项的 DOM id(与 `aria-activedescendant` 配对)。 */
-function optionDomId(index: number): string {
+/**
+ * 标题右侧的计数文案:单页时报总数,多页时带页码。
+ * @param total - 工作区总数。
+ * @param page - 当前页号(0 起)。
+ * @param pages - 总页数。
+ */
+function countLabel(total: number, page: number, pages: number): string {
+  if (pages <= 1) return `${total} 个工作区`
+  return `${total} 个工作区 · 第 ${page + 1} / ${pages} 页`
+}
+
+/** 一行候选项的 DOM id(与 `aria-activedescendant` 配对,滚进可见区也按它定位)。 */
+export function optionDomId(index: number): string {
   return `dsh-workspace-quick-switch-option-${index}`
 }
 
@@ -570,7 +661,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
     const refresh = (): void => {
       const workspaces = readWorkspaces(scope)
       const hosts = workspaces === undefined ? [] : workspaces.list.getSnapshot().items
-      store.sync(paletteEntries(hosts, currentWorkspaceId(readSessions(scope), hosts), WORKSPACE_LIMIT))
+      store.sync(paletteEntries(hosts, currentWorkspaceId(readSessions(scope), hosts)))
     }
 
     scope.effect(installStyleTag, `${name}: palette styles`)
