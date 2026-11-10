@@ -204,9 +204,9 @@ console.log('--- C④ 没有当前会话时默认选第一行 ---')
   check('第一行被选中', peek().rows.map((row) => row.selected), ['true', 'false'])
 }
 
-console.log('--- C⑤ 工作区超过 10 个:一屏 10 行,← / → 翻到后面的页 ---')
+console.log('--- C⑤ 工作区超过 10 个:一屏 10 行,← / → 滑一整屏 ---')
 {
-  const many = Array.from({ length: 12 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
+  const many = Array.from({ length: 25 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
   const { shortcuts, peek, store } = setup({ workspaces: many, current: undefined })
   const uninstall = installPaletteKeys(store, dom.document)
 
@@ -215,75 +215,86 @@ console.log('--- C⑤ 工作区超过 10 个:一屏 10 行,← / → 翻到后�
   check('一屏 10 行', rows.length, 10)
   check('顺序照抄', rows.map((row) => row.title), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
 
-  // → 翻到第二页:剩下两个工作区也能看到、也能选。
+  // → 滑一整屏:后面的工作区也能看到、也能选。
   dom.pressKey('ArrowRight')
-  check('→ 翻到第二页', peek().rows.map((row) => row.title), ['W11', 'W12'])
-  check('翻页后选中本页第一行', peek().rows.map((row) => row.selected), ['true', 'false'])
+  check('→ 滑到第二屏', peek().rows.map((row) => row.title), [
+    'W11', 'W12', 'W13', 'W14', 'W15', 'W16', 'W17', 'W18', 'W19', 'W20',
+  ])
+  check('滑完选中新窗口第一行', peek().rows.map((row) => row.selected).indexOf('true'), 0)
+  dom.pressKey('ArrowRight')
+  check('→ 到末尾贴底', peek().rows.map((row) => row.title), [
+    'W16', 'W17', 'W18', 'W19', 'W20', 'W21', 'W22', 'W23', 'W24', 'W25',
+  ])
+  dom.pressKey('ArrowRight')
+  check('末尾再 → 停住', peek().rows.map((row) => row.title)[0], 'W16')
   dom.pressKey('ArrowLeft')
-  check('← 翻回第一页', peek().rows.map((row) => row.title), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
+  check('← 回退一整屏', peek().rows.map((row) => row.title)[0], 'W6')
 
   uninstall()
 }
 
-console.log('--- C⑤ᵃ ↑/↓ 只在当前页内走,不翻页(只有 ←/→ 翻页)---')
+console.log('--- C⑤ᵃ ↑/↓ 连续移动:到窗口边就滑一行,到两端停住 ---')
 {
   const many = Array.from({ length: 12 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
   const { shortcuts, peek, store } = setup({ workspaces: many, current: undefined })
   const uninstall = installPaletteKeys(store, dom.document)
-  const page = () => store.getSnapshot().page
+  const offset = () => store.getSnapshot().offset
   const titles = () => peek().rows.map((row) => row.title)
 
   openViaShortcut(shortcuts)
-  check('起点在第一页', [page(), store.getSnapshot().activeIndex], [0, 0])
+  check('起点在窗口顶部', [offset(), store.getSnapshot().activeIndex], [0, 0])
+  check('第一屏是 1–10', titles(), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
 
-  // 连按 ↓ 走完第一页:绕回第一页第一行,页始终是 0。
+  // 连按 ↓ 走到底:选中行一路往下,窗口在它越过底边时跟着滑。
   for (let step = 0; step < 10; step += 1) dom.pressKey('ArrowDown')
-  check('连按 10 次 ↓ 仍停在第 0 页', page(), 0)
-  check('并绕回第一页第一行', store.getSnapshot().activeIndex, 0)
-  check('页内容没变', titles(), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
+  check('↓ 到底后选中第 11 行', store.getSnapshot().activeIndex, 10)
+  check('窗口滑了一行(2–11)', offset(), 1)
+  check('窗口内容跟着走', titles(), ['W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10', 'W11'])
+  dom.pressKey('ArrowDown')
+  check('最后一行再 ↓ 停住(不环状)', store.getSnapshot().activeIndex, 11)
+  check('窗口贴底', offset(), 2)
 
-  // 从第一行再按 ↑:绕到第一页最后一行(W10),不跳到别的页。
-  dom.pressKey('ArrowUp')
-  check('第一页第一行按 ↑ 绕到本页最后一行', store.getSnapshot().activeIndex, 9)
-  check('仍停在第 0 页', page(), 0)
-  check('选中的是 W10', peek().rows.map((row) => row.selected).indexOf('true'), 9)
+  // ↑ 一路回到顶部,窗口跟着滑到顶。
+  for (let step = 0; step < 12; step += 1) dom.pressKey('ArrowUp')
+  check('↑ 到第一行停住', store.getSnapshot().activeIndex, 0)
+  check('窗口回到顶部', offset(), 0)
+  check('第一屏又变回 1–10', titles(), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
 
-  // 到第二页上重复同样的动作:只在「W11 / W12」之间绕。
+  // ←/→ 仍是一整屏;12 个候选时只能滑到贴底(起点 2)。
   dom.pressKey('ArrowRight')
-  check('→ 才翻页', [page(), store.getSnapshot().activeIndex], [1, 10])
-  dom.pressKey('ArrowDown')
-  check('第二页 ↓', store.getSnapshot().activeIndex, 11)
-  dom.pressKey('ArrowDown')
-  check('第二页最后一行再 ↓ 绕回本页第一行', store.getSnapshot().activeIndex, 10)
-  check('仍是第二页', page(), 1)
-  dom.pressKey('ArrowUp')
-  check('第二页第一行再 ↑ 绕到本页最后一行', store.getSnapshot().activeIndex, 11)
-  check('仍是第二页', page(), 1)
+  check('→ 滑到贴底', [offset(), store.getSnapshot().activeIndex], [2, 2])
+  check('贴底后显示 3–12', titles(), ['W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10', 'W11', 'W12'])
+  dom.pressKey('ArrowRight')
+  check('贴底再 → 停住', offset(), 2)
+  dom.pressKey('ArrowLeft')
+  check('← 回退一整屏', offset(), 0)
 
   uninstall()
 }
 
-console.log('--- C⑤ᵇ 第二页上 Enter 命中的是第 11 个工作区 ---')
+console.log('--- C⑤ᵇ 第二屏上 Enter 命中的是第 11 个工作区 ---')
 {
-  const many = Array.from({ length: 12 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
+  const many = Array.from({ length: 25 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
   const { shortcuts, peek, store, startCalls } = setup({ workspaces: many, current: undefined })
   const uninstall = installPaletteKeys(store, dom.document)
   openViaShortcut(shortcuts)
   dom.pressKey('ArrowRight')
-  check('落在第二页', peek().rows.map((row) => row.title), ['W11', 'W12'])
+  check('落在第二屏', peek().rows.map((row) => row.title).slice(0, 2), ['W11', 'W12'])
   dom.pressKey('Enter')
-  check('Enter 在第二页选中的工作区新建会话', startCalls, ['ws-11'])
+  check('Enter 在第二屏选中的工作区新建会话', startCalls, ['ws-11'])
   check('浮层关闭', peek().open, false)
 
-  // 重新打开回到第一页:页不跨次留存。
+  // 重新打开回到顶部:窗口不跨次留存。
   openViaShortcut(shortcuts)
-  check('重新打开回到第一页', peek().rows[0].title, 'W1')
+  check('重新打开回到第一屏', peek().rows[0].title, 'W1')
 
-  // 两页时连续按 → 环状绕回第一页(12 个工作区 = 2 页)。
+  // 连续按 → 到末尾贴底后停住。
   dom.pressKey('ArrowRight')
-  check('一次 → 到第二页', peek().rows.map((row) => row.title), ['W11', 'W12'])
+  check('一次 → 到第二屏', peek().rows[0].title, 'W11')
   dom.pressKey('ArrowRight')
-  check('再按 → 绕回第一页', peek().rows.map((row) => row.title), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'])
+  check('再按 → 贴底', peek().rows[0].title, 'W16')
+  dom.pressKey('ArrowRight')
+  check('贴底后停住', peek().rows[0].title, 'W16')
   uninstall()
 }
 
@@ -673,11 +684,11 @@ console.log('--- C⑬ 会话浮层:Ctrl+Alt+I 打开,候选与左侧栏「单列
   ctx.dispose()
 }
 
-console.log('--- C⑭ 会话浮层的分页与按键归属 ---')
+console.log('--- C⑭ 会话浮层的窗口滑动与按键归属 ---')
 {
   const byId = {}
-  for (let index = 1; index <= 12; index += 1) {
-    byId[`s-${index}`] = { id: `s-${index}`, title: `S${index}`, updatedAt: 1_000 - index }
+  for (let index = 1; index <= 25; index += 1) {
+    byId[`s-${index}`] = { id: `s-${index}`, title: `S${index}`, updatedAt: 2_000 - index }
   }
   const { shortcuts, peekSessions, sessionStore, openCalls } = setup({
     workspaces: [workspace('ws-1', 'Alpha')],
@@ -691,9 +702,9 @@ console.log('--- C⑭ 会话浮层的分页与按键归属 ---')
     'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10',
   ])
   sessionDom.pressKey('ArrowRight')
-  check('→ 翻到第二页', peekSessions().rows.map((row) => row.title), ['S11', 'S12'])
+  check('→ 滑到第二屏', peekSessions().rows.map((row) => row.title).slice(0, 2), ['S11', 'S12'])
   sessionDom.pressKey('Enter')
-  check('第二页上 Enter 打开的是第 11 个', openCalls, ['s-11'])
+  check('第二屏上 Enter 打开的是第 11 个', openCalls, ['s-11'])
   uninstall()
 }
 

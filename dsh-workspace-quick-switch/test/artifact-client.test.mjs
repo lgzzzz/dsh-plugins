@@ -125,7 +125,7 @@ console.log('--- D② 产物装配后固定行与浮层生效 ---')
   check('产物认 ←', plugin.paletteAction({ key: 'ArrowLeft' }), 'page-previous')
 }
 
-console.log('--- D②ᵇ 产物里一屏 10 行、← / → 翻页 ---')
+console.log('--- D②ᵇ 产物里一屏 10 行、窗口连续滑动 ---')
 {
   const many = Array.from({ length: 23 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
   const slots = fakeSlots()
@@ -144,11 +144,15 @@ console.log('--- D②ᵇ 产物里一屏 10 行、← / → 翻页 ---')
   check('第一页 10 行', parseRows(slots).length, 10)
   check('第一页首个是 W1', parseRows(slots)[0].title, 'W1')
 
-  // 直接驱动产物里的 store 翻页(按键通路已在 C⑤ᵇ 端到端覆盖)。
+  // 直接驱动产物里的 store 滑动(按键通路已在 C⑤ᵇ 端到端覆盖)。
+  store.slide(1)
+  check('滚一行:第二个工作区起头(2–11)', parseRows(slots)[0].title, 'W2')
   store.turn(1)
-  check('第二页首个是 W11', parseRows(slots)[0].title, 'W11')
+  check('→ 滑一整屏到 W12 起头', parseRows(slots)[0].title, 'W12')
   store.turn(1)
-  check('第三页只剩 3 个', parseRows(slots).map((row) => row.title), ['W21', 'W22', 'W23'])
+  check('再 → 到末尾贴底(10 行)', parseRows(slots).map((row) => row.title), [
+    'W14', 'W15', 'W16', 'W17', 'W18', 'W19', 'W20', 'W21', 'W22', 'W23',
+  ])
   ctx.dispose()
 }
 

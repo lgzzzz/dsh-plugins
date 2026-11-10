@@ -14,6 +14,7 @@ import { createPaletteStore, paletteEntries } from '../src/palette.ts'
 import { sessionPaletteEntries } from '../src/sessions.ts'
 import {
   installPaletteKeys,
+  installPaletteWheel,
   keepOptionVisible,
   PALETTE_CSS,
   PaletteOverlay,
@@ -22,9 +23,11 @@ import {
   PALETTE_ROOT_ATTR,
   SESSION_ROOT_ATTR,
   SESSION_VIEW,
+  wheelPixels,
+  wheelStep,
   WORKSPACE_VIEW,
 } from '../src/client.ts'
-import { check, checkTrue, finish, installDom, workspace } from './helpers.mjs'
+import { check, checkTrue, finish, installDom, optionNodes, workspace } from './helpers.mjs'
 
 const dom = installDom()
 
@@ -64,7 +67,7 @@ function countText(html) {
 
 /** 底栏的提示条目。 */
 function footHints(html) {
-  return [...html.matchAll(/<span[^>]*>(↑ ↓ 选择|← → 翻页|Enter 新建会话|Enter 打开会话|Esc 关闭)<\/span>/g)].map(([, text]) => text)
+  return [...html.matchAll(/<span[^>]*>(↑ ↓ 选择|← → 翻页|← → 翻一屏|Enter 新建会话|Enter 打开会话|Esc 关闭)<\/span>/g)].map(([, text]) => text)
 }
 
 /**
@@ -88,14 +91,17 @@ function render(store, view = WORKSPACE_VIEW) {
   const previous = slot.current
   slot.current = dispatcher
   let html = ''
+  let tree = null
   try {
-    html = renderToStaticMarkup(React.createElement(PaletteOverlay, { store, view }))
+    tree = PaletteOverlay({ store, view })
+    html = renderToStaticMarkup(tree)
   } finally {
     slot.current = previous
   }
   let cleanups = []
   return {
     html,
+    tree,
     rows: parseOptions(html),
     /** 跑一遍登记的 effect,返回清理函数。 */
     runEffects() {
@@ -195,19 +201,19 @@ console.log('--- E④ installPaletteKeys:只接管浮层开着时的那四个键
   checkTrue('Enter 被消费', enter.defaultPrevented === true && enter.stopped === true)
   check('动作被调用一次', confirmed, 1)
 
-  // ↑/↓ 环状移动。
+  // ↑/↓ 移动选中行;到两端停住(不环状回头,与窗口滑动一致)。
   store.open(() => {}, 0)
   dom.pressKey('ArrowDown')
   check('↓ 移动选中行', store.getSnapshot().activeIndex, 1)
   dom.pressKey('ArrowUp')
   check('↑ 回到第一行', store.getSnapshot().activeIndex, 0)
   dom.pressKey('ArrowUp')
-  check('↑ 从第一行绕到末尾', store.getSnapshot().activeIndex, 2)
+  check('↑ 在第一行停住', store.getSnapshot().activeIndex, 0)
 
   // 带修饰键、输入法组合中、长按确认键都不归浮层。
   const modified = dom.pressKey('ArrowDown', { ctrlKey: true })
   check('Ctrl+↓ 放行', modified.defaultPrevented, false)
-  check('选中行没动', store.getSnapshot().activeIndex, 2)
+  check('选中行没动', store.getSnapshot().activeIndex, 0)
   const composing = dom.pressKey('Enter', { isComposing: true })
   check('输入法组合中放行', composing.defaultPrevented, false)
   const repeated = dom.pressKey('Enter', { repeat: true })
@@ -247,47 +253,173 @@ console.log('--- E⑥ 高度策略:面板不再被固定上限截断 ---')
   checkTrue('顶部内边距仍给 macOS 红绿灯 / Windows 标题栏让位', css.includes('var(--dsh-frame-overlay-top, 24px)'))
 }
 
-console.log('--- E⑦ 一屏 10 行、← / → 翻页、序号与页码跟着走 ---')
+console.log('--- E⑥b 指针:面板吃指针事件,点击一行就是 Enter ---')
+{
+  // 面板原先不接指针事件(整层 click-through,只有遮罩吃),点行落不到按钮上。
+  const css = PALETTE_CSS
+  checkTrue(
+    '面板自己接指针事件',
+    /\.dsh-workspace-quick-switch-panel \{[^}]*pointer-events: auto;/s.test(css),
+  )
+  checkTrue('遮罩仍然接指针事件(点外面不关)', /\.dsh-workspace-quick-switch-backdrop \{[^}]*pointer-events: auto;/s.test(css))
+  checkTrue('浮层根节点仍然 click-through', /\.dsh-workspace-quick-switch-overlay \{[^}]*pointer-events: none;/s.test(css))
+
+  // 行是 `<button type="button">`,onClick 走 activate:先选中这一行、关浮层、再执行动作。
+  const store = makeStore({ active: 'ws-1', selected: 0 })
+  const picked = []
+  store.open(() => {
+    const snapshot = store.getSnapshot()
+    picked.push(snapshot.entries[snapshot.activeIndex]?.key)
+  }, 0)
+  const rows = optionNodes(render(store).tree)
+  check('三行都可点', rows.length, 3)
+  checkTrue('每一行都是 type=button 的按钮', rows.every((row) => row.type === 'button' && row.props.type === 'button'))
+  rows[2].props.onClick()
+  check('点第 3 行:先选中它再执行', [picked, store.getSnapshot().activeIndex, store.getSnapshot().open], [['ws-3'], 2, false])
+}
+
+console.log('--- E⑥c 滚轮:一格就是一行,不足一行也算一行 ---')
+{
+  // 位移单位:像素原样,行 / 页模式换算。
+  check('像素模式原样', wheelPixels({ deltaY: 42 }), 42)
+  check('行模式按行高换算', wheelPixels({ deltaY: -3, deltaMode: 1 }), -48)
+  check('页模式按一屏换算', wheelPixels({ deltaY: 1, deltaMode: 2 }), 400)
+
+  // 一格 → 一行:只看方向,不看幅度。
+  check('一格 1px 也算一行', wheelStep(1), 1)
+  check('一格 20px 也算一行', wheelStep(20), 1)
+  check('一格 120px 还是一行', wheelStep(120), 1)
+  check('一格 300px 也只算一行', wheelStep(300), 1)
+  check('往上滚是 -1', wheelStep(-1), -1)
+  check('往上滚 300px 也是 -1', wheelStep(-300), -1)
+  check('零位移不滑', wheelStep(0), 0)
+  check('非法数值不滑', wheelStep(Number.NaN), 0)
+
+  // 监听挂在浮层根节点上:`passive: false`;每一格交给 slide。
+  const makeRoot = () => {
+    const calls = []
+    const listeners = new Set()
+    const root = {
+      addEventListener(type, next, options) {
+        calls.push({ kind: 'add', type, options })
+        listeners.add(next)
+      },
+      removeEventListener(type, next, options) {
+        calls.push({ kind: 'remove', type, options })
+        listeners.delete(next)
+      },
+    }
+    return { calls, listeners, root }
+  }
+  const wheelOn = (listeners, deltaY, overrides = {}) => {
+    const event = { deltaY, defaultPrevented: false, preventDefault() { event.defaultPrevented = true }, ...overrides }
+    for (const next of [...listeners]) next(event)
+    return event
+  }
+
+  {
+    const { calls, listeners, root } = makeRoot()
+    const slides = []
+    const off = installPaletteWheel(root, (rows) => slides.push(rows))
+    check('挂的是 wheel 监听且非被动', calls.map((call) => [call.kind, call.type, call.options]), [
+      ['add', 'wheel', { passive: false }],
+    ])
+    check('滚轮被浮层吃下', wheelOn(listeners, 46).defaultPrevented, true)
+    check('一格一行', slides, [1])
+    wheelOn(listeners, 1)
+    check('不足一行的一格也滑一行', slides, [1, 1])
+    wheelOn(listeners, 120)
+    check('120px 仍是一行', slides, [1, 1, 1])
+    wheelOn(listeners, -1)
+    check('向上滚一格回退一行', slides, [1, 1, 1, -1])
+
+    // 捏合缩放(Chrome 报成 ctrlKey + wheel)不是滚动,原样放行。
+    const beforeCtrl = slides.length
+    check('捏合缩放放行', wheelOn(listeners, 50, { ctrlKey: true }).defaultPrevented, false)
+    check('捏合缩放不滑动', slides.length, beforeCtrl)
+    check('零位移不动作', wheelOn(listeners, 0).defaultPrevented, false)
+    off()
+    check('卸载撤掉监听(按 capture 匹配,不带 passive)', calls.slice(-1).map((call) => [call.kind, call.type, call.options]), [
+      ['remove', 'wheel', false],
+    ])
+    check('卸载后不再有监听', listeners.size, 0)
+  }
+
+  // 行 / 页模式的滚轮同样一格一行(先折算成像素,再只看方向)。
+  {
+    const { listeners, root } = makeRoot()
+    const slides = []
+    const off = installPaletteWheel(root, (rows) => slides.push(rows))
+    wheelOn(listeners, 1, { deltaMode: 1 })
+    check('行模式一格一行', slides, [1])
+    wheelOn(listeners, -1, { deltaMode: 2 })
+    check('页模式一格也是 -1', slides, [1, -1])
+    off()
+  }
+
+  check('根节点缺席时不装', typeof installPaletteWheel(null, () => {}), 'function')
+}
+
+console.log('--- E⑦ 一屏 10 行、窗口连续滑动、可见范围跟着走 ---')
 {
   const many = Array.from({ length: 25 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
   const store = createPaletteStore()
   store.sync(paletteEntries(many, 'ws-13'))
   store.open(() => {}, 12)
 
-  // 打开时「当前」在第二页:浮层直接开在那一页,而不是停在第 1 行让人自己翻。
+  // 打开时「当前」在第 13 行:窗口对齐到包含它的那一屏,而不是停在第一行让人自己滑。
   const second = render(store)
-  check('开在当前工作区所在页', second.rows.map((row) => row.title), [
+  check('开在当前行所在的那一屏', second.rows.map((row) => row.title), [
     'W11', 'W12', 'W13', 'W14', 'W15', 'W16', 'W17', 'W18', 'W19', 'W20',
   ])
-  check('序号是全局序号(不是页内序号)', second.rows.map((row) => row.index), [
+  check('序号是全局序号(不是窗口内序号)', second.rows.map((row) => row.index), [
     '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
   ])
   check('选中当前工作区那一行', second.rows.map((row) => row.selected).indexOf('true'), 2)
-  check('页码文案', countText(second.html), '25 个工作区 · 第 2 / 3 页')
-  check('多页时底栏提示 ← → 翻页', footHints(second.html), ['↑ ↓ 选择', '← → 翻页', 'Enter 新建会话', 'Esc 关闭'])
+  check('计数文案报可见范围', countText(second.html), '25 个工作区 · 显示 11–20')
+  check('多于一屏时底栏提示整屏滑动', footHints(second.html), ['↑ ↓ 选择', '← → 翻一屏', 'Enter 新建会话', 'Esc 关闭'])
 
-  // → 翻到下一页。
+  // 滚一行:窗口连续滑动(这就是「1–10 → 2–11」)。
+  store.slide(1)
+  const slid = render(store)
+  check('滑一行后窗口是 12–21', slid.rows.map((row) => row.title)[0], 'W12')
+  check('滑一行后可见范围正确', countText(slid.html), '25 个工作区 · 显示 12–21')
+
+  // → 滑一整屏;到尽头贴底,不再整屏跳空。
   store.turn(1)
-  const third = render(store)
-  check('→ 后是第三页', third.rows.map((row) => row.title), ['W21', 'W22', 'W23', 'W24', 'W25'])
-  check('最后一页只渲染剩余的 5 行', third.rows.length, 5)
-  check('最后一页序号继续', third.rows.map((row) => row.index), ['21', '22', '23', '24', '25'])
-  check('页码跟到第三页', countText(third.html), '25 个工作区 · 第 3 / 3 页')
-
-  // ← 回第二页;选中行落在这一页第一行。
-  store.turn(-1)
-  const back = render(store)
-  check('← 回到第二页', back.rows.map((row) => row.title)[0], 'W11')
-  check('翻页后选中本页第一行', back.rows.map((row) => row.selected), [
-    'true', 'false', 'false', 'false', 'false', 'false', 'false', 'false', 'false', 'false',
+  const bottom = render(store)
+  check('→ 滑一整屏到末尾贴底', bottom.rows.map((row) => row.title), [
+    'W16', 'W17', 'W18', 'W19', 'W20', 'W21', 'W22', 'W23', 'W24', 'W25',
   ])
+  check('末尾仍是 10 行(贴底而不是只剩余数)', bottom.rows.length, 10)
+  check('末尾可见范围', countText(bottom.html), '25 个工作区 · 显示 16–25')
+  check('滑完选中新窗口第一行', bottom.rows.map((row) => row.selected).indexOf('true'), 0)
+  store.turn(1)
+  check('末尾再 → 停住', countText(render(store).html), '25 个工作区 · 显示 16–25')
 
-  // 单页:不显示翻页提示,页码也不出现。
+  store.turn(-1)
+  check('← 回退一整屏', render(store).rows.map((row) => row.title)[0], 'W6')
+
+  // 用户的例子:11 个候选,滚一格就是 1–10 → 2–11。
+  const eleven = createPaletteStore()
+  eleven.sync(paletteEntries(many.slice(0, 11), undefined))
+  eleven.open(() => {})
+  check('11 个候选第一屏是 1–10', countText(render(eleven).html), '11 个工作区 · 显示 1–10')
+  eleven.slide(1)
+  const secondWindow = render(eleven)
+  check('滚一格变成 2–11', countText(secondWindow.html), '11 个工作区 · 显示 2–11')
+  check('窗口里是 W2..W11', secondWindow.rows.map((row) => row.title), [
+    'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10', 'W11',
+  ])
+  eleven.slide(1)
+  check('到底再滚停住', countText(render(eleven).html), '11 个工作区 · 显示 2–11')
+
+  // 一屏装得下:只报总数,也没有整屏滑动的提示。
   const few = createPaletteStore()
   few.sync(paletteEntries(many.slice(0, 4), undefined))
   few.open(() => {})
-  check('单页页码文案只有总数', countText(render(few).html), '4 个工作区')
-  check('单页没有翻页提示', footHints(render(few).html), ['↑ ↓ 选择', 'Enter 新建会话', 'Esc 关闭'])
+  check('一屏装得下时报总数', countText(render(few).html), '4 个工作区')
+  check('一屏装得下时没有滑动提示', footHints(render(few).html), ['↑ ↓ 选择', 'Enter 新建会话', 'Esc 关闭'])
 }
 
 console.log('--- E⑧ 选中行滚进可见区 ---')

@@ -6,19 +6,18 @@
  */
 import {
   clampIndex,
-  clampPage,
+  clampOffset,
   createPaletteStore,
   inRange,
-  moveIndex,
-  moveWithinPage,
+  maxOffset,
   PAGE_SIZE,
-  pageCount,
-  pageOf,
-  pageSlice,
   paletteEntries,
   QUICK_SWITCH_ID,
+  revealOffset,
   SESSION_SWITCH_ID,
-  turnPage,
+  slideOffset,
+  stepIndex,
+  windowSlice,
 } from '../src/palette.ts'
 import { check, checkTrue, checkUndefined, finish, workspace } from './helpers.mjs'
 
@@ -64,72 +63,52 @@ console.log('--- A③ 下标收敛 ---')
   check('非整数收敛到 0', clampIndex(1.5, 3), 0)
 }
 
-console.log('--- A④ 环状步进 ---')
+console.log('--- A④ 选中行步进:到两端停住 ---')
 {
-  check('空候选不动', moveIndex(0, 1, 0), -1)
-  check('单成员原地', moveIndex(0, 1, 1), 0)
-  check('前进', moveIndex(0, 1, 3), 1)
-  check('末尾前进绕回开头', moveIndex(2, 1, 3), 0)
-  check('开头后退绕到末尾', moveIndex(0, -1, 3), 2)
-  check('越界下标先收敛', moveIndex(9, 1, 3), 0)
+  check('空候选不动', stepIndex(0, 1, 0), -1)
+  check('单成员原地', stepIndex(0, 1, 1), 0)
+  check('前进', stepIndex(0, 1, 3), 1)
+  check('末尾前进停住(不环状)', stepIndex(2, 1, 3), 2)
+  check('开头后退停住(不环状)', stepIndex(0, -1, 3), 0)
+  check('越界下标先收敛', stepIndex(9, 1, 3), 2)
+  check('一次走多步', stepIndex(0, 3, 10), 3)
 }
 
-console.log('--- A④ᵃ 页内环状步进:↑/↓ 不出本页 ---')
+console.log('--- A④ᵃ 窗口:最大起点、收敛、按行滑动 ---')
 {
-  // 25 个候选 = 3 页(10 / 10 / 5)。
-  check('本页中间前进', moveWithinPage(0, 1, 25, 0), 1)
-  check('本页最后一行前进绕回本页第一行', moveWithinPage(9, 1, 25, 0), 0)
-  check('本页第一行后退绕到本页最后一行', moveWithinPage(0, -1, 25, 0), 9)
-  check('第二页内前进', moveWithinPage(10, 1, 25, 1), 11)
-  check('第二页最后一行绕回第二页第一行', moveWithinPage(19, 1, 25, 1), 10)
-  check('第二页不会前进到第三页', moveWithinPage(19, 1, 25, 1) < 20, true)
+  // 25 个候选、一屏 10 行:起点可以停在 0~15(最后一行贴底)。
+  check('比一屏多 15 个,最大起点 15', maxOffset(25), 15)
+  check('正好一屏时起点只有 0', maxOffset(10), 0)
+  check('不足一屏时起点只有 0', maxOffset(4), 0)
+  check('11 个候选最大起点 1(显示 2–11)', maxOffset(11), 1)
+  check('没有候选时最大起点 0', maxOffset(0), 0)
+  check('页大小为 0 时最大起点 0', maxOffset(25, 0), 0)
 
-  // 最后一页只有 5 行:绕回的是第 21 行,不是第 31 行。
-  check('末页最后一行绕回末页第一行', moveWithinPage(24, 1, 25, 2), 20)
-  check('末页第一行后退绕到末页最后一行', moveWithinPage(20, -1, 25, 2), 24)
-  check('末页不会退到第二页', moveWithinPage(20, -1, 25, 2) >= 20, true)
+  check('非整数起点归 0', clampOffset(1.5, 25), 0)
+  check('负起点归 0', clampOffset(-3, 25), 0)
+  check('越界起点收到最大值', clampOffset(99, 25), 15)
+  check('没有候选时起点固定 0', clampOffset(3, 0), 0)
 
-  // 页边界与异常输入。
-  check('页号越界按最后一页算', moveWithinPage(24, 1, 25, 9), 20)
-  check('没有候选时为 -1', moveWithinPage(0, 1, 0, 0), -1)
-  check('单页内环状', moveWithinPage(2, 1, 3, 0), 0)
-  check('页大小为 1 时原地', moveWithinPage(3, 1, 25, 3, 1), 3)
-  check('空标题语言无关:12 个 = 2 页', [moveWithinPage(9, 1, 12, 0), moveWithinPage(11, 1, 12, 1)], [0, 10])
-}
+  check('往下滑一行', slideOffset(0, 1, 25), 1)
+  check('1–10 → 2–11 就是滑一行', slideOffset(0, 1, 11), 1)
+  check('滑到尽头停住', slideOffset(15, 5, 25), 15)
+  check('往上滑一行', slideOffset(3, -1, 25), 2)
+  check('滑到顶停住', slideOffset(0, -2, 25), 0)
+  check('滑一整屏(←/→ 用)', slideOffset(0, PAGE_SIZE, 25), 10)
+  check('滑一整屏到尽头贴底', slideOffset(10, PAGE_SIZE, 25), 15)
 
-console.log('--- A④ᵇ 分页:页数、收敛、环状翻页、切片 ---')
-{
-  check('没有候选就没有页', pageCount(0), 0)
-  check('9 个一行仍是一页', pageCount(9), 1)
-  check('10 个正好一页', pageCount(10), 1)
-  check('11 个两页', pageCount(11), 2)
-  check('20 个两页', pageCount(20), 2)
-  check('21 个三页', pageCount(21), 3)
-  check('页大小为 0 时没有页', pageCount(5, 0), 0)
-
-  check('非整数页号归 0', clampPage(1.5, 25), 0)
-  check('负页号归 0', clampPage(-3, 25), 0)
-  check('越界页号收到最后一页', clampPage(9, 25), 2)
-  check('没有候选时页号固定 0', clampPage(2, 0), 0)
-
-  check('单页翻不动', turnPage(0, 1, 10), 0)
-  check('前进一页', turnPage(0, 1, 25), 1)
-  check('最后一页前进绕回第一页', turnPage(2, 1, 25), 0)
-  check('第一页后退绕到最后一页', turnPage(0, -1, 25), 2)
-  check('越界页号先收敛', turnPage(9, 1, 25), 0)
-
-  check('第 0 行在第 0 页', pageOf(0), 0)
-  check('第 9 行仍在第 0 页', pageOf(9), 0)
-  check('第 10 行在第 1 页', pageOf(10), 1)
-  check('第 24 行在第 2 页', pageOf(24), 2)
-  check('负下标归第 0 页', pageOf(-1), 0)
+  check('已可见就不动', revealOffset(0, 5, 25), 0)
+  check('选中行在上方:滑到它贴顶', revealOffset(10, 4, 25), 4)
+  check('选中行在下方:滑到它贴底', revealOffset(0, 12, 25), 3)
+  check('窗口末尾不足一屏时贴底', revealOffset(13, 24, 25), 15)
+  check('没有选中行时不动', revealOffset(5, -1, 25), 5)
 
   const rows = Array.from({ length: 25 }, (_, index) => `r${index}`)
-  check('第一页切片', pageSlice(rows, 0).slice(0, 3), ['r0', 'r1', 'r2'])
-  check('第一页长度', pageSlice(rows, 0).length, 10)
-  check('最后一页只剩余数', pageSlice(rows, 2), ['r20', 'r21', 'r22', 'r23', 'r24'])
-  check('越界页号按最后一页切片', pageSlice(rows, 9).length, 5)
-  check('没有候选时切片为空', pageSlice([], 0), [])
+  check('一屏 10 行', windowSlice(rows, 0).length, 10)
+  check('起点 1 时显示 r1..r10(即 2–11)', windowSlice(rows, 1).slice(0, 2), ['r1', 'r2'])
+  check('末尾切片只剩余数', windowSlice(rows, 15), rows.slice(15))
+  check('越界起点按最大起点切片', windowSlice(rows, 99)[0], 'r15')
+  check('没有候选时切片为空', windowSlice([], 0), [])
 }
 
 console.log('--- A⑤ store:写入、收敛与批量通知 ---')
@@ -184,7 +163,7 @@ console.log('--- A⑥ store.open 可以指定初始行 ---')
   check('不指定则回到第一行', store.getSnapshot().activeIndex, 0)
 }
 
-console.log('--- A⑦ store 分页:翻页只走 turn,↑/↓ 不出本页 ---')
+console.log('--- A⑦ store 窗口:连续滑动、两端停住、↑/↓ 不整屏跳 ---')
 {
   const many = Array.from({ length: 25 }, (_, index) => ({ key: `ws-${index + 1}`, title: `W${index + 1}`, subtitle: `/w${index + 1}` }))
   const store = createPaletteStore()
@@ -192,53 +171,63 @@ console.log('--- A⑦ store 分页:翻页只走 turn,↑/↓ 不出本页 ---')
   check('候选全量进 store', store.getSnapshot().entries.length, 25)
 
   store.open(() => {})
-  check('打开落在第一页第一行', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 0])
+  check('打开落在窗口第一行', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [0, 0])
 
+  // 滚轮:按行滑,窗口是连续的。
+  store.slide(1)
+  check('滚一行:1–10 → 2–11', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [1, 1])
+  check('被滑出去的第一行不再选中:选中贴到可见边', store.getSnapshot().activeIndex, store.getSnapshot().offset)
+  store.slide(1)
+  check('再滚一行:3–12', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [2, 2])
+
+  // ←/→:滑一整屏。
   store.turn(1)
-  check('→ 翻到第二页,选中行落在本页第一行', [store.getSnapshot().page, store.getSnapshot().activeIndex], [1, 10])
+  check('→ 滑一整屏', store.getSnapshot().offset, 12)
+  check('滑完选中新窗口第一行', store.getSnapshot().activeIndex, 12)
   store.turn(1)
-  check('→ 再翻到第三页', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 20])
+  check('→ 到尽头贴底', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [15, 15])
   store.turn(1)
-  check('最后一页再 → 绕回第一页', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 0])
+  check('最后一屏再 → 停住(不环状)', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [15, 15])
   store.turn(-1)
-  check('第一页 ← 绕到最后一页', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 20])
+  check('← 回退一整屏', store.getSnapshot().offset, 5)
+  store.turn(-1)
+  check('← 再到顶停住', store.getSnapshot().offset, 0)
 
-  // ↑/↓ 只在当前页内环状走,任何一次都不会翻页。
+  // ↑/↓:到两端停住;选中行滑出窗口时窗口只滑到它贴边。
   store.move(1)
-  check('最后一页继续 ↓ 落在本页下一行', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 21])
-  store.select(24)
-  store.move(1)
-  check('本页最后一行再 ↓ 绕回本页第一行(不翻页)', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 20])
-  store.move(-1)
-  check('本页第一行再 ↑ 绕到本页最后一行(不翻页)', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 24])
-
-  // 第一页最后一行继续 ↓:绕回本页第一行,页仍是第一页。
+  check('↓ 选中下一行', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [0, 1])
   store.select(9)
-  check('第一页最后一行仍在第一页', store.getSnapshot().page, 0)
+  check('选中最后一行仍在窗口内', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [0, 9])
   store.move(1)
-  check('第一页最后一行再 ↓ 绕回第一页第一行(不翻页)', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 0])
-  store.move(-1)
-  check('第一页第一行再 ↑ 绕到本页最后一行(不翻页)', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 9])
+  check('↓ 越过窗口底边:窗口滑一行,选中行贴底', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [1, 10])
+  store.select(0)
+  check('选中第一行时窗口滑回顶部(贴边)', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [0, 0])
+  store.select(24)
+  check('选中末尾:窗口贴底,选中行在最后', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [15, 24])
+  store.move(1)
+  check('末尾再 ↓ 停住(不环状)', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [15, 24])
 
-  store.select(20)
-  check('直接选中第三页的行,页跟着走', [store.getSnapshot().page, store.getSnapshot().activeIndex], [2, 20])
-
-  // 打开时指定后面的行:页也要跟上,否则「选中了却看不见」。
+  // 打开时指定后面的行:窗口对齐到包含它的那一屏,选中行看得见。
   store.open(() => {}, 13)
-  check('打开在第 14 行 → 第二页', [store.getSnapshot().page, store.getSnapshot().activeIndex], [1, 13])
+  check('打开在第 14 行 → 窗口从第 11 行起', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [10, 13])
+  store.open(() => {}, 24)
+  check('打开在末尾 → 窗口贴底', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [15, 24])
 
-  // 候选变短到装不下当前行:下标回到第一行,页回到第一页。
+  // 候选变短到装不下当前行:窗口收敛,选中行回到第一行。
   store.sync(many.slice(0, 3))
-  check('候选变短后回到第一页第一行', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 0])
+  check('候选变短后回到第一行', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [0, 0])
 
-  // 单页时翻页不动。
+  // 装不满一屏时滑不动。
   store.turn(1)
-  check('单页时 → 不动', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, 0])
+  check('不足一屏时 → 不动', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [0, 0])
+  store.slide(3)
+  check('不足一屏时滚轮不动', store.getSnapshot().offset, 0)
 
   // 空候选。
   store.sync([])
   store.turn(1)
-  check('没有候选时翻页不动', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, -1])
+  store.slide(1)
+  check('没有候选时滑动不动', [store.getSnapshot().offset, store.getSnapshot().activeIndex], [0, -1])
 }
 
 check('工作区固定行 id 是插件命名空间下的', QUICK_SWITCH_ID.startsWith('dsh-workspace-quick-switch.'), true)

@@ -192,7 +192,8 @@ export interface PaletteView {
  *
  * `entries` 由渲染方从上游快照投影而来(工作区见 `paletteEntries`,会话见 `sessions.ts`),
  * **是全部候选**、不截断;`activeIndex` 是选中行在 `entries` 里的下标(`entries` 为空时固定为
- * -1);`page` 是当前显示第几页(0 起),一页 {@link PAGE_SIZE} 行、由 ← / → 翻页。
+ * -1);`offset` 是窗口第一行在 `entries` 里的下标 —— 窗口连续滑动,一屏 {@link PAGE_SIZE}
+ * 行,不按页对齐(第 2 行起头时显示的是 2–11 这样的跨页窗口)。
  * `binding` 是本次打开时的动作:Enter / 点击都执行它(工作区是「新建会话」,会话是
  * 「打开会话」)。
  *
@@ -202,7 +203,7 @@ export interface PaletteState<T = PaletteRow> {
   readonly open: boolean
   readonly entries: readonly T[]
   readonly activeIndex: number
-  readonly page: number
+  readonly offset: number
   readonly binding: (() => void) | null
 }
 
@@ -219,21 +220,23 @@ export interface PaletteStore<T = PaletteRow> {
   /** 选中某一行;越界时不做动作。 */
   select(index: number): void
   /**
-   * 相对位移选中行(`delta` 为 ±1),**只在本页内**环状回头;没有候选时不动。
-   * 翻页只由 {@link PaletteStore.turn} 触发,`move` 不会改页。
+   * 相对位移选中行(`delta` 为 ±1),到两端停住(不环状);选中行移出窗口时窗口跟着滑,
+   * 但只滑到它刚好可见。没有候选时不动。
    */
   move(delta: number): void
-  /** 翻一页(`delta` 为 ±1),到两端环状回头;单页时不动。 */
+  /** 窗口滑动一整屏(`delta` 为 ±1),到两端停住;滑完选中行落在新窗口第一行。 */
   turn(delta: number): void
-  /** 同步渲染方投影出来的候选;选中下标越出候选范围时退回第一行,页跟着选中行收敛。 */
+  /** 窗口滑动若干行(滚轮用,正数往下);到两端停住,选中行留在窗口内。 */
+  slide(rows: number): void
+  /** 同步渲染方投影出来的候选;选中下标越出候选范围时退回第一行,窗口跟着收敛。 */
   sync(entries: readonly T[]): void
 }
 
 /**
  * 投影浮层候选:整份工作区按给定顺序排出(不截断),并把「当前工作区」标出来。
  *
- * 一屏只放 {@link PAGE_SIZE} 行,切片由 {@link pageSlice} 在渲染时做 —— 候选本身保留
- * 完整长度,← / → 才能翻到后面的工作区。
+ * 一屏放 {@link PAGE_SIZE} 行,窗口切片由 {@link windowSlice} 在渲染时做 —— 候选本身保留
+ * 完整长度,滚轮与 ← / → 才能滑到后面的工作区。
  * @param workspaces - 上游工作区,已经是左侧栏显示顺序。
  * @param activeId - 当前会话所属的工作区 id;没有则为 undefined。
  * @returns 浮层候选行。
@@ -287,127 +290,107 @@ export function clampIndex(index: number, length: number): number {
 }
 
 /**
- * 环状步进后的下标:从 `activeIndex` 走 `delta` 步,到头绕回另一端。
+ * 步进后的下标:从 `activeIndex` 走 `delta` 步,到两端停住(不环状回头)。
  *
- * 步进范围是**整个候选列表**(不像 {@link moveWithinPage} 那样只在本页内走),供不分的
- * 场景与测试直接使用;浮层的 ↑/↓ 走的是页内版本。
+ * 浮层的 ↑/↓ 用它:到第一行再 ↑、到最后一行再 ↓ 都停住,与窗口「滑到两端就停」一致。
  * @param activeIndex - 当前下标(可以是 -1/越界,按 `clampIndex` 收敛)。
  * @param delta - 位移,通常为 ±1。
  * @param length - 候选数量。
  * @returns 新下标;没有候选时为 -1。
  */
-export function moveIndex(activeIndex: number, delta: number, length: number): number {
+export function stepIndex(activeIndex: number, delta: number, length: number): number {
   if (length <= 0) return -1
   const current = clampIndex(activeIndex, length)
   const steps = Number.isFinite(delta) ? Math.trunc(delta) : 1
-  const next = (current + steps) % length
-  return next < 0 ? next + length : next
+  return clampIndex(current + steps, length)
 }
 
 /**
- * 在**当前页内**环状步进的下标:走到本页第一行再 ↑ 就绕到本页最后一行,反之亦然。
+ * 窗口能滑到的最大起点(最后一行贴底)。
  *
- * 跨页只由 ←/→ 触发,所以 ↑/↓ **不会**把选中行挪到别的页上 —— 否则「↑/↓ 选着选着页
- * 自己翻了」,翻页就不再是左右键的专属动作。
- * @param activeIndex - 当前下标(可以是 -1/越界,按 `clampIndex` 收敛)。
- * @param delta - 位移,通常为 ±1。
- * @param length - 候选数量(决定最后一页剩几行)。
- * @param page - 当前页号(越界按 `clampPage` 收敛)。
- * @param size - 一页几行。
- * @returns 新下标;没有候选时为 -1。
+ * 候选比一屏还少时固定为 0 —— 没有可滑的余地。
+ * @param length - 候选数量。
+ * @param size - 一屏几行。
+ * @returns 最大起点下标。
  */
-export function moveWithinPage(
-  activeIndex: number,
-  delta: number,
+export function maxOffset(length: number, size: number = PAGE_SIZE): number {
+  const span = Math.max(0, Math.trunc(size))
+  if (!Number.isFinite(length) || length <= 0 || span === 0) return 0
+  return Math.max(0, length - span)
+}
+
+/**
+ * 把窗口起点收进合法范围:非整数取 0,越界取最近的边界;候选不足一屏固定为 0。
+ * @param offset - 待收敛的起点。
+ * @param length - 候选数量。
+ * @param size - 一屏几行。
+ * @returns 合法起点。
+ */
+export function clampOffset(offset: number, length: number, size: number = PAGE_SIZE): number {
+  const max = maxOffset(length, size)
+  if (!Number.isInteger(offset)) return 0
+  if (offset < 0) return 0
+  if (offset > max) return max
+  return offset
+}
+
+/**
+ * 窗口滑动若干行后的起点(夹在两端之间,不环状)。
+ * @param offset - 当前起点(可以是越界值,按 `clampOffset` 收敛)。
+ * @param rows - 位移行数,正数往下。
+ * @param length - 候选数量。
+ * @param size - 一屏几行。
+ * @returns 新起点。
+ */
+export function slideOffset(offset: number, rows: number, length: number, size: number = PAGE_SIZE): number {
+  const current = clampOffset(offset, length, size)
+  const steps = Number.isFinite(rows) ? Math.trunc(rows) : 0
+  return clampOffset(current + steps, length, size)
+}
+
+/**
+ * 让某个下标落进窗口所需的最小滑动:已经可见就不动,否则只滑到它贴边为止。
+ *
+ * 打开浮层时不用它(那里对齐到一屏的整数倍,见 `createPaletteStore` 的 `open`);
+ * 它管的是点击 / ↑↓ / 候选变短之后「选中行必须看得见」。
+ * @param offset - 当前起点(越界按 `clampOffset` 收敛)。
+ * @param index - 必须可见的下标。
+ * @param length - 候选数量。
+ * @param size - 一屏几行。
+ * @returns 新起点。
+ */
+export function revealOffset(
+  offset: number,
+  index: number,
   length: number,
-  page: number,
   size: number = PAGE_SIZE,
 ): number {
-  if (length <= 0) return -1
-  const span = Math.max(0, Math.trunc(size))
-  if (span === 0) return clampIndex(activeIndex, length)
-  const current = clampPage(page, length, size)
-  const start = current * span
-  // 最后一页可能不满:本页的行数是候选总长与页起点之差,夹在 [0, span] 内。
-  const rows = Math.max(0, Math.min(span, length - start))
-  if (rows === 0) return -1
-  const local = clampIndex(activeIndex - start, rows)
-  return start + moveIndex(local, delta, rows)
+  const span = Math.max(1, Math.trunc(size))
+  const current = clampOffset(offset, length, size)
+  // 没有选中行(-1 / 越界)时窗口不动:那不是「要看见某一行」的请求。
+  if (!inRange(index, length)) return current
+  const target = index
+  if (target < current) return clampOffset(target, length, size)
+  if (target >= current + span) return clampOffset(target - span + 1, length, size)
+  return current
 }
 
 /**
- * 候选总共有几页。
- * @param length - 候选数量。
- * @param size - 一页几行(默认 {@link PAGE_SIZE})。
- * @returns 页数;没有候选时为 0。
- */
-export function pageCount(length: number, size: number = PAGE_SIZE): number {
-  if (!Number.isFinite(length) || length <= 0) return 0
-  if (!Number.isFinite(size) || size <= 0) return 0
-  return Math.ceil(length / size)
-}
-
-/**
- * 把页号收进合法范围:非整数取 0,越界取最近的边界;没有候选固定为 0。
- * @param page - 待收敛的页号。
- * @param length - 候选数量。
- * @param size - 一页几行。
- * @returns 合法页号。
- */
-export function clampPage(page: number, length: number, size: number = PAGE_SIZE): number {
-  const last = pageCount(length, size) - 1
-  if (last < 0) return 0
-  if (!Number.isInteger(page)) return 0
-  if (page < 0) return 0
-  if (page > last) return last
-  return page
-}
-
-/**
- * 环状翻页后的页号:到头绕回另一端。
- * @param page - 当前页号(可以是越界值,按 `clampPage` 收敛)。
- * @param delta - 位移,通常为 ±1。
- * @param length - 候选数量。
- * @param size - 一页几行。
- * @returns 新页号;没有候选时为 0。
- */
-export function turnPage(page: number, delta: number, length: number, size: number = PAGE_SIZE): number {
-  const total = pageCount(length, size)
-  if (total <= 1) return 0
-  const current = clampPage(page, length, size)
-  const steps = Number.isFinite(delta) ? Math.trunc(delta) : 1
-  const next = (current + steps) % total
-  return next < 0 ? next + total : next
-}
-
-/**
- * 一个下标落在第几页。
- * @param index - 候选下标。
- * @param size - 一页几行。
- * @returns 页号;负下标归第 0 页。
- */
-export function pageOf(index: number, size: number = PAGE_SIZE): number {
-  if (!Number.isInteger(index) || index < 0) return 0
-  if (!Number.isFinite(size) || size <= 0) return 0
-  return Math.floor(index / size)
-}
-
-/**
- * 当前页在候选里的那一段(渲染一屏用它)。
+ * 窗口在候选里的那一段(渲染一屏用它)。
  * @param entries - 全部候选。
- * @param page - 页号(越界按 `clampPage` 收敛)。
- * @param size - 一页几行。
- * @returns 这一页的候选;超出范围的部分自然被 `slice` 截掉。
+ * @param offset - 窗口起点(越界按 `clampOffset` 收敛)。
+ * @param size - 一屏几行。
+ * @returns 这一屏的候选;末尾不足一屏时自然短一些。
  */
-export function pageSlice<T>(entries: readonly T[], page: number, size: number = PAGE_SIZE): T[] {
-  const window = Math.max(0, Math.trunc(size))
-  const start = clampPage(page, entries.length, size) * window
-  return entries.slice(start, start + window)
+export function windowSlice<T>(entries: readonly T[], offset: number, size: number = PAGE_SIZE): T[] {
+  const span = Math.max(0, Math.trunc(size))
+  const start = clampOffset(offset, entries.length, size)
+  return entries.slice(start, start + span)
 }
 
 /** 空状态:关闭、没有候选、没有动作。 */
 function emptyState<T>(): PaletteState<T> {
-  return { open: false, entries: [], activeIndex: -1, page: 0, binding: null }
+  return { open: false, entries: [], activeIndex: -1, offset: 0, binding: null }
 }
 
 /**
@@ -447,8 +430,11 @@ export function createPaletteStore<T = PaletteRow>(): PaletteStore<T> {
     open(binding, index) {
       const wanted = index === undefined ? 0 : index
       const activeIndex = clampIndex(wanted, state.entries.length)
-      // 打开时选中行可能落在后面的页上(当前会话在第 12 个工作区):页要跟着它。
-      commit({ ...state, open: true, binding, activeIndex, page: pageOf(activeIndex) })
+      // 打开时选中行可能落在后面(当前会话是第 90 个):窗口对齐到包含它的那一屏,
+      // 与「开在当前那一页」同感;末尾不足一屏时贴底,选中行照样看得见。
+      const aligned = Math.floor(activeIndex / PAGE_SIZE) * PAGE_SIZE
+      const offset = clampOffset(aligned, state.entries.length)
+      commit({ ...state, open: true, binding, activeIndex, offset })
     },
     close() {
       commit({ ...state, open: false, binding: null })
@@ -456,26 +442,41 @@ export function createPaletteStore<T = PaletteRow>(): PaletteStore<T> {
     select(index) {
       if (index === state.activeIndex) return
       const activeIndex = clampIndex(index, state.entries.length)
-      commit({ ...state, activeIndex, page: pageOf(activeIndex) })
+      const offset = revealOffset(state.offset, activeIndex, state.entries.length)
+      commit({ ...state, activeIndex, offset })
     },
     move(delta) {
       if (state.entries.length === 0) return
-      // 只在当前页内走:跨页归 ←/→,↑/↓ 不翻页。
-      const page = clampPage(state.page, state.entries.length)
-      const activeIndex = moveWithinPage(state.activeIndex, delta, state.entries.length, page)
-      commit({ ...state, activeIndex, page })
+      // 到两端停住(不环状);选中行滑出窗口时只滑到它贴边,不整屏跳。
+      const activeIndex = stepIndex(state.activeIndex, delta, state.entries.length)
+      if (activeIndex === state.activeIndex) return
+      const offset = revealOffset(state.offset, activeIndex, state.entries.length)
+      commit({ ...state, activeIndex, offset })
     },
     turn(delta) {
       if (state.entries.length === 0) return
-      const page = turnPage(state.page, delta, state.entries.length)
-      if (page === state.page) return
-      // 翻页后选中行落在这一页的第一行:↑/↓ 与 Enter 都接着新的一页走。
-      commit({ ...state, page, activeIndex: page * PAGE_SIZE })
+      const offset = slideOffset(state.offset, (Number.isFinite(delta) ? Math.trunc(delta) : 1) * PAGE_SIZE, state.entries.length)
+      if (offset === state.offset) return
+      // 滑完一整屏后选中行落在新窗口第一行:↑/↓ 与 Enter 都接着新的一屏走。
+      commit({ ...state, offset, activeIndex: clampIndex(offset, state.entries.length) })
+    },
+    slide(rows) {
+      if (state.entries.length === 0) return
+      const offset = slideOffset(state.offset, rows, state.entries.length)
+      if (offset === state.offset) return
+      // 选中行尽量留在窗口里;滑出去之后贴到最近的边(不整屏跳,滚轮只负责「看到哪一段」)。
+      const active = clampIndex(state.activeIndex, state.entries.length)
+      const first = offset
+      const last = Math.min(offset + PAGE_SIZE, state.entries.length) - 1
+      const activeIndex = active < first ? first : active > last ? last : active
+      commit({ ...state, offset, activeIndex })
     },
     sync(entries) {
       const keep = inRange(state.activeIndex, entries.length)
       const activeIndex = keep ? state.activeIndex : entries.length > 0 ? 0 : -1
-      commit({ ...state, entries, activeIndex, page: pageOf(activeIndex) })
+      // 窗口不整屏跳:候选变短后只把起点收到合法范围,选中行仍然露在窗口里。
+      const offset = clampOffset(revealOffset(state.offset, activeIndex, entries.length), entries.length)
+      commit({ ...state, entries, activeIndex, offset })
     },
   }
 }

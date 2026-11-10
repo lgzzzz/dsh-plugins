@@ -10,11 +10,12 @@
  * (⌘⌥)、在 Windows/Linux 上展开成 `control+alt`(Ctrl+Alt),所以同一份声明在两端
  * 各是各的键。
  *
- * 两张浮层共用同一套面板(同一份样式、同样的页码/选中/翻页规则,状态层在
+ * 两张浮层共用同一套面板(同一份样式、同样的窗口滑动/选中规则,状态层在
  * `palette.ts`),只是候选来源与确认动作不同:工作区候选照抄 Workspace 控制器的 `list`
  * 快照(`dsh-workspace-activity-sort` 之类改的正是这份顺序);会话候选由 `sessions.ts`
  * 按左侧栏的派生链投影,顺序与「单列表 / 最近更新 / 隐藏已归档」完全一致。一屏只渲染
- * {@link PAGE_SIZE} 行,更多候选用 `←` / `→` 翻页;`↑` / `↓` 只在当前页内环状走。
+ * {@link PAGE_SIZE} 行,窗口**连续滑动**:滚轮滚一格就是 1–10 → 2–11,`←` / `→` 滑一
+ * 整屏,`↑` / `↓` 移选中行并在它离开窗口时把窗口滑到贴边;到两端都停住。
  * 两张浮层互斥:打开一张会先关掉另一张。
  *
  * 四条通路(两张浮层各自一份):
@@ -28,7 +29,7 @@
  *     (槽只给框架标准 props,容器与其注入面在 `ctx.inject` 的 scope 里造好),所以候选一变
  *     就重渲。
  *   - **浮层内的按键**由本插件在 document 捕获阶段取走(`Escape` / `Enter` / `↑` / `↓`
- *     与翻页的 `←` / `→`):浮层一开它就先于任何本地控件看到按键,关掉后立即放行。
+ *     与整屏滑动的 `←` / `→`):浮层一开它就先于任何本地控件看到按键,关掉后立即放行。
  *   - **终端内的打开键**由本插件在 window 捕获阶段取走:落在 `.xterm` 里的 keydown 到不了
  *     固定通道(终端在自己的 textarea 处理器里 `stopPropagation()`),所以另挂一个捕获监听,
  *     早于事件进入终端判定,命中即吞掉这一按并开对应的浮层(判定与固定通道共用同一函数)。
@@ -56,12 +57,11 @@ import {
   SESSION_SWITCH_ID,
   bindingPress,
   clampIndex,
-  clampPage,
+  clampOffset,
   createPaletteStore,
   currentRowIndex,
-  pageCount,
-  pageSlice,
   paletteEntries,
+  windowSlice,
   quickSwitchKeys,
   sessionSwitchKeys,
   type HostWorkspace,
@@ -90,6 +90,10 @@ export const inject = ['slots', 'shortcuts']
  * 把这份高度压到约 561px,常见笔记本窗口(视口 ≥ 800px)同样一次看全。只有更矮的窗口才由
  * 列表内部滚动兜底,那时选中行靠 `scrollIntoView({ block: 'nearest' })` 跟着走。
  *
+ * 指针:浮层根节点仍是 click-through(`pointer-events: none`),遮罩与**面板**吃指针
+ * 事件 —— 面板因此能点(每一行就是按钮);滚轮由 `installPaletteWheel` 挂在浮层根节点上
+ * 接管(见那里对被动监听与「一格一行」的说明)。
+ *
  * 曾经的写法是 `max-height: min(70vh, 560px)`:面板在任何窗口里都被截到 560px,而候选列表
  * 需要 526px 放 10 行 × 50px,于是第 10 行永远在滚动区外。
  */
@@ -113,6 +117,7 @@ export const PALETTE_CSS = `
   backdrop-filter: var(--dsw-mask-blur, none);
 }
 .dsh-workspace-quick-switch-panel {
+  pointer-events: auto;
   box-sizing: border-box;
   position: relative;
   z-index: 1;
@@ -251,12 +256,12 @@ export const PALETTE_CSS = `
   color: var(--dsw-alias-label-tertiary, #81858c);
 }
 /*
- * 视口高度不足 860px 时收紧内部留白与行高,保证一页 10 行在常见笔记本窗口(视口 ≥ 800px)
+ * 视口高度不足 860px 时收紧内部留白与行高,保证一屏 10 行在常见笔记本窗口(视口 ≥ 800px)
  * 里一次看全;更矮的窗口仍由列表内部滚动兜底。
  *
  * 行高要显式写死:候选行是「名称 + 路径」两行文字,默认值 line-height: normal 会按字体
  * 给不同高度(中文 / 日文字体比拉丁字体高 2~3px/行,10 行累计差 20~30px,足以让第 10 行
- * 掉出视口)。写死之后一页高度与标题语言无关。
+ * 掉出视口)。写死之后一屏高度与标题语言无关。
  *
  * 只改内部间距,不动浮层根节点的顶部内边距 —— 那个值要让开 macOS 红绿灯 / Windows 标题栏。
  */
@@ -334,6 +339,93 @@ export const SESSION_VIEW: PaletteView = {
  */
 export function keepOptionVisible(option: Element | null | undefined): void {
   option?.scrollIntoView?.({ block: 'nearest' })
+}
+
+/** 一格滚轮事件(结构与 `WheelEvent` 兼容,测试替身也能给)。 */
+export interface PaletteWheelEventLike {
+  readonly deltaY: number
+  /** `0` 像素、`1` 行、`2` 页(DOM_DELTA_*);缺席按像素。 */
+  readonly deltaMode?: number
+  readonly ctrlKey?: boolean
+}
+
+/** 滚轮监听目标(浮层根节点结构上满足它)。 */
+export interface PaletteWheelTarget {
+  addEventListener(
+    type: 'wheel',
+    listener: (event: WheelEvent) => void,
+    options?: AddEventListenerOptions | boolean,
+  ): void
+  removeEventListener(
+    type: 'wheel',
+    listener: (event: WheelEvent) => void,
+    options?: EventListenerOptions | boolean,
+  ): void
+}
+
+/**
+ * 一次滚轮折算成多少像素。
+ *
+ * 像素模式(触控板、多数浏览器)原样使用;行 / 页模式(部分平台的鼠标滚轮)按一行 16px、
+ * 一整屏 400px 折算。幅度只用来判方向,见 {@link wheelStep}。
+ * @param event - 滚轮事实。
+ * @returns 纵向位移(向上为负)。
+ */
+export function wheelPixels(event: PaletteWheelEventLike): number {
+  if (event.deltaMode === 1) return event.deltaY * 16
+  if (event.deltaMode === 2) return event.deltaY * 400
+  return event.deltaY
+}
+
+/**
+ * 一次滚轮折算成滑几行:**一格就是一行,与幅度无关**。
+ *
+ * 有的鼠标一格只报十几像素、有的报到一百多,按像素折算会让前者「滚了没反应」、后者
+ * 「一格跳两三行」。这里不读幅度,只看方向:非零位移一律算一行(向上为 -1)。
+ * 触控板的连续事件也因此每个事件走一行 —— 手感由滚轮 / 触控板自己的节奏决定。
+ * @param pixels - 这一格折算出的像素(向上为负)。
+ * @returns -1 / 0 / 1。
+ */
+export function wheelStep(pixels: number): -1 | 0 | 1 {
+  if (!Number.isFinite(pixels) || pixels === 0) return 0
+  return pixels > 0 ? 1 : -1
+}
+
+/**
+ * 让滚轮滑动浮层窗口(一格一行),不是滚选中行,也不整屏跳。
+ *
+ * 监听挂在**浮层根节点**上、`passive: false`:
+ *
+ *   - 指针落在浮层任何位置(面板、遮罩留白)滚轮都归浮层 —— 只挂在面板上的话,指针偏到
+ *     遮罩那片留白里,滚轮就会穿到背后正文上;
+ *   - 每次都 `preventDefault()`:浮层是模态的,背后的正文被遮罩盖着,不该跟着滚;
+ *   - 触控板捏合在 Chrome 里报成 `ctrlKey + wheel`,那是浏览器缩放手势,原样放行;
+ *   - 每一格滚轮按 {@link wheelStep} 折成一行,窗口因此是**连续**的:显示 1–10 时滚一格
+ *     变成 2–11,而不是整屏跳到 11–20。
+ *
+ * 选中行不跟着滚轮走:高亮只由键盘与点击改;滑动把选中行带出窗口时,store 会把它贴到
+ * 最近的可见边上。
+ * @param root - 浮层根节点;缺席(浮层未挂载)时不装。
+ * @param slide - 滑动动作,参数是行数(正数往下)。
+ * @returns 卸载函数。
+ */
+export function installPaletteWheel(
+  root: PaletteWheelTarget | null | undefined,
+  slide: (rows: number) => void,
+): () => void {
+  if (root === null || root === undefined) return () => {}
+  const onWheel = (event: WheelEvent): void => {
+    // 捏合缩放在 Chrome 里报成 ctrlKey + wheel:那是浏览器缩放手势,不归浮层。
+    if (event.ctrlKey === true) return
+    const rows = wheelStep(wheelPixels(event))
+    if (rows === 0) return
+    // 浮层是模态的:滚轮一律归它,哪怕已经滑到头 —— 否则会漏到背后那层正文上。
+    event.preventDefault()
+    slide(rows)
+  }
+  root.addEventListener('wheel', onWheel, { passive: false })
+  // 卸载只按 capture 匹配:`passive` 不参与「是不是同一个监听」的判定。
+  return () => root.removeEventListener('wheel', onWheel, false)
 }
 
 /** 浮层内一个按键解出的动作。 */
@@ -530,16 +622,16 @@ export interface OverlayProps {
 export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
   const { store, view } = props
   const state = React.useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+  const rootRef = React.useRef<HTMLDivElement | null>(null)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
   const open = state.open
   const entries = state.entries
   const activeIndex = clampIndex(state.activeIndex, entries.length)
-  // 一屏只渲染 PAGE_SIZE 行;页号越界(候选变短)按当前候选收敛,渲染与按键读的是同一个值。
-  const page = clampPage(state.page, entries.length)
-  const pages = pageCount(entries.length)
-  const offset = page * PAGE_SIZE
-  const visible = pageSlice(entries, page)
+  // 一屏只渲染 PAGE_SIZE 行;窗口起点越界(候选变短)按当前候选收敛,渲染与按键读的是同一个值。
+  // 窗口是连续滑动的:起点可以是任意行,所以滚一下就是 1–10 → 2–11,而不是整屏跳。
+  const offset = clampOffset(state.offset, entries.length)
+  const visible = windowSlice(entries, offset)
 
   React.useEffect(() => {
     if (!open) return
@@ -555,6 +647,14 @@ export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
   }, [open, activeIndex, view])
 
   React.useEffect(() => installPaletteKeys(store, document), [store])
+
+  // 滚轮按行滑动窗口(一格一行,1–10 → 2–11),不改选中行(选中行只由键盘与点击改)。
+  // 挂在整个浮层上而不是面板上:指针偏到遮罩那片留白里时,滚轮也该归浮层,不该穿到背后
+  // 正文。浮层只在打开时才渲染,所以跟着 `open` 走。
+  React.useEffect(() => {
+    if (!open) return
+    return installPaletteWheel(rootRef.current, (rows) => store.slide(rows))
+  }, [open, store])
 
   if (!open) return null
 
@@ -578,7 +678,7 @@ export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
         React.createElement(
           'span',
           { key: 'count', className: 'dsh-workspace-quick-switch-count' },
-          entries.length === 0 ? view.emptyCount : countLabel(view, entries.length, page, pages),
+          entries.length === 0 ? view.emptyCount : countLabel(view, entries.length, offset),
         ),
       ),
       entries.length === 0
@@ -603,8 +703,8 @@ export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
         'div',
         { key: 'foot', className: 'dsh-workspace-quick-switch-foot' },
         React.createElement('span', { key: 'move' }, '↑ ↓ 选择'),
-        pages > 1
-          ? React.createElement('span', { key: 'page' }, '← → 翻页')
+        entries.length > PAGE_SIZE
+          ? React.createElement('span', { key: 'page' }, '← → 翻一屏')
           : null,
         React.createElement('span', { key: 'enter' }, view.enterHint),
         React.createElement('span', { key: 'esc' }, 'Esc 关闭'),
@@ -614,21 +714,22 @@ export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
 
   return React.createElement(
     'div',
-    { className: 'dsh-workspace-quick-switch-overlay', [view.rootAttr]: '' },
+    { ref: rootRef, className: 'dsh-workspace-quick-switch-overlay', [view.rootAttr]: '' },
     children,
   )
 }
 
 /**
- * 标题右侧的计数文案:单页时报总数,多页时带页码。
+ * 标题右侧的计数文案:一屏装得下时报总数,否则报当前看到的行范围。
  * @param view - 这张浮层的文案(决定计数单位)。
  * @param total - 候选总数。
- * @param page - 当前页号(0 起)。
- * @param pages - 总页数。
+ * @param offset - 窗口第一行的下标(0 起)。
  */
-function countLabel(view: PaletteView, total: number, page: number, pages: number): string {
-  if (pages <= 1) return `${total} ${view.unit}`
-  return `${total} ${view.unit} · 第 ${page + 1} / ${pages} 页`
+export function countLabel(view: PaletteView, total: number, offset: number): string {
+  if (total <= PAGE_SIZE) return `${total} ${view.unit}`
+  const from = offset + 1
+  const to = Math.min(offset + PAGE_SIZE, total)
+  return `${total} ${view.unit} · 显示 ${from}–${to}`
 }
 
 /**
