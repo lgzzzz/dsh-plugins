@@ -21,7 +21,6 @@ dsh-desktop-notify/lib/
 dsh-header-action-order/lib/
 dsh-jobs-optimize/lib/
 dsh-qoder-connect/lib/
-dsh-qoder-connect-src/lib/
 dsh-stats-ttft/lib/
 dsh-keyboard-shortcuts/lib/
 dsh-turn-process-open/lib/
