@@ -17,6 +17,7 @@ import {
   pageSlice,
   paletteEntries,
   QUICK_SWITCH_ID,
+  SESSION_SWITCH_ID,
   turnPage,
 } from '../src/palette.ts'
 import { check, checkTrue, checkUndefined, finish, workspace } from './helpers.mjs'
@@ -27,12 +28,12 @@ console.log('--- A① 候选投影:全量、顺序照抄、当前工作区打标
   const entries = paletteEntries(many, 'ws-3')
   // 候选保留完整长度:截成「前 10 个」会让第 11 个之后的工作区永远翻不到。
   check('投影保留全部工作区', entries.length, 14)
-  check('顺序就是传进来的顺序', entries.slice(0, 10).map((entry) => entry.workspaceId), [
+  check('顺序就是传进来的顺序', entries.slice(0, 10).map((entry) => entry.key), [
     'ws-1', 'ws-2', 'ws-3', 'ws-4', 'ws-5', 'ws-6', 'ws-7', 'ws-8', 'ws-9', 'ws-10',
   ])
-  check('第 11 个之后也在候选里', entries.slice(10).map((entry) => entry.workspaceId), ['ws-11', 'ws-12', 'ws-13', 'ws-14'])
-  check('当前工作区打标', entries.filter((entry) => entry.current === true).map((entry) => entry.workspaceId), ['ws-3'])
-  check('路径与标题透传', [entries[0].title, entries[0].path], ['工作区 1', '/projects/ws-1'])
+  check('第 11 个之后也在候选里', entries.slice(10).map((entry) => entry.key), ['ws-11', 'ws-12', 'ws-13', 'ws-14'])
+  check('当前工作区打标', entries.filter((entry) => entry.current === true).map((entry) => entry.key), ['ws-3'])
+  check('路径与标题透传', [entries[0].title, entries[0].subtitle], ['工作区 1', '/projects/ws-1'])
   check('空输入空输出', paletteEntries([], 'ws-1'), [])
   check('一页 10 行', PAGE_SIZE, 10)
 }
@@ -47,7 +48,7 @@ console.log('--- A② 没有当前会话 / 当前工作区不在列表里 ---')
   const many = Array.from({ length: 12 }, (_, index) => workspace(`ws-${index + 1}`, `W${index + 1}`))
   const entries = paletteEntries(many, 'ws-12')
   check('第 12 个工作区同样在候选里', entries.length, 12)
-  check('第 12 个(第二页)带「当前」', entries.filter((entry) => entry.current === true).map((entry) => entry.workspaceId), ['ws-12'])
+  check('第 12 个(第二页)带「当前」', entries.filter((entry) => entry.current === true).map((entry) => entry.key), ['ws-12'])
   checkUndefined('没打标的行不是 false 而是缺席', entries[0].current)
 }
 
@@ -140,7 +141,7 @@ console.log('--- A⑤ store:写入、收敛与批量通知 ---')
   check('初始关闭且无候选', [initial.open, initial.entries.length, initial.activeIndex, initial.binding], [false, 0, -1, null])
   checkTrue('getSnapshot 引用稳定', store.getSnapshot() === initial)
 
-  store.sync([{ workspaceId: 'ws-1', title: 'A', path: '/a' }, { workspaceId: 'ws-2', title: 'B', path: '/b' }])
+  store.sync([{ key: 'ws-1', title: 'A', subtitle: '/a' }, { key: 'ws-2', title: 'B', subtitle: '/b' }])
   let action = 0
   store.open(() => { action += 1 })
   store.move(1)
@@ -159,7 +160,7 @@ console.log('--- A⑤ store:写入、收敛与批量通知 ---')
   await Promise.resolve()
   check('关闭清掉动作', [store.getSnapshot().open, store.getSnapshot().binding], [false, null])
 
-  store.sync([{ workspaceId: 'ws-9', title: 'Z', path: '/z' }])
+  store.sync([{ key: 'ws-9', title: 'Z', subtitle: '/z' }])
   store.open(() => { action += 1 })
   await Promise.resolve()
   check('重新打开落在第一行', store.getSnapshot().activeIndex, 0)
@@ -174,7 +175,7 @@ console.log('--- A⑤ store:写入、收敛与批量通知 ---')
 console.log('--- A⑥ store.open 可以指定初始行 ---')
 {
   const store = createPaletteStore()
-  store.sync([1, 2, 3].map((index) => ({ workspaceId: `ws-${index}`, title: `W${index}`, path: `/w${index}` })))
+  store.sync([1, 2, 3].map((index) => ({ key: `ws-${index}`, title: `W${index}`, subtitle: `/w${index}` })))
   store.open(() => {}, 2)
   check('落在指定行', store.getSnapshot().activeIndex, 2)
   store.open(() => {}, 9)
@@ -185,7 +186,7 @@ console.log('--- A⑥ store.open 可以指定初始行 ---')
 
 console.log('--- A⑦ store 分页:翻页只走 turn,↑/↓ 不出本页 ---')
 {
-  const many = Array.from({ length: 25 }, (_, index) => ({ workspaceId: `ws-${index + 1}`, title: `W${index + 1}`, path: `/w${index + 1}` }))
+  const many = Array.from({ length: 25 }, (_, index) => ({ key: `ws-${index + 1}`, title: `W${index + 1}`, subtitle: `/w${index + 1}` }))
   const store = createPaletteStore()
   store.sync(many)
   check('候选全量进 store', store.getSnapshot().entries.length, 25)
@@ -240,6 +241,8 @@ console.log('--- A⑦ store 分页:翻页只走 turn,↑/↓ 不出本页 ---')
   check('没有候选时翻页不动', [store.getSnapshot().page, store.getSnapshot().activeIndex], [0, -1])
 }
 
-check('固定行 id 是插件命名空间下的', QUICK_SWITCH_ID.startsWith('dsh-workspace-quick-switch.'), true)
+check('工作区固定行 id 是插件命名空间下的', QUICK_SWITCH_ID.startsWith('dsh-workspace-quick-switch.'), true)
+check('会话固定行 id 是插件命名空间下的', SESSION_SWITCH_ID.startsWith('dsh-workspace-quick-switch.'), true)
+check('两条固定行 id 不撞车', QUICK_SWITCH_ID === SESSION_SWITCH_ID, false)
 
 finish()

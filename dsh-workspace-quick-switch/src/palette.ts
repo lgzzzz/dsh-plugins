@@ -1,30 +1,44 @@
 /**
- * 工作区快速切换浮层的纯状态层:候选切片、选中项的移动规则,以及浮层自己那份可变状态。
+ * 快速切换浮层的纯状态层:候选切片、选中项的移动规则,以及浮层自己那份可变状态。
+ *
+ * 两条浮层(工作区 / 会话)共用这一份:状态只关心「候选数组 + 选中下标 + 页号」,
+ * 候选元素的形状由渲染方决定(本插件里两张浮层都用 {@link PaletteRow}),`createPaletteStore`
+ * 的泛型参数就是它。
  *
  * 这里不碰 React、不碰 DOM、也不读任何上游服务 —— `client.ts` 把上游快照喂进来、
  * 把动作接出去,所以这一层的规则可以被测试直接驱动。
  *
  * 候选顺序就是传进来的顺序:上游 Workspace 控制器的 `list` 快照已经是宿主的持久
- * 显示顺序(`follow()` 的 order 增量跟随它),也就是左侧栏 Workspace 分组的顺序。
+ * 显示顺序(`follow()` 的 order 增量跟随它),也就是左侧栏 Workspace 分组的顺序;
+ * 会话候选的顺序由 `sessions.ts` 自己按左侧栏的「单列表 + 最近更新 + 隐藏已归档」投影。
  *
  * 本文件不 import React(连类型也不):这样它在没有任何前端依赖的 Node 里也能被直接
  * 加载,测试可以只驱动规则本身。
  */
 
-/** 浮层一页最多列出的工作区数量;更多工作区用 ← / → 翻页。 */
+/** 浮层一页最多列出的行数;更多候选用 ← / → 翻页。 */
 export const PAGE_SIZE = 10
 
-/** 本插件挂载的固定行 id(占用 `⌘⌥M` / `Ctrl+Alt+M`,并出现在快捷键目录里)。 */
+/** 工作区浮层的固定行 id(占用 `⌘⌥M` / `Ctrl+Alt+M`,并出现在快捷键目录里)。 */
 export const QUICK_SWITCH_ID = 'dsh-workspace-quick-switch.quick-switch'
 
+/** 会话浮层的固定行 id(占用 `⌘⌥I` / `Ctrl+Alt+I`,并出现在快捷键目录里)。 */
+export const SESSION_SWITCH_ID = 'dsh-workspace-quick-switch.session-switch'
+
 /**
- * 固定行占用的逻辑物理组合:`primary+alt+M`。
+ * 工作区浮层的逻辑组合:`primary+alt+M`。
  *
  * `primary` 是注册表认的逻辑主修饰键:macOS 上展开成 `meta`(`⌘⌥M`),Windows/Linux 上
  * 展开成 `control`(`Ctrl+Alt+M`)——同一份声明,两端各是各的键。
  */
 export const QUICK_SWITCH_BINDING = {
   code: 'KeyM',
+  modifiers: ['primary', 'alt'],
+} as const
+
+/** 会话浮层的逻辑组合:`primary+alt+I`(macOS `⌘⌥I`,Windows/Linux `Ctrl+Alt+I`)。 */
+export const SESSION_SWITCH_BINDING = {
+  code: 'KeyI',
   modifiers: ['primary', 'alt'],
 } as const
 
@@ -48,6 +62,15 @@ export function quickSwitchKeys(platform: QuickSwitchPlatform): string[] {
   return platform === 'macos' ? ['⌘', '⌥', 'M'] : ['Ctrl', 'Alt', 'M']
 }
 
+/**
+ * 会话浮层固定行的键帽(与 {@link quickSwitchKeys} 同一套平台规则)。
+ * @param platform - 接收输入的设备平台。
+ * @returns 固定行的三个键帽。
+ */
+export function sessionSwitchKeys(platform: QuickSwitchPlatform): string[] {
+  return platform === 'macos' ? ['⌘', '⌥', 'I'] : ['Ctrl', 'Alt', 'I']
+}
+
 /** 一次按键里本插件要读的修饰键事实(KeyboardEvent 结构上满足它)。 */
 export interface QuickSwitchGesture {
   readonly code?: string
@@ -58,7 +81,40 @@ export interface QuickSwitchGesture {
 }
 
 /**
- * 这次按键是否就是本插件固定行在给定平台上占用的物理组合。
+ * 一条固定行的逻辑组合(`code` + 逻辑修饰键)。
+ *
+ * `primary` 是平台相关的那一个;其余修饰键是逻辑名,与物理键一一对应。
+ */
+export interface LogicalBinding {
+  readonly code: string
+  readonly modifiers: readonly string[]
+}
+
+/**
+ * 这次按键是否就是给定逻辑组合在给定平台上的物理形态。
+ *
+ * 要求修饰键集合**完全相等**:`primary` 落成 `meta`(macOS)或 `control`(其余),
+ * `alt` / `shift` 原样;多按或漏按任何一个都不算。
+ * @param platform - 接收输入的设备平台。
+ * @param binding - 固定行声明的逻辑组合。
+ * @param gesture - 按键事实。
+ * @returns 完全匹配时为 true。
+ */
+export function bindingPress(
+  platform: QuickSwitchPlatform,
+  binding: LogicalBinding,
+  gesture: QuickSwitchGesture,
+): boolean {
+  if (gesture.code !== binding.code) return false
+  const wanted = new Set(binding.modifiers.map((modifier) => (modifier === 'primary' ? primaryModifier(platform) : modifier)))
+  for (const modifier of ['control', 'alt', 'shift', 'meta'] as const) {
+    if ((gesture[modifier] === true) !== wanted.has(modifier)) return false
+  }
+  return true
+}
+
+/**
+ * 这次按键是否就是工作区浮层固定行在给定平台上占用的物理组合。
  *
  * macOS 上要 `meta+alt`、且不许同时按下另一侧的主修饰键(`control`);Windows/Linux 上
  * 要 `control+alt`、且不许 `meta`;两边都拒绝 `shift` 与别的键。
@@ -67,13 +123,17 @@ export interface QuickSwitchGesture {
  * @returns 完全匹配时为 true。
  */
 export function quickSwitchPress(platform: QuickSwitchPlatform, gesture: QuickSwitchGesture): boolean {
-  const primary = primaryModifier(platform)
-  const other = primary === 'meta' ? 'control' : 'meta'
-  return gesture.code === QUICK_SWITCH_BINDING.code
-    && gesture[primary] === true
-    && gesture.alt === true
-    && gesture[other] !== true
-    && gesture.shift !== true
+  return bindingPress(platform, QUICK_SWITCH_BINDING, gesture)
+}
+
+/**
+ * 这次按键是否就是会话浮层固定行在给定平台上占用的物理组合(`⌘⌥I` / `Ctrl+Alt+I`)。
+ * @param platform - 接收输入的设备平台。
+ * @param gesture - 按键事实。
+ * @returns 完全匹配时为 true。
+ */
+export function sessionSwitchPress(platform: QuickSwitchPlatform, gesture: QuickSwitchGesture): boolean {
+  return bindingPress(platform, SESSION_SWITCH_BINDING, gesture)
 }
 
 /** 宿主侧的一个工作区(本插件只读这几个字段;形状沿用 Workspace 控制器的 `items` 元素)。 */
@@ -85,34 +145,71 @@ export interface HostWorkspace {
   readonly sessionIds?: readonly string[]
 }
 
-/** 浮层里的一行:一个工作区,外加「它是不是当前会话所在的那个」。 */
-export interface PaletteEntry {
-  readonly workspaceId: string
+/**
+ * 浮层里的一行 —— 工作区与会话共用这一份视图模型。
+ *
+ * `key` 是稳定身份(工作区 id / 会话 id),`title` 是主标题,`subtitle` 是第二行(路径 /
+ * 「工作区 · 相对时间」);`current` 由渲染方画成「当前」角标,`badges` 是其余角标
+ * (置顶 / 进行中之类),顺序即渲染顺序。
+ */
+export interface PaletteRow {
+  readonly key: string
   readonly title: string
-  readonly path: string
+  readonly subtitle: string
   readonly current?: boolean
+  readonly badges?: readonly string[]
+}
+
+/**
+ * 一张浮层的静态文案。
+ *
+ * 两个浮层共用同一个组件,差异只在这份文案与候选来源上:工作区浮层的确认动作是「新建
+ * 会话」,会话浮层是「打开会话」。
+ */
+export interface PaletteView {
+  /** 浮层标识(槽位注册 id)。 */
+  readonly id: string
+  /** 行 DOM id 的前缀;必须是合法的 CSS 标识符(`#…` 选择器要用它)。 */
+  readonly domId: string
+  /** 根节点的 DOM 标记属性名。 */
+  readonly rootAttr: string
+  /** 面板标题。 */
+  readonly title: string
+  /** 计数单位,如「个工作区」「个会话」。 */
+  readonly unit: string
+  /** 没有候选时标题右侧的文案。 */
+  readonly emptyCount: string
+  /** 空态主文案。 */
+  readonly emptyHint: string
+  /** 列表的 aria-label。 */
+  readonly listLabel: string
+  /** 底栏的确认提示,如「Enter 新建会话」。 */
+  readonly enterHint: string
 }
 
 /**
  * 浮层状态快照。
  *
- * `entries` 由渲染方从上游快照投影而来(见 `paletteEntries`),**是全部工作区**、不截断;
- * `activeIndex` 是选中行在 `entries` 里的下标(`entries` 为空时固定为 -1);`page` 是当前
- * 显示第几页(0 起),一页 {@link PAGE_SIZE} 行、由 ← / → 翻页。
- * `binding` 是本次打开时的动作:Enter / 点击都是「在选中工作区新建会话」。
+ * `entries` 由渲染方从上游快照投影而来(工作区见 `paletteEntries`,会话见 `sessions.ts`),
+ * **是全部候选**、不截断;`activeIndex` 是选中行在 `entries` 里的下标(`entries` 为空时固定为
+ * -1);`page` 是当前显示第几页(0 起),一页 {@link PAGE_SIZE} 行、由 ← / → 翻页。
+ * `binding` 是本次打开时的动作:Enter / 点击都执行它(工作区是「新建会话」,会话是
+ * 「打开会话」)。
+ *
+ * 泛型参数是候选行的类型:store 只按长度与下标工作,不读候选的字段。
  */
-export interface PaletteState {
+export interface PaletteState<T = PaletteRow> {
   readonly open: boolean
-  readonly entries: readonly PaletteEntry[]
+  readonly entries: readonly T[]
   readonly activeIndex: number
   readonly page: number
   readonly binding: (() => void) | null
 }
 
 /** 浮层状态的动作面。 */
-export interface PaletteStore {
+export interface PaletteStore<T = PaletteRow> {
   /** 当前快照;引用在未变化时保持稳定。 */
-  getSnapshot(): PaletteState
+  getSnapshot(): PaletteState<T>
   /** 订阅状态变化;返回退订函数。 */
   subscribe(listener: () => void): () => void
   /** 打开浮层;`index` 指定初始选中行(默认第一行)。 */
@@ -129,7 +226,7 @@ export interface PaletteStore {
   /** 翻一页(`delta` 为 ±1),到两端环状回头;单页时不动。 */
   turn(delta: number): void
   /** 同步渲染方投影出来的候选;选中下标越出候选范围时退回第一行,页跟着选中行收敛。 */
-  sync(entries: readonly PaletteEntry[]): void
+  sync(entries: readonly T[]): void
 }
 
 /**
@@ -144,13 +241,25 @@ export interface PaletteStore {
 export function paletteEntries(
   workspaces: readonly HostWorkspace[],
   activeId: string | undefined,
-): PaletteEntry[] {
+): PaletteRow[] {
   return workspaces.map((workspace) => {
-    if (activeId === undefined || activeId === '' || workspace.workspaceId !== activeId) {
-      return { workspaceId: workspace.workspaceId, title: workspace.title, path: workspace.path }
+    const matched = activeId !== undefined && activeId !== '' && workspace.workspaceId === activeId
+    return {
+      key: workspace.workspaceId,
+      title: workspace.title,
+      subtitle: workspace.path,
+      ...matched ? { current: true } : {},
     }
-    return { workspaceId: workspace.workspaceId, title: workspace.title, path: workspace.path, current: true }
   })
+}
+
+/**
+ * 「当前」那一条候选的下标(浮层打开时的初始选中行)。
+ * @param entries - 浮层候选。
+ * @returns 下标;没有带 `current` 的候选时为 -1。
+ */
+export function currentRowIndex(entries: readonly PaletteRow[]): number {
+  return entries.findIndex((entry) => entry.current === true)
 }
 
 /**
@@ -297,7 +406,7 @@ export function pageSlice<T>(entries: readonly T[], page: number, size: number =
 }
 
 /** 空状态:关闭、没有候选、没有动作。 */
-function emptyState(): PaletteState {
+function emptyState<T>(): PaletteState<T> {
   return { open: false, entries: [], activeIndex: -1, page: 0, binding: null }
 }
 
@@ -308,8 +417,8 @@ function emptyState(): PaletteState {
  * 之后的快照(React 的 useSyncExternalStore 正是这样消费)。
  * @returns 存储。
  */
-export function createPaletteStore(): PaletteStore {
-  let state: PaletteState = emptyState()
+export function createPaletteStore<T = PaletteRow>(): PaletteStore<T> {
+  let state: PaletteState<T> = emptyState<T>()
   const listeners = new Set<() => void>()
   let notifyScheduled = false
 
@@ -322,7 +431,7 @@ export function createPaletteStore(): PaletteStore {
     })
   }
 
-  const commit = (next: PaletteState): void => {
+  const commit = (next: PaletteState<T>): void => {
     state = next
     notify()
   }

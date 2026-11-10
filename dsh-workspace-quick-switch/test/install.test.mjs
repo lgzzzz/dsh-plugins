@@ -19,13 +19,22 @@ import {
   finish,
   fixedKeydown,
   fixedMacKeydown,
+  fixedSessionKeydown,
+  fixedSessionMacKeydown,
   installDom,
   renderSlotEntry,
   workspace,
 } from './helpers.mjs'
 
 const dom = installDom()
-const { apply, inject, installPaletteKeys, name, PALETTE_ROOT_ATTR } = await import('../src/client.ts')
+const {
+  apply,
+  inject,
+  installPaletteKeys,
+  name,
+  PALETTE_ROOT_ATTR,
+  SESSION_ROOT_ATTR,
+} = await import('../src/client.ts')
 
 /**
  * 起一份装着假服务的上下文并装配插件;返回浮层的读数与动作。
@@ -40,21 +49,28 @@ function setup({
   ],
   current,
   platform = 'windows',
+  rowState = {},
+  byId,
 } = {}) {
   const slots = fakeSlots()
   const shortcuts = fakeShortcuts({ platform })
   const startCalls = []
-  const list = fakeWorkspaces(workspaces)
-  const sessions = fakeSessions({ current })
+  const openCalls = []
+  const list = fakeWorkspaces(workspaces, rowState)
+  const sessions = fakeSessions({ current, byId })
   const ctx = fakeCtx({
     slots,
     shortcuts,
     workspaces: { list },
     sessions,
-    uiWorkspace: { startSession: (workspaceId) => startCalls.push(workspaceId) },
+    uiWorkspace: {
+      startSession: (workspaceId) => startCalls.push(workspaceId),
+      openSession: (sessionId) => openCalls.push(sessionId),
+    },
   })
   apply(ctx)
-  const overlay = slots.registered.find((entry) => entry.options?.name === 'shell.overlay')
+  const overlay = slots.registered.find((entry) => entry.options?.id === name)
+  const sessionOverlay = slots.registered.find((entry) => entry.options?.id !== name)
   return {
     ctx,
     slots,
@@ -62,51 +78,73 @@ function setup({
     list,
     sessions,
     startCalls,
+    openCalls,
     overlay,
+    sessionOverlay,
     store: overlay?.options.inject?.().store,
+    sessionStore: sessionOverlay?.options.inject?.().store,
     /** 当前浮层的 HTML(服务端渲染;effect 由 `installPaletteKeys` 单独验证)。 */
     html: () => renderSlotEntry(overlay),
     /** 当前浮层:根节点在不在 + 候选行。 */
     peek: () => parse(renderSlotEntry(overlay)),
+    /** 会话浮层:根节点在不在 + 候选行。 */
+    peekSessions: () => parse(renderSlotEntry(sessionOverlay), SESSION_ROOT_ATTR),
   }
 }
 
 /** 解析浮层 HTML:根节点在不在、候选行(标题 + 是否选中)。 */
-function parse(html) {
+function parse(html, rootAttr = PALETTE_ROOT_ATTR) {
   const rows = [...html.matchAll(/<button[^>]*aria-selected="(true|false)"[^>]*>(.*?)<\/button>/gs)].map(
     ([, selected, body]) => ({
       selected,
       title: /dsh-workspace-quick-switch-name">([^<]*)</.exec(body)?.[1],
     }),
   )
-  return { open: html.includes(PALETTE_ROOT_ATTR), rows }
+  return { open: html.includes(`${rootAttr}=""`), rows }
 }
 
-/** 打开浮层(派发一次固定通道的 Ctrl+Alt+M)。 */
+/** 打开工作区浮层(派发一次固定通道的 Ctrl+Alt+M)。 */
 function openViaShortcut(shortcuts) {
   shortcuts.fire(fixedKeydown())
 }
 
+/** 打开会话浮层(派发一次固定通道的 Ctrl+Alt+I)。 */
+function openSessionsViaShortcut(shortcuts) {
+  shortcuts.fire(fixedSessionKeydown())
+}
+
 console.log('--- C① 固定行与浮层都挂上了 ---')
 {
-  const { ctx, slots, shortcuts, list, overlay, html } = setup({ current: 'ws-2' })
+  const { ctx, slots, shortcuts, list, overlay, sessionOverlay, html } = setup({ current: 'ws-2' })
   check('声明了依赖', inject, ['slots', 'shortcuts'])
   check('请求的依赖', ctx.requested, ['slots', 'shortcuts'])
   check('没有缺失的依赖', ctx.missing, [])
-  check('固定行 id', shortcuts.commands.map((command) => command.id), ['dsh-workspace-quick-switch.quick-switch'])
-  check('固定行分组', shortcuts.commands[0].group, 'application')
-  check('固定行键帽', shortcuts.commands[0].keys, ['Ctrl', 'Alt', 'M'])
-  check('固定行声明逻辑组合 primary+alt+M', shortcuts.commands[0].bindings, [{ code: 'KeyM', modifiers: ['primary', 'alt'] }])
-  check('注册表把 primary 落成 Ctrl:占用 Ctrl+Alt+M', shortcuts.fixedCatalog.getSnapshot()[0].bindings, [{ code: 'KeyM', modifiers: ['control', 'alt'] }])
+  check('两条固定行', shortcuts.commands.map((command) => command.id), [
+    'dsh-workspace-quick-switch.quick-switch',
+    'dsh-workspace-quick-switch.session-switch',
+  ])
+  check('固定行分组', shortcuts.commands.map((command) => command.group), ['application', 'application'])
+  check('工作区固定行键帽', shortcuts.commands[0].keys, ['Ctrl', 'Alt', 'M'])
+  check('会话固定行键帽', shortcuts.commands[1].keys, ['Ctrl', 'Alt', 'I'])
+  check('工作区固定行声明逻辑组合 primary+alt+M', shortcuts.commands[0].bindings, [{ code: 'KeyM', modifiers: ['primary', 'alt'] }])
+  check('会话固定行声明逻辑组合 primary+alt+I', shortcuts.commands[1].bindings, [{ code: 'KeyI', modifiers: ['primary', 'alt'] }])
+  check('注册表把 primary 落成 Ctrl:占用 Ctrl+Alt+M / Ctrl+Alt+I', shortcuts.fixedCatalog.getSnapshot().map((row) => row.bindings), [
+    [{ code: 'KeyM', modifiers: ['control', 'alt'] }],
+    [{ code: 'KeyI', modifiers: ['control', 'alt'] }],
+  ])
   check('挂了固定输入观察者', shortcuts.observerCount(), 1)
   check('等 shell.overlay 声明后才注册', slots.injected, ['shell.overlay'])
   check(
-    '注册进 shell.overlay 的条目',
+    '注册进 shell.overlay 的两个条目',
     slots.registered.map((entry) => ({ ...entry.options, inject: typeof entry.options.inject })),
-    [{ name: 'shell.overlay', id: name, order: 60, inject: 'function' }],
+    [
+      { name: 'shell.overlay', id: name, order: 60, inject: 'function' },
+      { name: 'shell.overlay', id: `${name}.session-switch`, order: 61, inject: 'function' },
+    ],
   )
-  check('交出去的是组件本体(不是元素)', typeof overlay.component, 'function')
-  check('业务 props 由 inject 提供', Object.keys(overlay.options.inject()), ['store'])
+  check('交出去的是组件本体(不是元素)', slots.registered.map((entry) => typeof entry.component), ['function', 'function'])
+  check('工作区浮层的业务 props', Object.keys(overlay.options.inject()), ['store', 'view'])
+  check('会话浮层的业务 props', Object.keys(sessionOverlay.options.inject()), ['store', 'view'])
   check('订阅了工作区快照', list.listenerCount(), 1)
   check('未打开时不渲染浮层', html(), '')
 }
@@ -284,7 +322,10 @@ console.log('--- C⑦ 上游服务缺席时的降级 ---')
   const ctx = fakeCtx({ slots, shortcuts, uiWorkspace: { startSession: (id) => startCalls.push(id) } })
   const warnings = captureWarnings(() => apply(ctx))
   check('没有 workspaces 时不告警', warnings, [])
-  check('固定行仍然注册', shortcuts.commands.map((command) => command.id), ['dsh-workspace-quick-switch.quick-switch'])
+  check('固定行仍然注册', shortcuts.commands.map((command) => command.id), [
+    'dsh-workspace-quick-switch.quick-switch',
+    'dsh-workspace-quick-switch.session-switch',
+  ])
   openViaShortcut(shortcuts)
   const withoutList = parse(renderSlotEntry(slots.registered[0]))
   checkTrue('浮层打开但没有候选', withoutList.open && withoutList.rows.length === 0)
@@ -331,8 +372,11 @@ console.log('--- C⑧ 工作区/会话服务晚到:等待子 fiber 补上读数 
   const currentTitle = () => store.getSnapshot().entries.find((row) => row.current)?.title
 
   check('激活时没有告警', warnings, [])
-  check('固定行已经挂上', shortcuts.commands.map((command) => command.id), ['dsh-workspace-quick-switch.quick-switch'])
-  check('浮层已经挂进槽位', slots.registered.length, 1)
+  check('固定行已经挂上', shortcuts.commands.map((command) => command.id), [
+    'dsh-workspace-quick-switch.quick-switch',
+    'dsh-workspace-quick-switch.session-switch',
+  ])
+  check('两张浮层都挂进了槽位', slots.registered.length, 2)
   check('两个等待子 fiber 排着队', ctx.children.map((child) => child.names), [['workspaces'], ['sessions']])
   check('还没有候选', titles(), [])
   check('还没有订阅工作区', list.listenerCount(), 0)
@@ -390,8 +434,8 @@ console.log('--- C⑩ macOS:固定行占 ⌘⌥M,键帽与按键归属都按平�
 console.log('--- C⑨ 卸载时清干净 ---')
 {
   const { ctx, slots, shortcuts, list, sessions } = setup({ current: 'ws-1' })
-  check('五个 scope effect 都登记了', ctx.effects.length, 5)
-  check('effect 各自交了清理函数', ctx.effects.filter((effect) => typeof effect.cleanup === 'function').length, 5)
+  check('六个 scope effect 都登记了', ctx.effects.length, 6)
+  check('effect 各自交了清理函数', ctx.effects.filter((effect) => typeof effect.cleanup === 'function').length, 6)
   check('两个等待子 fiber 都挂上了', ctx.children.map((child) => child.running), [true, true])
   ctx.dispose()
   check('固定行撤掉', shortcuts.commands, [])
@@ -523,10 +567,10 @@ console.log('--- C⑫ 终端内按 ⌘⌥M / Ctrl+Alt+M:捕获阶段拦下并开
   delete globalThis.window
   try {
     const bare = setup({ current: undefined })
-    check('没有 window 时照常注册固定行', bare.shortcuts.commands.length, 1)
+    check('没有 window 时照常注册固定行', bare.shortcuts.commands.length, 2)
     openViaShortcut(bare.shortcuts)
     check('没有 window 时固定通道照常打开', bare.peek().open, true)
-    check('没有 window 时也登记了那个 effect', bare.ctx.effects.length, 5)
+    check('没有 window 时也登记了那些 effect', bare.ctx.effects.length, 6)
   } finally {
     globalThis.window = noWindowDom.window
   }
@@ -542,6 +586,145 @@ console.log('--- C⑫ 终端内按 ⌘⌥M / Ctrl+Alt+M:捕获阶段拦下并开
   check('卸载后不再打开也不吞事件', [unmount.peek().open, after.defaultPrevented, after.stopped], [false, false, false])
   unmountDom.uninstall()
 }
+
+// C⑫ 的「没有 window」用例卸掉了全局 document / window;后面几节要用 document 上的捕获监听,
+// 所以在这里重新装一份(与其它节各自 installDom() 的做法一致)。
+const sessionDom = installDom()
+
+console.log('--- C⑬ 会话浮层:Ctrl+Alt+I 打开,候选与左侧栏「单列表 / 最近更新 / 隐藏已归档」一致 ---')
+{
+  // 目录顺序(新建在前)刻意与「最近更新」不同,并且混进 subagent / 旧空白 / 归档 / 置顶。
+  const workspaces = [
+    workspace('ws-1', 'Alpha', { sessionIds: ['newest', 'pinned', 'gone'] }),
+    workspace('ws-2', 'Beta', { sessionIds: ['middle', 'sub'] }),
+  ]
+  const byId = {
+    newest: { id: 'newest', title: '最新会话', updatedAt: 900 },
+    gone: { id: 'gone', title: '已归档', updatedAt: 850 },
+    sub: { id: 'sub', title: '子智能体', updatedAt: 950, origin: 'subagent' },
+    'blank-old': { id: 'blank-old', title: '', updatedAt: 700, blank: true },
+    pinned: { id: 'pinned', title: '置顶会话', updatedAt: 100 },
+    middle: { id: 'middle', title: '中间会话', updatedAt: 500 },
+    'blank-current': { id: 'blank-current', title: '', updatedAt: 50, blank: true },
+  }
+  const slots = fakeSlots()
+  const shortcuts = fakeShortcuts()
+  const list = fakeWorkspaces(workspaces, { archived: ['gone'], pinned: ['pinned'] })
+  const sessions = fakeSessions({ current: 'blank-current', byId })
+  const openCalls = []
+  const ctx = fakeCtx({
+    slots,
+    shortcuts,
+    workspaces: { list },
+    sessions,
+    uiWorkspace: { startSession() {}, openSession: (id) => openCalls.push(id) },
+  })
+  apply(ctx)
+  const sessionOverlay = slots.registered.find((entry) => entry.options.id !== name)
+  const sessionStore = sessionOverlay.options.inject().store
+  const rows = () => parse(renderSlotEntry(sessionOverlay), SESSION_ROOT_ATTR).rows
+  const uninstall = installPaletteKeys(sessionStore, sessionDom.document)
+
+  openSessionsViaShortcut(shortcuts)
+  const opened = parse(renderSlotEntry(sessionOverlay), SESSION_ROOT_ATTR)
+  check('会话浮层出来了', opened.open, true)
+  check('工作区浮层没有被同时打开', parse(renderSlotEntry(slots.registered[0])).open, false)
+  check('顺序:空白 → 置顶 → 最近更新;subagent 与归档都不在', rows().map((row) => row.title), [
+    '新会话', '置顶会话', '最新会话', '中间会话',
+  ])
+  check('初始选中行落在当前会话(第一行)', rows().map((row) => row.selected), ['true', 'false', 'false', 'false'])
+
+  // ↓ 到置顶会话按 Enter:打开它(而不是新建会话)。
+  sessionDom.pressKey('ArrowDown')
+  check('↓ 移到第二行', rows().map((row) => row.selected), ['false', 'true', 'false', 'false'])
+  sessionDom.pressKey('Enter')
+  check('Enter 打开选中的会话', openCalls, ['pinned'])
+  check('会话浮层关闭', parse(renderSlotEntry(sessionOverlay), SESSION_ROOT_ATTR).open, false)
+
+  // 候选跟随快照:归档集合变了,列表立刻少一行。
+  openSessionsViaShortcut(shortcuts)
+  list.setRowState({ archived: ['gone', 'middle'], pinned: ['pinned'] })
+  check('新归档的会话立刻从候选里消失', rows().map((row) => row.title), ['新会话', '置顶会话', '最新会话'])
+  sessionDom.pressKey('Escape')
+  check('Esc 关掉会话浮层', parse(renderSlotEntry(sessionOverlay), SESSION_ROOT_ATTR).open, false)
+
+  // 主视图会话换人:候选里的「当前」标记与初始选中行跟着走。
+  sessions.list.setCurrent('newest')
+  openSessionsViaShortcut(shortcuts)
+  check('选中的是新的当前会话', rows().map((row) => row.title)[rows().map((row) => row.selected).indexOf('true')], '最新会话')
+  // 当前会话被归档(不在候选里)时退回第一行,而不是停在越界下标上。
+  // 同时,换成非空白会话后空白行按左侧栏口径整体退出候选(空白只显示当前那一个)。
+  sessions.list.setCurrent('middle')
+  openSessionsViaShortcut(shortcuts)
+  check('空白行退出候选、选中第一行', rows().map((row) => row.title), ['置顶会话', '最新会话'])
+  check('当前会话不在候选里时选中第一行', rows().map((row) => row.selected), ['true', 'false'])
+
+  // 两张浮层互斥:Ctrl+Alt+I 打开会话浮层会关掉工作区浮层,反之亦然。
+  sessionDom.pressKey('Escape')
+  openViaShortcut(shortcuts)
+  check('工作区浮层打开', parse(renderSlotEntry(slots.registered[0])).open, true)
+  openSessionsViaShortcut(shortcuts)
+  check('会话浮层打开后工作区浮层关掉', parse(renderSlotEntry(slots.registered[0])).open, false)
+  check('会话浮层自己开着', parse(renderSlotEntry(sessionOverlay), SESSION_ROOT_ATTR).open, true)
+  openViaShortcut(shortcuts)
+  check('工作区浮层打开后会话浮层关掉', parse(renderSlotEntry(sessionOverlay), SESSION_ROOT_ATTR).open, false)
+
+  uninstall()
+  ctx.dispose()
+}
+
+console.log('--- C⑭ 会话浮层的分页与按键归属 ---')
+{
+  const byId = {}
+  for (let index = 1; index <= 12; index += 1) {
+    byId[`s-${index}`] = { id: `s-${index}`, title: `S${index}`, updatedAt: 1_000 - index }
+  }
+  const { shortcuts, peekSessions, sessionStore, openCalls } = setup({
+    workspaces: [workspace('ws-1', 'Alpha')],
+    current: 's-1',
+    byId,
+  })
+  const uninstall = installPaletteKeys(sessionStore, sessionDom.document)
+  openSessionsViaShortcut(shortcuts)
+  check('一屏 10 行', peekSessions().rows.length, 10)
+  check('按最近更新倒序', peekSessions().rows.map((row) => row.title), [
+    'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10',
+  ])
+  sessionDom.pressKey('ArrowRight')
+  check('→ 翻到第二页', peekSessions().rows.map((row) => row.title), ['S11', 'S12'])
+  sessionDom.pressKey('Enter')
+  check('第二页上 Enter 打开的是第 11 个', openCalls, ['s-11'])
+  uninstall()
+}
+
+console.log('--- C⑮ macOS:会话浮层占 ⌘⌥I,死键那一按也能认领 ---')
+{
+  const mac = setup({ current: undefined, platform: 'macos' })
+  check('macOS 会话固定行键帽', mac.shortcuts.commands[1].keys, ['⌘', '⌥', 'I'])
+  check('macOS 会话固定行落成 ⌘⌥I', mac.shortcuts.fixedCatalog.getSnapshot()[1].bindings, [{ code: 'KeyI', modifiers: ['alt', 'meta'] }])
+  mac.shortcuts.fire(fixedSessionKeydown())
+  check('macOS 上 Ctrl+Alt+I 不打开会话浮层', mac.peekSessions().open, false)
+  mac.shortcuts.fire(fixedSessionMacKeydown())
+  check('macOS 上 ⌘⌥I 打开会话浮层', mac.peekSessions().open, true)
+
+  // Option+I 是死键:固定通道会把这一按标成 composing,观察者让位;捕获补偿认领它。
+  const deadDom = installDom()
+  try {
+    const dead = setup({ current: undefined, platform: 'macos', byId: { s1: { id: 's1', title: 'A', updatedAt: 1 } } })
+    // 先证明固定通道那一半确实让位(组字中不动作)。
+    dead.shortcuts.fire(fixedSessionMacKeydown({ composing: true }))
+    check('组字中的 ⌘⌥I 不打开', dead.peekSessions().open, false)
+    check('终端捕获与死键补偿各一条监听', deadDom.windowListenerCount(), 2)
+    const deadKey = deadDom.pressWindowKey({ code: 'KeyI', key: 'Dead', metaKey: true, altKey: true, path: [{ closest: () => null }] })
+    check('死键 ⌘⌥I 打开会话浮层', dead.peekSessions().open, true)
+    check('死键这一按被吞', [deadKey.defaultPrevented, deadKey.stopped], [true, true])
+    dead.ctx.dispose()
+    check('卸载后死键监听撤掉', deadDom.windowListenerCount(), 0)
+  } finally {
+    deadDom.uninstall()
+  }
+}
+
 
 finish()
 dom.uninstall()

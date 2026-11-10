@@ -11,6 +11,7 @@ import * as React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { createPaletteStore, paletteEntries } from '../src/palette.ts'
+import { sessionPaletteEntries } from '../src/sessions.ts'
 import {
   installPaletteKeys,
   keepOptionVisible,
@@ -19,6 +20,9 @@ import {
   optionDomId,
   PALETTE_OPTION_ATTR,
   PALETTE_ROOT_ATTR,
+  SESSION_ROOT_ATTR,
+  SESSION_VIEW,
+  WORKSPACE_VIEW,
 } from '../src/client.ts'
 import { check, checkTrue, finish, installDom, workspace } from './helpers.mjs'
 
@@ -60,7 +64,7 @@ function countText(html) {
 
 /** 底栏的提示条目。 */
 function footHints(html) {
-  return [...html.matchAll(/<span[^>]*>(↑ ↓ 选择|← → 翻页|Enter 新建会话|Esc 关闭)<\/span>/g)].map(([, text]) => text)
+  return [...html.matchAll(/<span[^>]*>(↑ ↓ 选择|← → 翻页|Enter 新建会话|Enter 打开会话|Esc 关闭)<\/span>/g)].map(([, text]) => text)
 }
 
 /**
@@ -70,7 +74,7 @@ function footHints(html) {
  * 这里把它们登记下来,`runEffects()` 负责跑,`cleanup()` 按逆序跑返回的清理函数,
  * 也就是组件卸载时会发生的事。
  */
-function render(store) {
+function render(store, view = WORKSPACE_VIEW) {
   const effects = []
   const dispatcher = {
     useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
@@ -85,7 +89,7 @@ function render(store) {
   slot.current = dispatcher
   let html = ''
   try {
-    html = renderToStaticMarkup(React.createElement(PaletteOverlay, { store }))
+    html = renderToStaticMarkup(React.createElement(PaletteOverlay, { store, view }))
   } finally {
     slot.current = previous
   }
@@ -125,9 +129,10 @@ console.log('--- E② 渲染候选:顺序、标题、路径、当前标记与选
   checkTrue('根节点带插件标记', rendered.html.includes(PALETTE_ROOT_ATTR))
   check('三行候选', rendered.rows.length, 3)
   check('标题按候选顺序', rendered.rows.map((row) => row.title), ['Alpha', 'Beta', 'ws-3'])
+  check('空标题退回候选身份(这里是工作区 id)', rendered.rows[2].title, 'ws-3')
   check('当前工作区被选中', rendered.rows.map((row) => row.selected), ['false', 'true', 'false'])
   check('只有当前行带「当前」角标', rendered.rows.filter((row) => row.current).map((row) => row.title), ['Beta'])
-  checkTrue('路径也渲染出来', rendered.html.includes('/projects/ws-2'))
+  checkTrue('第二行(路径)也渲染出来', rendered.html.includes('/projects/ws-2'))
   checkTrue('空标题退回工作区 id', rendered.html.includes('>ws-3<'))
   checkTrue('每行都带插件行标记', rendered.html.split(PALETTE_OPTION_ATTR).length - 1 === 3)
   checkTrue(
@@ -218,12 +223,13 @@ console.log('--- E⑤ Enter 用的是当下的选中行 ---')
   const picked = []
   store.open(() => {
     const snapshot = store.getSnapshot()
-    picked.push(snapshot.entries[snapshot.activeIndex]?.workspaceId)
+    picked.push(snapshot.entries[snapshot.activeIndex]?.key)
   }, 0)
-  installPaletteKeys(store, dom.document)
-  check('打开在第一条', store.getSnapshot().entries[store.getSnapshot().activeIndex].workspaceId, 'ws-1')
+  const offKeys = installPaletteKeys(store, dom.document)
+  check('打开在第一条', store.getSnapshot().entries[store.getSnapshot().activeIndex].key, 'ws-1')
   dom.pressKey('ArrowDown')
   dom.pressKey('Enter')
+  offKeys()
   check('Enter 落在移动后的行', picked, ['ws-2'])
   check('行标记常量', PALETTE_OPTION_ATTR, 'data-workspace-quick-switch-option')
   checkTrue('浮层关闭', store.getSnapshot().open === false)
@@ -302,9 +308,74 @@ console.log('--- E⑧ 选中行滚进可见区 ---')
 
   // 组件按「选中行的 DOM id」查找:这个 id 必须就是渲染出来的那一行,否则滚不动。
   const rendered = render(makeStore({ active: 'ws-3', selected: 2 }))
-  check('选中行按 id 查找', optionDomId(2), 'dsh-workspace-quick-switch-option-2')
+  check('选中行按 id 查找', optionDomId(WORKSPACE_VIEW, 2), 'dsh-workspace-quick-switch-option-2')
   checkTrue('渲染结果里存在这个 id', rendered.html.includes('id="dsh-workspace-quick-switch-option-2"'))
   checkTrue('选中的正是那一行', rendered.rows[2].selected === 'true')
+}
+
+console.log('--- E⑨ 会话浮层:同一个组件、另一份文案与候选 ---')
+{
+  const store = createPaletteStore()
+  store.sync(sessionPaletteEntries({
+    sessions: {
+      ids: ['s1', 's2'],
+      byId: {
+        s1: { id: 's1', title: '重构排序', updatedAt: 200, retainedBy: { mainView: 1 } },
+        s2: { id: 's2', title: '修快捷键', updatedAt: 100, retainedBy: { mainView: 0 }, running: true },
+      },
+    },
+    workspaces: [
+      { workspaceId: 'w1', title: 'dsh-plugins', path: '/p', sessionIds: ['s1', 's2'] },
+    ],
+    rowState: { pinnedSessionIds: ['s2'] },
+  }, 200))
+  store.open(() => {}, 0)
+
+  const rendered = render(store, SESSION_VIEW)
+  checkTrue('根节点用会话浮层的标记', rendered.html.includes(`${SESSION_ROOT_ATTR}=""`))
+  check('工作区浮层的根标记不出现', rendered.html.includes(`${PALETTE_ROOT_ATTR}=""`), false)
+  check('标题是「切换会话」', rendered.html.includes('切换会话'), true)
+  check('计数单位是「个会话」', countText(rendered.html), '2 个会话')
+  check('底栏提示打开会话', footHints(rendered.html), ['↑ ↓ 选择', 'Enter 打开会话', 'Esc 关闭'])
+  // 左侧栏的口径:置顶行在「最近更新」顺序之前,空白行再在置顶之前(这一组没有空白)。
+  check('候选顺序:置顶在前,其余按最近更新', rendered.rows.map((row) => row.title), ['修快捷键', '重构排序'])
+  check('第二行是「工作区 · 相对时间」', rendered.html.includes('dsh-plugins · 刚刚'), true)
+  checkTrue('进行中角标渲染出来', rendered.html.includes('>进行中<'))
+  checkTrue('置顶角标渲染出来', rendered.html.includes('>置顶<'))
+  check('行 id 前缀独立(不与工作区浮层撞车)', optionDomId(SESSION_VIEW, 3), 'dsh-workspace-quick-switch-session-option-3')
+
+  // 空态文案也来自 view,不是硬编码的工作区文案。
+  const empty = createPaletteStore()
+  empty.sync([])
+  empty.open(() => {})
+  const emptyHtml = render(empty, SESSION_VIEW).html
+  checkTrue('空态给出会话文案', emptyHtml.includes(SESSION_VIEW.emptyHint))
+  checkTrue('空态计数也是会话口径', emptyHtml.includes(SESSION_VIEW.emptyCount))
+}
+
+console.log('--- E⑩ 两张浮层各挂一份按键监听,只认自己那个 store ---')
+{
+  const workspaceStore = makeStore({ active: 'ws-1', selected: null })
+  const sessionStore = createPaletteStore()
+  sessionStore.sync(sessionPaletteEntries({
+    sessions: { ids: ['s1'], byId: { s1: { id: 's1', title: 'A', updatedAt: 1 } } },
+    workspaces: [],
+    rowState: {},
+  }, 2))
+  const before = dom.document.listenerCount()
+  const offWorkspace = installPaletteKeys(workspaceStore, dom.document)
+  const offSession = installPaletteKeys(sessionStore, dom.document)
+  check('两条监听', dom.document.listenerCount() - before, 2)
+
+  // 只有会话浮层开着:工作区浮层那条监听什么都不做,会话浮层那条收下这一按。
+  sessionStore.open(() => {}, 0)
+  dom.pressKey('Escape')
+  check('Esc 只关掉开着的那一张', [sessionStore.getSnapshot().open, workspaceStore.getSnapshot().open], [false, false])
+  check('关闭它自己就够了', sessionStore.getSnapshot().open, false)
+
+  offWorkspace()
+  offSession()
+  check('卸载后都撤掉', dom.document.listenerCount(), before)
 }
 
 finish()

@@ -4,7 +4,16 @@
  *
  * 运行:`node test/keys.test.mjs`(或 pnpm test 跑全部)。
  */
-import { QUICK_SWITCH_BINDING, QUICK_SWITCH_ID, quickSwitchKeys, quickSwitchPress } from '../src/palette.ts'
+import {
+  QUICK_SWITCH_BINDING,
+  QUICK_SWITCH_ID,
+  SESSION_SWITCH_BINDING,
+  SESSION_SWITCH_ID,
+  quickSwitchKeys,
+  quickSwitchPress,
+  sessionSwitchKeys,
+  sessionSwitchPress,
+} from '../src/palette.ts'
 import { paletteAction } from '../src/client.ts'
 import { check, checkTrue, checkUndefined, finish } from './helpers.mjs'
 
@@ -47,8 +56,11 @@ console.log('--- B③ 组合输入、已消费、长按重复 ---')
 console.log('--- B④ 其它键不归它 ---')
 {
   checkUndefined('普通字符键', paletteAction(key('m')))
+  checkUndefined('普通字符键 i', paletteAction(key('i')))
   checkUndefined('Ctrl+Alt+M 本身(打开键由固定行处理)', paletteAction(key('m', { ctrlKey: true, altKey: true })))
   checkUndefined('⌘⌥M 本身(macOS 上同一个打开键)', paletteAction(key('m', { metaKey: true, altKey: true })))
+  checkUndefined('Ctrl+Alt+I 本身(会话浮层的打开键)', paletteAction(key('i', { ctrlKey: true, altKey: true })))
+  checkUndefined('⌘⌥I 本身', paletteAction(key('i', { metaKey: true, altKey: true })))
   checkUndefined('Tab', paletteAction(key('Tab')))
   checkUndefined('空格', paletteAction(key(' ')))
 }
@@ -61,6 +73,12 @@ console.log('--- B⑤ 固定行声明与平台展开 ---')
   check('macOS 键帽', quickSwitchKeys('macos'), ['⌘', '⌥', 'M'])
   check('Windows 键帽', quickSwitchKeys('windows'), ['Ctrl', 'Alt', 'M'])
   check('Linux 键帽', quickSwitchKeys('linux'), ['Ctrl', 'Alt', 'M'])
+
+  check('会话浮层的逻辑组合是 primary+alt+I', [SESSION_SWITCH_BINDING.code, SESSION_SWITCH_BINDING.modifiers], ['KeyI', ['primary', 'alt']])
+  check('会话浮层固定行 id', SESSION_SWITCH_ID, 'dsh-workspace-quick-switch.session-switch')
+  check('会话浮层的 macOS 键帽', sessionSwitchKeys('macos'), ['⌘', '⌥', 'I'])
+  check('会话浮层的 Windows 键帽', sessionSwitchKeys('windows'), ['Ctrl', 'Alt', 'I'])
+  check('会话浮层的 Linux 键帽', sessionSwitchKeys('linux'), ['Ctrl', 'Alt', 'I'])
 }
 
 console.log('--- B⑥ 按键归属:各平台只认自己那一组 ---')
@@ -75,6 +93,20 @@ console.log('--- B⑥ 按键归属:各平台只认自己那一组 ---')
   check('缺 Alt 不认', quickSwitchPress('macos', { code: 'KeyM', meta: true }), false)
   check('缺主修饰键不认', quickSwitchPress('macos', { code: 'KeyM', alt: true }), false)
   check('按键不对不认', quickSwitchPress('macos', { code: 'KeyJ', meta: true, alt: true }), false)
+}
+
+console.log('--- B⑦ 会话浮层按键归属:两组合互不串台 ---')
+{
+  checkTrue('macOS 认 ⌘⌥I', sessionSwitchPress('macos', { code: 'KeyI', meta: true, alt: true }))
+  check('macOS 不认 Ctrl+Alt+I', sessionSwitchPress('macos', { code: 'KeyI', control: true, alt: true }), false)
+  checkTrue('Windows 认 Ctrl+Alt+I', sessionSwitchPress('windows', { code: 'KeyI', control: true, alt: true }))
+  check('Linux 认 Ctrl+Alt+I', sessionSwitchPress('linux', { code: 'KeyI', control: true, alt: true }), true)
+  check('多按 Shift 不认', sessionSwitchPress('macos', { code: 'KeyI', meta: true, alt: true, shift: true }), false)
+  check('缺 Alt 不认', sessionSwitchPress('macos', { code: 'KeyI', meta: true }), false)
+
+  // M 与 I 两组按键各归各的浮层:工作区那组不会被会话那组当成自己。
+  check('⌘⌥M 不是会话浮层的键', sessionSwitchPress('macos', { code: 'KeyM', meta: true, alt: true }), false)
+  check('⌘⌥I 不是工作区浮层的键', quickSwitchPress('macos', { code: 'KeyI', meta: true, alt: true }), false)
 }
 
 finish()

@@ -21,6 +21,7 @@ import {
   finish,
   fixedKeydown,
   fixedMacKeydown,
+  fixedSessionKeydown,
   installDom,
   pluginRoot,
   renderSlotEntry,
@@ -28,7 +29,7 @@ import {
 } from './helpers.mjs'
 
 const dom = installDom()
-const { paletteAction } = await import('../src/client.ts')
+const { installPaletteKeys, paletteAction } = await import('../src/client.ts')
 
 /** 模块表里的 react:与源码测试用的是同一个实例。 */
 const reactModule = reactNamespace.default ?? reactNamespace
@@ -98,10 +99,16 @@ console.log('--- D② 产物装配后固定行与浮层生效 ---')
     uiWorkspace: { startSession: (workspaceId) => startCalls.push(workspaceId) },
   })
   plugin.apply(ctx)
-  check('固定行 id', shortcuts.commands.map((command) => command.id), ['dsh-workspace-quick-switch.quick-switch'])
-  check('注册进 shell.overlay', slots.registered.map((entry) => entry.options.id), ['dsh-workspace-quick-switch'])
-  check('交出去的是组件本体(不是元素)', typeof slots.registered[0].component, 'function')
-  check('业务 props 由 inject 提供', Object.keys(slots.registered[0].options.inject()), ['store'])
+  check('两条固定行', shortcuts.commands.map((command) => command.id), [
+    'dsh-workspace-quick-switch.quick-switch',
+    'dsh-workspace-quick-switch.session-switch',
+  ])
+  check('两张浮层都注册进 shell.overlay', slots.registered.map((entry) => entry.options.id), [
+    'dsh-workspace-quick-switch',
+    'dsh-workspace-quick-switch.session-switch',
+  ])
+  check('交出去的是组件本体(不是元素)', slots.registered.map((entry) => typeof entry.component), ['function', 'function'])
+  check('业务 props 由 inject 提供', Object.keys(slots.registered[0].options.inject()), ['store', 'view'])
 
   check('未打开时渲染为空', renderSlotEntry(slots.registered[0]), '')
   shortcuts.fire(fixedKeydown())
@@ -110,6 +117,7 @@ console.log('--- D② 产物装配后固定行与浮层生效 ---')
 
   // 产物导出的按键解码与源码一致。
   check('产物导出了 paletteAction', typeof plugin.paletteAction, 'function')
+  check('产物导出了会话浮层归属判定', typeof plugin.sessionSwitchOwns, 'function')
   check('Escape → close', plugin.paletteAction({ key: 'Escape' }), 'close')
   check('源码与产物的解码一致', paletteAction({ key: 'Enter' }) === plugin.paletteAction({ key: 'Enter' }), true)
   // 翻页键同样随产物发布:产物漏掉 ←/→ 时用户看到的仍是「10 个封顶」的旧行为。
@@ -166,8 +174,11 @@ console.log('--- D④ 产物在 macOS 平台上占 ⌘⌥M,并只认这一组 --
     uiWorkspace: { startSession() {} },
   })
   plugin.apply(ctx)
-  check('macOS 固定行键帽', shortcuts.commands[0].keys, ['⌘', '⌥', 'M'])
-  check('macOS 固定行落成 ⌘⌥M', shortcuts.fixedCatalog.getSnapshot()[0].bindings, [{ code: 'KeyM', modifiers: ['alt', 'meta'] }])
+  check('macOS 固定行键帽', shortcuts.commands.map((command) => command.keys), [['⌘', '⌥', 'M'], ['⌘', '⌥', 'I']])
+  check('macOS 固定行落成 ⌘⌥M / ⌘⌥I', shortcuts.fixedCatalog.getSnapshot().map((row) => row.bindings), [
+    [{ code: 'KeyM', modifiers: ['alt', 'meta'] }],
+    [{ code: 'KeyI', modifiers: ['alt', 'meta'] }],
+  ])
   shortcuts.fire(fixedKeydown())
   check('macOS 上 Ctrl+Alt+M 不打开', parseRows(slots).length, 0)
   shortcuts.fire(fixedMacKeydown())
@@ -219,6 +230,89 @@ console.log('--- D⑤ 产物里的终端捕获:`.xterm` 内的 ⌘⌥M 也开浮
     terminalDom.uninstall()
   }
 }
+
+// D⑤ 的终端用例收尾时卸掉了全局 document / window;后面几节要重新装一份。
+const sessionDom = installDom()
+
+console.log('--- D⑥ 产物里的会话浮层:Ctrl+Alt+I 打开、顺序照左侧栏、Enter 打开会话 ---')
+{
+  /** 渲染第二个注册项(会话浮层)并解析候选行。 */
+  function sessionRows(slots) {
+    const html = renderSlotEntry(slots.registered[1])
+    return [...html.matchAll(/<button[^>]*aria-selected="(true|false)"[^>]*>(.*?)<\/button>/gs)].map(
+      ([, selected, body]) => ({
+        selected,
+        title: /dsh-workspace-quick-switch-name">([^<]*)</.exec(body)?.[1],
+      }),
+    )
+  }
+
+  const slots = fakeSlots()
+  const shortcuts = fakeShortcuts()
+  const openCalls = []
+  const ctx = fakeCtx({
+    slots,
+    shortcuts,
+    workspaces: {
+      list: fakeWorkspaces([
+        workspace('ws-1', 'Alpha', { sessionIds: ['old', 'archived'] }),
+        workspace('ws-2', 'Beta', { sessionIds: ['newest'] }),
+      ], { archived: ['archived'], pinned: ['old'] }),
+    },
+    sessions: fakeSessions({
+      current: 'newest',
+      byId: {
+        old: { id: 'old', title: '旧会话', updatedAt: 100 },
+        archived: { id: 'archived', title: '已归档', updatedAt: 900 },
+        newest: { id: 'newest', title: '新会话', updatedAt: 500 },
+      },
+    }),
+    uiWorkspace: { startSession() {}, openSession: (id) => openCalls.push(id) },
+  })
+  plugin.apply(ctx)
+  check('未打开时会话浮层渲染为空', renderSlotEntry(slots.registered[1]), '')
+  shortcuts.fire(fixedSessionKeydown())
+  check('Ctrl+Alt+I 打开会话浮层', sessionRows(slots).map((row) => row.title), ['旧会话', '新会话'])
+  check('当前会话被选中', sessionRows(slots).map((row) => row.selected), ['false', 'true'])
+  check('这一次按键被消费', shortcuts.consumeCalls(), 1)
+
+  // ↑ 到置顶那一行再 Enter:走 openSession(而不是 startSession)。
+  const overlay = slots.registered[1].options.inject()
+  const offKeys = installPaletteKeys(overlay.store, sessionDom.document)
+  sessionDom.pressKey('ArrowUp')
+  check('↑ 移到置顶那一行', sessionRows(slots).map((row) => row.selected), ['true', 'false'])
+  sessionDom.pressKey('Enter')
+  check('Enter 打开选中的会话', openCalls, ['old'])
+  check('会话浮层关闭', sessionRows(slots).length, 0)
+  offKeys()
+  ctx.dispose()
+}
+
+console.log('--- D⑦ 产物里的死键补偿:macOS 上 Dead 的 ⌘⌥I 也打开会话浮层 ---')
+{
+  const macDom = installDom()
+  try {
+    const slots = fakeSlots()
+    const shortcuts = fakeShortcuts({ platform: 'macos' })
+    const ctx = fakeCtx({
+      slots,
+      shortcuts,
+      workspaces: { list: fakeWorkspaces([workspace('ws-1', 'Alpha')]) },
+      sessions: fakeSessions({ current: undefined, byId: { s1: { id: 's1', title: 'A', updatedAt: 1 } } }),
+      uiWorkspace: { startSession() {}, openSession() {} },
+    })
+    plugin.apply(ctx)
+    check('终端捕获 + 死键补偿两条监听', macDom.windowListenerCount(), 2)
+    const event = macDom.pressWindowKey({ code: 'KeyI', key: 'Dead', metaKey: true, altKey: true, path: [{ closest: () => null }] })
+    const html = renderSlotEntry(slots.registered[1])
+    checkTrue('死键打开会话浮层', html.includes('data-session-quick-switch=""'))
+    check('这一按被吞', [event.defaultPrevented, event.stopped], [true, true])
+    ctx.dispose()
+  } finally {
+    macDom.uninstall()
+  }
+}
+
 
 finish()
 dom.uninstall()

@@ -1,5 +1,5 @@
 /**
- * 按 A–E 的主题顺序跑完 test/ 下所有 `*.test.mjs`,并汇总各文件结果。
+ * 按 A–E 的主题顺序跑完 test/ 下所有 `*.test.mjs`(S 组是会话候选投影,紧跟纯状态层),并汇总各文件结果。
  *
  *   node test/run-all.mjs            # 全部
  *   node test/run-all.mjs install    # 只跑文件名匹配 "install" 的
@@ -17,6 +17,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 // A–E 的主题顺序;不在表内的测试文件按名字排在其后。
 const ORDER = [
   'palette.test.mjs',
+  'sessions.test.mjs',
   'keys.test.mjs',
   'overlay.test.mjs',
   'install.test.mjs',

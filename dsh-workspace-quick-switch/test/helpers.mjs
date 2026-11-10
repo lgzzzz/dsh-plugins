@@ -118,36 +118,65 @@ export function optionRows(tree) {
 
 //#region 假服务与假上下文
 
-/** 造一个假的工作区快照源(订阅会立即送一次当前值,与工作区控制器一致)。 */
-export function fakeWorkspaces(items) {
+/**
+ * 造一个假的工作区快照源(订阅会立即送一次当前值,与工作区控制器一致)。
+ *
+ * 快照里还带注册表全局的归档 / 置顶集合 —— 会话浮层的「隐藏已归档」与置顶前置都读它们。
+ * @param items - 工作区行。
+ * @param rowState - `{ archived, pinned }`:归档 / 置顶的会话 id。
+ */
+export function fakeWorkspaces(items, { archived = [], pinned = [] } = {}) {
   const listeners = new Set()
   let current = items
+  let archivedIds = archived
+  let pinnedIds = pinned
+  const notify = () => {
+    for (const listener of [...listeners]) listener()
+  }
   const list = {
-    getSnapshot: () => ({ items: current }),
+    getSnapshot: () => ({ items: current, archivedSessionIds: archivedIds, pinnedSessionIds: pinnedIds }),
     subscribe(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
     set(next) {
       current = next
-      for (const listener of [...listeners]) listener()
+      notify()
+    },
+    /** 换归档 / 置顶集合(真实控制器会把整份集合推下来)。 */
+    setRowState({ archived: nextArchived = archivedIds, pinned: nextPinned = pinnedIds } = {}) {
+      archivedIds = nextArchived
+      pinnedIds = nextPinned
+      notify()
     },
     listenerCount: () => listeners.size,
   }
   return list
 }
 
-/** 造一个假的会话目录(只有本插件读的字段 + `ObservableSnapshot` 的订阅面)。 */
+/**
+ * 造一个假的会话目录(只有本插件读的字段 + `ObservableSnapshot` 的订阅面)。
+ *
+ * `byId` 里的每一行都是会话摘要(至少 `updatedAt`);主视图会话由 `current` 指定,缺省时
+ * 也会被补进目录(旧用例用「工作区 id = 会话 id」的写法辨认当前工作区)。
+ * @param options - `{ current, byId }`。
+ */
 export function fakeSessions({ current, byId = {} } = {}) {
   const listeners = new Set()
   let mainView = current
-  const summaries = { ...byId }
+  let summaries = { ...byId }
+  const snapshot = () => {
+    const rows = { ...summaries }
+    if (mainView !== undefined) rows[mainView] = { ...(rows[mainView] ?? {}), retainedBy: { mainView: 1 } }
+    const ids = Object.keys(rows)
+    return {
+      ids,
+      byId: Object.fromEntries(ids.map((id) => [id, { updatedAt: 0, ...rows[id], retainedBy: rows[id].retainedBy ?? { mainView: 0 } }])),
+      phase: 'ready',
+    }
+  }
   const list = {
-    getSnapshot() {
-      const rows = { ...summaries }
-      if (mainView !== undefined) rows[mainView] = { ...(rows[mainView] ?? {}), retainedBy: { mainView: 1 } }
-      return { ids: Object.keys(rows), byId: rows }
-    },
+    getSnapshot: snapshot,
     subscribe(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -155,6 +184,11 @@ export function fakeSessions({ current, byId = {} } = {}) {
     /** 换一个主视图会话(真实目录里这会推一次快照)。 */
     setCurrent(id) {
       mainView = id
+      for (const listener of [...listeners]) listener()
+    },
+    /** 换整份会话目录(会话新增 / 标题变化 / 更新时间推进)。 */
+    setRows(next) {
+      summaries = { ...next }
       for (const listener of [...listeners]) listener()
     },
     listenerCount: () => listeners.size,
@@ -426,6 +460,16 @@ export function fixedKeydown(overrides = {}) {
 /** 造一条 macOS 口径的固定输入读数(`⌘⌥M`)。 */
 export function fixedMacKeydown(overrides = {}) {
   return fixedKeydown({ control: false, meta: true, ...overrides })
+}
+
+/** 造一条会话浮层的固定输入读数(Windows/Linux 口径:`Ctrl+Alt+I`)。 */
+export function fixedSessionKeydown(overrides = {}) {
+  return fixedKeydown({ code: 'KeyI', ...overrides })
+}
+
+/** 造一条 macOS 口径的会话浮层读数(`⌘⌥I`)。 */
+export function fixedSessionMacKeydown(overrides = {}) {
+  return fixedSessionKeydown({ control: false, meta: true, ...overrides })
 }
 
 /** 造一个宿主工作区。 */
