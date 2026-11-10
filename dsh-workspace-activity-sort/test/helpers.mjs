@@ -154,6 +154,8 @@ export function createHarness({ entities = [], insertFails = false } = {}) {
     emit,
     /** 一条用户消息提交。 */
     activity: (sessionId) => emit('api-session/activity', sessionId, Date.now()),
+    /** 一条会话日志事件（`session/event`）：回合终态与模型请求重试都从这里进来。 */
+    event: (session, event) => emit('session/event', session, event),
     /** 会话被创建 / 被重新打开（resume 也走这一条）。 */
     created: (session) => emit('session/created', session),
     disposed: (session) => emit('session/disposed', session),

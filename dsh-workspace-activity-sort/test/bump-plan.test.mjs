@@ -4,7 +4,7 @@
  * 运行：`node test/bump-plan.test.mjs`。
  */
 import assert from 'node:assert/strict'
-import { frontMove, owningWorkspaceId, planActivityFronts, planPendingFronts } from '../src/bump.ts'
+import { frontMove, owningWorkspaceId, planActivityFronts, planPendingFronts, taskOutcome } from '../src/bump.ts'
 import { ws } from './helpers.mjs'
 
 // 归属查找
@@ -144,6 +144,79 @@ const TTL = 60_000
     '同一工作区的多个新会话各自成一次请求，最终都收敛到同一次写盘',
   )
   assert.deepEqual(plan.settled, ['s-1', 's-2'], '两个都已认领')
+}
+
+// 回合终态：完成与「模型请求重试耗尽」
+
+{
+  /** 一条重试记录：重试到第 `retry` 次，上限 `maxRetries`。 */
+  const retried = (retry, maxRetries, turn = 1) => ({ mode: 'normal', turn, retry, maxRetries })
+
+  assert.equal(
+    taskOutcome({ turn: 1, kind: 'completed', retry: undefined, hadStep: true }),
+    'completed',
+    '正常答完算任务完成',
+  )
+  assert.equal(
+    taskOutcome({ turn: 1, kind: 'completed', retry: undefined, hadStep: false }),
+    undefined,
+    '没跑过 step 的空回合没有最终回复，不算完成',
+  )
+
+  assert.equal(
+    taskOutcome({ turn: 1, kind: 'error', retry: retried(5, 5), failureCode: 'TIMEOUT', hadStep: true }),
+    'error',
+    '重试到上限后仍失败，算任务报错',
+  )
+  assert.equal(
+    taskOutcome({ turn: 1, kind: 'error', retry: retried(5, 5), failureCode: 'UNKNOWN', hadStep: true }),
+    undefined,
+    '未知错误（非模型请求）不算报错',
+  )
+  assert.equal(
+    taskOutcome({ turn: 1, kind: 'error', retry: retried(5, 5), failureCode: 'TOOL_ACTIVATION_FAILED', hadStep: true }),
+    undefined,
+    '工具激活失败不算报错',
+  )
+  assert.equal(
+    taskOutcome({ turn: 1, kind: 'error', retry: retried(2, 5), failureCode: 'TIMEOUT', hadStep: true }),
+    undefined,
+    '还没到重试上限的失败不算「重试耗尽」',
+  )
+  assert.equal(
+    taskOutcome({ turn: 1, kind: 'error', retry: undefined, failureCode: 'TIMEOUT', hadStep: true }),
+    undefined,
+    '没有重试记录的失败不算',
+  )
+  assert.equal(
+    taskOutcome({ turn: 2, kind: 'error', retry: retried(5, 5, 1), failureCode: 'TIMEOUT', hadStep: true }),
+    undefined,
+    '别的回合的重试记录不算',
+  )
+  assert.equal(
+    taskOutcome({
+      turn: 1,
+      kind: 'error',
+      retry: { mode: 'always', turn: 1, retry: 9 },
+      failureCode: 'TIMEOUT',
+      hadStep: true,
+    }),
+    undefined,
+    'always 模式不设上限，不会「耗尽」',
+  )
+  assert.equal(
+    taskOutcome({ turn: 1, kind: 'error', retry: retried(5, 5), failureCode: 'TIMEOUT', hadStep: false }),
+    undefined,
+    '没跑过 step 就没有模型请求',
+  )
+
+  for (const kind of ['aborted', 'blocked', 'max-tokens', 'interrupted', 'forked']) {
+    assert.equal(
+      taskOutcome({ turn: 1, kind, retry: retried(5, 5), failureCode: 'TIMEOUT', hadStep: true }),
+      undefined,
+      `${kind} 不算任务终点`,
+    )
+  }
 }
 
 console.log('bump-plan checks passed')

@@ -2,7 +2,7 @@
   "name": "dsh-workspace-activity-sort",
   "version": "1.0.0",
   "private": true,
-  "description": "按会话活动自动排序左侧栏的 Workspace 分组：把最近有用户消息的工作区提到 Workspace 注册表持久显示顺序的最前。",
+  "description": "按会话活动自动排序左侧栏的 Workspace 分组：把最近有用户消息、任务完成，或大模型请求重试耗尽的工作区提到 Workspace 注册表持久显示顺序的最前。",
   "type": "module",
   "main": "index.ts",
   "exports": {

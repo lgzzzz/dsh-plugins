@@ -1,8 +1,9 @@
 /**
  * 真实 cordis 集成测试：用 `new Context()` 起宿主上下文，把注册表 provide 成真服务，
  * 以对象插件方式按加载器挂载，走真实事件总线。验证两件事：`inject: ['workspaceRegistry']`
- * 的等待语义（服务缺席时不运行，出现即运行），以及三条事件（`api-session/activity`、
- * `session/created` + `domain/changed`、`session/disposed`）确实驱动上浮。
+ * 的等待语义（服务缺席时不运行，出现即运行），以及四类事件（`api-session/activity`、
+ * `session/event` 的 `turn/end`、`session/created` + `domain/changed`、`session/disposed`）
+ * 确实驱动上浮。
  *
  * 运行：`node test/cordis-integration.test.mjs`。
  */
@@ -96,6 +97,45 @@ assert.equal(plugin.Config, undefined, '没有配置 schema：插件不接受配
   registry.attach('b', 's-orphan')
   await settle()
   assert.deepEqual(registry.inserts, [], '真实事件总线下：已销毁的会话不参与上浮')
+
+  await fiber.dispose()
+  await root.fiber.dispose()
+}
+
+// 真实事件总线上的回合终态
+
+{
+  const root = new Context()
+  const registry = new FakeRegistry(
+    [ws('a', ['s-a']), ws('b', ['s-b'])],
+    (change) => root.emit('domain/changed', change),
+  )
+  root.provide('workspaceRegistry', registry)
+  const fiber = root.plugin(plugin)
+  await settle()
+
+  const session = sessionFixture('s-b')
+  const stepStart = (turn, step) => ({ type: 'step/start', data: { turn, step } })
+  const retryEvent = (turn, retry, maxRetries = 5) => ({
+    type: 'llm/retry',
+    data: { turn, step: 1, retry, maxRetries, mode: 'normal', provider: 'deepseek', policyKey: 'k', failure: { code: 'TIMEOUT', message: 'timed out' } },
+  })
+  const turnEnd = (turn, reason) => ({ type: 'turn/end', data: { turn, reason } })
+
+  root.emit('session/event', session, stepStart(1, 1))
+  root.emit('session/event', session, turnEnd(1, { kind: 'completed' }))
+  await settle()
+  assert.deepEqual(registry.order, ['b', 'a'], '真实事件总线下：任务完成让工作区上浮')
+
+  await registry.drag('b', undefined) // 用户又把 b 拖到末尾
+  await settle()
+  assert.deepEqual(registry.order, ['a', 'b'])
+
+  root.emit('session/event', session, stepStart(1, 1))
+  for (const retry of [1, 2, 3, 4, 5]) root.emit('session/event', session, retryEvent(1, retry))
+  root.emit('session/event', session, turnEnd(1, { kind: 'error', error: { code: 'TIMEOUT', message: 'timed out' } }))
+  await settle()
+  assert.deepEqual(registry.order, ['b', 'a'], '真实事件总线下：模型请求重试耗尽同样上浮')
 
   await fiber.dispose()
   await root.fiber.dispose()

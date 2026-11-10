@@ -16,7 +16,7 @@
 | 目录 | 作用 | 文档 |
 | --- | --- | --- |
 | `dsh-workspace-quick-switch` | 两张浮层：`⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows）按左侧栏顺序列出工作区、`Enter` 在该工作区新建会话；`⌘⌥I` / `Ctrl+Alt+I` 按左侧栏「单列表 + 最近更新 + 隐藏已归档」的顺序列出会话、`Enter` 打开该会话。都是一屏 10 个、窗口连续滑动（滚轮滚一格 1–10 → 2–11、`←/→` 滑一整屏、`↑/↓` 移选中行，两端停住）；鼠标点一行即确认（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
-| `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
+| `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动、任务完成，或大模型请求重试耗尽的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
 | `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |

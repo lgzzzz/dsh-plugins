@@ -1,9 +1,11 @@
 /**
- * 上浮规划：把注册表当前顺序、工作区归属与待落位的新会话算成上浮请求与移动动作，不碰任何服务。
+ * 上浮规划：把注册表当前顺序、工作区归属、待落位的新会话与回合终态算成上浮请求与移动动作，
+ * 不碰任何服务。
  *
  *   - `owningWorkspaceId`：这个会话属于哪个工作区（依据注册表实体的 `sessionIds`）；
  *   - `frontMove`：把它提到最前需要注册表的哪一次 `insertBefore`（DOM insertBefore 语义）；
- *   - `planPendingFronts`：新会话还没有归属时先登记，等归属出现再认领。
+ *   - `planPendingFronts`：新会话还没有归属时先登记，等归属出现再认领；
+ *   - `taskOutcome`：一次回合结束算不算任务终点（完成，或模型请求重试耗尽后的报错）。
  */
 
 /** 规划只读到的工作区字段。 */
@@ -38,6 +40,57 @@ export interface FrontMove {
 
 /** 待落位的新会话最长等待时间；超时仍无归属就放弃。 */
 export const PENDING_TTL_MS = 60_000
+
+/**
+ * 非模型请求失败的合成错误码：工具激活失败与未知错误。
+ * 带上它们的回合错误不是「大模型请求失败」，不参与报错上浮。
+ */
+export const SYNTHETIC_FAILURE_CODES: readonly string[] = ['UNKNOWN', 'TOOL_ACTIVATION_FAILED']
+
+/** 一次 `llm/retry` 事件里规划关心的字段。 */
+export interface RequestRetry {
+  /** 重试策略模式；`always` 不设上限，也就不会「耗尽」。 */
+  readonly mode: 'normal' | 'always'
+  /** 重试所属的回合号。 */
+  readonly turn: number
+  /** 已排定的重试序号；等于上限时，下一次尝试就是最后一次。 */
+  readonly retry: number
+  /** `normal` 模式允许的重试次数上限。 */
+  readonly maxRetries?: number
+}
+
+/** 一次回合结束里规划关心的字段。 */
+export interface TurnEndFacts {
+  /** 结束的回合号。 */
+  readonly turn: number
+  /** `turn/end.reason.kind`。 */
+  readonly kind: string
+  /** 本会话当前 step 最近一次 `llm/retry`；没有重试时为 undefined。 */
+  readonly retry: RequestRetry | undefined
+  /** 出错时的错误码（`kind === 'error'` 时有意义）。 */
+  readonly failureCode?: string
+  /** 这个回合是否真的跑过至少一个 step（即模型产出了内容）。 */
+  readonly hadStep: boolean
+}
+
+/**
+ * 回合算不算一次任务终点，是则返回 `'completed'` 或 `'error'`，否则 undefined。
+ *
+ *   - 完成：`completed` 且跑过 step——有最终回复；
+ *   - 报错：只认「模型请求重试耗尽」——当前 step 的重试已到上限，且失败不是
+ *     {@link SYNTHETIC_FAILURE_CODES} 里的合成码；其余终止（用户取消、策略阻断、
+ *     token 上限、崩溃补记）都不算。
+ */
+export function taskOutcome(facts: TurnEndFacts): 'completed' | 'error' | undefined {
+  if (facts.kind === 'completed') return facts.hadStep ? 'completed' : undefined
+  if (facts.kind !== 'error' || !facts.hadStep) return undefined
+  const retry = facts.retry
+  if (retry === undefined || retry.mode !== 'normal' || retry.maxRetries === undefined) return undefined
+  if (retry.turn !== facts.turn) return undefined
+  if (retry.retry < retry.maxRetries) return undefined
+  if (SYNTHETIC_FAILURE_CODES.includes(facts.failureCode ?? '')) return undefined
+  return 'error'
+}
 
 /** 返回拥有该会话的工作区 id；不属于任何工作区时为 undefined。 */
 export function owningWorkspaceId(

@@ -1,12 +1,36 @@
 /**
  * 宿主挂载测试（假 ctx）：验证插件形状、会话活动上浮、新会话落位后上浮、
- * 拖拽与改名不被覆盖、注册表拒绝时的降级，以及卸载后停手。
+ * 回合终态（任务完成 / 模型请求重试耗尽）上浮、拖拽与改名不被覆盖、
+ * 注册表拒绝时的降级，以及卸载后停手。
  *
  * 运行：`node test/plugin-apply.test.mjs`。
  */
 import assert from 'node:assert/strict'
 import * as plugin from '../index.ts'
 import { createHarness, sessionFixture, settle, ws } from './helpers.mjs'
+
+/** 一条 `step/start`：回合真的开始跑模型。 */
+const stepStart = (turn, step) => ({ type: 'step/start', data: { turn, step } })
+
+/** 一条 `llm/retry`：模型请求失败后由 `llm-retry` 排定的一次重试。 */
+const retryEvent = (turn, retry, maxRetries = 5, step = 1) => ({
+  type: 'llm/retry',
+  data: {
+    retryId: 'r',
+    turn,
+    step,
+    provider: 'deepseek',
+    mode: 'normal',
+    policyKey: 'k',
+    retry,
+    maxRetries,
+    delayMs: 1,
+    failure: { code: 'TIMEOUT', message: 'timed out' },
+  },
+})
+
+/** 一条 `turn/end`。 */
+const turnEnd = (turn, reason) => ({ type: 'turn/end', data: { turn, reason } })
 
 const { apply, inject, name } = plugin
 
@@ -105,6 +129,143 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   harness.activity('s-c')
   await settle()
   assert.deepEqual(harness.registry.order, ['c', 'a', 'b'], '随后的活动仍然只上浮真正活跃的工作区')
+  harness.dispose()
+}
+
+// 任务完成：回合跑过 step 且正常答完
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  const session = sessionFixture('s-b')
+  harness.event(session, stepStart(1, 1))
+  harness.event(session, turnEnd(1, { kind: 'completed' }))
+  await settle()
+  assert.deepEqual(harness.registry.order, ['b', 'a'], '任务完成让所属工作区上浮')
+  assert.deepEqual(harness.registry.inserts, ['b→a前'], '完成只写一次注册表')
+  harness.dispose()
+}
+
+// 没跑过 step 的空回合不算完成
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  harness.event(sessionFixture('s-b'), turnEnd(1, { kind: 'completed' }))
+  await settle()
+  assert.deepEqual(harness.registry.inserts, [], '没有最终回复的回合不上浮')
+  harness.dispose()
+}
+
+// 模型请求重试耗尽：算报错
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  const session = sessionFixture('s-b')
+  harness.event(session, stepStart(1, 1))
+  for (const retry of [1, 2, 3, 4, 5]) harness.event(session, retryEvent(1, retry))
+  harness.event(session, turnEnd(1, { kind: 'error', error: { code: 'TIMEOUT', message: 'timed out' } }))
+  await settle()
+  assert.deepEqual(harness.registry.order, ['b', 'a'], '重试到上限后失败，所属工作区上浮')
+  harness.dispose()
+}
+
+// 重试还没到上限：不算报错
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  const session = sessionFixture('s-b')
+  harness.event(session, stepStart(1, 1))
+  harness.event(session, retryEvent(1, 2))
+  harness.event(session, turnEnd(1, { kind: 'error', error: { code: 'TIMEOUT', message: 'timed out' } }))
+  await settle()
+  assert.deepEqual(harness.registry.inserts, [], '没到重试上限的失败不上浮')
+  harness.dispose()
+}
+
+// 工具失败（合成码）不算模型请求报错
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  const session = sessionFixture('s-b')
+  harness.event(session, stepStart(1, 1))
+  for (const retry of [1, 2, 3, 4, 5]) harness.event(session, retryEvent(1, retry))
+  harness.event(session, turnEnd(1, { kind: 'error', error: { code: 'TOOL_ACTIVATION_FAILED', message: 'no tool' } }))
+  await settle()
+  assert.deepEqual(harness.registry.inserts, [], '重试记录还在，但错误不是模型请求失败')
+  harness.dispose()
+}
+
+// 重试记录按 step 隔离：上一 step 的重试不替下一 step 作证
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  const session = sessionFixture('s-b')
+  harness.event(session, stepStart(1, 1))
+  for (const retry of [1, 2, 3, 4, 5]) harness.event(session, retryEvent(1, retry))
+  harness.event(session, stepStart(1, 2))
+  harness.event(session, turnEnd(1, { kind: 'error', error: { code: 'TIMEOUT', message: 'timed out' } }))
+  await settle()
+  assert.deepEqual(harness.registry.inserts, [], '新 step 没有重试，失败不是重试耗尽')
+  harness.dispose()
+}
+
+// 其余终止原因都不算任务终点
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  const session = sessionFixture('s-b')
+  harness.event(session, stepStart(1, 1))
+  for (const retry of [1, 2, 3, 4, 5]) harness.event(session, retryEvent(1, retry))
+  for (const reason of [
+    { kind: 'aborted', reason: { kind: 'user' } },
+    { kind: 'blocked' },
+    { kind: 'max-tokens' },
+  ]) {
+    harness.event(session, turnEnd(1, reason))
+  }
+  await settle()
+  assert.deepEqual(harness.registry.inserts, [], '用户取消、策略阻断、token 上限都不上浮')
+  harness.dispose()
+}
+
+// subagent 子会话的任务终点不参与
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', [])] })
+  harness.apply(plugin)
+  await settle()
+  const child = sessionFixture('s-child', { origin: 'subagent' })
+  harness.event(child, stepStart(1, 1))
+  harness.event(child, turnEnd(1, { kind: 'completed' }))
+  await settle()
+  assert.deepEqual(harness.registry.inserts, [], 'subagent 子会话不上浮')
+  harness.dispose()
+}
+
+// 没有工作区归属的会话完成任务：没有可上浮的分组
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a'])] })
+  harness.apply(plugin)
+  await settle()
+  const ungrouped = sessionFixture('s-ungrouped')
+  harness.event(ungrouped, stepStart(1, 1))
+  harness.event(ungrouped, turnEnd(1, { kind: 'completed' }))
+  await settle()
+  assert.deepEqual(harness.registry.inserts, [], 'Ungrouped 会话没有可上浮的分组')
   harness.dispose()
 }
 
