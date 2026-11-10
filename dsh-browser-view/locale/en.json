@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "Browser view",
+    "description": "Shows the live Chromium screen an agent drives through Chrome DevTools MCP, in a right-Sidebar tab."
+  },
+  "view": {
+    "title": "Browser view",
+    "empty": "The agent has not opened a browser in this session yet.",
+    "emptyHint": "Ask it to browse something, and this tab follows along.",
+    "waiting": "Waiting for the first frame…",
+    "stopped": "Live view paused.",
+    "resume": "Resume",
+    "pause": "Pause",
+    "refresh": "Refresh now",
+    "page": "Page {id}",
+    "pageCount": "{count} pages",
+    "fps": "Every {seconds}s",
+    "error": "Could not read the browser: {reason}"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "浏览器画面",
+    "description": "在右侧栏标签页里显示 agent 通过 Chrome DevTools MCP 操作的 Chromium 实时画面。"
+  },
+  "view": {
+    "title": "浏览器画面",
+    "empty": "本会话里 agent 还没有打开过浏览器。",
+    "emptyHint": "让它去浏览点什么，这个标签页就会跟上来。",
+    "waiting": "正在等待第一帧…",
+    "stopped": "实时画面已暂停。",
+    "resume": "继续",
+    "pause": "暂停",
+    "refresh": "立即刷新",
+    "page": "页面 {id}",
+    "pageCount": "{count} 个页面",
+    "fps": "每 {seconds}s 一帧",
+    "error": "读取浏览器失败：{reason}"
+  }
+}

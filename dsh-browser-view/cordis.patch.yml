@@ -1,0 +1,19 @@
+# dsh-browser-view 的 profile 挂载行：随 dsh.profile.bundles 自动挂载。
+# 宿主半部按 <name>/package.json 解析；客户端半部由 dsh.client.platform=web + immediately
+# 注册进浏览器 roster。配置见 index.js 的 Config：截图来源、抓帧间隔、画质。
+- insert:
+    - id: dsh-browser-view
+      name: dsh-browser-view
+    # 控制浏览器的插件：browser-use 工具与 chrome-devtools-mcp 后端，随本插件一起挂载。
+    # 前置条件：这两个包是普通插件（无 dsh.bundle），行的 bare name 只能由**本插件所在的 profile**
+    # 的 package.json dependencies 提供。本插件自身以 link: 方式挂载，pnpm 不会安装 link: 目标的
+    # 依赖，所以它们由仓库根的 add-plugins.sh / add-plugins.ps1 单独安装（版本跟随 dsh --version）。
+    # 缺这一步时本选项卡不报错，只会一直显示空状态。
+    - id: browser-use
+      name: "@deepseek-ai/dsh-browser-use"
+    - id: browser-use-chrome-devtools-mcp
+      name: "@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp"
+      config:
+        mode: launch
+        headless: true
+        executablePath: /usr/bin/google-chrome
