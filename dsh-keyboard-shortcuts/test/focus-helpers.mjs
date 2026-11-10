@@ -301,6 +301,20 @@ export class FakeElement extends FakeNode {
     this.focusCount = 0
     this.lastFocusOptions = undefined
     this.listeners = new Map()
+    /** 页签文案:视图切换只把它当诊断信息,测试按需赋值。 */
+    this.text = ''
+    /** `click()` 调用次数:视图切换就是点页签按钮。 */
+    this.clickCount = 0
+  }
+  /** 与真实 DOM 同义:自身文字加上所有后代的文字。 */
+  get textContent() {
+    return this.text + this.children.map((child) => child.textContent ?? '').join('')
+  }
+  set textContent(value) {
+    this.text = String(value)
+  }
+  click() {
+    this.clickCount += 1
   }
   addEventListener(type, listener) {
     const listeners = this.listeners.get(type) ?? new Set()

@@ -490,4 +490,104 @@ console.log('--- M⑲ 展开补位选根:会话包装与面板两层同 id,取�
   }
 }
 
+console.log('--- M⑳ 折叠态:同一对键改切会话视图,点页签按钮、不消费页签外的东西 ---')
+{
+  /** 一行会话视图标签:返回行元素与它的按钮。 */
+  const viewRow = (labels, active) => {
+    const list = new FakeElement('div', { 'data-conversation-tabs': '' })
+    const buttons = labels.map((label, index) => {
+      const button = list.append(new FakeElement('button', {
+        role: 'tab',
+        ...(index === active ? { 'aria-selected': 'true' } : {}),
+      }))
+      button.append(new FakeElement('span')).textContent = label
+      return button
+    })
+    return { list, buttons }
+  }
+
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const { shortcuts } = harness({ sidebar })
+  const app = new FakeElement('div', { 'data-app': '' })
+  const { list, buttons } = viewRow(['对话', '轨迹'], 0)
+  app.append(list)
+  const dom = withPageDom({ app })
+  try {
+    const press = keydown(PAGE_NEXT_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    check('点中「轨迹」', buttons.map((button) => button.clickCount), [0, 1])
+    check('这一按被消费', press.consumed.count, 1)
+    check('不切右栏页(折叠态没有当前页)', sidebar.focusCalls, [])
+
+    const back = keydown(PAGE_PREVIOUS_PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(back.input)
+    check('反向仍落到同一颗(只有两颗)', buttons.map((button) => button.clickCount), [0, 2])
+    check('反向也消费', back.consumed.count, 1)
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- M㉑ 折叠态让位:没有标签行 / 只有一颗页签时不消费、不动作 ---')
+{
+  const cases = [
+    ['没有标签行', (app) => app],
+    ['只有一颗页签(Chat)', (app) => {
+      const list = app.append(new FakeElement('div', { 'data-conversation-tabs': '' }))
+      const button = list.append(new FakeElement('button', { role: 'tab', 'aria-selected': 'true' }))
+      button.append(new FakeElement('span')).textContent = '对话'
+      return app
+    }],
+  ]
+  for (const [label, build] of cases) {
+    const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+    const { shortcuts } = harness({ sidebar })
+    const app = build(new FakeElement('div', { 'data-app': '' }))
+    const dom = withPageDom({ app })
+    try {
+      const press = keydown(PAGE_NEXT_PRESS, shortcutContext({ target: null }))
+      shortcuts.emit(press.input)
+      check(`${label}:不消费`, press.consumed.count, 0)
+      check(`${label}:不切页`, sidebar.focusCalls, [])
+    } finally {
+      dom.restore()
+    }
+  }
+}
+
+console.log('--- M㉒ 折叠态 + 焦点在终端:捕获路径同样切会话视图,不把按键漏进 shell ---')
+{
+  const viewRow = (labels, active) => {
+    const list = new FakeElement('div', { 'data-conversation-tabs': '' })
+    const buttons = labels.map((label, index) => {
+      const button = list.append(new FakeElement('button', {
+        role: 'tab',
+        ...(index === active ? { 'aria-selected': 'true' } : {}),
+      }))
+      button.append(new FakeElement('span')).textContent = label
+      return button
+    })
+    return { list, buttons }
+  }
+
+  const sidebar = fakePageSidebar({ list: ['t1', 't2'], active: 't1', expanded: false })
+  const app = new FakeElement('div', { 'data-app': '' })
+  const { list, buttons } = viewRow(['对话', '轨迹'], 0)
+  app.append(list)
+  const terminal = app.append(new FakeElement('div', { class: 'xterm' }))
+  const textarea = terminal.append(new FakeElement('textarea'))
+  // 捕获监听在装配那一刻挂到 window 上,所以 DOM 要先就位。
+  const dom = withPageDom({ app })
+  const { shortcuts } = harness({ sidebar })
+  try {
+    const event = fakeKeyEvent({ path: [textarea, terminal, app], code: 'ArrowRight', ctrlKey: true, altKey: true })
+    dom.window.emit(event)
+    check('终端内切到「轨迹」', buttons.map((button) => button.clickCount), [0, 1])
+    check('事件在捕获阶段被吞', [event.prevented, event.stopped], [1, 1])
+    check('不切右栏页', sidebar.focusCalls, [])
+  } finally {
+    dom.restore()
+  }
+}
+
 finish()

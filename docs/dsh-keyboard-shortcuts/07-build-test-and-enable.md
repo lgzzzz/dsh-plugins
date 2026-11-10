@@ -27,7 +27,8 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | `src/approval-keys.ts` | 审批键 `Enter` 允许一次 / `Esc` 拒绝 |
 | `src/focus-composer.ts` | 聚焦输入框 `primary+alt+J`（macOS `⌘⌥J` / Windows/Linux `Ctrl+Alt+J`；固定键，终端内另走捕获拦截） |
 | `src/focus-page.ts` | 聚焦右栏当前显示的页面 `primary+alt+K`（macOS `⌘⌥K` / Windows/Linux `Ctrl+Alt+K`；复用页面切换桥的 `focusShownPage`；Web 上占用 `session.search` 的默认键位） |
-| `src/page-cycle.ts` | 页面循环 `primary+alt+←` / `primary+alt+→`（切页后自动聚焦新页面） |
+| `src/page-cycle.ts` | 页面循环 `primary+alt+←` / `primary+alt+→`：右栏展开时切页并自动聚焦新页面，折叠时改切会话视图（分档与投递都在这里） |
+| `src/view-cycle.ts` | 会话视图标签的读数与步进：只认当前渲染出来的 `[data-conversation-tabs] [role="tab"]`，环状步进后 `click()` 目标页签 |
 | `src/strip-scroll.ts` | 右栏页签行的滚动补偿：`scroll-behavior: auto` + 切页前后保持观察窗口；纯视图补偿，不消费按键 |
 | `src/question-keys.ts` | 提问卡片 `Esc` 取消 / 关闭（调面板自己的 `dismiss()`） |
 | `src/session-cycle.ts` | 会话导航 `primary+↑/↓`（全部候选）与 `primary+alt+↑/↓`（只走活跃会话） |
@@ -87,6 +88,7 @@ dsh plugin --profile web add <本仓库路径>/dsh-keyboard-shortcuts
 - 任意焦点位置按 `⌘⌥J` / `Ctrl+Alt+J` → 聚焦底部输入框，光标回到上次位置；焦点在终端里按同一键 → 仍聚焦输入框，且这一按不进 shell；
 - 在终端里按 `⌘⌥N` / `Ctrl+Alt+N` → 新建会话并切过去，这一按不进 shell；焦点在页面 / 文本控件里按同一键 → 由官方命令处理；
 - 右侧栏有两张以上页面时，任意焦点位置按 `⌘⌥→` / `⌘⌥←` → 环状切页，键盘落到新页面（终端可直接打字）；焦点在终端里 → 仍能切页；
+- **收起右侧栏**后按 `⌘⌥→` / `⌘⌥←` → 在主会话的视图标签之间环状切换（对话 ↔ 轨迹 ↔ 插件注册的 View），标签的 `aria-selected` 跟着换；焦点在终端里 → 仍能切视图，且这一按不进 shell；只有一个视图标签 → 不动作、也不吞按键；
 - 页签行横向溢出时来回切页 → 相邻来回切时页签行不动、来源页签留在视野里；在 DevTools 里确认 `[data-sidebar-right-session] [data-dockkit-strip-tabs]` 的 `scrollBehavior` 为 `auto`；
 - 展开若干工作区后按 `⌘↓` / `⌘↑` → 在左侧栏前三个工作区当前显示的会话行之间环状切换；按 `⌘⌥↓` / `⌘⌥↑` → 只在活跃会话之间切换；
 - 焦点在终端里按这两对键 → 仍能切会话，且不进 shell；模态弹窗打开或长按重复时 → 消费但不切换；

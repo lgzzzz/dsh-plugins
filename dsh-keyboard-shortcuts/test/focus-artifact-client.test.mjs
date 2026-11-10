@@ -222,6 +222,41 @@ console.log('--- G① lib/client.js 注册、声明与端到端装配 ---')
     }
   }
 
+  console.log('--- G⑤ 产物里的折叠态切会话视图:⌘⌥←/→ 点页签按钮 ---')
+  {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const tabs = app.append(new FakeElement('div', { 'data-conversation-tabs': '' }))
+    const chat = tabs.append(new FakeElement('button', { role: 'tab', 'aria-selected': 'true' }))
+    chat.append(new FakeElement('span')).textContent = '对话'
+    const trajectory = tabs.append(new FakeElement('button', { role: 'tab' }))
+    trajectory.append(new FakeElement('span')).textContent = '轨迹'
+    const composer = app.append(new FakeElement('textarea', { class: 'composer' }))
+    const dom = withWindowDom({ root: app, activeElement: composer })
+    try {
+      const shortcuts = fakeShortcuts()
+      // 右栏折叠:这一档才轮到会话视图。
+      const sidebar = fakeSidebar()
+      sidebar.expanded = false
+      const ctx = new FakeCtx({
+        shortcuts,
+        sidebarRight: sidebar,
+        sessions: fakeSessions({ summary: { s1: session('s1') } }),
+        uiSession: fakeUiSession(),
+        uiWorkspace: fakeSessionNavigation(),
+      })
+      check('折叠切视图装配无告警', captureWarnings(() => plugin.apply(ctx)), [])
+      shortcuts.emit(keydown(gesture('ArrowRight', { control: true, alt: true }), shortcutContext({ target: composer })).input)
+      check('产物里 ⌘⌥→ 点到「轨迹」', [chat.clickCount, trajectory.clickCount], [0, 1])
+      // 点页签后上游会重渲并改写 aria-selected;假 DOM 不重渲,这里手工补上这一步。
+      chat.removeAttribute('aria-selected')
+      trajectory.setAttribute('aria-selected', 'true')
+      shortcuts.emit(keydown(gesture('ArrowLeft', { control: true, alt: true }), shortcutContext({ target: composer })).input)
+      check('产物里 ⌘⌥← 再切回「对话」', [chat.clickCount, trajectory.clickCount], [1, 1])
+    } finally {
+      dom.restore()
+    }
+  }
+
 }
 
 finish()

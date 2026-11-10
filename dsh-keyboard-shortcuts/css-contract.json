@@ -27,6 +27,7 @@
     {"id":"row-key","plugin":"dsh-keyboard-shortcuts","token":"data-row-key","paths":["dsh-client-ui-workspace/lib"],"hint":"侧栏行标记消失：会话导航的候选恒为空，两对会话键不动作、不消费"},
     {"id":"row-key-workspace","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-row-key\":\\s*`workspace:","paths":["dsh-client-ui-workspace/lib"],"hint":"工作区分组行的 data-row-key 前缀变了：分组一个也认不出来，会话行归属归零，候选恒为空"},
     {"id":"row-key-session","plugin":"dsh-keyboard-shortcuts","pattern":"\"data-row-key\":\\s*`session:","paths":["dsh-client-ui-workspace/lib"],"hint":"会话行的 data-row-key 前缀变了：一行会话也认不出来，两对会话键不动作"},
+    {"id":"conversation-view-tabs","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-tabs","paths":["dsh-client-ui-conversation/lib"],"hint":"会话视图标签行标记消失：右栏折叠时 ⌘⌥←/→ 找不到页签行，会话视图切换退化成不动作、不消费（右栏展开时的切页不受影响）"},
     {"id":"archived-marker","plugin":"dsh-keyboard-shortcuts","pattern":"\"aria-description\":[\\s\\S]{0,80}archived","paths":["dsh-client-ui-workspace/lib"],"hint":"归档行的 aria-description 标记变了：归档行回到候选里（按下去只弹一次『已归档，不可打开』提示、不切换）"}
   ]
 }

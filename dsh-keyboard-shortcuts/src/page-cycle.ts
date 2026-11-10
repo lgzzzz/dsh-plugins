@@ -1,16 +1,19 @@
 /**
  * 挂载 fixed 行 `dsh-keyboard-shortcuts.page-cycle`(group `application`)，由
- * `⌘⌥←` / `⌘⌥→`(macOS)或 `Ctrl+Alt+←` / `Ctrl+Alt+→`(Windows、Linux)循环切换右栏
- * 当前页，并把键盘交给切换后的页面。声明的是逻辑组合 `primary+alt`，注册表按平台展开。
+ * `⌘⌥←` / `⌘⌥→`(macOS)或 `Ctrl+Alt+←` / `Ctrl+Alt+→`(Windows、Linux)按右栏状态
+ * 分两档：
  *
- * 页面列表与切换取自 Right-Sidebar 公开面：`tabsIn(sessionId)` 按记录顺序列出页，
- * `active()` 给出当前页，`focus(tabId)` 与点击页签执行同一操作；方向为循环。
- * 切换后在渲染该页的 commit 之后定位可见 pane 并交还键盘，页面自身已取得焦点时
- * 不动它(`focusShownPage`)。
+ *   - **右栏展开**：循环切换右栏当前页，并把键盘交给切换后的页面。页面列表与切换取自
+ *     Right-Sidebar 公开面：`tabsIn(sessionId)` 按记录顺序列出页，`active()` 给出当前页，
+ *     `focus(tabId)` 与点击页签执行同一操作；方向为循环。切换后在渲染该页的 commit 之后
+ *     定位可见 pane 并交还键盘，页面自身已取得焦点时不动它(`focusShownPage`)。
+ *   - **右栏折叠**：这时右栏没有"当前显示的页"，同一对键改去切换**会话视图**标签
+ *     (「对话」/「轨迹」/ 插件注册的其它 View)，见 `view-cycle.ts`。闭合状态下的
+ *     页签按钮就是用户点击的那一颗，所以点它与点标签是同一个上游动作。
  *
  * 落在 `.xterm` 内的按键不会到达 window 上的 fixed-input 监听(终端在自己的
  * textarea 处理器里 `stopPropagation()`)，因此另外安装捕获阶段的 window
- * `keydown` 监听，在事件进入终端前判定；两条路径共用 `pageCycleTarget`，一次按键
+ * `keydown` 监听，在事件进入终端前判定；两条路径共用 `pageCycleAction`，一次按键
  * 只被处理一次。
  *
  * 同一观察者还带一项非消费任务：按键为 `sidebar.right.toggle` 的生效绑定时，
@@ -29,6 +32,7 @@ import { captureContext, captureGesture, composedElement, terminalTarget } from 
 import { bindingKeycaps, bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
 import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
 import { captureStripScroll, installInstantStripScroll, restoreStripScroll } from './strip-scroll.ts'
+import { activateViewTab, displayedViewTabs, steppedViewTab, type DisplayedViewTab, type ViewCycleStep } from './view-cycle.ts'
 import type {
   ShortcutCatalogEntry,
   ShortcutContext,
@@ -78,7 +82,7 @@ export const PAGE_NEXT_BINDING: ShortcutFixedCommand['bindings'][number] = {
 export function pageCycleCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
   return {
     id: PAGE_CYCLE_ID,
-    label: () => '切换右栏页面',
+    label: () => '切换右栏页面／会话视图',
     keys: bindingKeycaps(PAGE_PREVIOUS_BINDING, platform, '←/→'),
     bindings: [PAGE_PREVIOUS_BINDING, PAGE_NEXT_BINDING],
     group: 'application',
@@ -230,7 +234,8 @@ function whenShown(run: () => void): void {
  * 一次按键切换页面所需的全部信息，按当前状态解析；返回 undefined 表示不动该按键。
  *
  * 两条投递路径(观察者与终端前的捕获拦截)共用本判定，结果包含要切换的 Session 与
- * 要聚焦的页。
+ * 要聚焦的页。右栏折叠时没有"当前显示的页"，返回 undefined —— 那一档由
+ * `pageCycleAction` 交给会话视图切换。
  */
 export function pageCycleTarget(
   shortcuts: Shortcuts,
@@ -263,11 +268,51 @@ export interface PageStepTarget {
 }
 
 /**
+ * 一次按键的全部结论：右栏展开时切页，折叠时切会话视图；undefined 表示这一按不归本桥动作。
+ *
+ * 两档互斥且按右栏展开状态二选一 —— 折叠时没有"当前显示的页"，展开时不碰会话视图
+ * (那时会话视图页签仍是可见的，用户点它即可；把同一个键同时绑给两件事只会让动作不可预期)。
+ */
+export type PageCycleAction =
+  | { readonly kind: 'page'; readonly target: PageStepTarget }
+  | { readonly kind: 'view'; readonly step: ViewCycleStep; readonly tab: DisplayedViewTab }
+
+/**
+ * 解析一次按键要做什么：右栏展开时是切页目标，折叠时是会话视图页签。
+ *
+ * 两条投递路径(观察者与终端前的捕获拦截)共用本函数，一次按键只被处理一次。
+ */
+export function pageCycleAction(
+  shortcuts: Shortcuts,
+  sidebar: Sidebar,
+  gesture: ShortcutGesture,
+  context: ShortcutContext,
+): PageCycleAction | undefined {
+  if (!pageCycleEligible(gesture, context)) return undefined
+  const step: PageStep | undefined = pageStepFor(shortcuts.fixedCatalog.getSnapshot(), PAGE_CYCLE_ID, gesture)
+  if (step === undefined) return undefined
+  if (sidebar.isExpanded()) {
+    const target = pageCycleTarget(shortcuts, sidebar, gesture, context)
+    return target === undefined ? undefined : { kind: 'page', target }
+  }
+  // 右栏折叠：同一对键改去切换会话视图。页签不足两颗(只有 Chat、或还在 Hero)时没有
+  // 可切的目标，这一按不消费、原样放行 —— 与折叠态原有的让位口径一致。
+  const tab = steppedViewTab(displayedViewTabs(), step)
+  return tab === undefined ? undefined : { kind: 'view', step, tab }
+}
+
+/** 执行一次已解析的结论。 */
+export function runPageCycleAction(sidebar: Sidebar, action: PageCycleAction): void {
+  if (action.kind === 'page') switchPage(sidebar, action.target)
+  else activateViewTab(action.tab)
+}
+
+/**
  * 桥接页面切换键。
  *
  * 通过两条路径投递按键：观察者处理 DOM 通道收到的按键；捕获阶段 window
  * `keydown` 监听处理落在 `.xterm` 内、通道收不到的按键。两条路径运行同一判定
- * (`pageCycleTarget`)与同一切换，一次按键只被处理一次。
+ * (`pageCycleAction`)与同一动作，一次按键只被处理一次。
  *
  * 观察者还带一项非消费任务：交付 `sidebar.right.toggle` 展开后所显示的页面的焦点。
  */
@@ -300,13 +345,13 @@ export function installPageCycleBridge(ctx: Context): void {
         if (event.type !== 'keydown') return
         const element = composedElement(event)
         if (!terminalTarget(element)) return
-        const target = pageCycleTarget(shortcuts, sidebar, captureGesture(event), captureContext(element))
-        if (target === undefined) return
+        const action = pageCycleAction(shortcuts, sidebar, captureGesture(event), captureContext(element))
+        if (action === undefined) return
         // 在终端自身处理器之前拦截：事件到此为止，xterm 既收不到该按键，也不会向
         // shell 发送转义序列。
         event.preventDefault()
         event.stopPropagation()
-        switchPage(sidebar, target)
+        runPageCycleAction(sidebar, action)
       }
       window.addEventListener('keydown', onKeydown, true)
       return () => window.removeEventListener('keydown', onKeydown, true)
@@ -315,14 +360,14 @@ export function installPageCycleBridge(ctx: Context): void {
 }
 
 /**
- * 处理固定通道投递的一次 keydown；只有解析出切换目标时才消费按键。
+ * 处理固定通道投递的一次 keydown；只有解析出动作时才消费按键。
  */
 function handlePageCycleInput(shortcuts: Shortcuts, sidebar: Sidebar, input: KeydownInput): void {
-  const target = pageCycleTarget(shortcuts, sidebar, input.gesture, input.context)
-  if (target === undefined) return
+  const action = pageCycleAction(shortcuts, sidebar, input.gesture, input.context)
+  if (action === undefined) return
   // 先消费再动作，避免该按键同时被页面内的输入控件处理。
   input.consume()
-  switchPage(sidebar, target)
+  runPageCycleAction(sidebar, action)
 }
 
 /**
