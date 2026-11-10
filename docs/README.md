@@ -24,6 +24,7 @@
 | `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
+| `dsh-browser-view` | 右栏「浏览器画面」标签页：用当前会话 agent 自己那份 chrome-devtools-mcp 工具（`list_pages` + `take_screenshot`）每 1s 抓一帧 JPEG，经已认证的 `/api` 路由轮询显示 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-changes-review-wrap` | 让右栏的改动审查（changes-review）标签页默认开启自动换行：新标签页首次挂载时调用换行按钮的 React `onClick` 写入 `wrap=true`，工具栏开关照常可用；切页重挂不重写，关闭重开重新默认开启 | [说明](dsh-changes-review-wrap.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
@@ -86,6 +87,13 @@ pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
   目录，删除插件只要删掉目录。
 - `remove-plugins` 从 profile 的 `dependencies` 中挑出指向本仓库的 `link:` / `file:` 条目来卸载，因此插件目录
   删除后遗留的注册项也能清掉。
+
+`add-plugins` 末尾还会单独安装两个**浏览器控制插件**（`@deepseek-ai/dsh-browser-use` 与
+`@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp`）。原因：`dsh-browser-view` 的
+`cordis.patch.yml` 按裸包名挂载它们，而本仓库的插件一律以 `link:` 装进 profile —— pnpm 不会安装 `link:`
+目标的依赖，所以这两行在全新机器上会解析失败，选项卡静默显示空状态。版本取自 `dsh --version`，让它们与
+运行中的 dsh 保持同一版本族（它们的 `peerDependencies` 钉着 cordis / dsh-agent / dsh-tools 等）。没有
+`dsh-browser-view` 目录时这一步自动跳过；`remove-plugins` 不会移除它们。
 
 DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效策略是 `RemoteSigned` 也会被拒
 （报「未对文件进行数字签名」或 `AuthorizationManager check failed`；`RemoteSigned` / `Unrestricted` 都拦，只有

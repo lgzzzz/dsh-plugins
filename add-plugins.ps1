@@ -28,6 +28,27 @@ foreach ($plugin in $Plugins) {
   if ($LASTEXITCODE -ne 0) { $failed += $name }
 }
 
+# 浏览器控制插件：dsh-browser-view 的 cordis.patch.yml 里挂着
+# @deepseek-ai/dsh-browser-use 与 @deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp 两行。
+# 它们是普通插件(没有 dsh.bundle)，patch 行按裸包名解析，只能由 profile 的 dependencies 提供；
+# 而本脚本对插件目录用的是 link: 安装，pnpm 不安装 link: 目标的依赖，所以它们必须单独装一次。
+# 版本跟随运行中的 dsh：这两个包把 cordis / dsh-agent / dsh-tools / dsh-system-prompt 等
+# 钉在同版本 dsh 提供的 peer 上，版本漂移会让 patch 行解析失败(选项卡静默显示空状态)。
+$BrowserControlVersionFallback = '0.2.2-rc.1'
+if (Test-Path -LiteralPath (Join-Path $Base 'dsh-browser-view/package.json')) {
+  $browserControlVersion = (dsh --version 2>$null | Select-Object -First 1)
+  if ($browserControlVersion) { $browserControlVersion = $browserControlVersion.Trim() }
+  if (-not $browserControlVersion) {
+    $browserControlVersion = $BrowserControlVersionFallback
+    Write-Host "未取到 dsh 版本,浏览器控制插件回退到 $browserControlVersion"
+  }
+  Write-Host "==> dsh plugin --profile web add 浏览器控制插件@$browserControlVersion"
+  dsh plugin --profile web add `
+    "@deepseek-ai/dsh-browser-use@$browserControlVersion" `
+    "@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp@$browserControlVersion"
+  if ($LASTEXITCODE -ne 0) { $failed += '浏览器控制插件' }
+}
+
 if ($failed.Count -gt 0) {
   Write-Host "失败: $($failed -join ', ')"
   exit 1
