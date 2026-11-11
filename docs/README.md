@@ -26,7 +26,6 @@
 | `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
-| `dsh-browser-view` | 右栏「浏览器画面」标签页：用当前会话 agent 自己那份 chrome-devtools-mcp 工具（`list_pages` + `take_screenshot`）每 1s 抓一帧 JPEG，经已认证的 `/api` 路由轮询显示 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-changes-review-wrap` | 让右栏的改动审查（changes-review）标签页默认开启自动换行：新标签页首次挂载时调用换行按钮的 React `onClick` 写入 `wrap=true`，工具栏开关照常可用；切页重挂不重写，关闭重开重新默认开启 | [说明](dsh-changes-review-wrap.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
@@ -91,18 +90,22 @@ pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
 
 - `add-plugins` 运行时发现仓库根下所有 `dsh-*` 目录，`example/` 等非 `dsh-*` 目录不参与；新增插件只要建好
   目录，删除插件只要删掉目录。
+- `add-plugins` 在挂载每个插件前先补齐客户端半部产物：仓库根的 `node_modules/.bin/tsdown` 缺失时先跑一次
+  `pnpm install`，然后对 `package.json` 的 `exports` 里写明、但磁盘上不存在的 `.js`（即 `.gitignore` 里的
+  `lib/*.js`）跑 `pnpm --filter <name> build`。缺产物时插件照样挂得上，只是浏览器里是个空壳、启动日志里
+  只有一行 `ENOENT`，所以这一步失败就不挂该插件。只按 `exports` 判定，没有 `build` 脚本的宿主半部插件
+  （`dsh-agent-auto-retry`、`dsh-git-guard` 等）不会被误构建；已有产物的插件也不会被重复构建。
 - `remove-plugins` 从 profile 的 `dependencies` 中挑出指向本仓库的 `link:` / `file:` 条目来卸载，因此插件目录
-  删除后遗留的注册项也能清掉。
+  删除后遗留的注册项也能清掉。它不碰 `lib/` 产物：卸下不会让产物失效，再挂回去不必重新构建。
 
-`add-plugins` 末尾还会单独安装两个**浏览器控制插件**（`@deepseek-ai/dsh-browser-use` 与
-`@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp`）。原因：`dsh-browser-view` 的
-`cordis.patch.yml` 按裸包名挂载它们，而本仓库的插件一律以 `link:` 装进 profile —— pnpm 不会安装 `link:`
-目标的依赖，所以这两行在全新机器上会解析失败，选项卡静默显示空状态。版本取自 `dsh --version`，让它们与
-运行中的 dsh 保持同一版本族（它们的 `peerDependencies` 钉着 cordis / dsh-agent / dsh-tools 等）。没有
-`dsh-browser-view` 目录时这一步自动跳过。
-
-`remove-plugins` 对称地处理：**本次卸下了 `dsh-browser-view`** 时，顺带卸掉这两个仍装着的浏览器控制包；
-没卸 `dsh-browser-view` 时不动它们，所以独立安装过这两个包的用户不受影响。
+浏览器控制插件（`@deepseek-ai/dsh-browser-use` 与
+`@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp`）不在这个扫描范围内：它们是普通插件、没有
+`dsh.bundle`，patch 行按裸包名解析，只能由 profile 的 `dependencies` 提供，而 profile 对仓库插件用的是 `link:`
+安装（pnpm 不安装 `link:` 目标的依赖）。它们的挂载配置直接写在 `~/.dsh/profiles/web/cordis.patch.yml` 的
+`insert` 层里（`browser-use` 与 `browser-use-chrome-devtools-mcp` 两行，后者带 `mode: launch` / `headless` /
+`executablePath`），依赖则手写在 profile 的 `dependencies` 中，版本跟随运行中的 `dsh --version`（它们的
+`peerDependencies` 钉着 cordis / dsh-agent / dsh-tools 等）。这两项属于 profile 的本地配置，仓库脚本增删插件时
+不再触碰它们。
 
 DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效策略是 `RemoteSigned` 也会被拒
 （报「未对文件进行数字签名」或 `AuthorizationManager check failed`；`RemoteSigned` / `Unrestricted` 都拦，只有
@@ -110,7 +113,10 @@ DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\remove-plugins.ps1`（当前会话临时放开：
 `Set-ExecutionPolicy -Scope Process Bypass -Force`）。
 
-`remove-plugins` 假定 `dsh` 未在运行：先退出 `dsh web`，跑完再重新启动（运行中的实例不会读到 profile 变更）。它只改
-profile（`dependencies` 与 `dsh.profile.bundles` 由 pnpm 和 `dsh` 重算），不删除本仓库里的插件目录。
+`remove-plugins` 假定 `dsh` 未在运行：先退出 `dsh web`，跑完再重新启动（运行中的实例不会读到 profile 变更）。
+脚本会先探测一次运行中的 `dsh web`（按 argv 词元判定，只认 `node <…/dsh> web` 与
+`node <…/dsh> --profile <name> web`），命中时打印警告但**不阻断**——同一台机器上可能还有别的 profile 或别的
+dsh home 在跑，而写入冲突本身会由 pnpm 的 `EACCES … package.json.lock` 暴露出来。它只改 profile
+（`dependencies` 与 `dsh.profile.bundles` 由 pnpm 和 `dsh` 重算），不删除本仓库里的插件目录。
 
 新插件挂载后刷新浏览器即可生效。**客户端半部(`lib/client.js`)改动后必须重新构建**；Host 在合成那一刻就把产物字节读进快照(`dsh-client-modules` 的 `initialBundleSnapshot`)，所以重新构建后仅刷新页面可能仍拿到旧字节——还要重启 `dsh web`，或在「设置 → 插件」里关掉再打开本插件，再刷新页面(完整说明见 [`dsh-changes-hover-off.md`](dsh-changes-hover-off.md#挂载与启用))。

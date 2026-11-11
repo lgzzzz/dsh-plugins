@@ -42,8 +42,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  dsh-browser-view: {}
-
   dsh-changes-hover-off:
     devDependencies:
       '@deepseek-ai/cordis':

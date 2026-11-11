@@ -114,3 +114,7 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-official-bundles@0.2.2-alpha.2 || 0.2.2-alpha.3 || 0.2.2-rc.1'
   - '@deepseek-ai/dsh-fs-patch@0.2.2-alpha.3 || 0.2.2-rc.1'
   - tsdown@0.23.5
+
+allowBuilds:
+  '@google/genai': false
+  protobufjs: false

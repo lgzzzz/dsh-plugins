@@ -1,9 +1,9 @@
 ﻿# 本文件须保存为 UTF-8 with BOM:PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI(GBK)解码,中文会乱码并吞掉行尾引号。
 # 把本仓库的插件从 web profile 卸下:按 profile 的 dependencies 里指向本仓库的 link:/file: 路径识别,
 # 目录已删除后遗留的条目也能清理;不维护插件名单。
-# 本次卸下 dsh-browser-view 时,顺带卸掉它安装期引入的浏览器控制包(它们不在本仓库,故不被上面的规则命中)。
 # 默认在 dsh 未运行时执行:先退出 dsh web,再跑本脚本,完成后重新启动 dsh web(运行中的实例不会读到 profile 的变更)。
 # 只改 profile(pnpm 重算 dependencies 与 dsh.profile.bundles),不删除本仓库里的插件目录。
+# 也不碰 .gitignore 里的 lib/ 构建产物:卸下不会让产物失效,再挂回去不必重新构建。
 # 本脚本可以重复执行:没有可卸载的条目时直接结束。
 $ErrorActionPreference = 'Stop'
 
@@ -46,32 +46,48 @@ if ($names.Count -eq 0) {
   exit 0
 }
 
-$failed = @()
-$removedBrowserView = $false
-foreach ($name in $names) {
-  if ($name -eq 'dsh-browser-view') { $removedBrowserView = $true }
-  Write-Host "==> dsh plugin --profile $ProfileName remove $name"
-  dsh plugin --profile $ProfileName remove $name
-  if ($LASTEXITCODE -ne 0) { $failed += $name }
+# pnpm / dsh 会把进度与警告写到 stderr。PS 5.1 在 $ErrorActionPreference = 'Stop' 下会把原生命令的
+# stderr 当成终止错误抛出,所以原生调用统一走这里:临时放开 ErrorActionPreference,只按退出码判断。
+function Invoke-Native {
+  param([string]$Program, [string[]]$Arguments)
+  $previous = $ErrorActionPreference
+  $code = 1
+  $ErrorActionPreference = 'Continue'
+  try {
+    & $Program @Arguments
+    # 原生命令在哪个作用域跑,$LASTEXITCODE 就更新在哪个作用域;这里与 & 同一层,读到的才是本次的。
+    $code = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previous
+  }
+  return $code
 }
 
-# 浏览器控制插件是 dsh-browser-view 的安装期副产物(见 add-plugins.ps1):它的 cordis.patch.yml 按
-# 裸包名挂载这两个 registry 包,而上面按 link:/file: 识别只能命中本仓库的插件,所以必须在这里对称卸下。
-# 只在本次确实卸下了 dsh-browser-view 时执行 —— 独立安装过这两个包的用户不受影响。
-# 清单在上一轮 remove 里已被 pnpm 重写,所以这里重新读一次,只卸仍然装着的那几个。
-$BrowserControlPackages = @(
-  '@deepseek-ai/dsh-browser-use',
-  '@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp'
-)
+# 运行中的实例会在它自己的配置刷新里读写 profile,再叠上本脚本的写入就是两个写者;
+# 实际症状是 pnpm 报 EACCES: permission denied, open '.../package.json.lock'。
+# 这里只提示、不阻断:同一台机器上可能有别的 profile 或别的 dsh home 在跑。
+#
+# 判定按 argv 词元而不是整个命令行子串 —— 后者会把「命令行里恰好带着这些字样的 shell」
+# 也算成运行中的实例(比如包着本脚本的那层 powershell)。只认 `node <...\dsh> web` 与
+# `node <...\dsh> --profile <name> web` 两种形态。
+$running = @(Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
+  Where-Object {
+    $argv = @($_.CommandLine -split '\s+' | Where-Object { $_ -ne '' })
+    if ($argv.Count -lt 3) { return $false }
+    if ([IO.Path]::GetFileName($argv[1]) -notmatch '^dsh(\.js)?$') { return $false }
+    $rest = @($argv[2..($argv.Count - 1)])
+    return $rest[0] -eq 'web' -or ($rest[0] -eq '--profile' -and $rest.Count -ge 3 -and $rest[2] -eq 'web')
+  } |
+  ForEach-Object { $_.ProcessId })
+if ($running.Count -gt 0) {
+  Write-Host "警告: 检测到 dsh web 正在运行(pid $($running -join ', '))。"
+  Write-Host '      先退出它再跑本脚本,否则写入 profile 可能失败(EACCES ... package.json.lock)。'
+}
 
-if ($removedBrowserView -and (Test-Path -LiteralPath $Manifest)) {
-  $current = (Get-Content -LiteralPath $Manifest -Raw -Encoding UTF8 | ConvertFrom-Json).dependencies
-  foreach ($name in $BrowserControlPackages) {
-    if (-not $current -or -not ($current.PSObject.Properties.Name -contains $name)) { continue }
-    Write-Host "==> dsh plugin --profile $ProfileName remove $name(浏览器控制插件,dsh-browser-view 的安装期副产物)"
-    dsh plugin --profile $ProfileName remove $name
-    if ($LASTEXITCODE -ne 0) { $failed += $name }
-  }
+$failed = @()
+foreach ($name in $names) {
+  Write-Host "==> dsh plugin --profile $ProfileName remove $name"
+  if ((Invoke-Native 'dsh' @('plugin', '--profile', $ProfileName, 'remove', $name)) -ne 0) { $failed += $name }
 }
 
 if ($failed.Count -gt 0) {

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # 把本仓库的插件从 web profile 卸下:按 profile 的 dependencies 里指向本仓库的 link:/file: 路径识别,
 # 目录已删除后遗留的条目也能清理;不维护插件名单。
-# 本次卸下 dsh-browser-view 时,顺带卸掉它安装期引入的浏览器控制包(它们不在本仓库,故不被上面的规则命中)。
 # 默认在 dsh 未运行时执行:先退出 dsh web,再跑本脚本,完成后重新启动 dsh web(运行中的实例不会读到 profile 的变更)。
 # 只改 profile(pnpm 重算 dependencies 与 dsh.profile.bundles),不删除本仓库里的插件目录。
+# 也不碰 .gitignore 里的 lib/ 构建产物:卸下不会让产物失效,再挂回去不必重新构建。
 # 本脚本可以重复执行:没有可卸载的条目时直接结束。
 set -u
 
@@ -60,45 +60,47 @@ if [ -z "$local_plugins" ]; then
   exit 0
 fi
 
+# 运行中的实例会在它自己的配置刷新里读写 profile,再叠上本脚本的写入就是两个写者;
+# 实际症状是 pnpm 报 EACCES: permission denied, open '.../package.json.lock'。
+# 这里只提示、不阻断:同一台机器上可能有别的 profile 或别的 dsh home 在跑。
+#
+# 判定按 argv 词元而不是整个命令行子串 —— 后者会把「命令行里恰好带着这些字样的 shell」
+# 也算成运行中的实例(比如包着本脚本的那层 bash)。只看 node 进程,且参数是
+# `web` 或 `[--profile <name>] web`。
+web_pids="$(
+  ps -eo pid=,args= 2>/dev/null | node -e '
+    let input = ""
+    process.stdin.on("data", chunk => (input += chunk))
+    process.stdin.on("end", () => {
+      const base = name => name.slice(name.lastIndexOf("/") + 1)
+      for (const line of input.split("\n")) {
+        const trimmed = line.trim()
+        if (trimmed === "") continue
+        const [pid, ...argv] = trimmed.split(/\s+/)
+        // 只认 node 跑 dsh 入口的进程:`node <.../bin/dsh> web --no-open`。
+        if (argv.length < 2 || !/^node(?:js)?$/.test(base(argv[0]))) continue
+        const [script, ...rest] = argv.slice(1)
+        if (!/^dsh(?:\.js)?$/.test(base(script))) continue
+        const isWeb = rest[0] === "web" || (rest[0] === "--profile" && rest[2] === "web")
+        if (isWeb) console.log(pid)
+      }
+    })
+  '
+)" || web_pids=""
+
+if [ -n "$web_pids" ]; then
+  echo "警告: 检测到 dsh web 正在运行(pid $(echo $web_pids))。"
+  echo "      先退出它再跑本脚本,否则写入 profile 可能失败(EACCES ... package.json.lock)。"
+fi
+
 failed=()
-removed_browser_view=0
 while IFS= read -r package_name; do
   [ -n "$package_name" ] || continue
-  [ "$package_name" = "dsh-browser-view" ] && removed_browser_view=1
   echo "==> dsh plugin --profile $PROFILE remove $package_name"
   if ! dsh plugin --profile "$PROFILE" remove "$package_name"; then
     failed+=("$package_name")
   fi
 done <<< "$local_plugins"
-
-# 浏览器控制插件是 dsh-browser-view 的安装期副产物(见 add-plugins.sh):它的 cordis.patch.yml 按
-# 裸包名挂载这两个 registry 包,而上面按 link:/file: 识别只能命中本仓库的插件,所以必须在这里对称卸下。
-# 只在本次确实卸下了 dsh-browser-view 时执行 —— 独立安装过这两个包的用户不受影响。
-# 清单在上一轮 remove 里已被 pnpm 重写,所以这里重新读一次,只卸仍然装着的那几个。
-BROWSER_CONTROL_PACKAGES=(
-  "@deepseek-ai/dsh-browser-use"
-  "@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp"
-)
-
-if [ "$removed_browser_view" -eq 1 ] && [ -f "$MANIFEST" ]; then
-  browser_control_installed="$(
-    node - "$MANIFEST" "${BROWSER_CONTROL_PACKAGES[@]}" <<'NODE'
-const fs = require('node:fs')
-
-const [manifestPath, ...candidates] = process.argv.slice(2)
-const dependencies = JSON.parse(fs.readFileSync(manifestPath, 'utf8')).dependencies ?? {}
-for (const name of candidates) if (Object.hasOwn(dependencies, name)) console.log(name)
-NODE
-  )" || browser_control_installed=""
-
-  while IFS= read -r package_name; do
-    [ -n "$package_name" ] || continue
-    echo "==> dsh plugin --profile $PROFILE remove $package_name(浏览器控制插件,dsh-browser-view 的安装期副产物)"
-    if ! dsh plugin --profile "$PROFILE" remove "$package_name"; then
-      failed+=("$package_name")
-    fi
-  done <<< "$browser_control_installed"
-fi
 
 if [ ${#failed[@]} -gt 0 ]; then
   echo "失败: ${failed[*]}"
