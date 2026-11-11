@@ -56,6 +56,13 @@ export const PALETTE_CSS = `
   font-weight: 500;
   color: var(--dsw-alias-label-primary, #1b1b1c);
 }
+.dsh-model-quick-switch-subhead {
+  flex: none;
+  padding: 0 18px 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary, #81858c);
+}
 .dsh-model-quick-switch-count {
   font-size: 12px;
   color: var(--dsw-alias-label-tertiary, #81858c);

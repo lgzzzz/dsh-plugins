@@ -16,8 +16,15 @@ export type CatalogStatus = 'idle' | 'loading' | 'ready' | 'error'
 /** 本插件设置命名空间在配置表单里的状态。 */
 export type ConfigStatus = 'loading' | 'ready' | 'unavailable'
 
+/** 浮层当前停在哪一步：选模型，还是选思考等级。 */
+export type PaletteStage = 'models' | 'efforts'
+
 /** 一张快照里的全部读数。 */
 export interface ModelDataState {
+  /** 浮层当前步骤；设置页不读它。 */
+  readonly stage: PaletteStage
+  /** 进入思考等级步骤时选中的模型；还在模型步骤时为 null。 */
+  readonly stageModel: ModelSelectionLike | null
   /** 设置里保存的列表（顺序即浮层顺序）。 */
   readonly choices: readonly ModelChoice[]
   /** 模型目录展开后的模型行；目录还没加载时为空数组。 */
@@ -60,6 +67,8 @@ export interface ModelDataStore {
 
 /** 初始快照：什么都还没读到。 */
 export const INITIAL_MODEL_DATA: ModelDataState = {
+  stage: 'models',
+  stageModel: null,
   choices: [],
   catalog: [],
   groups: [],

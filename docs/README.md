@@ -15,7 +15,7 @@
 
 | 目录 | 作用 | 文档 |
 | --- | --- | --- |
-| `dsh-model-quick-switch` | 模型浮层：`⌘⌥U`（Windows / Linux 上是 `Ctrl+Alt+U`，与其它固定键同用逻辑 `primary`）弹出与工作区浮层同一套面板，候选是设置页「模型快速切换」里维护的列表，`Enter` / 点击一行切换当前会话使用的模型（成功关闭、失败留在浮层显示 Host 错误）；设置页从 Host 模型目录按提供方添加、删除，列表存在插件即时配置里 | [说明](dsh-model-quick-switch.md) |
+| `dsh-model-quick-switch` | 模型浮层：`⌘⌥U`（Windows / Linux 上是 `Ctrl+Alt+U`，与其它固定键同用逻辑 `primary`）弹出与工作区浮层同一套面板；第一步选设置页「模型快速切换」里维护的模型，模型公布思考等级时第二步原地换成「默认 + 各档强度」，选完把当前会话切到「模型 + 强度」（成功关闭、失败留在浮层显示 Host 错误）；设置页从 Host 模型目录按提供方添加、删除，列表存在插件即时配置里 | [说明](dsh-model-quick-switch.md) |
 | `dsh-workspace-quick-switch` | 两张浮层：`⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows）按左侧栏顺序列出工作区、`Enter` 在该工作区新建会话；`⌘⌥I` / `Ctrl+Alt+I` 按左侧栏「单列表 + 最近更新 + 隐藏已归档」的顺序列出会话、`Enter` 打开该会话。都是一屏 10 个、窗口连续滑动（滚轮滚一格 1–10 → 2–11、`←/→` 滑一整屏、`↑/↓` 移选中行，两端停住）；鼠标点一行即确认（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
 | `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动、任务完成，或大模型请求重试耗尽的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
 | `dsh-agent-auto-retry` | 宿主半部：模型请求失败、下游恢复策略都放弃之后，在同一个回合里自动重试（按失败码判定、指数退避、服从 `Retry-After`、按 step 限次），每次重试以与上游同形的 `llm/retry` / `llm/retry-started` 事件持久化 | [说明](dsh-agent-auto-retry.md) |

@@ -1,6 +1,6 @@
 # dsh-model-quick-switch
 
-按 **`⌘⌥U`**（Windows / Linux 上是 `Ctrl+Alt+U`；逻辑组合 `primary+alt+U`，与仓库其它固定键一致）弹出模型浮层：候选是**设置里维护的模型列表**，`Enter` / 点击一行把**当前主视图会话**切换到该模型。浮层与 [`dsh-workspace-quick-switch`](dsh-workspace-quick-switch.md) 同一套面板 —— 一屏 10 行、窗口连续滑动、滚轮一格一行、`←` / `→` 滑一整屏；列表循环，两端继续走会绕回另一端。设置页「模型快速切换」从 Host 模型目录里按提供方浏览、添加，也能删除；列表保存在本插件的即时配置里，增删立刻反映到浮层。
+按 **`⌘⌥U`**（Windows / Linux 上是 `Ctrl+Alt+U`；逻辑组合 `primary+alt+U`，与仓库其它固定键一致）弹出模型浮层：第一步是**设置里维护的模型列表**，`Enter` / 点击一行选中模型；模型公布了思考等级时浮层原地换成第二步，选一档后把**当前主视图会话**切换到「模型 + 强度」。浮层与 [`dsh-workspace-quick-switch`](dsh-workspace-quick-switch.md) 同一套面板 —— 一屏 10 行、窗口连续滑动、滚轮一格一行、`←` / `→` 滑一整屏；列表循环，两端继续走会绕回另一端。设置页「模型快速切换」从 Host 模型目录里按提供方浏览、添加，也能删除；列表保存在本插件的即时配置里，增删立刻反映到浮层。
 
 -----
 
@@ -18,6 +18,8 @@
 
 ### 模型浮层（`primary+alt+U`）
 
+- **两步选择**：第一步列设置里的模型；确认后，如果模型目录公布了这个模型的思考等级，候选原地换成「默认 + 各档强度」（标题「选择思考等级」，下面一行带模型名），再确认才真正切换。模型没有公布强度（或目录不可用）时第一步确认直接切换。
+- **思考等级默认对齐当前**：进入第二步时优先选中设置行里固定的强度，其次是会话当前使用的强度，都没有才选「默认」；直接按 `Enter` 等于沿用现状。第二步按 `Esc` 退回模型列表并回到刚才那一行，再按 `Esc` 关闭。
 - **候选 = 设置里保存的列表**：顺序照抄列表（先添加的在前），不排序、不截断；一屏只渲染连续 10 行，标题右侧显示「n 个模型 · 显示 a–b」，装得下时退化成「n 个模型」。
 - **窗口连续滑动**：滚轮一格就滑一行（1–10 → 2–11），与滚轮幅度无关；`←` / `→` 滑一整屏，`↑` / `↓` 移选中行并在它离开窗口时把窗口贴到边上。**列表循环**：末行再 ↓ 回到首行、首行再 ↑ 到末行，`←` / `→` 与滚轮到两端同样绕回。
 - **当前模型会被标出来**：读主视图会话的 `modelSelection` 投影（没有显式选择时用模型目录里的默认值），同一提供方 + 模型的行带「当前」角标，打开时默认选中它。
@@ -68,6 +70,7 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-model-quick-switch
 | 当前选择 | 读 `sessions.list` 快照里主视图会话（`retainedBy.mainView > 0`）的 `projectionValues.modelSelection.next ?? lastUsed`；没有显式选择时回退到模型目录的 `default` |
 | 切换模型 | `remote.session.selectModel({ sessionId, provider, model, reasoningEffort? })`：请求只带一个会话与完整选择，Host 负责规范化并保存默认值；成功后把返回的 `selected` 写回快照，投影随后也会推同一个值 |
 | 模型目录 | `remote.session.modelCatalog()`：只在打开浮层或进入设置页时拉取，并发调用共用一次请求；`groups` 展开成设置页的分组与浮层的显示名，`failures` 原样显示 |
+| 思考等级 | `remote.session.modelCatalog()` 里每个模型的 `reasoning.efforts` / `defaultEffort` 展开成「默认 + 各档」；行身份是 `[provider, model, effort]`，默认行不带 `reasoningEffort`。投影规则在 `src/model.ts` 的 `effortChoices` / `effortRows` / `initialEffortIndex` |
 | 候选投影 | 列表顺序照抄；`matchesCurrent` 里「没写推理强度」的选择覆盖同模型的任意强度，「写了强度」的要求强度相等；目录里找不到的行加「目录外」角标。规则在 `src/model.ts`，设置页与浮层共用 |
 | 浮层内的按键 | 在 document 捕获阶段接管 `Esc` / `Enter` / `↑` / `↓`（选行）与 `←` / `→`（滑一整屏），带修饰键的按键一律放行；确认**不**预先关闭浮层，失败时它要留着显示错误 |
 | 滚轮 | 监听挂在浮层根节点上（`passive: false`），每次都 `preventDefault()`；`wheelStep` 只看方向（非零即 ±1），所以一格固定滑一行；`ctrlKey` 的捏合手势放行 |
@@ -92,10 +95,10 @@ node test/run-all.mjs          # 六个测试文件
 | 测试文件 | 覆盖 |
 | --- | --- |
 | `test/palette.test.mjs` | 纯状态：固定行的逻辑组合（`primary` 按平台展开成 ⌘⌥U / Ctrl+Alt+U，各平台只认自己那一组）、下标收敛、窗口（最大起点 / 收敛 / 按行滑动 / 整屏 / 贴边）、store 的连续滑动与循环绕回、滚轮一格一行、浮层六键 |
-| `test/model.test.mjs` | 配置读写（坏形状、去重、保序）、选择身份（强度算身份、分隔符不撞车）、当前匹配、目录排序 / 展开 / 显示名回退、候选行的「当前」与「目录外」 |
+| `test/model.test.mjs` | 配置读写（坏形状、去重、保序）、选择身份（强度算身份、分隔符不撞车）、当前匹配、目录排序 / 展开 / 显示名回退、候选行的「当前」与「目录外」、思考等级候选 / 当前标记 / 初始选中 / 写回形状 |
 | `test/host.test.mjs` | 宿主 Config：默认空列表、必填字段校验、`models` 带 `volatile`（设置文档才会投影它）、`apply` 只声明 `auto: false` |
-| `test/overlay.test.mjs` | 真 React 渲染：候选 / 当前角标 / 目录外角标 / 选中行、空态、错误与进行中提示、一屏 10 行与 2–11 窗口、六键接管、滚轮、设置页的列表 / 只读 / 目录错误 / 不可用状态 |
-| `test/install.test.mjs` | 装配：固定行与两个槽位、`primary+alt+U` 打开并消费、候选来自设置与目录、`Enter` 走 `selectModel` 并在成功后关闭、失败留在浮层、没有会话 / 没有远程 / 设置服务晚到、全局捕获（终端 / 页面）与卸载清理、固定行被挤掉时两条通路都不抢、macOS 上认 ⌘⌥U 而不认 Ctrl+Alt+U、设置页增删与写入被拒 |
+| `test/overlay.test.mjs` | 真 React 渲染：候选 / 当前角标 / 目录外角标 / 选中行、空态、错误与进行中提示、一屏 10 行与 2–11 窗口、六键接管（含第二步 `Esc` 返回）、滚轮、设置页的列表 / 只读 / 目录错误 / 不可用状态 |
+| `test/install.test.mjs` | 装配：固定行与两个槽位、`primary+alt+U` 打开并消费、两步选择（模型 → 思考等级）与 `Esc` 返回、候选来自设置与目录、`Enter` 走 `selectModel` 并在成功后关闭、失败留在浮层、没有会话 / 没有远程 / 设置服务晚到、全局捕获（终端 / 页面）与卸载清理、固定行被挤掉时两条通路都不抢、macOS 上认 ⌘⌥U 而不认 Ctrl+Alt+U、设置页增删与写入被拒 |
 | `test/artifact-client.test.mjs` | 产物：模块 id / 插件名 / `inject`、只向模块表要 `react`、浮动行 + 浮层 + 设置页、候选与切换、设置页写入随产物发布、依赖缺失时只是不安装 |
 
 `test/run-all.mjs` 用 `spawnSync` 逐个跑；受限沙箱里 spawn 被拒时直接逐个执行：

@@ -172,6 +172,15 @@ console.log('--- O⑤ 浮层内六键:捕获阶段接管、确认走 binding、�
     check('Escape 关闭', store.getSnapshot().open, false)
     off()
     check('卸载撤掉监听', dom.document.listenerCount(), 0)
+
+    // 第二步（选思考等级）传入 back 时，Esc 退回上一步而不是关闭浮层。
+    store.open(() => {}, 0)
+    let backs = 0
+    const offBack = installPaletteKeys(store, dom.document, undefined, { back: () => { backs += 1 } })
+    dom.pressKey('Escape')
+    check('Esc 交给 back 且浮层不关', [backs, store.getSnapshot().open], [1, true])
+    offBack()
+    check('卸载撤掉返回监听', dom.document.listenerCount(), 0)
   } finally {
     dom.uninstall()
   }

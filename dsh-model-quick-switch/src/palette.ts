@@ -455,12 +455,14 @@ export function activatePaletteRow(store: PaletteStore, index: number): void {
  * @param store - 浮层状态。
  * @param target - 按键目标，浏览器里是 `document`。
  * @param confirm - 自定义确认动作；缺席时执行 store 里登记的 binding。
+ * @param options - `back` 存在时 `Esc` 先执行它（从第二步退回第一步），否则关闭浮层。
  * @returns 卸载函数。
  */
 export function installPaletteKeys(
   store: PaletteStore,
   target: PaletteKeyTarget,
   confirm?: () => void,
+  options: { readonly back?: () => void } = {},
 ): () => void {
   if (target === undefined || target === null) return () => {}
   const onKeyDown = (event: KeyboardEvent): void => {
@@ -469,7 +471,10 @@ export function installPaletteKeys(
     if (action === undefined) return
     event.preventDefault()
     event.stopPropagation()
-    if (action === 'close') store.close()
+    if (action === 'close') {
+      if (options.back !== undefined) options.back()
+      else store.close()
+    }
     else if (action === 'confirm') {
       if (confirm !== undefined) confirm()
       else {

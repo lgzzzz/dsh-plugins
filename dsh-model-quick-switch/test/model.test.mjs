@@ -10,10 +10,13 @@ import {
   choicePresentation,
   choiceRows,
   currentChoiceIndex,
+  effortChoices,
   effortName,
+  effortRows,
   findCatalogModel,
   flattenCatalog,
   hasChoice,
+  initialEffortIndex,
   matchesCurrent,
   normalizeChoice,
   orderCatalogGroups,
@@ -21,6 +24,7 @@ import {
   removeChoice,
   sameSelection,
   selectionOfChoice,
+  selectionOfEffort,
 } from '../src/model.ts'
 import { check, checkTrue, checkUndefined, finish } from './helpers.mjs'
 
@@ -144,6 +148,35 @@ console.log('--- M⑤ 一行候选:标题、副标题、目录外与当前 ---')
 
   const defaultRow = choiceRows([{ provider: 'deepseek', model: 'deepseek-chat' }], catalog, { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'low' })
   check('目录默认强度同样算当前', defaultRow[0].current, true)
+}
+
+console.log('--- M⑥ 思考等级:默认行、目录强度、当前标记与初始选中 ---')
+{
+  const catalog = flattenCatalog(orderCatalogGroups(GROUPS))
+  const chat = findCatalogModel(catalog, { provider: 'deepseek', model: 'deepseek-chat' })
+  const efforts = effortChoices({ provider: 'deepseek', model: 'deepseek-chat' }, chat)
+  check('默认行在最前', efforts[0].title, '默认')
+  check('默认行副标题带目录默认值', efforts[0].subtitle, '跟随目录默认 · Low')
+  check('目录强度按顺序展开', efforts.slice(1).map((effort) => [effort.reasoningEffort, effort.title]), [['low', 'Low'], ['high', 'High']])
+  check('没有强度时只剩默认行', effortChoices({ provider: 'deepseek', model: 'deepseek-chat' }, undefined).length, 1)
+  check('没有目录默认值时副标题不冒充', effortChoices({ provider: 'x', model: 'y' }, undefined)[0].subtitle, '跟随模型目录的默认强度')
+
+  const rows = effortRows(
+    { provider: 'deepseek', model: 'deepseek-chat' },
+    efforts,
+    { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' },
+  )
+  check('行身份带强度', rows[2].key, choiceKey({ provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' }))
+  check('当前强度打标', rows.map((row) => row.current === true), [false, false, true])
+  check('别的模型的当前选择不算', effortRows({ provider: 'deepseek', model: 'deepseek-chat' }, efforts, { provider: 'deepseek', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' })[2].current, undefined)
+
+  check('初始选中会话当前强度', initialEffortIndex({ provider: 'deepseek', model: 'deepseek-chat' }, efforts, { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' }), 2)
+  check('设置里固定的强度优先', initialEffortIndex({ provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'low' }, efforts, { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' }), 1)
+  check('没有强度线索时选默认', initialEffortIndex({ provider: 'deepseek', model: 'deepseek-chat' }, efforts, null), 0)
+  check('目录里已没有该强度时退回默认', initialEffortIndex({ provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'max' }, efforts, null), 0)
+
+  check('默认行写回不带强度', selectionOfEffort({ provider: 'deepseek', model: 'deepseek-chat' }, efforts[0]), { provider: 'deepseek', model: 'deepseek-chat' })
+  check('强度行写回带强度', selectionOfEffort({ provider: 'deepseek', model: 'deepseek-chat' }, efforts[2]), { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' })
 }
 
 finish()

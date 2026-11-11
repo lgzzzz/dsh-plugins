@@ -133,7 +133,7 @@ console.log('--- C① 固定行、浮层与设置页都挂上了 ---')
   check('设置页注册项', [section.options.id, section.options.order], [name, 70])
   check('设置页导航标题', typeof section.options.label, 'function')
   check('交出去的是组件本体', [typeof overlay.component, typeof section.component], ['function', 'function'])
-  check('浮层业务 props', Object.keys(overlay.options.inject()), ['store', 'data', 'view'])
+  check('浮层业务 props', Object.keys(overlay.options.inject()), ['store', 'data', 'view', 'effortView', 'onBack'])
   check('设置页业务 props', Object.keys(section.options.inject()), ['data', 'actions'])
   check('设置页标题渲染', section.options.label(), '模型快速切换')
   check('未打开时浮层不渲染', renderSlotEntry(overlay), '')
@@ -188,11 +188,68 @@ console.log('--- C④ 切换失败:浮层留在原地并显示 Host 的错误 --
   const off = installPaletteKeys(fixture.store, fixture.dom.document)
   fixture.dom.pressKey('Enter')
   await tick()
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('两步确认后带强度发出请求', fixture.remote.selectCalls, [{
+    sessionId: 's1',
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    reasoningEffort: 'high',
+  }])
   check('浮层保持打开', fixture.store.getSnapshot().open, true)
   check('错误写进数据快照', fixture.data.getSnapshot().error, '切换失败：session/writer-held: 另一个 DSH 正在使用这个会话')
   check('浮层层面上显示错误', fixture.html().includes('session/writer-held'), true)
   check('错误行带 role=alert', fixture.html().includes('role="alert"'), true)
   check('没有关闭', fixture.store.getSnapshot().open, true)
+  off()
+}
+
+console.log('--- C③b 两步:先选模型,再选思考等级 ---')
+{
+  const fixture = setup()
+  await fixture.open()
+  await tick()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('第一次确认不发出选择请求', fixture.remote.selectCalls, [])
+  check('进入思考等级步骤', [fixture.data.getSnapshot().stage, fixture.data.getSnapshot().stageModel], ['efforts', { provider: 'deepseek', model: 'deepseek-chat' }])
+  check('候选换成默认 + 目录强度', fixture.store.getSnapshot().entries.map((row) => row.title), ['默认', 'Low', 'High'])
+  check('浮层标题换成思考等级', fixture.html().includes('选择思考等级'), true)
+  check('标题下带模型名', fixture.html().includes('模型：DeepSeek Chat · DeepSeek'), true)
+  check('底栏提示 Esc 返回', fixture.html().includes('Esc 返回'), true)
+  check('默认选中会话当前强度 High', fixture.store.getSnapshot().activeIndex, 2)
+  check('当前强度带角标', rowsOf(fixture.html()).map((row) => row.current), [false, false, true])
+
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('第二次确认带强度写回', fixture.remote.selectCalls, [{
+    sessionId: 's1',
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    reasoningEffort: 'high',
+  }])
+  check('成功后关闭并回到第一步', [fixture.store.getSnapshot().open, fixture.data.getSnapshot().stage], [false, 'models'])
+  off()
+}
+
+console.log('--- C③c 第二步 Esc 退回模型列表,并回到刚才那一行 ---')
+{
+  const fixture = setup()
+  await fixture.open()
+  await tick()
+  // 组件挂载时也是这样把 onBack 交给安装函数的：第二步 Esc 走「返回」而不是「关闭」。
+  const off = installPaletteKeys(fixture.store, fixture.dom.document, undefined, { back: fixture.overlayProps.onBack })
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('进入第二步', fixture.data.getSnapshot().stage, 'efforts')
+  const esc = fixture.dom.pressKey('Escape')
+  await tick()
+  check('Esc 被吞掉', [esc.defaultPrevented, esc.stopped], [true, true])
+  check('退回模型步骤且浮层仍开着', [fixture.store.getSnapshot().open, fixture.data.getSnapshot().stage], [true, 'models'])
+  check('候选回到模型列表', fixture.store.getSnapshot().entries.map((row) => row.title), ['DeepSeek Chat', 'DeepSeek V4.1 Flash'])
+  check('回到刚才确认的那一行', fixture.store.getSnapshot().activeIndex, 0)
+  check('没有发出选择请求', fixture.remote.selectCalls, [])
   off()
 }
 

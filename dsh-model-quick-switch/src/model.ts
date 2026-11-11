@@ -317,3 +317,100 @@ export function selectionOfChoice(choice: ModelChoice): ModelSelectionLike {
     ...choice.reasoningEffort === undefined ? {} : { reasoningEffort: choice.reasoningEffort },
   }
 }
+
+/** 思考等级浮层里的一行（「当前」标记由 {@link effortRows} 投影）。 */
+export interface EffortChoice {
+  /** 强度 id；缺席表示「默认」（不写 reasoningEffort，交给 Host 的默认值）。 */
+  readonly reasoningEffort?: string
+  /** 主标题。 */
+  readonly title: string
+  /** 副标题。 */
+  readonly subtitle: string
+}
+
+/**
+ * 一个模型可选的思考等级：第一行固定是「默认」，后面是模型目录公布的每个强度。
+ *
+ * 目录缺席（还没加载完或加载失败）与「模型不公布强度」都只得到「默认」一行 —— 调用方据此
+ * 判断要不要进入第二步（长度 ≤ 1 就直接切换）。
+ * @param choice - 用户在模型浮层里选中的那一行。
+ * @param row - 这个模型在展开后的目录里的那一行；找不到时为 undefined。
+ * @returns 思考等级候选。
+ */
+export function effortChoices(choice: ModelSelectionLike, row: CatalogModelRow | undefined): EffortChoice[] {
+  const fallback = row?.defaultEffort === undefined ? undefined : effortName(row, row.defaultEffort)
+  const choices: EffortChoice[] = [
+    {
+      title: '默认',
+      subtitle: fallback === undefined ? '跟随模型目录的默认强度' : `跟随目录默认 · ${fallback}`,
+    },
+  ]
+  for (const effort of row?.efforts ?? []) {
+    choices.push({
+      reasoningEffort: effort.id,
+      title: effort.name ?? effort.id,
+      subtitle: effort.name === undefined || effort.name === effort.id ? '思考等级' : effort.id,
+    })
+  }
+  return choices
+}
+
+/**
+ * 把思考等级候选投影成浮层行。
+ *
+ * 「当前」按完整身份比较：没写强度的行只在会话也没写强度时才算当前；写了强度时要求强度相等。
+ * @param choice - 选中的模型（只取 provider / model）。
+ * @param efforts - {@link effortChoices} 的结果。
+ * @param current - 会话当前的选择；没有时为 null。
+ * @returns 浮层行。
+ */
+export function effortRows(
+  choice: ModelSelectionLike,
+  efforts: readonly EffortChoice[],
+  current: ModelSelectionLike | null,
+): PaletteRow[] {
+  const sameModel = current !== null && current.provider === choice.provider && current.model === choice.model
+  return efforts.map((effort) => ({
+    key: choiceKey({
+      provider: choice.provider,
+      model: choice.model,
+      ...effort.reasoningEffort === undefined ? {} : { reasoningEffort: effort.reasoningEffort },
+    }),
+    title: effort.title,
+    subtitle: effort.subtitle,
+    ...sameModel && current.reasoningEffort === effort.reasoningEffort ? { current: true } : {},
+  }))
+}
+
+/**
+ * 进入思考等级浮层时应该选中哪一行。
+ *
+ * 优先用设置里那一行固定的强度，其次是会话当前使用的强度；都没有（或目录里已经不存在）时
+ * 选「默认」。这样用户直接按 Enter 就等于沿用当前状态，不会莫名其妙改掉强度。
+ * @param choice - 选中的模型。
+ * @param efforts - 思考等级候选。
+ * @param current - 会话当前的选择。
+ * @returns 候选下标；没有候选时为 0。
+ */
+export function initialEffortIndex(
+  choice: ModelSelectionLike,
+  efforts: readonly EffortChoice[],
+  current: ModelSelectionLike | null,
+): number {
+  const preferred = choice.reasoningEffort
+    ?? (current !== null && current.provider === choice.provider && current.model === choice.model
+      ? current.reasoningEffort
+      : undefined)
+  if (preferred === undefined) return 0
+  const index = efforts.findIndex((effort) => effort.reasoningEffort === preferred)
+  return index < 0 ? 0 : index
+}
+
+/** 一条思考等级选择折成写回 Host 的形状（默认行不带 reasoningEffort）。 */
+export function selectionOfEffort(choice: ModelSelectionLike, effort: EffortChoice): ModelSelectionLike {
+  return {
+    provider: choice.provider,
+    model: choice.model,
+    ...effort.reasoningEffort === undefined ? {} : { reasoningEffort: effort.reasoningEffort },
+  }
+}

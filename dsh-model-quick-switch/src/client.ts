@@ -55,13 +55,19 @@ import {
   choicePresentation,
   choiceRows,
   currentChoiceIndex,
+  effortChoices,
+  effortRows,
+  findCatalogModel,
+  initialEffortIndex,
   orderCatalogGroups,
   readChoices,
   removeChoice,
   selectionOfChoice,
+  selectionOfEffort,
   type CatalogModelRow,
   type CatalogFailure,
   type CatalogGroup,
+  type EffortChoice,
   type ModelChoice,
   type ModelSelectionLike,
 } from './model.ts'
@@ -70,6 +76,7 @@ import {
   describeRemoteFailure,
   messageOf,
   type ModelDataStore,
+  type PaletteStage,
 } from './model-data.ts'
 import { PALETTE_CSS, SETTINGS_CSS } from './styles.ts'
 
@@ -107,6 +114,19 @@ export const MODEL_VIEW: PaletteView = {
   emptyCount: '列表里还没有模型',
   emptyHint: '在「设置 → 模型快速切换」里添加要在这里出现的模型。',
   listLabel: '模型',
+  enterHint: 'Enter 切换模型',
+}
+
+/** 思考等级浮层的文案。 */
+export const EFFORT_VIEW: PaletteView = {
+  id: `${name}.effort`,
+  domId: `${name}-effort`,
+  rootAttr: PALETTE_ROOT_ATTR,
+  title: '选择思考等级',
+  unit: '个等级',
+  emptyCount: '没有可选等级',
+  emptyHint: '这个模型没有公布思考等级。',
+  listLabel: '思考等级',
   enterHint: 'Enter 切换模型',
 }
 
@@ -250,6 +270,10 @@ export interface OverlayProps {
   readonly store: PaletteStore
   readonly data: ModelDataStore
   readonly view: PaletteView
+  /** 第二步（选思考等级）的文案；缺席时复用 `view`。 */
+  readonly effortView?: PaletteView
+  /** 第二步按 `Esc` 时退回第一步。 */
+  readonly onBack?: () => void
 }
 
 /**
@@ -413,6 +437,11 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
     // 「cannot get property "remote.session" without inject」，所以先等子 fiber 把它接上。
     let sessionRemote: SessionRemoteLike | undefined
     let catalogInFlight: Promise<void> | undefined
+    // 浮层的两步：先选模型，确认后再把候选换成这个模型的思考等级。
+    let stage: PaletteStage = 'models'
+    let stageChoice: ModelChoice | null = null
+    let stageEfforts: readonly EffortChoice[] = []
+    let stageModelIndex = 0
 
     /** 把设置里保存的列表读进数据快照。 */
     const refreshChoices = (): void => {
@@ -525,26 +554,92 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
       }
     }
 
-    /** 确认浮层当前选中行（Enter / 点击同一行）；成功才关闭浮层。 */
-    const confirmActive = async (): Promise<void> => {
+    /** 把当前步骤的候选重新投影进浮层（目录 / 当前选择变化时都走这里）。 */
+    const projectPalette = (): void => {
+      if (stage === 'efforts' && stageChoice !== null) {
+        palette.sync(effortRows(stageChoice, stageEfforts, data.getSnapshot().current))
+        return
+      }
+      syncRows()
+    }
+
+    /** 关掉浮层并退回第一步（成功切换或外部关闭都走这里）。 */
+    const closePalette = (): void => {
+      palette.close()
+      stage = 'models'
+      stageChoice = null
+      stageEfforts = []
+      if (data.getSnapshot().stage !== 'models') data.set({ stage: 'models', stageModel: null })
+    }
+
+    /** 进入第二步：候选换成这个模型的思考等级，并选中当前强度。 */
+    const enterEfforts = (choice: ModelChoice, efforts: readonly EffortChoice[], modelIndex: number): void => {
+      stage = 'efforts'
+      stageChoice = choice
+      stageEfforts = efforts
+      stageModelIndex = modelIndex
+      const current = data.getSnapshot().current
+      data.set({ stage: 'efforts', stageModel: { provider: choice.provider, model: choice.model }, error: null })
+      palette.sync(effortRows(choice, efforts, current))
+      palette.open(() => {
+        void confirmEffort()
+      }, initialEffortIndex(choice, efforts, current))
+    }
+
+    /** 确认模型行：这个模型公布了思考等级就进入第二步，否则直接切换。 */
+    const confirmModel = async (): Promise<void> => {
       const snapshot = palette.getSnapshot()
       const index = clampIndex(snapshot.activeIndex, snapshot.entries.length)
       const row = index < 0 ? undefined : snapshot.entries[index]
       if (row === undefined) return
       const choice = data.getSnapshot().choices.find((candidate) => choiceKey(candidate) === row.key)
       if (choice === undefined) return
-      if (await selectChoice(choice)) palette.close()
+      // 目录还在路上时先等一下：不知道这个模型有没有思考等级，就不能贸然跳过第二步。
+      const status = data.getSnapshot().catalogStatus
+      if (status === 'idle' || status === 'loading') await loadCatalog()
+      const efforts = effortChoices(choice, findCatalogModel(data.getSnapshot().catalog, choice))
+      if (efforts.length <= 1) {
+        if (await selectChoice(choice)) closePalette()
+        return
+      }
+      enterEfforts(choice, efforts, index)
     }
 
-    /** 打开浮层：对齐到「当前」那一行，并顺手刷新会话与目录。 */
+    /** 确认思考等级行：把「模型 + 强度」一起写给 Host。 */
+    const confirmEffort = async (): Promise<void> => {
+      if (stage !== 'efforts' || stageChoice === null) return
+      const snapshot = palette.getSnapshot()
+      const index = clampIndex(snapshot.activeIndex, snapshot.entries.length)
+      const effort = index < 0 ? undefined : stageEfforts[index]
+      if (effort === undefined) return
+      if (await selectChoice(selectionOfEffort(stageChoice, effort))) closePalette()
+    }
+
+    /** 第二步按 Esc：退回模型列表，并回到刚才确认的那一行。 */
+    const backToModels = (): void => {
+      if (stage !== 'efforts') return
+      stage = 'models'
+      stageChoice = null
+      stageEfforts = []
+      data.set({ stage: 'models', stageModel: null })
+      syncRows()
+      palette.open(() => {
+        void confirmModel()
+      }, stageModelIndex)
+    }
+
+    /** 打开浮层：总是从模型列表开始，对齐到「当前」那一行，并顺手刷新会话与目录。 */
     const openPalette = (): void => {
-      data.set({ error: null })
+      stage = 'models'
+      stageChoice = null
+      stageEfforts = []
+      data.set({ error: null, stage: 'models', stageModel: null })
       const sessionId = refreshSession()
       syncRows()
       const rows = palette.getSnapshot().entries
       const index = currentChoiceIndex(rows)
       palette.open(() => {
-        void confirmActive()
+        void confirmModel()
       }, index < 0 ? 0 : index)
       if (sessionId === null) {
         data.set({ error: '当前没有打开的会话：先在左侧栏打开或新建一个会话，再切换模型。' })
@@ -597,8 +692,8 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
       },
     }
 
-    // 数据一变就重投影浮层行（设置里增删、目录加载完成、当前会话切换都会走到这里）。
-    scope.effect(() => data.subscribe(syncRows), `${name}: row projection`)
+    // 数据一变就重投影当前步骤的浮层行（设置里增删、目录加载完成、当前会话切换都会走到这里）。
+    scope.effect(() => data.subscribe(projectPalette), `${name}: row projection`)
     scope.effect(installStyleTag, `${name}: styles`)
 
     // 固定行要先挂载，固定输入观察者才读得到它。
@@ -655,7 +750,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
             id: name,
             order: 70,
             // 业务 props 只能由 inject 交出来：渲染器对条目做的是 jsx(entry.component, props)。
-            inject: () => ({ store: palette, data, view: MODEL_VIEW }),
+            inject: () => ({ store: palette, data, view: MODEL_VIEW, effortView: EFFORT_VIEW, onBack: backToModels }),
           },
           ModelOverlay,
         ) as () => void
@@ -752,9 +847,14 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
 
 /** 浮层本体：只在 `open` 为真时渲染；开着的时候按捕获阶段收到的按键动作。 */
 export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
-  const { store, data, view } = props
+  const { store, data, view: modelView, effortView, onBack } = props
   const state = React.useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
   const dataState = React.useSyncExternalStore(data.subscribe, data.getSnapshot, data.getSnapshot)
+  const stage = dataState.stage
+  const view = stage === 'efforts' && effortView !== undefined ? effortView : modelView
+  const stagePresentation = dataState.stageModel === null
+    ? undefined
+    : choicePresentation(dataState.stageModel, dataState.catalog)
   const rootRef = React.useRef<HTMLDivElement | null>(null)
   const panelRef = React.useRef<HTMLDivElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
@@ -776,7 +876,10 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
     keepOptionVisible(activeIndex < 0 ? null : list?.querySelector(`#${optionDomId(view, activeIndex)}`))
   }, [open, activeIndex, view])
 
-  React.useEffect(() => installPaletteKeys(store, document), [store])
+  React.useEffect(
+    () => installPaletteKeys(store, document, undefined, stage === 'efforts' && onBack !== undefined ? { back: onBack } : {}),
+    [store, stage, onBack],
+  )
 
   // 滚轮按行滑动窗口（一格一行），不改选中行；挂在整个浮层上，指针偏到遮罩留白也归浮层。
   React.useEffect(() => {
@@ -809,6 +912,13 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
           entries.length === 0 ? view.emptyCount : countLabel(view, entries.length, offset),
         ),
       ),
+      stagePresentation === undefined
+        ? null
+        : React.createElement(
+            'div',
+            { key: 'subhead', className: 'dsh-model-quick-switch-subhead' },
+            `模型：${stagePresentation.title} · ${stagePresentation.subtitle}`,
+          ),
       entries.length === 0
         ? React.createElement(
             'div',
@@ -841,7 +951,7 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
           ? React.createElement('span', { key: 'page' }, '← → 翻一屏')
           : null,
         React.createElement('span', { key: 'enter' }, view.enterHint),
-        React.createElement('span', { key: 'esc' }, 'Esc 关闭'),
+        React.createElement('span', { key: 'esc' }, stage === 'efforts' ? 'Esc 返回' : 'Esc 关闭'),
       ),
     ),
   ]
@@ -938,7 +1048,7 @@ export function ModelSettingsSection(props: SettingsProps): React.ReactElement {
       React.createElement(
         'p',
         { key: 'intro', className: 'dsh-model-quick-switch-settings-intro' },
-        '按 ⌘⌥U（Windows / Linux 上是 Ctrl+Alt+U）打开模型浮层，切换当前会话使用的模型。下面这份列表就是浮层里的候选，顺序与浮层一致。',
+        '按 ⌘⌥U（Windows / Linux 上是 Ctrl+Alt+U）打开模型浮层：先选模型，模型公布了思考等级时再选一档，最后切换当前会话使用的模型。下面这份列表就是第一步的候选，顺序与浮层一致。',
       ),
       React.createElement(
         'p',
