@@ -1,0 +1,48 @@
+{
+  "name": "dsh-model-quick-switch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "快捷键 ⌘⌥U（Windows / Linux 上是 Ctrl+Alt+U）弹出模型浮层（与 dsh-workspace-quick-switch 同一套面板：一屏 10 个、窗口连续滑动、Enter 或点击一行切换当前会话的模型）；浮层里的候选来自本插件在设置页维护的模型列表，可在「设置 → 模型快速切换」里从 Host 模型目录中按提供方添加、删除。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "test": "node test/run-all.mjs",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.19.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-settings": "^0.2.2-rc.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}

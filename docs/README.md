@@ -15,6 +15,7 @@
 
 | 目录 | 作用 | 文档 |
 | --- | --- | --- |
+| `dsh-model-quick-switch` | 模型浮层：`⌘⌥U`（Windows / Linux 上是 `Ctrl+Alt+U`，与其它固定键同用逻辑 `primary`）弹出与工作区浮层同一套面板，候选是设置页「模型快速切换」里维护的列表，`Enter` / 点击一行切换当前会话使用的模型（成功关闭、失败留在浮层显示 Host 错误）；设置页从 Host 模型目录按提供方添加、删除，列表存在插件即时配置里 | [说明](dsh-model-quick-switch.md) |
 | `dsh-workspace-quick-switch` | 两张浮层：`⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows）按左侧栏顺序列出工作区、`Enter` 在该工作区新建会话；`⌘⌥I` / `Ctrl+Alt+I` 按左侧栏「单列表 + 最近更新 + 隐藏已归档」的顺序列出会话、`Enter` 打开该会话。都是一屏 10 个、窗口连续滑动（滚轮滚一格 1–10 → 2–11、`←/→` 滑一整屏、`↑/↓` 移选中行，两端停住）；鼠标点一行即确认（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
 | `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动、任务完成，或大模型请求重试耗尽的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
 | `dsh-agent-auto-retry` | 宿主半部：模型请求失败、下游恢复策略都放弃之后，在同一个回合里自动重试（按失败码判定、指数退避、服从 `Retry-After`、按 step 限次），每次重试以与上游同形的 `llm/retry` / `llm/retry-started` 事件持久化 | [说明](dsh-agent-auto-retry.md) |
@@ -60,10 +61,11 @@
 | `dsh-stats-ttft` | [`contract.json`](../dsh-stats-ttft/contract.json) | `conversation.composer.dock` 槽与 `activity` 注册 / order + 同 id 遮蔽规则 + 渲染期读取条目 component + `stats.counts` 键与调用 + 两个时长单位与上游取整规则 + `sessionStats` 的 TTFT 字段 + `useProjection` / `useChat` 标准 props |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
+| `dsh-model-quick-switch` | [`css-contract.json`](../dsh-model-quick-switch/css-contract.json) | `shell.overlay` / `settings.section` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-changes-review-wrap` | [`contract.json`](../dsh-changes-review-wrap/contract.json) | 审查根 / 正文 / 换行按钮 / 换行态锚点 + review store 的默认 `wrap:false` + `toggledWrap` + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
 | `dsh-agent-auto-retry` | [`contract.json`](../dsh-agent-auto-retry/contract.json) | `agent/request-error` 的派发 / 载荷 / 决定形状 / 下游默认值 + `llm/retry` 的编号连续性、坐标、`retryId` 唯一性与 `retry-started` 配对 + 客户端与 token 计量的消费点 + 上游执行器的策略键算法 |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 10 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 11 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
