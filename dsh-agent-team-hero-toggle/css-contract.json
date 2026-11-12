@@ -1,0 +1,20 @@
+{
+  "description": "dsh-agent-team-hero-toggle 依赖的 DSH 前端稳定契约：新会话行渲染的 hero 槽、forge 工作树入口在该槽的注册 id、`agentTeam` 投影键与 `agentTeams/setEnabled` 端点，以及开关样式消费的 `--dsw-*` 设计令牌。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：槽位不再渲染时开关静默消失；工作树不再以同槽同 id 注册时「在工作树右边」的定位前提失效；投影/端点改名时开关不显示或写入失败；令牌被改名时轨道、圆点与文字颜色静默失效。",
+  "checks": [
+    {"id":"hero-options-slot","plugin":"dsh-agent-team-hero-toggle","pattern":"renderSlot\\(\\s*[\"'`]conversation\\.hero\\.options[\"'`]","paths":["dsh-client-ui-conversation/lib"],"hint":"新会话行不再渲染 conversation.hero.options 槽：开关注册进去也不显示，整行静默少一个控件"},
+    {"id":"worktree-registration","plugin":"dsh-agent-team-hero-toggle","pattern":"[\"'`]conversation\\.hero\\.options[\"'`]\\s*,\\s*id:\\s*[\"'`]forge-panel\\.worktree[\"'`]","paths":["dsh-experimental-client-ui-forge/lib"],"hint":"forge 不再以 id: forge-panel.worktree 注册进 conversation.hero.options：开关仍显示，但「在新建工作树右边」的定位前提失效"},
+    {"id":"agent-team-projection","plugin":"dsh-agent-team-hero-toggle","pattern":"key:\\s*[\"'`]agentTeam[\"'`]","paths":["dsh-agent-team/lib"],"hint":"agentTeam 投影键改名：useProjection('agentTeam') 拿不到投影，开关不显示"},
+    {"id":"agent-teams-set-enabled","plugin":"dsh-agent-team-hero-toggle","token":"agentTeams/setEnabled","paths":["dsh-agent-team/lib"],"hint":"agentTeams/setEnabled 端点改名：ctx.inject 等不到 remote.agentTeams，开关不显示"},
+    {"id":"label-secondary-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-alias-label-secondary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-secondary 变量消失，开关文字颜色失效"},
+    {"id":"interactive-hover-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-alias-interactive-bg-hover","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-interactive-bg-hover 变量消失，悬停背景失效，芯片没有可点反馈"},
+    {"id":"label-dimmed-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-alias-label-dimmed","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-dimmed 变量消失，pending 时的禁用文字色失效"},
+    {"id":"border-l3-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-alias-border-l3","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-border-l3 变量消失，关闭态轨道背景变透明，看不出开关形状"},
+    {"id":"brand-primary-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-alias-brand-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-brand-primary 变量消失，开启态轨道失去品牌色"},
+    {"id":"label-primary-foreground-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-alias-label-primary-foreground","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-primary-foreground 变量消失，开关圆点背景变透明、只剩滑动位移"},
+    {"id":"state-error-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-alias-state-error-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-state-error-primary 变量消失，写入失败的感叹号不再醒目标色"},
+    {"id":"radius-sm-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-radius-sm","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-radius-sm 变量消失，芯片圆角与工作树控件不再一致"},
+    {"id":"focus-ring-width-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-focus-ring-width","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-focus-ring-width 变量消失，键盘焦点环整条失效"},
+    {"id":"focus-ring-color-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-focus-ring-color","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-focus-ring-color 变量消失，焦点环退回备用色（仍可见但可能与主题不一致）"},
+    {"id":"state-business-primary-var","plugin":"dsh-agent-team-hero-toggle","token":"--dsw-alias-state-business-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-state-business-primary 变量消失，焦点环的备用色也失效，只剩浏览器默认描边"}
+  ]
+}

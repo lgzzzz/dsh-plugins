@@ -25,6 +25,7 @@ dsh-turn-process-open/lib/
 dsh-ui-css-patches/lib/
 dsh-workspace-quick-switch/lib/
 dsh-model-quick-switch/lib/
+dsh-agent-team-hero-toggle/lib/
 
 # 本地排查痕迹(探针脚本产出、快照、备份)
 .scratch/

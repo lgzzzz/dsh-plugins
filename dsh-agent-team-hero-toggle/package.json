@@ -1,0 +1,38 @@
+{
+  "name": "dsh-agent-team-hero-toggle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "在空白新会话行的「新建工作树」右侧提供「团队协作」开关，读写与模型菜单相同的 agentTeam 会话设置；保留上游菜单入口。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@types/react": "^18.3.31",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}
