@@ -325,4 +325,20 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   position: relative;
   z-index: 1;
 }
+
+/* 命令结果行 14px(斜杠命令在消息流里的那一行,例如 /plan 的
+   「Plan mode on. Use /plan off to leave.」,上游默认 13px)。
+   CommandNodeView 把命令结果渲染进 [data-slot="conversation.chat.commandview"] 槽位;行内两段文字
+   各自声明字号:标题是 DisclosureRow 原语的 .…_title,摘要是 GenericCommandCard 的 .…_summary,
+   两者都取 --dsh-content-font-size-secondary。该令牌在 body 上由主题算成
+   min(主字号 − 1px, max(13px, 主字号 − 2px)),默认主字号 14px 时即 13px。
+   这里在槽位包装上把该令牌改成主字号:两段文字一起跟随,展开体 <pre> 用的是代码字体令牌,不受影响。
+   槽位包装是 display:contents、不生成盒子,自定义属性照常继承;改的是变量而不是 font-size,
+   因此不需要 !important,也不与上游 .…_title / .…_summary 的特异性竞争。
+   规则对整个槽位生效:所有斜杠命令的结果行走同一个槽位,各命令注册的自定义视图也在其中,
+   它们的次要字号一并变成主字号。槽位键消失时整条落空、字号退回 13px,
+   由 css-contract.json 的 commandview-slot 契约在构建后报失效。 */
+[data-slot="conversation.chat.commandview"] {
+  --dsh-content-font-size-secondary: var(--dsh-content-font-size, 14px);
+}
 `
