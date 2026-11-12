@@ -7,6 +7,7 @@
  *
  * 本文件不 import React。
  */
+import type { CheckoutState, QuickAction, TeamFacts, WorktreeFacts } from './actions.ts'
 import type { CatalogFailure, CatalogGroup, CatalogModelRow, ModelChoice, ModelSelectionLike } from './model.ts'
 import { flattenCatalog } from './model.ts'
 
@@ -43,6 +44,14 @@ export interface ModelDataState {
   readonly current: ModelSelectionLike | null
   /** 主视图会话 id；没有打开的会话时为 null。 */
   readonly sessionId: string | null
+  /** 主视图会话的 `forgeWorktree` 投影；没有会话或投影缺席时为 null。 */
+  readonly worktree: WorktreeFacts | null
+  /** 主视图会话的 `agentTeam` 投影；没有会话或投影缺席时为 null。 */
+  readonly team: TeamFacts | null
+  /** 当前目录的 Git 检查结果（来自 forge 面板流）；还没读到时为 null。 */
+  readonly checkout: CheckoutState | null
+  /** 正在执行的快捷操作（工作树 / 团队协作）。 */
+  readonly actionPending: QuickAction | null
   /** 配置表单状态。 */
   readonly configStatus: ConfigStatus
   /** 当前配置是否可写。 */
@@ -78,6 +87,10 @@ export const INITIAL_MODEL_DATA: ModelDataState = {
   catalogError: null,
   current: null,
   sessionId: null,
+  worktree: null,
+  team: null,
+  checkout: null,
+  actionPending: null,
   configStatus: 'loading',
   writable: false,
   pending: false,

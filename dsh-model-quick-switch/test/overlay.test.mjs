@@ -101,7 +101,7 @@ console.log('--- O② 打开:候选、当前角标、目录外角标、选中行
   checkTrue('行带稳定身份', html.includes('data-palette-key='))
   check('行身份是完整选择(JSON 数组)', JSON.parse(html.match(/data-palette-key="([^"]*)"/)[1].replaceAll('&quot;', '"')), ['deepseek', 'deepseek-chat', ''])
   checkTrue('行带候选标记', html.includes(`${PALETTE_OPTION_ATTR}=""`))
-  check('标题与计数', [MODEL_VIEW.title, html.includes('3 个模型')], ['切换模型', true])
+  check('标题与计数', [MODEL_VIEW.title, html.includes('3 个模型')], ['快捷菜单', true])
   check('底栏提示', ['↑ ↓ 选择', 'Enter 切换模型', 'Esc 关闭'].map((text) => html.includes(text)), [true, true, true])
 }
 
@@ -129,6 +129,9 @@ console.log('--- O④ 空列表与错误 / 进行中提示 ---')
   checkTrue('空态提示', html.includes('在「设置 → 模型快速切换」里添加要在这里出现的模型。'))
   checkTrue('计数换成空态文案', html.includes('列表里还没有模型'))
   check('没有候选行', rowsOf(html).length, 0)
+  // 状态区始终渲染（空闲 / 进行中 / 出错都是同一个定高容器），否则切换工作树或团队协作时
+  // 浮层会因这一行的出现与消失改变高度、在居中的视口里上下跳一下。
+  checkTrue('空闲时状态区也在', html.includes('dsh-model-quick-switch-status'))
 
   data.set({ error: '切换失败：session/writer-held: 会话被占用' })
   checkTrue('错误行带 role=alert', renderOverlay(palette, data).includes('role="alert"'))

@@ -18,6 +18,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const ORDER = [
   'palette.test.mjs',
   'model.test.mjs',
+  'actions.test.mjs',
   'host.test.mjs',
   'overlay.test.mjs',
   'install.test.mjs',

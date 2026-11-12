@@ -1,6 +1,6 @@
 # dsh-model-quick-switch
 
-按 **`⌘⌥U`**（Windows / Linux 上是 `Ctrl+Alt+U`；逻辑组合 `primary+alt+U`，与仓库其它固定键一致）弹出模型浮层：第一步是**设置里维护的模型列表**，`Enter` / 点击一行选中模型；模型公布了思考等级时浮层原地换成第二步，选一档后把**当前主视图会话**切换到「模型 + 强度」。浮层与 [`dsh-workspace-quick-switch`](dsh-workspace-quick-switch.md) 同一套面板 —— 一屏 10 行、窗口连续滑动、滚轮一格一行、`←` / `→` 滑一整屏；列表循环，两端继续走会绕回另一端。设置页「模型快速切换」从 Host 模型目录里按提供方浏览、添加，也能删除；列表保存在本插件的即时配置里，增删立刻反映到浮层。
+按 **`⌘⌥U`**（Windows / Linux 上是 `Ctrl+Alt+U`；逻辑组合 `primary+alt+U`，与仓库其它固定键一致）弹出**快捷菜单**：顶部是作用于**当前主视图会话**的「新建工作树」与「团队协作」开关（工作区不是 Git 仓库时工作树那一行不显示），下面才是**设置里维护的模型列表**。`Enter` / 点击一行选中模型；模型公布了思考等级时浮层原地换成第二步，选一档后把当前会话切换到「模型 + 强度」。浮层与 [`dsh-workspace-quick-switch`](dsh-workspace-quick-switch.md) 同一套面板 —— 一屏 10 行、窗口连续滑动、滚轮一格一行、`←` / `→` 滑一整屏；列表循环，两端继续走会绕回另一端。设置页「模型快速切换」从 Host 模型目录里按提供方浏览、添加，也能删除；列表保存在本插件的即时配置里，增删立刻反映到浮层。
 
 -----
 
@@ -16,17 +16,27 @@
 
 ## 它做什么
 
+### 快捷操作（`primary+alt+U` 菜单的顶部两行）
+
+两行在「有会话 + 对应服务可用」时出现在菜单顶部（工作树额外要求当前目录是 Git 仓库），只用键盘就能完成：
+
+- **新建工作树**：读当前会话的 `forgeWorktree` 投影。没有请求时 `Enter` 调 forge 面板的 `requestWorktree(sessionId, null)`（基于当前 HEAD），再按一次 `Enter` 取消请求。和空白新会话行上的同名勾选框完全等价：**请求不会立刻创建工作树**，首条消息发送时才真正创建。已创建（投影里有 `created`）时再按 `Enter` 只给出提示、不重复请求。副标题**只报「已开启 / 已关闭」**，不再写创建时机或分支名。当前目录不是 Git 仓库（forge 面板 `checkout.state === 'none'`）时这一行**整行隐藏**。
+- **团队协作**：读当前会话的 `agentTeam` 投影，`Enter` 调 `remote.agentTeams.setEnabled(sessionId, !enabled)`；成功与失败都**不关闭浮层**。与 hero 行上的开关行为一致，不做停用确认。
+- **两行显示规则一致**：都在「有会话 + 对应服务可用」时出现，角标都只有「操作」，副标题都只报「已开启 / 已关闭」；工作树行额外要求当前目录是 Git 仓库。没有会话、服务未挂载时对应行直接隐藏，不再用副标题写「服务不可用」之类的提示。
+- **两行共用菜单交互**：`↑` / `↓` 选行、`Enter` 执行、`Esc` 关闭；打开菜单时选中行仍落在「当前」模型上，从当前模型往上按 `↑` 一两次就能到这两行。底栏在选中操作行时显示「Enter 执行」。执行过程中**不显示**「正在设置…」这类中间态，成功与否只体现在行上的角标与副标题。
+- **失败留在菜单里**：Host 拒绝时（例如会话已经开始后的 `forgePanel/session-started`、团队设置的写入失败）把原因显示在菜单底部，按 `Esc` 回到输入框。
+
 ### 模型浮层（`primary+alt+U`）
 
 - **两步选择**：第一步列设置里的模型；确认后，如果模型目录公布了这个模型的思考等级，候选原地换成「默认 + 各档强度」（标题「选择思考等级」，下面一行带模型名），再确认才真正切换。模型没有公布强度（或目录不可用）时第一步确认直接切换。
 - **思考等级默认对齐当前**：进入第二步时优先选中设置行里固定的强度，其次是会话当前使用的强度，都没有才选「默认」；直接按 `Enter` 等于沿用现状。第二步按 `Esc` 退回模型列表并回到刚才那一行，再按 `Esc` 关闭。
-- **候选 = 设置里保存的列表**：顺序照抄列表（先添加的在前），不排序、不截断；一屏只渲染连续 10 行，标题右侧显示「n 个模型 · 显示 a–b」，装得下时退化成「n 个模型」。
+- **候选 = 设置里保存的列表**：顺序照抄列表（先添加的在前），不排序、不截断；一屏只渲染连续 10 行，标题右侧显示「n 个模型 · m 个操作」（只有模型时才是原来的「n 个模型 · 显示 a–b」），装得下时退化成「n 个模型」。
 - **窗口连续滑动**：滚轮一格就滑一行（1–10 → 2–11），与滚轮幅度无关；`←` / `→` 滑一整屏，`↑` / `↓` 移选中行并在它离开窗口时把窗口贴到边上。**列表循环**：末行再 ↓ 回到首行、首行再 ↑ 到末行，`←` / `→` 与滚轮到两端同样绕回。
 - **当前模型会被标出来**：读主视图会话的 `modelSelection` 投影（没有显式选择时用模型目录里的默认值），同一提供方 + 模型的行带「当前」角标，打开时默认选中它。
 - **`Enter` / 点击一行 = 切换模型**：调 `session.selectModel({ sessionId, provider, model, reasoningEffort? })`。成功后关闭浮层；失败时浮层**留在原地**，底部显示 Host 的 `code: message`（例如会话被另一个 DSH 占用的 `session/writer-held`）。
 - **列表里的模型可以暂时不在目录里**：提供方下架、账号退登之后，存着的行照旧列出并标「目录外」，标题退回模型 id、副标题退回 provider id —— 浮层不替用户静默删数据，删不删是设置页的决定。
 - **名称来自 Host 模型目录**：目录里有显示名时用目录名（模型名 / 提供方名 / 推理强度名），目录还没加载完时先显示 id，加载完成后原地换名，不闪退、不关闭。
-- **没有打开的会话**：浮层照常打开并列出候选，确认时给出「先在左侧栏打开或新建一个会话」的提示。
+- **没有打开的会话**：浮层照常打开并列出候选；模型确认时给出「先在左侧栏打开或新建一个会话」的提示，两行快捷操作则在副标题里直接说明。
 - **随处都能按**：插件在 window 捕获阶段还挂了一条打开键监听，命中即吞掉这一按再开浮层。它覆盖 composer、设置页、终端（终端会 `stopPropagation`，固定通道的 window 冒泡收不到），捕获先跑，固定通道不会收到同一按、不会开两次。
 
 ### 设置页「模型快速切换」
@@ -53,7 +63,7 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-model-quick-switch
 
 挂载后**重启 `dsh web` 并刷新浏览器**：`dsh.client.platform=web` + `immediately` 让客户端 roster 随页面加载，但 Host 在启动时读 profile；新增插件不会热挂进已运行的实例。
 
-第一次打开时列表为空。进入「设置 → 模型快速切换 → 添加模型」，从当前模型目录里挑几个；之后 `⌘⌥U`（Windows / Linux 上是 `Ctrl+Alt+U`）就能切换。
+第一次打开时列表为空。进入「设置 → 模型快速切换 → 添加模型」，从当前模型目录里挑几个；之后 `⌘⌥U`（Windows / Linux 上是 `Ctrl+Alt+U`）就能切换。菜单顶部的快捷操作要求 profile 里同时装有 forge bundle（`remote.forgePanel`）与带 `agentTeams` 的远程链路；缺哪一条，对应行就直接不显示。
 
 -----
 
@@ -68,11 +78,17 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-model-quick-switch
 | 设置页 | 注册进 `settings.section`（id `dsh-model-quick-switch`，`order: 70`，label「模型快速切换」）；Host 半部用 `settings.configure({ auto: false })` 关掉按 schema 自动生成的通用表单页，避免出现两张编辑同一字段的页面 |
 | 写入 | `form.mutate([{ op: 'set', path: ['models'], value }])` 整份替换（不是字段级 `set`，因为值是一个数组）；写入状态与 `writeError` 放在数据快照里，页面据此禁用按钮并显示原因 |
 | 当前选择 | 读 `sessions.list` 快照里主视图会话（`retainedBy.mainView > 0`）的 `projectionValues.modelSelection.next ?? lastUsed`；没有显式选择时回退到模型目录的 `default` |
+| 快捷操作行 | `src/actions.ts` 把 `projectionValues.forgeWorktree` / `agentTeam` 收窄成两种事实，投影成 `PaletteRow`（`key` 是 `action:worktree` / `action:team`），排在模型行前面。两行都在「有会话 + 对应服务可用」时出现（工作树额外要求 `checkout` 不是 `none`），副标题只报开启 / 关闭，角标只有「操作」。`syncRows` 重投影时按 key 找回选中行，避免前插操作行后选中行跳到「新建工作树」上 |
+| 工作树开关 | `remote.forgePanel.requestWorktree(sessionId, null)`（`null` = 当前 HEAD）/ `cancelWorktree(sessionId)`；成功不关浮层，先按写入结果更新快照里的 `worktree.request`，等 `forgeWorktree` 投影追上。已经创建（投影里有 `created`）时不再发请求；副标题只显示「已开启 / 已关闭」 |
+| Git 仓库检查 | `remote.forgePanel.follow(sessionId)` 每帧是完整的 `ForgePanelState`，只取 `checkout.state` 到快照的 `checkout`。`none` 时工作树行整行隐藏；流断开保留最后一次读数，会话切换时换一条流 |
+| 团队协作开关 | `remote.agentTeams.setEnabled(sessionId, !enabled)`；成功不关浮层，按写入结果更新快照里的 `team.enabled`，投影随后也会推同一个值 |
+| 快捷操作的服务链路 | `remote.forgePanel` / `remote.agentTeams` 各用一条等待子 fiber（`scope.inject`）接上；缺席时对应行直接隐藏。`remote.*` 是生成出来的命名空间，不能直接 `scope.get` |
 | 切换模型 | `remote.session.selectModel({ sessionId, provider, model, reasoningEffort? })`：请求只带一个会话与完整选择，Host 负责规范化并保存默认值；成功后把返回的 `selected` 写回快照，投影随后也会推同一个值 |
 | 模型目录 | `remote.session.modelCatalog()`：只在打开浮层或进入设置页时拉取，并发调用共用一次请求；`groups` 展开成设置页的分组与浮层的显示名，`failures` 原样显示 |
 | 思考等级 | `remote.session.modelCatalog()` 里每个模型的 `reasoning.efforts` / `defaultEffort` 展开成「默认 + 各档」；行身份是 `[provider, model, effort]`，默认行不带 `reasoningEffort`。投影规则在 `src/model.ts` 的 `effortChoices` / `effortRows` / `initialEffortIndex` |
 | 候选投影 | 列表顺序照抄；`matchesCurrent` 里「没写推理强度」的选择覆盖同模型的任意强度，「写了强度」的要求强度相等；目录里找不到的行加「目录外」角标。规则在 `src/model.ts`，设置页与浮层共用 |
 | 浮层内的按键 | 在 document 捕获阶段接管 `Esc` / `Enter` / `↑` / `↓`（选行）与 `←` / `→`（滑一整屏），带修饰键的按键一律放行；确认**不**预先关闭浮层，失败时它要留着显示错误 |
+| 状态区与高度稳定 | 「正在切换模型…」与错误文案放在一个**常驻的定高状态区**里（`.dsh-model-quick-switch-status`，`min-height` + `box-sizing: border-box`）。浮层在视口里垂直居中，高度一变整块会上下跳一下；常驻状态区让面板高度保持不动。快捷操作**不显示**「正在设置工作树…」/「正在保存团队协作设置…」这类中间态，只用行上的角标与副标题体现结果 |
 | 滚轮 | 监听挂在浮层根节点上（`passive: false`），每次都 `preventDefault()`；`wheelStep` 只看方向（非零即 ±1），所以一格固定滑一行；`ctrlKey` 的捏合手势放行 |
 | 服务晚到 | 只等 `slots` / `shortcuts`；`configForms`、`sessions`、`remote` 各用等待子 fiber 接上（设置文档、会话目录、远程链路都可能比本插件激活晚）。缺席时浮层照常能开，表现为空列表、没有会话提示或可读的服务不可用错误 |
 | 样式 | 插件自己的 `<style>`（随 fiber 卸载移除），只用自己的类名与主题令牌 `--dsw-*` / `--dsh-*`，亮 / 暗主题自动跟随 |
@@ -87,7 +103,7 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-model-quick-switch
 cd dsh-model-quick-switch
 pnpm typecheck                 # tsc --noEmit
 pnpm check:css                 # 上游槽位 / 主题令牌契约校验（--dsh-root / $DSH_ROOT 可指定 DSH 根）
-node test/run-all.mjs          # 六个测试文件
+node test/run-all.mjs          # 七个测试文件
 ```
 
 `check-css.mjs` 逐条校验 `shell.overlay` / `settings.section` 两个槽位，以及样式表消费的全部主题令牌；清单在 [`css-contract.json`](../dsh-model-quick-switch/css-contract.json)，上游改名 / 删 token 时显式失败。
@@ -96,15 +112,16 @@ node test/run-all.mjs          # 六个测试文件
 | --- | --- |
 | `test/palette.test.mjs` | 纯状态：固定行的逻辑组合（`primary` 按平台展开成 ⌘⌥U / Ctrl+Alt+U，各平台只认自己那一组）、下标收敛、窗口（最大起点 / 收敛 / 按行滑动 / 整屏 / 贴边）、store 的连续滑动与循环绕回、滚轮一格一行、浮层六键 |
 | `test/model.test.mjs` | 配置读写（坏形状、去重、保序）、选择身份（强度算身份、分隔符不撞车）、当前匹配、目录排序 / 展开 / 显示名回退、候选行的「当前」与「目录外」、思考等级候选 / 当前标记 / 初始选中 / 写回形状 |
+| `test/actions.test.mjs` | 快捷操作行的纯投影：`forgeWorktree` / `agentTeam` 投影收窄（坏形状 → null）、面板流里的 Git 检查结果、工作树 / 团队行在各种状态下的副标题与角标（工作树只报开启 / 关闭，非 Git 仓库不出行）、操作行计数与「第一行模型」下标 |
 | `test/host.test.mjs` | 宿主 Config：默认空列表、必填字段校验、`models` 带 `volatile`（设置文档才会投影它）、`apply` 只声明 `auto: false` |
 | `test/overlay.test.mjs` | 真 React 渲染：候选 / 当前角标 / 目录外角标 / 选中行、空态、错误与进行中提示、一屏 10 行与 2–11 窗口、六键接管（含第二步 `Esc` 返回）、滚轮、设置页的列表 / 只读 / 目录错误 / 不可用状态 |
-| `test/install.test.mjs` | 装配：固定行与两个槽位、`primary+alt+U` 打开并消费、两步选择（模型 → 思考等级）与 `Esc` 返回、候选来自设置与目录、`Enter` 走 `selectModel` 并在成功后关闭、失败留在浮层、没有会话 / 没有远程 / 设置服务晚到、全局捕获（终端 / 页面）与卸载清理、固定行被挤掉时两条通路都不抢、macOS 上认 ⌘⌥U 而不认 Ctrl+Alt+U、设置页增删与写入被拒 |
+| `test/install.test.mjs` | 装配：固定行与两个槽位、`primary+alt+U` 打开并消费、顶部快捷操作（↑ 到操作行、`Enter` 请求 / 取消工作树、切换团队协作、失败留在浮层、已创建工作树 / 缺服务 / 没有会话 / 非 Git 仓库整行隐藏、不显示中间态）、两步选择（模型 → 思考等级）与 `Esc` 返回、候选来自设置与目录、`Enter` 走 `selectModel` 并在成功后关闭、失败留在浮层、没有会话 / 没有远程 / 设置服务晚到、全局捕获（终端 / 页面）与卸载清理、固定行被挤掉时两条通路都不抢、macOS 上认 ⌘⌥U 而不认 Ctrl+Alt+U、设置页增删与写入被拒 |
 | `test/artifact-client.test.mjs` | 产物：模块 id / 插件名 / `inject`、只向模块表要 `react`、浮动行 + 浮层 + 设置页、候选与切换、设置页写入随产物发布、依赖缺失时只是不安装 |
 
 `test/run-all.mjs` 用 `spawnSync` 逐个跑；受限沙箱里 spawn 被拒时直接逐个执行：
 
 ```bash
-node test/palette.test.mjs && node test/model.test.mjs && node test/host.test.mjs \
+node test/palette.test.mjs && node test/model.test.mjs && node test/actions.test.mjs && node test/host.test.mjs \
   && node test/overlay.test.mjs && node test/install.test.mjs && node test/artifact-client.test.mjs
 ```
 
@@ -112,6 +129,10 @@ node test/palette.test.mjs && node test/model.test.mjs && node test/host.test.mj
 
 ## 边界
 
+- **快捷操作只作用于当前主视图会话**：菜单没有会话选择器。工作树请求与团队协作设置都写在 `retainedBy.mainView` 那个会话上；要改别的会话，先在左侧栏打开它。
+- **工作树行只在 Git 仓库里出现**：目录不是 Git 仓库（`checkout.state === 'none'`）时整行隐藏；没有打开会话或 forge 面板未启用时也不显示。团队行同样在没有会话或团队服务未挂载时隐藏。两行副标题都只有「已开启 / 已关闭」。
+- **工作树请求不等于立刻创建**：`Enter` 只是打开 forge 的工作树请求（与 hero 行的勾选框相同），首条消息发送时才创建；已经创建过的会话不会重复请求。工作树的基础分支固定用当前 HEAD，菜单不提供选分支入口。
+- **团队协作不做停用确认**：与 hero 开关一致直接写入；上游模型菜单里的停用确认流程不受影响，仍可在那里使用。
 - **只切当前主视图会话**：浮层没有会话选择器。要切别的会话，先在左侧栏打开它。subagent 子会话不提供这个入口（Host 的 `selectModel` 也不接受）。
 - **列表不自动跟随目录**：模型下架不会从列表里消失，只会标「目录外」；重新上架后角标消失。删除由用户在设置页决定。
 - **添加只从 Host 模型目录里挑**：模型目录拉不到时「添加模型」面板没有候选（页面显示原因与刷新入口），删除仍然可用。目录里没有的路由可以先手工写进 profile 的 `models`，它会以「目录外」的形式出现在浮层里。

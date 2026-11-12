@@ -96,6 +96,12 @@ export const PALETTE_CSS = `
 .dsh-model-quick-switch-option[data-active='true'] {
   background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
 }
+.dsh-model-quick-switch-option[data-action] .dsh-model-quick-switch-name {
+  font-weight: 500;
+}
+.dsh-model-quick-switch-option[data-action] .dsh-model-quick-switch-badge[data-badge='操作'] {
+  color: var(--dsw-alias-state-business-primary, #3d6ce7);
+}
 .dsh-model-quick-switch-option:hover:not([data-active='true']) {
   background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
 }
@@ -164,18 +170,18 @@ export const PALETTE_CSS = `
   line-height: 20px;
   color: var(--dsw-alias-label-tertiary, #81858c);
 }
-.dsh-model-quick-switch-error {
+.dsh-model-quick-switch-status {
   flex: none;
-  padding: 6px 18px 0;
+  box-sizing: border-box;
+  min-height: 23px;
+  padding: 5px 18px 0;
   font-size: 12px;
   line-height: 18px;
+}
+.dsh-model-quick-switch-error {
   color: var(--dsw-alias-state-error-primary, #c8342f);
 }
 .dsh-model-quick-switch-pending {
-  flex: none;
-  padding: 6px 18px 0;
-  font-size: 12px;
-  line-height: 18px;
   color: var(--dsw-alias-label-tertiary, #81858c);
 }
 .dsh-model-quick-switch-foot {

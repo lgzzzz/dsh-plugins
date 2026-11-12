@@ -1,15 +1,18 @@
 /**
- * 浏览器半部：一条固定键 + 一张模型浮层 + 注册进设置页的列表编辑器。
+ * 浏览器半部：一条固定键 + 一张快捷菜单 + 注册进设置页的列表编辑器。
  *
- *   - **模型浮层**：`primary+alt+U`（macOS `⌘⌥U`，Windows / Linux `Ctrl+Alt+U`）弹出，候选就是本插件设置里
- *     保存的模型列表；`Enter` / 点击一行切换**当前主视图会话**使用的模型（`session.selectModel`），
- *     成功后关闭浮层，失败则把 Host 的错误留在浮层底部。
+ *   - **快捷菜单**：`primary+alt+U`（macOS `⌘⌥U`，Windows / Linux `Ctrl+Alt+U`）弹出。顶部两行是
+ *     作用于**当前主视图会话**的「新建工作树」「团队协作」开关（`remote.forgePanel` /
+ *     `remote.agentTeams`，成功也不关浮层）；下面是本插件设置里保存的模型列表，`Enter` / 点击
+ *     一行切换当前会话使用的模型（`session.selectModel`），成功后关闭浮层，失败则把 Host 的
+ *     错误留在浮层底部。
  *   - **设置页**：注册进 `settings.section`（「模型快速切换」）。列表从 Host 模型目录里按提供方
  *     浏览、添加，也能删除；写入走 `ctx.configForms.get('dsh-model-quick-switch')` 的
  *     `mutate({ op: 'set', path: ['models'] })`，整份列表原子替换。
  *
  * 浮层交互与 `dsh-workspace-quick-switch` 同一套（一屏 10 行、窗口连续滑动、滚轮一格一行、
- * `←` / `→` 滑一整屏、两端绕回），状态规则在 `palette.ts`，候选投影在 `model.ts`。
+ * `←` / `→` 滑一整屏、两端绕回），状态规则在 `palette.ts`，候选投影在 `model.ts`，两行快捷
+ * 操作的事实收窄与文案在 `actions.ts`。
  *
  * 四条通路：
  *
@@ -23,11 +26,25 @@
  *     它覆盖 composer、设置页与终端（终端会 stopPropagation，固定通道的 window 冒泡收不到），
  *     捕获先跑，所以固定通道不会收到同一按、不会开两次。
  *
- * 内核所需的 `slots` / `shortcuts` 是启动即有；`configForms`、`sessions` 与 `remote` 经等待子
- * fiber 接上（设置文档、会话目录、远程模型目录都可能比本插件晚到位）。服务缺席时浮层照常能开，
- * 只是没有候选 / 切换时给出可读错误。
+ * 内核所需的 `slots` / `shortcuts` 是启动即有；`configForms`、`sessions`、`remote.session`、
+ * `remote.forgePanel`、`remote.agentTeams` 各经等待子 fiber 接上（设置文档、会话目录、远程链路
+ * 都可能比本插件晚到位）。服务缺席时浮层照常能开，只是没有候选 / 工作树行隐藏 / 团队行写明
+ * 不可用 / 执行时给出可读错误。
  */
 import * as React from 'react'
+import {
+  actionOfKey,
+  actionRowCount,
+  checkoutStateOf,
+  firstModelRowIndex,
+  quickActionRows,
+  teamFacts,
+  worktreeFacts,
+  type CheckoutState,
+  type QuickAction,
+  type TeamFacts,
+  type WorktreeFacts,
+} from './actions.ts'
 import { name } from './runtime.ts'
 import {
   MODEL_SWITCH_BINDING,
@@ -37,6 +54,7 @@ import {
   clampIndex,
   clampOffset,
   createPaletteStore,
+  inRange,
   installPaletteKeys,
   installPaletteWheel,
   keepOptionVisible,
@@ -109,11 +127,11 @@ export const MODEL_VIEW: PaletteView = {
   id: name,
   domId: name,
   rootAttr: PALETTE_ROOT_ATTR,
-  title: '切换模型',
+  title: '快捷菜单',
   unit: '个模型',
   emptyCount: '列表里还没有模型',
   emptyHint: '在「设置 → 模型快速切换」里添加要在这里出现的模型。',
-  listLabel: '模型',
+  listLabel: '模型与操作',
   enterHint: 'Enter 切换模型',
 }
 
@@ -195,10 +213,17 @@ interface ModelSelectionProjectionLike {
   readonly next?: ModelSelectionLike | null
 }
 
+/** 会话投影里本插件读的三份读数（其余投影不读）。 */
+interface ProjectionValuesLike {
+  readonly modelSelection?: ModelSelectionProjectionLike
+  readonly forgeWorktree?: unknown
+  readonly agentTeam?: unknown
+}
+
 /** 会话摘要里本插件读的字段。 */
 interface SessionSummaryLike {
   readonly retainedBy?: { readonly mainView?: number }
-  readonly projectionValues?: { readonly modelSelection?: ModelSelectionProjectionLike }
+  readonly projectionValues?: ProjectionValuesLike
 }
 
 /** 会话目录快照。 */
@@ -244,9 +269,29 @@ interface SessionRemoteLike {
   }): Promise<RemoteResultLike<{ selected?: ModelSelectionLike }>>
 }
 
+/** forge 面板里与工作树请求相关的方法。 */
+interface ForgePanelRemoteLike {
+  requestWorktree?(sessionId: string, from: string | null): Promise<RemoteResultLike<unknown>>
+  cancelWorktree?(sessionId: string): Promise<RemoteResultLike<unknown>>
+  /** 面板状态流；每帧是完整的 `ForgePanelState`（这里只读 `checkout.state`）。 */
+  follow?(sessionId: string, signal?: AbortSignal): ForgeStreamLike
+}
+
+/** 面板状态流的客户端形状（结构上满足 `RemoteStreamHandle`）。 */
+interface ForgeStreamLike extends AsyncIterable<unknown> {
+  dispose(): void
+}
+
+/** 团队协作服务里本插件用到的方法。 */
+interface AgentTeamsRemoteLike {
+  setEnabled?(sessionId: string, enabled: boolean): Promise<RemoteResultLike<unknown>>
+}
+
 /** 远程服务面。 */
 interface RemoteFace {
   readonly session?: SessionRemoteLike
+  readonly forgePanel?: ForgePanelRemoteLike
+  readonly agentTeams?: AgentTeamsRemoteLike
 }
 
 /** 设置页里可执行的动作。 */
@@ -301,6 +346,23 @@ export function countLabel(view: PaletteView, total: number, offset: number): st
   const from = offset + 1
   const to = Math.min(offset + PAGE_SIZE, total)
   return `${total} ${view.unit} · 显示 ${from}–${to}`
+}
+
+/**
+ * 快捷菜单标题右侧的计数：把模型与操作分开报。
+ *
+ * 没有操作行时保持原行为（含「显示 a–b」的窗口提示）；有操作行时只报「n 个模型 · m 个操作」，
+ * 不把两行操作算进模型数。
+ * @param view - 浮层文案。
+ * @param entries - 全部候选。
+ * @param offset - 窗口起点。
+ * @returns 一行计数文案。
+ */
+export function paletteCountLabel(view: PaletteView, entries: readonly PaletteRow[], offset: number): string {
+  const actions = actionRowCount(entries)
+  if (actions === 0) return countLabel(view, entries.length, offset)
+  const models = entries.length - actions
+  return `${models} ${view.unit} · ${actions} 个操作`
 }
 
 /** 一行候选项的 DOM id（与 `aria-activedescendant` 配对，滚进可见区也按它定位）。 */
@@ -436,6 +498,12 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
     // `remote.session` 是生成出来的命名空间：没在 fiber 的 inject 里声明就直接读会抛
     // 「cannot get property "remote.session" without inject」，所以先等子 fiber 把它接上。
     let sessionRemote: SessionRemoteLike | undefined
+    // 快捷操作的两条链路各自晚到：forge 面板负责工作树请求与 Git 检查，团队服务负责 agentTeam 开关。
+    let forgePanelRemote: ForgePanelRemoteLike | undefined
+    let agentTeamsRemote: AgentTeamsRemoteLike | undefined
+    // 只为「当前目录是不是 Git 仓库」维持一条 forge 面板状态流；会话切换时换一条。
+    let forgePanelStream: ForgeStreamLike | undefined
+    let forgePanelStreamSession: string | null = null
     let catalogInFlight: Promise<void> | undefined
     // 浮层的两步：先选模型，确认后再把候选换成这个模型的思考等级。
     let stage: PaletteStage = 'models'
@@ -459,31 +527,110 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
     }
 
     /**
-     * 读主视图会话与它的当前选择。
+     * 为「当前目录是不是 Git 仓库」维持一条 forge 面板状态流。
+     *
+     * 只读 `checkout.state`：`none` 时工作树那一行整行隐藏。会话切换就换一条流；
+     * 流断开时保留最后一次读数（不把 Git 仓库误判成非仓库）。
+     * @param sessionId - 当前主视图会话；没有会话时为 null。
+     */
+    const startForgeFollow = (sessionId: string | null): void => {
+      forgePanelStream?.dispose()
+      forgePanelStream = undefined
+      forgePanelStreamSession = sessionId
+      data.set({ checkout: null })
+      if (sessionId === null) return
+      const remote = forgePanelRemote
+      const follow = remote?.follow
+      if (remote === undefined || typeof follow !== 'function') return
+      let stream: ForgeStreamLike
+      try {
+        stream = follow.call(remote, sessionId)
+      } catch {
+        return
+      }
+      forgePanelStream = stream
+      void (async () => {
+        try {
+          for await (const frame of stream) {
+            if (forgePanelStream !== stream) return
+            const checkout = checkoutStateOf(frame)
+            if (checkout !== null && checkout !== data.getSnapshot().checkout) data.set({ checkout })
+          }
+        } catch {
+          // 链路断开：保留最后一次读数，工作树行不因一次断线而消失。
+        } finally {
+          if (forgePanelStream === stream) forgePanelStream = undefined
+        }
+      })()
+    }
+
+    /**
+     * 会话变化时换一条面板流；没变就不重复订阅。
+     * @param sessionId - 当前主视图会话；没有会话时为 null。
+     */
+    const syncForgeFollow = (sessionId: string | null): void => {
+      if (forgePanelStreamSession === sessionId) return
+      startForgeFollow(sessionId)
+    }
+
+    /**
+     * 读主视图会话与它的当前选择 / 两个快捷操作的状态投影。
      * @returns 会话 id；没有打开的会话时为 null。
      */
     const refreshSession = (): string | null => {
       const sessions = readSessions(scope)
       const snapshot = sessions?.list.getSnapshot()
       if (snapshot === undefined) {
-        data.set({ sessionId: null, current: null })
+        data.set({ sessionId: null, current: null, worktree: null, team: null })
+        syncForgeFollow(null)
         return null
       }
       const id = snapshot.ids.find((candidate) => (snapshot.byId[candidate]?.retainedBy?.mainView ?? 0) > 0)
       if (id === undefined) {
-        data.set({ sessionId: null, current: null })
+        data.set({ sessionId: null, current: null, worktree: null, team: null })
+        syncForgeFollow(null)
         return null
       }
-      const projection = snapshot.byId[id]?.projectionValues?.modelSelection
-      data.set({ sessionId: id, current: projection?.next ?? projection?.lastUsed ?? null })
+      const values = snapshot.byId[id]?.projectionValues
+      const projection = values?.modelSelection
+      data.set({
+        sessionId: id,
+        current: projection?.next ?? projection?.lastUsed ?? null,
+        worktree: worktreeFacts(values?.forgeWorktree),
+        team: teamFacts(values?.agentTeam),
+      })
+      syncForgeFollow(id)
       return id
     }
 
-    /** 把「列表 + 目录 + 当前选择」投影成浮层行；当前选中行按原下标保留。 */
+    /**
+     * 把「操作 + 列表 + 目录 + 当前选择」投影成浮层行。
+     *
+     * 两行快捷操作排在模型前面；重投影时按 key 找回原来选中的行，避免前插操作行后选中行
+     * 从某个模型跳到「新建工作树」上。
+     */
     const syncRows = (): void => {
       const state = data.getSnapshot()
       const current = state.current ?? state.defaultSelection
-      palette.sync(choiceRows(state.choices, state.catalog, current, { catalogReady: state.catalogStatus === 'ready' }))
+      const actions = quickActionRows({
+        sessionOpen: state.sessionId !== null,
+        worktreeAvailable: forgePanelRemote !== undefined,
+        teamAvailable: agentTeamsRemote !== undefined,
+        worktree: state.worktree,
+        team: state.team,
+        checkout: state.checkout,
+      })
+      const models = choiceRows(state.choices, state.catalog, current, { catalogReady: state.catalogStatus === 'ready' })
+      const rows = [...actions, ...models]
+      const before = palette.getSnapshot()
+      const activeKey = before.open && inRange(before.activeIndex, before.entries.length)
+        ? before.entries[before.activeIndex]?.key
+        : undefined
+      palette.sync(rows)
+      if (activeKey !== undefined) {
+        const index = rows.findIndex((row) => row.key === activeKey)
+        if (index >= 0 && index !== palette.getSnapshot().activeIndex) palette.select(index)
+      }
     }
 
     /** 拉一次 Host 模型目录；并发调用共用同一次请求。 */
@@ -554,6 +701,92 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
       }
     }
 
+    /**
+     * 执行浮层顶部的一行快捷操作。
+     *
+     * 与模型确认的区别：成功与否都**不关闭浮层** —— 用户可以接着按 `↑` / `↓` 去切另一个开关，
+     * 最后按 `Esc` 回到输入框；失败原因留在浮层底部。
+     * @param action - 选中的快捷操作。
+     */
+    const runQuickAction = async (action: QuickAction): Promise<void> => {
+      const state = data.getSnapshot()
+      if (state.pending || state.actionPending !== null) return
+      // 不在这里重读会话投影：写入成功后的乐观状态会被尚未追上的旧投影盖掉，连按第二次
+      // 就会把「取消」又变成一次「请求」。会话切换由目录订阅负责刷新。
+      const sessionId = state.sessionId ?? refreshSession()
+      if (sessionId === null) {
+        data.set({ error: '当前没有打开的会话：先在左侧栏打开或新建一个会话，再使用这里的开关。' })
+        return
+      }
+      const facts = data.getSnapshot().worktree
+      if (action === 'worktree') {
+        if (facts !== null && facts.created !== null) {
+          data.set({ error: `当前会话已经有工作树：${facts.created.branch ?? facts.created.path ?? '已创建'}。` })
+          return
+        }
+        const remote = forgePanelRemote
+        const request = remote?.requestWorktree
+        const cancel = remote?.cancelWorktree
+        if (remote === undefined || typeof request !== 'function' || typeof cancel !== 'function') {
+          data.set({ error: '工作树服务不可用（forge 面板未启用）。' })
+          return
+        }
+        const pending = facts !== null && facts.request !== null
+        data.set({ actionPending: action, error: null })
+        syncRows()
+        try {
+          const result = pending
+            ? await cancel.call(remote, sessionId)
+            : await request.call(remote, sessionId, null)
+          if (!result.ok) {
+            data.set({
+              actionPending: null,
+              error: `${pending ? '取消工作树' : '新建工作树'}失败：${describeRemoteFailure(result.error)}`,
+            })
+          } else {
+            // 投影会随后推同一份状态；先按写入结果更新，避免等待一拍才看到角标变化。
+            data.set({
+              actionPending: null,
+              worktree: {
+                request: pending ? null : { from: null },
+                created: facts?.created ?? null,
+                locked: facts?.locked ?? false,
+                stepped: facts?.stepped ?? false,
+              },
+            })
+          }
+        } catch (error) {
+          data.set({
+            actionPending: null,
+            error: `${pending ? '取消工作树' : '新建工作树'}失败：${messageOf(error)}`,
+          })
+        }
+        syncRows()
+        return
+      }
+      const team = data.getSnapshot().team
+      const remote = agentTeamsRemote
+      const setEnabled = remote?.setEnabled
+      if (remote === undefined || typeof setEnabled !== 'function') {
+        data.set({ error: '团队协作服务不可用（agentTeams 未挂载）。' })
+        return
+      }
+      const next = !(team?.enabled ?? false)
+      data.set({ actionPending: action, error: null })
+      syncRows()
+      try {
+        const result = await setEnabled.call(remote, sessionId, next)
+        if (!result.ok) {
+          data.set({ actionPending: null, error: `保存团队协作设置失败：${describeRemoteFailure(result.error)}` })
+        } else {
+          data.set({ actionPending: null, team: { enabled: next } })
+        }
+      } catch (error) {
+        data.set({ actionPending: null, error: `保存团队协作设置失败：${messageOf(error)}` })
+      }
+      syncRows()
+    }
+
     /** 把当前步骤的候选重新投影进浮层（目录 / 当前选择变化时都走这里）。 */
     const projectPalette = (): void => {
       if (stage === 'efforts' && stageChoice !== null) {
@@ -592,6 +825,11 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
       const index = clampIndex(snapshot.activeIndex, snapshot.entries.length)
       const row = index < 0 ? undefined : snapshot.entries[index]
       if (row === undefined) return
+      const action = actionOfKey(row.key)
+      if (action !== null) {
+        await runQuickAction(action)
+        return
+      }
       const choice = data.getSnapshot().choices.find((candidate) => choiceKey(candidate) === row.key)
       if (choice === undefined) return
       // 目录还在路上时先等一下：不知道这个模型有没有思考等级，就不能贸然跳过第二步。
@@ -637,7 +875,9 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
       const sessionId = refreshSession()
       syncRows()
       const rows = palette.getSnapshot().entries
-      const index = currentChoiceIndex(rows)
+      let index = currentChoiceIndex(rows)
+      // 没有「当前」模型时落在第一行模型上，不要把选中行停在快捷操作上导致回车误触。
+      if (index < 0) index = firstModelRowIndex(rows)
       palette.open(() => {
         void confirmModel()
       }, index < 0 ? 0 : index)
@@ -830,6 +1070,40 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
       if (data.getSnapshot().catalogStatus !== 'ready') void loadCatalog()
     })
 
+    // 工作树快捷操作走 forge 面板；链路晚到或没装 forge 时整行隐藏（没有 Git 检查就无从判断）。
+    scope.inject(['remote', 'remote.forgePanel'], (inner) => {
+      const remote = readRemote(inner)
+      const panel = remote?.forgePanel
+      if (panel === undefined) return
+      forgePanelRemote = panel
+      startForgeFollow(data.getSnapshot().sessionId)
+      inner.effect(() => () => {
+        if (forgePanelRemote !== panel) return
+        forgePanelRemote = undefined
+        forgePanelStream?.dispose()
+        forgePanelStream = undefined
+        forgePanelStreamSession = null
+        data.set({ actionPending: null, checkout: null })
+        syncRows()
+      }, `${name}: forge panel release`)
+      syncRows()
+    })
+
+    // 团队协作快捷操作走 agentTeams；同样允许晚到，缺席时只是行上写明不可用。
+    scope.inject(['remote', 'remote.agentTeams'], (inner) => {
+      const remote = readRemote(inner)
+      const agentTeams = remote?.agentTeams
+      if (agentTeams === undefined) return
+      agentTeamsRemote = agentTeams
+      inner.effect(() => () => {
+        if (agentTeamsRemote !== agentTeams) return
+        agentTeamsRemote = undefined
+        data.set({ actionPending: null })
+        syncRows()
+      }, `${name}: agent teams release`)
+      syncRows()
+    })
+
     // 会话目录晚到也能补上：主视图会话与 `modelSelection` 投影都从这里来。
     scope.inject(['sessions'], (inner) => {
       const sessions = readSessions(inner)
@@ -863,6 +1137,10 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
   const activeIndex = clampIndex(state.activeIndex, entries.length)
   const offset = clampOffset(state.offset, entries.length)
   const visible = windowSlice(entries, offset)
+  const activeEntry = activeIndex < 0 ? undefined : entries[activeIndex]
+  const enterHint = activeEntry !== undefined && actionOfKey(activeEntry.key) !== null
+    ? 'Enter 执行'
+    : view.enterHint
 
   React.useEffect(() => {
     if (!open) return
@@ -909,7 +1187,7 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
         React.createElement(
           'span',
           { key: 'count', className: 'dsh-model-quick-switch-count' },
-          entries.length === 0 ? view.emptyCount : countLabel(view, entries.length, offset),
+          entries.length === 0 ? view.emptyCount : paletteCountLabel(view, entries, offset),
         ),
       ),
       stagePresentation === undefined
@@ -937,12 +1215,19 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
             },
             visible.map((entry, index) => optionElement(store, view, entry, offset + index, offset + index === activeIndex)),
           ),
-      dataState.pending
-        ? React.createElement('div', { key: 'pending', className: 'dsh-model-quick-switch-pending' }, '正在切换模型…')
-        : null,
-      dataState.error === null
-        ? null
-        : React.createElement('div', { key: 'error', className: 'dsh-model-quick-switch-error', role: 'alert' }, dataState.error),
+      // 状态区始终占一行高：切换工作树 / 团队协作时浮层不增不减，面板不会因这一行出现
+      // 或消失而在视口里上下跳一下（浮层是居中的，高度一变整块就平移）。快捷操作不显示
+      // 中间态：开关成功与否只用行上的角标与副标题体现，状态区只留给模型切换与错误。
+      React.createElement(
+        'div',
+        { key: 'status', className: 'dsh-model-quick-switch-status' },
+        dataState.pending
+          ? React.createElement('span', { key: 'pending', className: 'dsh-model-quick-switch-pending' }, '正在切换模型…')
+          : null,
+        dataState.error === null
+          ? null
+          : React.createElement('span', { key: 'error', className: 'dsh-model-quick-switch-error', role: 'alert' }, dataState.error),
+      ),
       React.createElement(
         'div',
         { key: 'foot', className: 'dsh-model-quick-switch-foot' },
@@ -950,7 +1235,7 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
         entries.length > PAGE_SIZE
           ? React.createElement('span', { key: 'page' }, '← → 翻一屏')
           : null,
-        React.createElement('span', { key: 'enter' }, view.enterHint),
+        React.createElement('span', { key: 'enter' }, enterHint),
         React.createElement('span', { key: 'esc' }, stage === 'efforts' ? 'Esc 返回' : 'Esc 关闭'),
       ),
     ),
@@ -973,6 +1258,7 @@ function optionElement(
 ): React.ReactElement {
   const label = entry.title === '' ? entry.key : entry.title
   const badges = entry.badges ?? []
+  const action = actionOfKey(entry.key)
   return React.createElement(
     'button',
     {
@@ -986,6 +1272,7 @@ function optionElement(
       // 稳定身份（列表项的复合 key）：人工排查与自动化验证按它定位行。
       'data-palette-key': entry.key,
       'data-active': active ? 'true' : 'false',
+      ...action === null ? {} : { 'data-action': action },
       onClick: () => {
         store.select(index)
         const binding = store.getSnapshot().binding
@@ -1048,7 +1335,7 @@ export function ModelSettingsSection(props: SettingsProps): React.ReactElement {
       React.createElement(
         'p',
         { key: 'intro', className: 'dsh-model-quick-switch-settings-intro' },
-        '按 ⌘⌥U（Windows / Linux 上是 Ctrl+Alt+U）打开模型浮层：先选模型，模型公布了思考等级时再选一档，最后切换当前会话使用的模型。下面这份列表就是第一步的候选，顺序与浮层一致。',
+        '按 ⌘⌥U（Windows / Linux 上是 Ctrl+Alt+U）打开快捷菜单：顶部两行是「新建工作树」与「团队协作」开关，生效于当前会话；下面是模型列表，先选模型，模型公布了思考等级时再选一档，最后切换当前会话使用的模型。下面这份列表就是模型候选，顺序与浮层一致。',
       ),
       React.createElement(
         'p',

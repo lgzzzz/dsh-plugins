@@ -146,14 +146,16 @@ export function fakeConfigForms(form) {
 }
 
 /**
- * 造一个假的会话目录：`ids` / `byId` 快照、主视图会话与它的 `modelSelection` 投影。
+ * 造一个假的会话目录：`ids` / `byId` 快照、主视图会话与它的投影（`modelSelection` 以及
+ * `forgeWorktree` / `agentTeam` 这两份快捷操作读数）。
  *
- * @param options - `{ current, byId, modelSelection }`。
+ * @param options - `{ current, byId, modelSelection, projections }`。
  */
-export function fakeSessions({ current, byId = {}, modelSelection = null } = {}) {
+export function fakeSessions({ current, byId = {}, modelSelection = null, projections = {} } = {}) {
   const listeners = new Set()
   let main = current
   let selection = modelSelection
+  let extra = { ...projections }
   let rows = { ...byId }
   const notify = () => {
     for (const listener of [...listeners]) listener()
@@ -164,7 +166,7 @@ export function fakeSessions({ current, byId = {}, modelSelection = null } = {})
       all[main] = {
         ...(all[main] ?? {}),
         retainedBy: { mainView: 1 },
-        projectionValues: { modelSelection: selection },
+        projectionValues: { modelSelection: selection, ...extra },
       }
     }
     const ids = Object.keys(all)
@@ -193,6 +195,11 @@ export function fakeSessions({ current, byId = {}, modelSelection = null } = {})
       selection = next
       notify()
     },
+    /** 换当前会话的其余投影（`forgeWorktree` / `agentTeam`）。 */
+    setProjections(next) {
+      extra = { ...extra, ...next }
+      notify()
+    },
     /** 换整份会话目录。 */
     setRows(next) {
       rows = { ...next }
@@ -203,10 +210,35 @@ export function fakeSessions({ current, byId = {}, modelSelection = null } = {})
   return { list }
 }
 
-/** 造一个假的远程服务：模型目录 + 模型选择。 */
-export function fakeRemote({ catalog, selectResult } = {}) {
+/** 造一条假的 forge 面板状态流（`RemoteStreamHandle` 结构上需要的部分）。 */
+function makeFollowStream(frames) {
+  let disposed = false
+  return {
+    dispose() {
+      disposed = true
+    },
+    get disposed() {
+      return disposed
+    },
+    async *[Symbol.asyncIterator]() {
+      for (const frame of frames) {
+        if (disposed) return
+        await Promise.resolve()
+        yield frame
+      }
+    },
+  }
+}
+
+/** 造一个假的远程服务：模型目录 + 模型选择 + forge 工作树 + 团队协作。 */
+export function fakeRemote({ catalog, selectResult, worktreeResult, cancelResult, teamResult, followFrames } = {}) {
   const catalogCalls = []
   const selectCalls = []
+  const worktreeCalls = []
+  const cancelCalls = []
+  const teamCalls = []
+  const followCalls = []
+  const followStreams = []
   const defaultCatalog = {
     ok: true,
     value: {
@@ -230,8 +262,35 @@ export function fakeRemote({ catalog, selectResult } = {}) {
         return { ok: true, value: { selected } }
       },
     },
+    forgePanel: {
+      async requestWorktree(sessionId, from) {
+        worktreeCalls.push({ sessionId, from })
+        return worktreeResult ?? { ok: true, value: undefined }
+      },
+      async cancelWorktree(sessionId) {
+        cancelCalls.push({ sessionId })
+        return cancelResult ?? { ok: true, value: undefined }
+      },
+      follow(sessionId) {
+        followCalls.push(sessionId)
+        const stream = makeFollowStream(followFrames ?? [{ checkout: { state: 'ready' } }])
+        followStreams.push(stream)
+        return stream
+      },
+    },
+    agentTeams: {
+      async setEnabled(sessionId, enabled) {
+        teamCalls.push({ sessionId, enabled })
+        return teamResult ?? { ok: true, value: undefined }
+      },
+    },
     catalogCalls,
     selectCalls,
+    worktreeCalls,
+    cancelCalls,
+    teamCalls,
+    followCalls,
+    followStreams,
   }
 }
 
@@ -361,13 +420,17 @@ export function fakeCtx(services) {
   const cleanups = []
   const children = []
 
-  // 真实上下文里 `ctx.remote.session` 是生成出来的命名空间服务：只 provide 了 `remote`
-  // 时，`remote.session` 也必须可以按名字等到，否则声明 `inject: ['remote.session']` 的
-  // 子 fiber 会永远不启动。
+  // 真实上下文里 `ctx.remote.session` 这类生成出来的命名空间服务可以单独按名字等到；只
+  // provide 了 `remote` 时，也要把本插件 inject 的命名空间同步登记进去，否则等待子 fiber
+  // 永远不会启动。新增的 remote 命名空间在这里登记。
+  const remoteNamespaces = () => ['session', 'forgePanel', 'agentTeams']
   const syncRemoteSession = () => {
     const remote = registry.remote
-    if (remote !== undefined && remote.session !== undefined) registry['remote.session'] = remote.session
-    else delete registry['remote.session']
+    for (const namespace of remoteNamespaces()) {
+      const key = `remote.${namespace}`
+      if (remote !== undefined && remote[namespace] !== undefined) registry[key] = remote[namespace]
+      else delete registry[key]
+    }
   }
   syncRemoteSession()
 

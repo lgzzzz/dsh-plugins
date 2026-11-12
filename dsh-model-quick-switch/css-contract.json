@@ -15,6 +15,7 @@
     {"id":"alias-label-secondary-var","plugin":"dsh-model-quick-switch","token":"--dsw-alias-label-secondary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-secondary 变量消失，设置页说明文字掉到兜底色，深色主题下对比不足"},
     {"id":"alias-label-tertiary-var","plugin":"dsh-model-quick-switch","token":"--dsw-alias-label-tertiary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-label-tertiary 变量消失，序号 / 副标题 / 快捷键等次要文字掉到兜底灰，深色主题下对比不足"},
     {"id":"alias-state-warn-primary-var","plugin":"dsh-model-quick-switch","token":"--dsw-alias-state-warn-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-state-warn-primary 变量消失，「目录外」角标掉到兜底的黄褐色，深色主题下可能看不清"},
+    {"id":"alias-state-business-primary-var","plugin":"dsh-model-quick-switch","token":"--dsw-alias-state-business-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-state-business-primary 变量消失，快捷操作行的「操作」角标掉到兜底蓝，与主题强调色不一致"},
     {"id":"alias-state-error-primary-var","plugin":"dsh-model-quick-switch","token":"--dsw-alias-state-error-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-state-error-primary 变量消失，切换失败 / 写入失败的文字与删除按钮掉到兜底红，深色主题下对比不足"},
     {"id":"alias-brand-primary-var","plugin":"dsh-model-quick-switch","token":"--dsw-alias-brand-primary","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-alias-brand-primary 变量消失，设置页按钮的键盘焦点环掉到兜底蓝，与主题品牌色不一致"},
     {"id":"elevation-prominent-var","plugin":"dsh-model-quick-switch","token":"--dsw-elevation-prominent","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-elevation-prominent 变量消失，浮层阴影掉到兜底值，浅色主题下浮层与页面糊在一起"},

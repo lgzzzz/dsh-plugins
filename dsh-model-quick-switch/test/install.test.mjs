@@ -146,10 +146,11 @@ console.log('--- C② Ctrl+Alt+U 打开:候选来自设置、目录名补上、�
   check('这一次按键被消费', fixture.shortcuts.consumeCalls(), 1)
   const rows = rowsOf(fixture.html())
   check('浮层出来了', fixture.store.getSnapshot().open, true)
-  check('两行候选', rows.map((row) => row.title), ['DeepSeek Chat', 'DeepSeek V4.1 Flash'])
-  check('当前行被标出来', rows.map((row) => row.current), [true, false])
-  check('初始选中当前行', rows.map((row) => row.selected), ['true', 'false'])
-  check('计数', fixture.html().includes('2 个模型'), true)
+  check('顶部两行操作 + 两行模型', rows.map((row) => row.title), ['新建工作树', '团队协作', 'DeepSeek Chat', 'DeepSeek V4.1 Flash'])
+  check('操作行带「操作」角标', rows.slice(0, 2).map((row) => row.badge), ['操作', '操作'])
+  check('当前行被标出来', rows.map((row) => row.current), [false, false, true, false])
+  check('初始选中当前模型而不是操作行', rows.map((row) => row.selected), ['false', 'false', 'true', 'false'])
+  check('计数分开报模型与操作', fixture.html().includes('2 个模型 · 2 个操作'), true)
   check('拉过一次目录', fixture.remote.catalogCalls.length, 1)
 }
 
@@ -247,8 +248,8 @@ console.log('--- C③c 第二步 Esc 退回模型列表,并回到刚才那一行
   await tick()
   check('Esc 被吞掉', [esc.defaultPrevented, esc.stopped], [true, true])
   check('退回模型步骤且浮层仍开着', [fixture.store.getSnapshot().open, fixture.data.getSnapshot().stage], [true, 'models'])
-  check('候选回到模型列表', fixture.store.getSnapshot().entries.map((row) => row.title), ['DeepSeek Chat', 'DeepSeek V4.1 Flash'])
-  check('回到刚才确认的那一行', fixture.store.getSnapshot().activeIndex, 0)
+  check('候选回到模型列表', fixture.store.getSnapshot().entries.map((row) => row.title), ['新建工作树', '团队协作', 'DeepSeek Chat', 'DeepSeek V4.1 Flash'])
+  check('回到刚才确认的那一行', fixture.store.getSnapshot().activeIndex, 2)
   check('没有发出选择请求', fixture.remote.selectCalls, [])
   off()
 }
@@ -259,7 +260,7 @@ console.log('--- C⑤ 没有打开的会话:浮层照常打开,确认时给出�
   const fixture = setup({ sessions })
   await fixture.open()
   check('打开时就提示没有会话', fixture.data.getSnapshot().error, '当前没有打开的会话：先在左侧栏打开或新建一个会话，再切换模型。')
-  check('候选照常列出', rowsOf(fixture.html()).length, 2)
+  check('没有会话时两个开关都不显示', rowsOf(fixture.html()).map((row) => row.title), ['DeepSeek Chat', 'DeepSeek V4.1 Flash'])
   const off = installPaletteKeys(fixture.store, fixture.dom.document)
   fixture.dom.pressKey('Enter')
   await tick()
@@ -294,7 +295,7 @@ console.log('--- C⑦ 设置服务晚到:先空列表,到位后补上 ---')
   await tick()
   check('服务到位后候选补上', fixture.data.getSnapshot().choices, DEFAULT_CHOICES)
   await fixture.open()
-  check('浮层候选跟着出现', rowsOf(fixture.html()).length, 2)
+  check('浮层候选跟着出现', rowsOf(fixture.html()).map((row) => row.title), ['新建工作树', '团队协作', 'DeepSeek Chat', 'DeepSeek V4.1 Flash'])
 }
 
 console.log('--- C⑧ 全局捕获:Ctrl+Alt+U 在终端与页面里都被吞并打开浮层 ---')
@@ -358,6 +359,130 @@ console.log('--- C⑩ macOS:键帽是 ⌘⌥U,认 ⌘⌥U、不认 Ctrl+Alt+U --
   fixture.shortcuts.fire(fixedMacKeydown())
   check('macOS 上 ⌘⌥U 打开', fixture.store.getSnapshot().open, true)
   check('只消费命中的那一次', fixture.shortcuts.consumeCalls(), 1)
+}
+
+console.log('--- C⑩b 快捷操作:工作树与团队协作都能只用键盘切换 ---')
+{
+  const fixture = setup()
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.dom.pressKey('ArrowUp')
+  check('从当前模型 ↑ 到团队协作', fixture.store.getSnapshot().activeIndex, 1)
+  fixture.dom.pressKey('ArrowUp')
+  check('再 ↑ 到新建工作树', fixture.store.getSnapshot().activeIndex, 0)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('Enter 请求工作树（基于 HEAD）', fixture.remote.worktreeCalls, [{ sessionId: 's1', from: null }])
+  check('成功也不关闭浮层', fixture.store.getSnapshot().open, true)
+  check('行状态变成已请求', fixture.data.getSnapshot().worktree?.request, { from: null })
+  check('副标题只报开启', fixture.store.getSnapshot().entries[0].subtitle, '已开启')
+  check('底栏提示 Enter 执行', fixture.html().includes('Enter 执行'), true)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('再按一次取消请求', fixture.remote.cancelCalls, [{ sessionId: 's1' }])
+  check('行状态回到未请求', fixture.data.getSnapshot().worktree?.request, null)
+  check('副标题只报关闭', fixture.store.getSnapshot().entries[0].subtitle, '已关闭')
+
+  fixture.dom.pressKey('ArrowDown')
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('开启团队协作', fixture.remote.teamCalls, [{ sessionId: 's1', enabled: true }])
+  check('状态跟着变', fixture.data.getSnapshot().team, { enabled: true })
+  check('角标变成已开启', fixture.html().includes('已开启'), true)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('再按一次关闭', fixture.remote.teamCalls[1], { sessionId: 's1', enabled: false })
+  check('关闭后状态', fixture.data.getSnapshot().team, { enabled: false })
+  off()
+}
+
+console.log('--- C⑩c 快捷操作失败与不可用:留在浮层里给可读原因 ---')
+{
+  const remote = fakeRemote({
+    catalog: DEFAULT_CATALOG,
+    worktreeResult: { ok: false, error: { code: 'forgePanel/session-started', message: '会话已开始' } },
+  })
+  const fixture = setup({ remote })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.store.select(0)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('失败原因带 Host 错误码', fixture.data.getSnapshot().error, '新建工作树失败：forgePanel/session-started: 会话已开始')
+  check('失败也留在浮层', fixture.store.getSnapshot().open, true)
+  check('浮层上能看到错误', fixture.html().includes('forgePanel/session-started'), true)
+  off()
+}
+{
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' } },
+    projections: {
+      forgeWorktree: {
+        request: null,
+        created: { path: '/tmp/wt', branch: 'forge/s1', from: null, baseCommit: 'abc', repositoryRoot: '/repo' },
+        locked: true,
+        stepped: true,
+      },
+    },
+  })
+  const fixture = setup({ sessions })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  check('已创建时副标题只报开启', fixture.store.getSnapshot().entries[0].subtitle, '已开启')
+  fixture.store.select(0)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('不会为已创建的工作树再发请求', fixture.remote.worktreeCalls, [])
+  check('提示已有工作树', fixture.data.getSnapshot().error, '当前会话已经有工作树：forge/s1。')
+  off()
+}
+{
+  const base = fakeRemote({ catalog: DEFAULT_CATALOG })
+  const fixture = setup({ remote: { session: base.session } })
+  await fixture.open()
+  check('缺 forge / 团队链路时两个开关都不显示', fixture.store.getSnapshot().entries.map((row) => row.title), ['DeepSeek Chat', 'DeepSeek V4.1 Flash'])
+  check('没有开关行时计数只报模型', fixture.html().includes('2 个模型'), true)
+}
+{
+  const fixture = setup({ sessions: fakeSessions({}) })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  check('没有会话时两个开关都不显示', fixture.store.getSnapshot().entries.map((row) => row.title), ['DeepSeek Chat', 'DeepSeek V4.1 Flash'])
+  fixture.store.select(0)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('没有会话时提示先建会话', fixture.data.getSnapshot().error, '当前没有打开的会话：先在左侧栏打开或新建一个会话，再切换模型。')
+  check('没有会话时不会调用远程', fixture.remote.worktreeCalls, [])
+  off()
+}
+{
+  // 工作区不是 Git 仓库：forge 面板的 checkout.state 是 none，工作树行整行隐藏；团队行照常显示。
+  const remote = fakeRemote({ catalog: DEFAULT_CATALOG, followFrames: [{ checkout: { state: 'none' } }] })
+  const fixture = setup({ remote })
+  await fixture.open()
+  check('非 Git 仓库时没有工作树行，团队行保留', fixture.store.getSnapshot().entries.map((row) => row.title), ['团队协作', 'DeepSeek Chat', 'DeepSeek V4.1 Flash'])
+  check('计数不算工作树操作', fixture.html().includes('2 个模型 · 1 个操作'), true)
+  check('团队行副标题只报状态', fixture.store.getSnapshot().entries[0].subtitle, '已关闭')
+  check('工作树状态读到了 none', fixture.data.getSnapshot().checkout, 'none')
+}
+
+console.log('--- C⑩d 快捷操作不显示中间态,只有结果与错误 ---')
+{
+  const fixture = setup()
+  await fixture.open()
+  fixture.data.set({ actionPending: 'team' })
+  await tick()
+  check('不显示团队保存中间态', fixture.html().includes('正在保存团队协作设置'), false)
+  fixture.data.set({ actionPending: 'worktree' })
+  await tick()
+  check('不显示工作树设置中间态', fixture.html().includes('正在设置工作树'), false)
+  fixture.data.set({ actionPending: null, pending: true })
+  await tick()
+  check('模型切换的进行中提示仍然保留', fixture.html().includes('正在切换模型…'), true)
+  check('状态区始终在（高度稳定）', fixture.html().includes('dsh-model-quick-switch-status'), true)
 }
 
 console.log('--- C⑪ 设置页:添加与删除都写回 models 字段 ---')

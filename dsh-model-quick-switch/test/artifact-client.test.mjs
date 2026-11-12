@@ -118,7 +118,7 @@ const { registration, plugin, requested } = loadArtifact()
   check('只向模块表要 react', requested, ['react'])
   check('插件名', plugin.name, 'dsh-model-quick-switch')
   check('inject 声明', plugin.inject, ['slots', 'shortcuts'])
-  check('导出了浮层文案', plugin.MODEL_VIEW.title, '切换模型')
+  check('导出了浮层文案', plugin.MODEL_VIEW.title, '快捷菜单')
   check('导出了按键解码', plugin.paletteAction({ key: 'Enter' }), 'confirm')
 }
 
@@ -134,7 +134,7 @@ console.log('--- D② 产物装配:固定行、浮层、设置页、候选与切
   fixture.shortcuts.fire(fixedKeydown())
   await tick()
   check('这一次按键被消费', fixture.shortcuts.consumeCalls(), 1)
-  check('候选来自设置 + 目录名', rowTitles(fixture.html()), ['DeepSeek Chat', 'DeepSeek V4.1 Flash'])
+  check('候选来自设置 + 目录名', rowTitles(fixture.html()), ['新建工作树', '团队协作', 'DeepSeek Chat', 'DeepSeek V4.1 Flash'])
 
   const off = installPaletteKeys(fixture.props.store, fixture.dom.document)
   fixture.dom.pressKey('ArrowDown')
