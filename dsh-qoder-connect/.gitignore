@@ -1,4 +1,0 @@
-node_modules/
-*.tgz
-tests/node-compile-cache/
-lib/
