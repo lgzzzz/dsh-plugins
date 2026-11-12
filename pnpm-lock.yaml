@@ -92,6 +92,15 @@ importers:
 
   dsh-directory-picker-browse: {}
 
+  dsh-forge-changes-font-14:
+    devDependencies:
+      tsdown:
+        specifier: ^0.23.5
+        version: 0.23.5(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   dsh-git-guard:
     devDependencies:
       '@deepseek-ai/cordis':

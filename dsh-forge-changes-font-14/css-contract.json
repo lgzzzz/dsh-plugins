@@ -1,0 +1,26 @@
+{
+  "description": "dsh-forge-changes-font-14 依赖的上游事实：两个右栏标签页根的 data-* 锚点，以及上游没有用 !important 钉住字号（否则本插件的覆盖会被更高特异性或更晚的 !important 压过）。check-css.mjs 逐条校验这些 token 仍存在于上游构建产物中。",
+  "checks": [
+    {
+      "id": "changes-root-attr",
+      "plugin": "dsh-forge-changes-font-14",
+      "token": "\"data-forge-changes\":source.kind",
+      "paths": ["dsh-experimental-client-ui-forge/lib"],
+      "hint": "变更视图根不再输出 data-forge-changes={source.kind}：[data-forge-changes] 整条落空，本地变更与各变更请求 diff 标签页回到上游的 11/12/13px"
+    },
+    {
+      "id": "panel-root-attr",
+      "plugin": "dsh-forge-changes-font-14",
+      "token": "\"data-forge-panel\":",
+      "paths": ["dsh-experimental-client-ui-forge/lib"],
+      "hint": "变更请求面板根不再输出 data-forge-panel：[data-forge-panel] 整条落空，面板回到上游的 12/13px"
+    },
+    {
+      "id": "no-important-font-size",
+      "plugin": "dsh-forge-changes-font-14",
+      "forbid": "font-size:[^;}]*!important",
+      "paths": ["dsh-experimental-client-ui-forge/lib"],
+      "hint": "上游开始用 !important 钉字号：本插件 (0,1,0) 的 !important 可能被更高特异性或更晚的 !important 压过，部分元素不再变成 14px"
+    }
+  ]
+}

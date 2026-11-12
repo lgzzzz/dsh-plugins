@@ -1,0 +1,35 @@
+{
+  "name": "dsh-forge-changes-font-14",
+  "version": "1.0.0",
+  "private": true,
+  "description": "把右栏「本地变更」「变更请求」标签页整棵子树的字号统一为 14px：覆盖变更视图（[data-forge-changes]，本地变更与各变更请求的 diff）和变更请求面板（[data-forge-panel]）里的标题、工具栏、文件树、diff 行号与代码、评审讨论、卡片与空状态；只改字号，字体族、行高、颜色与布局不动。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts"
+  },
+  "devDependencies": {
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}
