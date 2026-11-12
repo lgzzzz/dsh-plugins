@@ -8,8 +8,8 @@
  * 免聚焦桥接组处理内置命令够不着的状态与键位：连按两下 `Esc` 停止、审批面板
  * `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、
  * `⌘⌥K` 聚焦右栏当前页面、`⌘⌥←/→` 切换右栏页面、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、
- * `⌘\` 分屏。它们各自打开固定输入观察者，在可配置派发之前消费按键；落在 `.xterm`
- * 内的按键由各桥的捕获阶段监听接管。
+ * `⌘\` 分屏、`⌘⌥Y` 打开右栏的本地变更／变更请求页。它们各自打开固定输入观察者，
+ * 在可配置派发之前消费按键；落在 `.xterm` 内的按键由各桥的捕获阶段监听接管。
  *
  * 另装一条与固定键无关的 DOM 补偿：消息滚动口的 PageUp/PageDown 按“可见消息带”
  * 翻页，Space 的原生翻页在滚动口内被吞掉（见 `chat-paging.ts`）。
@@ -17,6 +17,7 @@
  * 各桥的机制与边界见 docs/dsh-keyboard-shortcuts/ 下的分册。
  */
 import { installApprovalBridge } from './approval-keys.ts'
+import { installChangesOpenBridge } from './changes-open.ts'
 import { installChatPaging } from './chat-paging.ts'
 import { installFixedKeyBridge, type ClientContext } from './fixed-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
@@ -46,6 +47,7 @@ export function apply(ctx: Context): void {
   installFullscreenDismissBridge(ctx)
   installFocusComposerBridge(ctx)
   installFocusPageBridge(ctx)
+  installChangesOpenBridge(ctx)
   installPageCycleBridge(ctx)
   installSessionCycleBridge(ctx)
   installPaneSplitBridge(ctx)

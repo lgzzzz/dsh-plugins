@@ -213,10 +213,11 @@ export const FOCUS_PAGE_PRESS = gesture('KeyK', { control: true, alt: true })
 export const FOCUS_PAGE_MAC_PRESS = gesture('KeyK', { meta: true, alt: true })
 
 /**
- * 一个真正空闲的组合(`Ctrl+Alt+Y` / `⌘⌥Y`):本插件与内置命令都没有占用。
- * 让位类用例改用它,以免与"聚焦右栏页面"的 `primary+alt+K` 撞车。
+ * 一个真正空闲的组合(`Ctrl+Alt+U` / `⌘⌥U`):本插件与内置命令都没有占用。
+ * 让位类用例改用它,以免与"聚焦右栏页面"的 `primary+alt+K` 或"打开变更页"的
+ * `primary+alt+Y` 撞车。
  */
-export const UNUSED_PRESS = gesture('KeyY', { control: true, alt: true })
+export const UNUSED_PRESS = gesture('KeyU', { control: true, alt: true })
 
 export class FakeNode {
   constructor(tag = 'div', attrs = []) {

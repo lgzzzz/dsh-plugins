@@ -35,6 +35,7 @@ const ORDER = [
   'focus-bridge-focus-composer.test.mjs',
   'focus-bridge-focus-page.test.mjs',
   'focus-bridge-page-cycle.test.mjs',
+  'changes-open.test.mjs',
   'focus-bridge-session-cycle.test.mjs',
   'focus-bridge-fullscreen-dismiss.test.mjs',
   'focus-bridge-platform-keys.test.mjs',

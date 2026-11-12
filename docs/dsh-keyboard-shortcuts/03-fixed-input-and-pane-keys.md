@@ -6,10 +6,10 @@
 
 ## 4. 机制总览
 
-插件挂两层固定键，共十四条只读行：
+插件挂两层固定键，共十四条只读行（八条官方命令 + 六条自挂）：
 
 - **八条官方命令固定键**（`fixed-keys.ts`）：`session.new`、`sidebar.left.toggle`、`workspace.openLocal`、`sidebar.right.toggle`、`workspace.files`、`terminal.new`、`pane.fullscreen.toggle`、`page.close`。它们占住 `primary+alt+…` 组合，命中后调用官方命令注册表的 `registry.invoke()`；面板全屏与关页在 Web 上先走 `sidebarRight.commandTarget()` 的免聚焦回退。
-- **五条本插件自挂固定键**：聚焦输入框（`focus-composer`）、聚焦右栏页面（`focus-page`）、页面循环（`page-cycle`，右栏展开切页、折叠切会话视图）、全部会话导航（`session-cycle`）与活跃会话导航（`session-active-cycle`）。其中 `focus-page`（`⌘⌥K` / `Ctrl+Alt+K`）**有意占用** Web 上内置 `session.search` 的默认键位（见 [第 5.6 节](03-fixed-input-and-pane-keys.md)）。固定键与可配置命令是两套目录。
+- **六条本插件自挂固定键**：聚焦输入框（`focus-composer`）、聚焦右栏页面（`focus-page`）、页面循环（`page-cycle`，右栏展开切页、折叠切会话视图）、全部会话导航（`session-cycle`）、活跃会话导航（`session-active-cycle`）与变更页（`changes-open`，有本地变更开「本地变更」页，否则开「变更请求」面板）。其中 `focus-page`（`⌘⌥K` / `Ctrl+Alt+K`）**有意占用** Web 上内置 `session.search` 的默认键位（见 [第 5.6 节](03-fixed-input-and-pane-keys.md)）。固定键与可配置命令是两套目录。
 
 除分屏外，其余内置命令不再由插件跟随生效绑定：固定行只按命令 id 转交，键位改绑 / 解绑 / 冲突都不影响固定行。用户要改这些键位，只能修改 `src/shortcuts.ts` 的 `TARGETS` 后重新构建。
 
@@ -25,12 +25,13 @@
 | 聚焦输入框 | 同一条"主视图持有的会话"的 scope，经 `conversation.input.for(scope)` 取到 composer 输入面 | 该输入面的 `focus()`（光标位置一并还原）；焦点在终端里时由捕获钩子投递同一判定（见第 4 节） |
 | 页面切换／会话视图 | 右栏**展开**时：`sidebar.mounted`（右侧栏正在画的会话）的页面列表 `tabsIn` 与当前页 `active()`；右栏**折叠**时：主会话此刻渲染出来的 `[data-conversation-tabs] [role="tab"]` 与 `aria-selected` | `focus(tabId)` 切页（与点击芯片同一操作，记入布局历史）；切页后在**下一帧**执行 `focusShownPage` 把键盘交给新显示的页面，页面自聚焦（如终端）则不抢。页签行另有两处补偿：注入一条作用域限定在右侧栏的样式规则消掉"先回到最左、再迅速滑过去"的动画，并在切页前后保持观察窗口（切页前记下 chip box 的位置，下一帧先还回去、只有目标不在窗口里时才最小推移）（见第 5.4 节）。**折叠态**改用同一对键切换会话视图：环状步进后 `click()` 目标页签按钮 —— 与用户点标签是同一次上游 `selectView`，所以持久化偏好、激活 target 与宽度预算折叠全由上游处理；候选只含此刻画在行里的页签（折进「更多会话视图」菜单的不算），不足两颗时不动作、不消费（见 `view-cycle.ts`） |
 | 聚焦右栏页面（`⌘⌥K` / `Ctrl+Alt+K`） | 插件自己的固定行 `dsh-keyboard-shortcuts.focus-page` 占用这一按（`fixedRowOwns`），且右栏展开、`sidebar.mounted` 有会话 | `focusShownPage(sessionId)`：与页面切换键共用同一条交棒判定（页面自持键盘就不抢，否则聚焦可见 pane 并下探页面自己的输入面，终端即 `.xterm-helper-textarea`）；不换页 |
+| 变更页（`⌘⌥Y` / `Ctrl+Alt+Y`） | 插件自己的固定行 `dsh-keyboard-shortcuts.changes-open` 占用这一按，且 `sidebar.mounted` 有会话、无模态层 | 惰性读 `remote.forgePanel.localDiff(sessionId, { kind: 'branch', base: null, commits: null })`（2 秒超时）：有文件就 `sidebarRight.openResource()` 打开「本地变更」资源页（地址 `dsh-resource://forge-changes/<session>/local`），否则或读取失败就 `sidebarRight.openTab('forge-panel')` 打开「变更请求」面板；读 git 期间会话切走则不打开原会话的页 |
 | 会话导航 | 左侧栏此刻渲染出来的会话行：`[data-row-key="workspace:…"]` / `session:…` 两类行里取前三个工作区的会话行；当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出，活跃与否读 `uiSession.sessionStatus` | `uiWorkspace.openSession(id)`（与点击侧栏那一行同一操作）；`⌘↑/↓`（macOS）/ `Ctrl+↑/↓`（Windows/Linux）（`session-cycle`）在全部候选里环状走，`⌘⌥↑/↓`（macOS）/ `Ctrl+Alt+↑/↓`（Windows/Linux）（`session-active-cycle`）只走候选里带状态点的活跃会话（运行中 / 待交互 / 已完成未读） |
 | 全屏右栏关栏（`Esc`） | DOM 上 `[data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]` 与 `sidebarRight.isExpanded()` 同时成立，且焦点不在终端、不在右栏自己的文本控件里 | `toggleExpanded()`（与面板自带的折叠按钮同一个动词）；只关栏、不重置记录的模式，所以再次展开仍回到全屏。面板全屏时待答审批与提问卡片也不在这一按上作答——它们被这块浮层盖住（见第 5.11 节） |
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
 
-八条官方固定键、聚焦输入框、聚焦右栏页面、页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。macOS Web 另有一条只认 `⌘⌥N` 的捕获监听：Option+N 是死键，固定通道会把这一按标成组字中，监听直接认领并执行官方 `session.new`。
+八条官方固定键、聚焦输入框、聚焦右栏页面、页面切换、会话导航与变更页另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。macOS Web 另有一条只认 `⌘⌥N` 的捕获监听：Option+N 是死键，固定通道会把这一按标成组字中，监听直接认领并执行官方 `session.new`。
 
 > 各捕获路径只在 `.xterm` 内出手，所以它们与冒泡通道互斥、一次按键最多只被处理一次：命中即 `stopPropagation()`，window 冒泡上的固定通道再也看不到这一按。聚焦输入框那条的冒泡准入（`focusComposerEligible`）仍对 `terminal` 区域让位 —— 终端那一半只由捕获路径负责。固定键的终端捕获调用官方命令；八条命令的页面 / 文本控件那一半由固定输入通道处理。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
 

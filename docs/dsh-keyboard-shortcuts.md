@@ -1,6 +1,6 @@
 # dsh-keyboard-shortcuts
 
-Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**的只读固定行，命中后调用官方命令注册表；另一层为内置命令够不着的状态补上免聚焦桥接（连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`、`⌘\` 分屏）。面板全屏与关闭当前页面在 Web 上还会在焦点不在右栏时回退到当前 Session 的活动 dock 面板；`⌘⌥←/→` 这一对按右栏状态分两档——右栏展开切右栏页面，右栏折叠切**会话视图**标签（对话／轨迹／插件注册的 View）；消息滚动口内的 PageUp/PageDown 按可见消息带翻页，Space 的原生翻页被吞掉。
+Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**的只读固定行，命中后调用官方命令注册表；另一层为内置命令够不着的状态补上免聚焦桥接（连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`、`⌘\` 分屏、`⌘⌥Y` 打开本地变更／变更请求）。面板全屏与关闭当前页面在 Web 上还会在焦点不在右栏时回退到当前 Session 的活动 dock 面板；`⌘⌥←/→` 这一对按右栏状态分两档——右栏展开切右栏页面，右栏折叠切**会话视图**标签（对话／轨迹／插件注册的 View）；`⌘⌥Y` 按当前会话有没有本地变更二选一，有就开「本地变更」diff 页，没有就开「变更请求」面板；消息滚动口内的 PageUp/PageDown 按可见消息带翻页，Space 的原生翻页被吞掉。
 
 ## 目录
 
@@ -47,6 +47,7 @@ Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**
 | 切换会话 | `⌘↑` / `⌘↓` | 左侧栏前三个工作区当前显示的会话行之间环状导航 |
 | 切换活跃会话 | `⌘⌥↑` / `⌘⌥↓` | 只在行上有状态点的活跃会话之间切换 |
 | 分屏 | `⌘\` | 焦点不在面板内时回退到活动 dock 面板并分屏 |
+| 打开本地变更／变更请求 | `⌘⌥Y` / `Ctrl+Alt+Y` | 当前会话有本地变更时打开「本地变更」diff 页，否则打开「变更请求」面板；右栏折叠时自动展开 |
 
 固定键与 `⌘⌥J` / `⌘⌥K` / 切页 / 会话键在终端 `.xterm` 内同样生效：终端会在自己的处理器里 `preventDefault()+stopPropagation()`，所以各桥另挂 window **捕获阶段**监听，在事件进入终端前判定并吞掉这一按，既不误动作，也不把按键当输入送进 shell。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
 
@@ -71,7 +72,7 @@ Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行�
 
 ## 工作方式
 
-1. `registerFixed()` 为八个官方命令各注册一条固定行，占用 `primary+alt+…` 组合；另为 `⌘⌥J` / `⌘⌥K` / `⌘⌥←/→` / `⌘↑/↓` / `⌘⌥↑/↓` 注册五条自挂固定行；
+1. `registerFixed()` 为八个官方命令各注册一条固定行，占用 `primary+alt+…` 组合；另为 `⌘⌥J` / `⌘⌥K` / `⌘⌥←/→` / `⌘↑/↓` / `⌘⌥↑/↓` / `⌘⌥Y` 注册六条自挂固定行；
 2. `observeFixedInput()` 接收官方适配器投递的本地按键；命中固定组合时先 `consume()`，再调用官方注册表的 `registry.invoke(commandId, context)`，或交给本插件自己的桥执行；
 3. 焦点在终端 `.xterm` 内时，官方固定通道收不到按键（xterm 会截断冒泡），插件另挂 window 捕获阶段的 keydown：命中即 `preventDefault()` + `stopPropagation()`，再走同一条执行路径；
 4. macOS Web 上 `⌘⌥N` 的 Option+N 是死键，官方固定通道会把这一按标成组字中；插件另在捕获阶段认领它，`preventDefault()` + `stopPropagation()` 后直接调 `session.new`（只限 Web，Desktop 由原生键盘桥接处理）；
@@ -80,6 +81,7 @@ Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行�
 7. 模态层、区域、目标面板与失败原因由官方命令的 `resolve()` 判断；插件只把 `region / modal / target` 原样交过去；
 8. `⌘⌥←/→` 按右栏展开状态分两档：展开时切右栏页面（`sidebarRight.focus()`，下一帧再把键盘交给新页面）；折叠时切会话视图——读当前渲染出来的 `[data-conversation-tabs] [role="tab"]`，按 `aria-selected` 认出当前视图，环状步进后 `click()` 目标页签（与用户点标签是同一次上游 `selectView`）。页签不足两颗时不动作、不消费；
 9. 消息滚动口另挂一条与固定键无关的 window 捕获监听：PageUp/PageDown 按 `clientHeight - composerHeight - 50` 翻页，并用 rAF 缓动；Space 直接吞掉；输入框、按钮、终端、模态层与内层可滚动区不接管；
+10. `⌘⌥Y` 先消费按键，再惰性读取 `remote.forgePanel`，用 `localDiff(sessionId, { kind: 'branch', base: null, commits: null })` 判断有没有本地变更（与「变更请求」面板的本地变更卡片同源，2 秒超时）：有就 `sidebarRight.openResource('dsh-resource://forge-changes/<session>/local')`，没有、读失败或 Remote 缺席就 `sidebarRight.openTab('forge-panel')`；两条页都由上游 forge 包注册，本插件只触发；
 
 `registry` 是官方快捷键服务实例上的内部字段（公开的 `Shortcuts` 接口没有「按 id 调命令」的方法）。插件对它做结构检查：`invoke` 缺席时告警并完全不安装固定行，而不是退回自己调用业务服务。
 
@@ -108,7 +110,7 @@ Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行�
 ```bash
 cd dsh-keyboard-shortcuts
 ../node_modules/.bin/tsdown            # 构建 lib/client.js
-node test/run-all.mjs                  # 29 个测试文件
+node test/run-all.mjs                  # 30 个测试文件
 ../node_modules/.bin/tsc --noEmit      # 类型检查
 node check-css.mjs                     # 上游 DOM 锚点契约校验
 node --check lib/client.js && node --check index.ts
@@ -149,6 +151,8 @@ dsh plugin --profile web remove dsh-keyboard-shortcuts
 | 模态层打开 | 官方 `invoke()` 按命令声明的 `modals` 决定是否执行；插件不越过模态层 |
 | 会话导航候选 | 只取左侧栏此刻渲染出来的会话行；折叠工作区、被「展开更多」挡住的行、归档行、搜索过滤与窄侧栏都不算候选 |
 | 会话视图切换候选 | 只取此刻渲染在标签行里的页签：被宽度预算折进「更多会话视图」菜单的 View 不算候选；少于两颗页签时 `⌘⌥←/→` 在折叠态不动作、不消费 |
+| `⌘⌥Y` 的判定 | 有本地变更开「本地变更」，否则开「变更请求」；判定读 forge Remote 的 `branch` 范围（含未提交、未跟踪文件与相对 fork point 的提交），与面板卡片同源，读失败、超时（2 秒）或 `remote.forgePanel` 缺席时按「没有本地变更」处理 |
+| `⌘⌥Y` 遇上未启用的 forge 包 | 固定行仍占用组合，打开时告警、不动作；两条目标页都由 `@deepseek-ai/dsh-experimental-client-ui-forge` 注册，本插件不复制面板内容，也不在包里造替代页 |
 | 消息滚动口缺少 composer / 滚动口标记 | PageUp/PageDown/Space 不接管，保持原生 | 翻页补偿只在能算出可见消息带时生效；`css-contract.json` 的 `conversation-scroll` / `composer-seat` 兜住锚点 |
 
 -----

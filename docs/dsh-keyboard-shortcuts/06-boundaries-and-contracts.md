@@ -47,9 +47,9 @@
 
 | 情况 | 行为 | 机制与失败表现 |
 |---|---|---|
-| `shortcuts.registry` 缺席 | 八条官方固定键完全不安装并告警一次；五条自挂键仍安装 | `registry` 是官方快捷键服务实例上的内部字段，公开接口没有「按 id 调命令」。插件做结构检查，缺席时告警而不是自己执行动作 |
+| `shortcuts.registry` 缺席 | 八条官方固定键完全不安装并告警一次；六条自挂键仍安装 | `registry` 是官方快捷键服务实例上的内部字段，公开接口没有「按 id 调命令」。插件做结构检查，缺席时告警而不是自己执行动作 |
 | `shortcuts.observeFixedInput` 缺席 | 各桥各告警一次、不安装 | 固定输入是这些桥唯一的投递通道 |
-| `sidebarRight` 服务缺席 | 全屏 / 关页 / 分屏 / 聚焦右栏页面 / 页面循环与全屏关栏的侧栏相关部分不安装；停止、审批、提问、聚焦输入框、会话导航照常 | 这些桥通过 `ctx.inject([... 'sidebarRight'])` 等侧栏服务；服务不到，回调不运行 |
+| `sidebarRight` 服务缺席 | 全屏 / 关页 / 分屏 / 聚焦右栏页面 / 页面循环 / 变更页与全屏关栏的侧栏相关部分不安装；停止、审批、提问、聚焦输入框、会话导航照常 | 这些桥通过 `ctx.inject([... 'sidebarRight'])` 等侧栏服务；服务不到，回调不运行 |
 | Desktop 运行时 | 全屏 / 关页的免聚焦回退不创建，分屏桥告警跳过；固定行仍注册，停止、审批、提问、J/K/箭头照常 | Desktop 的可配置键位由 Electron 原生桥派发，DOM 侧再执行一次会让全屏 / 关页 / 分屏各发生两次 |
 | Web/Linux 上的内置默认绑定 | 分屏、内置 `page.close`、`session.search` 等没有默认绑定；固定键不受影响 | 上游默认键位表按 `desktop\|web` × `macos\|windows\|linux` 六档声明，缺档即未绑定；`registerFixed` 不查这张表 |
 | 固定键与官方默认可配置键重叠 | `session.new`、`sidebar.left.toggle`、`pane.fullscreen.toggle` 的固定键与默认键相同；`workspace.openLocal` 的固定键占 `Ctrl+Alt+P`（原属 `workspace.files`）；`sidebar.right.toggle` 的固定键占 `Ctrl+Alt+O`（原属 `workspace.add`）；`page.close` 的固定键占 `Ctrl+Alt+,`（原属 `settings.open`） | 与固定行重叠的可配置命令进入冲突态：`workspace.files` / `workspace.add` / `settings.open` 等需要另用按钮或在设置里改绑。固定行只读；要改键位只能改 `src/shortcuts.ts` 后重新构建 |
@@ -96,7 +96,7 @@
 
 1. 八条官方命令 id：`session.new`、`sidebar.left.toggle`、`workspace.openLocal`、`sidebar.right.toggle`、`workspace.files`、`terminal.new`、`pane.fullscreen.toggle`、`page.close`；
 2. `page.close` 的 `modals` 包含 `settings` / `shortcuts` / `other`，弹窗下它的语义是关掉最上面那层；
-3. 八条固定行 id 为 `dsh-keyboard-shortcuts.<command.id>`，五条自挂固定行 id 为 `dsh-keyboard-shortcuts.focus-composer` / `.focus-page` / `.page-cycle` / `.session-cycle` / `.session-active-cycle`；它们都通过 `registerFixed()` 声明，存在即预约；
+3. 八条固定行 id 为 `dsh-keyboard-shortcuts.<command.id>`，六条自挂固定行 id 为 `dsh-keyboard-shortcuts.focus-composer` / `.focus-page` / `.page-cycle` / `.session-cycle` / `.session-active-cycle` / `.changes-open`；它们都通过 `registerFixed()` 声明，存在即预约；
 4. `approval.allow` / `approval.reject` 这两条官方固定行与「预约的组合就是审批决定键」的语义；
 5. `pendingInteraction` 槽位可被别的域复用，因此审批桥运行时确认 `kind === 'approval'`、`key` 为字符串、`answerable === true`、`answer` 为函数；提问桥确认 `kind` 为 `question` 或 `plan-review`、带 `dismiss()`；
 6. DOM 锚点：`[data-conversation-session]` / `[data-conversation-region]`（停止归属）、`[data-approval-key]`（审批面板根与让位）、`[data-question-key]` / `[data-plan-review-key]`（提问卡片根）、`[role="dialog"][aria-modal="true"], [role="menu"]`（模态）、`data-dsh-automatic-focus` 与主题的 `outline:none` 规则（无环聚焦）、`.xterm` / `.xterm-helper-textarea`（终端与输入面）、`[data-sidebar-right-session]` / `[data-sidebar-right-panel="fullscreen"]` / `[data-sidebar-right-open]`（右栏）、`[data-conversation-scroll]` / `[data-composer-seat]`（消息滚动口与 composer 座位）、`[data-dockkit-pane]` / `[data-dockkit-float]` / `[data-dockkit-pane-active]` / `[data-dockkit-float-active]` / `[data-dockkit-strip-tabs]` / `[data-dockkit-tab]`（dockkit）、`[data-row-key="workspace:…"]` / `[data-row-key="session:…"]` 与归档行的 `aria-description`（侧栏候选）、`[data-conversation-tabs]` 与行内 `[role="tab"]` / `aria-selected`（会话视图候选与当前视图）；

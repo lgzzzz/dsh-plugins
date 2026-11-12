@@ -22,7 +22,7 @@
 | `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |
 | `dsh-agent-team-hero-toggle` | 空白新会话行的「新建工作树」右侧加「团队协作」开关：读 `agentTeam` 投影、写 `remote.agentTeams.setEnabled`，模型菜单旧入口保留（A2）；首轮后随 hero 行消失 | [说明](dsh-agent-team-hero-toggle.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
-| `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
+| `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏、`⌘⌥Y` 打开本地变更／变更请求），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
