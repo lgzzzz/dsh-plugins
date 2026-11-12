@@ -31,7 +31,7 @@ export const inject = ['slots']
 const SLOTS_SERVICE = 'slots'
 
 /**
- * 自检窗口里两次探测之间的间隔（毫秒）；与 dsh-jobs-optimize 同一口径。
+ * 自检窗口里两次探测之间的间隔（毫秒）；窗口总长约 1 秒，覆盖 roster 启动期。
  */
 export const MISSING_PROBE_MS = 50
 

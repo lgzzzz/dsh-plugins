@@ -44,9 +44,17 @@ export const QODER_RETRY_MAX_DELAY_MS = 60_000
 /**
  * Image-request budgets (dsh-llm-pi-ai defaults). They bound requests to models
  * whose catalog entry declares `supportsImages`; text-only models get none.
+ *
+ * `maxRequestImages` and `imageOffloadCountQuantum` are part of the resolved
+ * profile since upstream 0.2.2-rc.2: the count bound caps how many retained
+ * images one request version keeps, and the quantum is the step by which
+ * overflow offloads them. Both carry the upstream defaults so a Qoder request
+ * is bounded exactly like a first-party pi-ai request.
  */
 const REQUEST_IMAGE_BUDGETS = {
   maxRequestImageBytes: 20_971_520,
+  maxRequestImages: 50,
+  imageOffloadCountQuantum: 10,
   requestImagePixelBudget: 4_194_304,
   requestImageMaxBytes: 1_048_576,
 } as const

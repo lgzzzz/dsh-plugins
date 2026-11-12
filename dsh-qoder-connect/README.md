@@ -181,13 +181,16 @@ dsh-qoder-connect pat clear --provider qoder         # 清除全部（logout 同
 
 ## 开发
 
+本插件是仓库 workspace 的一员：devDependencies 统一提升到仓库根 `node_modules`，插件目录自身不装依赖。在仓库根执行：
+
 ```sh
 pnpm install
-pnpm run build      # tsdown 产出 lib/（宿主 bundle + client bundle）
-pnpm test           # vitest run（tests/**/*.spec.ts）
-pnpm run test:qoder # node --test（tests/qoder/*.test.ts，Qoder 传输层用例）
-pnpm run typecheck  # tsc：宿主 + client 两份 tsconfig
-pnpm run check      # typecheck + test + test:qoder + build 一条命令全过
+
+pnpm --filter dsh-qoder-connect build      # tsdown 产出 lib/（宿主 bundle + client bundle）
+pnpm --filter dsh-qoder-connect test       # vitest run（tests/**/*.spec.ts，跑仓库根 node_modules 里的 vitest）
+pnpm --filter dsh-qoder-connect test:qoder # node --test（tests/qoder/*.test.ts，Qoder 传输层用例）
+pnpm --filter dsh-qoder-connect typecheck  # tsc：宿主 + client 两份 tsconfig
+pnpm --filter dsh-qoder-connect check      # typecheck + test + test:qoder + build 一条命令全过
 ```
 
 Qoder 传输层的上游 `node:test` 用例已移植进 `tests/qoder/`（用 `pnpm run test:qoder` 跑，原件 `reference-qoder-tests/` 已移除）；命令以 `package.json` scripts 为准。

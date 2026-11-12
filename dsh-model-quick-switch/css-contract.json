@@ -1,9 +1,9 @@
 {
   "description": "dsh-model-quick-switch 依赖的 DSH 前端稳定契约：浮层与设置页注册用的槽位，以及注入样式表消费的主题令牌（CSS 变量）。浮层与设置页的样式选择器都是本插件自己的类名（.dsh-model-quick-switch-*），选择器不会失效；真正会静默退化的上游事实是槽位不再渲染 / 声明（浮层整层不显示、设置页不出现在导航里）与令牌改名（对应声明整条失效，多数写有回退值所以只掉到浅色/深色不合适的兜底色）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中。",
   "checks": [
-    {"id":"overlay-slot-rendered","plugin":"dsh-model-quick-switch","pattern":"renderSlot\\(\\s*\"shell\\.overlay\"","paths":["dsh-client-ui-layout/lib"],"hint":"外壳不再渲染 shell.overlay 槽：⌘⌥U / Ctrl+Alt+U 仍占住按键，但浮层整层不显示（按键看起来没反应）"},
+    {"id":"overlay-slot-rendered","plugin":"dsh-model-quick-switch","pattern":"renderSlot\\(\\s*[\"'`]shell\\.overlay[\"'`]","paths":["dsh-client-ui-layout/lib"],"hint":"外壳不再渲染 shell.overlay 槽：⌘⌥U / Ctrl+Alt+U 仍占住按键，但浮层整层不显示（按键看起来没反应）"},
     {"id":"overlay-slot-declared","plugin":"dsh-model-quick-switch","pattern":"\"shell\\.overlay\"\\s*:","paths":["dsh-client-ui-layout/lib"],"hint":"外壳不再声明 shell.overlay 槽：本插件注册浮层时会一直排队，永远不显示"},
-    {"id":"settings-section-rendered","plugin":"dsh-model-quick-switch","pattern":"renderSlot\\(\\s*\"settings\\.section\"","paths":["dsh-client-ui-settings-general/lib"],"hint":"设置外壳不再渲染 settings.section：本插件的「模型快速切换」页不出现在导航里，模型列表无处增删"},
+    {"id":"settings-section-rendered","plugin":"dsh-model-quick-switch","pattern":"renderSlot\\(\\s*[\"'`]settings\\.section[\"'`]","paths":["dsh-client-ui-settings-general/lib"],"hint":"设置外壳不再渲染 settings.section：本插件的「模型快速切换」页不出现在导航里，模型列表无处增删"},
     {"id":"settings-section-declared","plugin":"dsh-model-quick-switch","pattern":"'settings\\.section'\\s*:","paths":["dsh-client-ui-settings/lib"],"hint":"设置域底座不再声明 settings.section 槽类型：注册浮层设置页时会一直排队或类型契约失效"},
     {"id":"font-family-var","plugin":"dsh-model-quick-switch","token":"--dsw-font-family","paths":["dsh-client-ui-theme/lib"],"hint":"--dsw-font-family 变量消失（本条没有回退值），浮层字体退回浏览器默认，与应用字体不一致"},
     {"id":"frame-overlay-top-var","plugin":"dsh-model-quick-switch","token":"--dsh-frame-overlay-top","paths":["dsh-client-ui-layout/lib"],"hint":"--dsh-frame-overlay-top 变量消失，浮层退到兜底 24px 顶距，应用自定义顶栏高度时可能被遮挡"},

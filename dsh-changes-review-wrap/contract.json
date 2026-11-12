@@ -4,7 +4,7 @@
     {"id":"review-root","plugin":"dsh-changes-review-wrap","token":"data-changes-review","paths":["dsh-client-ui-deliverables/lib"],"hint":"审查标签页根元素锚点消失，默认换行没有作用范围"},
     {"id":"review-body","plugin":"dsh-changes-review-wrap","token":"data-review-view","paths":["dsh-client-ui-deliverables/lib"],"hint":"diff 正文锚点消失，本插件无法确认换行是否已开启"},
     {"id":"review-wrap-attr","plugin":"dsh-changes-review-wrap","token":"data-review-wrap","paths":["dsh-client-ui-deliverables/lib"],"hint":"换行态属性消失，上游可能改了换行的 DOM 表达"},
-    {"id":"wrap-tool","plugin":"dsh-changes-review-wrap","pattern":"\"data-review-tool\":\\s*\"wrap\"","paths":["dsh-client-ui-deliverables/lib"],"hint":"工具栏换行按钮锚点消失，本插件无从触发默认换行"},
+    {"id":"wrap-tool","plugin":"dsh-changes-review-wrap","pattern":"\"data-review-tool\":\\s*[\"'`]wrap[\"'`]","paths":["dsh-client-ui-deliverables/lib"],"hint":"工具栏换行按钮锚点消失，本插件无从触发默认换行"},
     {"id":"wrap-default-off","plugin":"dsh-changes-review-wrap","pattern":"split:\\s*true,\\s*wrap:\\s*false","paths":["dsh-client-ui-deliverables/lib"],"hint":"review store 的首次 seed 不再默认 wrap:false —— 上游可能已改成默认换行，本插件可能多余"},
     {"id":"wrap-action","plugin":"dsh-changes-review-wrap","token":"toggledWrap","paths":["dsh-client-ui-deliverables/lib"],"hint":"换行动作名消失，换行按钮的 onClick 可能不再写 review store"},
     {"id":"tab-occurrence","plugin":"dsh-changes-review-wrap","token":"data-sidebar-right-occurrence","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"标签页占位实例锚点消失，本插件退回会话 id + 标签页 id，跨会话去重可能失真"},

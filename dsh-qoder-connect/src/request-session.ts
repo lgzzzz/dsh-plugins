@@ -79,6 +79,22 @@ export function readQoderSessionHeader(value: string | string[] | undefined): st
   }
 }
 
+/**
+ * Host-declared auxiliary purposes this adapter forwards as transport metadata.
+ *
+ * The host declares its purposes through `LlmRequestPurposeMap` and this plugin
+ * only relays whatever the loop stamped, so it cannot import the producer
+ * packages to widen the union. Declaring the two purposes the host is known to
+ * send keeps the header readable without pinning the type to a literal union
+ * the host may extend.
+ */
+declare module '@deepseek-ai/dsh-llm/types' {
+  interface LlmRequestPurposeMap {
+    'session-title': true
+    compaction: true
+  }
+}
+
 /** Only host-declared auxiliary purposes may influence the hint's visibility. */
 export function readQoderPurposeHeader(value: string | string[] | undefined): GenerateOptions['purpose'] {
   return value === 'session-title' || value === 'compaction' ? value : undefined

@@ -59,6 +59,24 @@ function credentialDocument(pat: string, region: 'china' | 'global'): string {
 const PAT_CN = 'pt-settings-cn-0000000000000000aa'
 const PAT_GLOBAL = 'pt-settings-global-000000000000bb'
 
+/**
+ * Read one parsed configuration field through the volatile indirection.
+ *
+ * Schemastery hosts differ in shape: where projection is supported, a volatile
+ * field parses to a reference read with `.get()`, and elsewhere it parses to the
+ * plain value. The plugin's own reader collapses both, and this mirrors it so a
+ * schema assertion holds on either host rather than pinning one shape.
+ * @param config - the parsed configuration.
+ * @param field - the declared field to read.
+ * @returns the field's plain value.
+ */
+function configField(config: object, field: string): unknown {
+  const value = (config as Record<string, unknown>)[field]
+  return value !== null && typeof value === 'object' && typeof (value as { get?: unknown }).get === 'function'
+    ? (value as { get: () => unknown }).get()
+    : value
+}
+
 /** Isolate the plugin's file roots and silence any real environment PAT. */
 function stubEnvRoot(): void {
   vi.stubEnv('DSH_HOME', root!)
@@ -452,17 +470,22 @@ describe('Qoder Host settings integration', () => {
     // The poll floor is the schema's, not the card's: the instance validates and applies defaults.
     expect(Qoder.QUOTA_POLL_DEFAULT_MS).toBe(300_000)
     expect(Qoder.QUOTA_POLL_MIN_MS).toBe(60_000)
-    expect(Qoder.Config({})).toMatchObject({ quotaPollMs: Qoder.QUOTA_POLL_DEFAULT_MS })
+    // The schema marks these fields volatile, and on a host whose schemastery
+    // supports projection a volatile field parses to a reference read with
+    // `.get()` rather than to a plain value. Read through that indirection, the
+    // same way the plugin's own field reader does, so this asserts the schema's
+    // defaults and floors on either host shape.
+    expect(configField(Qoder.Config({}), 'quotaPollMs')).toBe(Qoder.QUOTA_POLL_DEFAULT_MS)
     expect(() => Qoder.Config({ quotaPollMs: 1_000 })).toThrow()
-    expect(Qoder.Config({ quotaPollMs: Qoder.QUOTA_POLL_MIN_MS })).toMatchObject({ quotaPollMs: Qoder.QUOTA_POLL_MIN_MS })
+    expect(configField(Qoder.Config({ quotaPollMs: Qoder.QUOTA_POLL_MIN_MS }), 'quotaPollMs')).toBe(Qoder.QUOTA_POLL_MIN_MS)
 
     // The check-in floor is the schema's too: 10:00 UTC+8 is when the benefit opens, so an earlier moment is refused.
     expect(() => Qoder.Config({ checkInMinuteCN: 599 })).toThrow()
     expect(() => Qoder.Config({ checkInMinuteCN: 0 })).toThrow()
     expect(() => Qoder.Config({ checkInMinuteGlobal: 540 })).toThrow()
     expect(() => Qoder.Config({ checkInMinuteCN: 1440 })).toThrow()
-    expect(Qoder.Config({ checkInMinuteCN: 600 })).toMatchObject({ checkInMinuteCN: 600 })
-    expect(Qoder.Config({ checkInMinuteCN: 870 })).toMatchObject({ checkInMinuteCN: 870 })
+    expect(configField(Qoder.Config({ checkInMinuteCN: 600 }), 'checkInMinuteCN')).toBe(600)
+    expect(configField(Qoder.Config({ checkInMinuteCN: 870 }), 'checkInMinuteCN')).toBe(870)
   })
 
   it('defaults its model rows to the live-catalog shape the stores fingerprint', async () => {

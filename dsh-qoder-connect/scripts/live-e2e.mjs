@@ -1,7 +1,8 @@
 /**
  * Live end-to-end check (NOT part of the offline test suite):
  * adapter -> pi-ai -> loopback shim -> real Qoder upstream, driven by a
- * Personal Access Token. Run from the package root, after `pnpm run build`:
+ * Personal Access Token. Run from the package directory after building from the
+ * repo root (`pnpm --filter dsh-qoder-connect build`):
  *
  *   node --experimental-strip-types scripts/live-e2e.mjs [--global]
  *

@@ -31,7 +31,7 @@
     {
       "id": "turn-process-chevron-class",
       "plugin": "dsh-turn-process-open",
-      "pattern": "TurnProcessNodeView_module_css_default\\s*=\\s*\\{[\\s\\S]{0,300}?\"chevron\":\\s*\"[\\w-]+_chevron\"",
+      "pattern": "TurnProcessNodeView_module_css_default\\s*=\\s*\\{[\\s\\S]{0,300}?[\"'`]chevron[\"'`]:\\s*[\"'`][\\w-]+_chevron[\"'`]",
       "paths": [
         "dsh-client-ui-chat/lib"
       ],

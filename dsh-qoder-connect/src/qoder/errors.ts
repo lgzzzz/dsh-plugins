@@ -4,12 +4,22 @@
  * @module dsh-provider-qoder/qoder/errors
  */
 
-import { LlmError, ProviderRequestId, type LlmErrorOptions } from '@deepseek-ai/dsh-llm'
+import { LlmError, ProviderRequestId, type BuiltinLlmFailureCode, type LlmErrorOptions } from '@deepseek-ai/dsh-llm'
 import { qoderResultCode } from './codes.ts'
 
+/**
+ * Provider-owned failure codes this plugin raises beside the built-in ones.
+ *
+ * The constructor declares its code as `BuiltinLlmFailureCode` so the codes the
+ * harness itself raises stay within that union, while `LlmError.fromFailure`
+ * documents that any provider may carry its own: the constructor validates only
+ * that the code is a non-empty string. Qoder classifies transport and protocol
+ * faults more finely than the built-in set, so it keeps its own codes and casts
+ * at this one boundary rather than degrading them to `UNKNOWN`.
+ */
 export class QoderLlmError extends LlmError {
   constructor(message: string, code: string = 'UNKNOWN_ERROR', options?: LlmErrorOptions) {
-    super(message, code, options)
+    super(message, code as BuiltinLlmFailureCode, options)
   }
 }
 

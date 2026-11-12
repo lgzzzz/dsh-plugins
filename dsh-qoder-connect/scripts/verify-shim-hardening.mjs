@@ -4,7 +4,7 @@
  * inbound requests and unauthenticated local processes, while accepting the
  * plugin's own legitimate client.
  *
- * Usage: node scripts/verify-shim-hardening.mjs   (after `pnpm run build`)
+ * Usage: node scripts/verify-shim-hardening.mjs   (after repo-root `pnpm --filter dsh-qoder-connect build`)
  *
  * It spins up the shim with a fake upstream, then fires six raw HTTP
  * requests at it:

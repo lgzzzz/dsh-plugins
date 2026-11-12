@@ -7,6 +7,9 @@ const PACKAGE_VERSION = JSON.parse(
 ).version as string
 
 export default defineConfig({
+  // Keep Vite's transform cache in the repo-root node_modules too, so a test run
+  // never creates a package-local node_modules directory.
+  cacheDir: '../node_modules/.vite-qoder-connect',
   define: {
     __DSH_QODER_VERSION__: JSON.stringify(PACKAGE_VERSION),
   },

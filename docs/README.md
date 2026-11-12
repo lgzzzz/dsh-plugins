@@ -18,9 +18,7 @@
 | `dsh-model-quick-switch` | 模型浮层：`⌘⌥U`（Windows / Linux 上是 `Ctrl+Alt+U`，与其它固定键同用逻辑 `primary`）弹出与工作区浮层同一套面板；第一步选设置页「模型快速切换」里维护的模型，模型公布思考等级时第二步原地换成「默认 + 各档强度」，选完把当前会话切到「模型 + 强度」（成功关闭、失败留在浮层显示 Host 错误）；设置页从 Host 模型目录按提供方添加、删除，列表存在插件即时配置里 | [说明](dsh-model-quick-switch.md) |
 | `dsh-workspace-quick-switch` | 两张浮层：`⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows）按左侧栏顺序列出工作区、`Enter` 在该工作区新建会话；`⌘⌥I` / `Ctrl+Alt+I` 按左侧栏「单列表 + 最近更新 + 隐藏已归档」的顺序列出会话、`Enter` 打开该会话。都是一屏 10 个、窗口连续滑动（滚轮滚一格 1–10 → 2–11、`←/→` 滑一整屏、`↑/↓` 移选中行，两端停住）；鼠标点一行即确认（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
 | `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动、任务完成，或大模型请求重试耗尽的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
-| `dsh-agent-auto-retry` | 宿主半部：模型请求失败、下游恢复策略都放弃之后，在同一个回合里自动重试（按失败码判定、指数退避、服从 `Retry-After`、按 step 限次），每次重试以与上游同形的 `llm/retry` / `llm/retry-started` 事件持久化 | [说明](dsh-agent-auto-retry.md) |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
-| `dsh-jobs-optimize` | 会话标题栏的后台任务计数控件的三个行为与子代理控件一致：悬停 150ms 展开、离开 120ms 折叠、点击钉住（已展开时点击也不折叠） | [说明](dsh-jobs-optimize.md) |
 | `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
 | `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
@@ -31,6 +29,8 @@
 | `dsh-desktop-notify` | 桌面通知 | — |
 | `dsh-directory-picker-browse` | 应用内目录浏览选择器 | — |
 | `dsh-git-guard` | git 操作保护 | — |
+
+> `dsh-jobs-optimize` 已退役并从仓库移除：0.2.2-rc.2 起上游后台任务控件原生实现悬停 150ms 展开、离开 120ms 折叠与点击钉住，插件不再必要。
 
 ## 主题文档
 
@@ -46,8 +46,8 @@
 （`pnpm check:css`，不挂在 `pnpm build` 上）：把清单逐条对 DSH 安装产物 grep 一遍，上游改名 /
 删 token 时显式失败，而不是让补丁在页面上静默失效（选择器落空不报错），或让插件写出格式校验
 器会拒绝的会话事件。每个插件目录都有自己的 `check-css.mjs`，默认读同目录的清单
-（`css-contract.json`；`dsh-changes-hover-off`、`dsh-jobs-optimize`、`dsh-stats-ttft`、
-`dsh-changes-review-wrap` 与 `dsh-agent-auto-retry` 是 `contract.json`），可用 `--manifest`
+（`css-contract.json`；`dsh-changes-hover-off`、`dsh-stats-ttft`、
+`dsh-changes-review-wrap` 是 `contract.json`），可用 `--manifest`
 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
 | 插件 | 清单 | 校验的契约 |
@@ -56,15 +56,13 @@
 | `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点（含 `aria-expanded` 同元素）+ 标题右侧箭头的图标与 `chevron` 局部类名 + fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话槽位与会话作用域 + 折叠目标 / 聊天行 / 轮次 / 跟随尾部 / 上游动画 / 封口锚点 |
 | `dsh-changes-hover-off` | [`contract.json`](../dsh-changes-hover-off/contract.json) | 改动文件卡片锚点 + 悬停延迟 |
-| `dsh-jobs-optimize` | [`contract.json`](../dsh-jobs-optimize/contract.json) | 槽位 / 注册 / 渲染锚点 + 触发器的开合真值与 toggle + 菜单由本控件经 React portal 渲染到 body + 子代理控件（参照物）的两个延迟与点击语义 |
 | `dsh-stats-ttft` | [`contract.json`](../dsh-stats-ttft/contract.json) | `conversation.composer.dock` 槽与 `activity` 注册 / order + 同 id 遮蔽规则 + 渲染期读取条目 component + `stats.counts` 键与调用 + 两个时长单位与上游取整规则 + `sessionStats` 的 TTFT 字段 + `useProjection` / `useChat` 标准 props |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-model-quick-switch` | [`css-contract.json`](../dsh-model-quick-switch/css-contract.json) | `shell.overlay` / `settings.section` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-changes-review-wrap` | [`contract.json`](../dsh-changes-review-wrap/contract.json) | 审查根 / 正文 / 换行按钮 / 换行态锚点 + review store 的默认 `wrap:false` + `toggledWrap` + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
-| `dsh-agent-auto-retry` | [`contract.json`](../dsh-agent-auto-retry/contract.json) | `agent/request-error` 的派发 / 载荷 / 决定形状 / 下游默认值 + `llm/retry` 的编号连续性、坐标、`retryId` 唯一性与 `retry-started` 配对 + 客户端与 token 计量的消费点 + 上游执行器的策略键算法 |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 11 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 9 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
@@ -94,18 +92,14 @@ pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
   `pnpm install`，然后对 `package.json` 的 `exports` 里写明、但磁盘上不存在的 `.js`（即 `.gitignore` 里的
   `lib/*.js`）跑 `pnpm --filter <name> build`。缺产物时插件照样挂得上，只是浏览器里是个空壳、启动日志里
   只有一行 `ENOENT`，所以这一步失败就不挂该插件。只按 `exports` 判定，没有 `build` 脚本的宿主半部插件
-  （`dsh-agent-auto-retry`、`dsh-git-guard` 等）不会被误构建；已有产物的插件也不会被重复构建。
+  （`dsh-git-guard`、`dsh-workspace-activity-sort` 等）不会被误构建；已有产物的插件也不会被重复构建。
 - `remove-plugins` 从 profile 的 `dependencies` 中挑出指向本仓库的 `link:` / `file:` 条目来卸载，因此插件目录
   删除后遗留的注册项也能清掉。它不碰 `lib/` 产物：卸下不会让产物失效，再挂回去不必重新构建。
 
-浏览器控制插件（`@deepseek-ai/dsh-browser-use` 与
-`@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp`）不在这个扫描范围内：它们是普通插件、没有
-`dsh.bundle`，patch 行按裸包名解析，只能由 profile 的 `dependencies` 提供，而 profile 对仓库插件用的是 `link:`
-安装（pnpm 不安装 `link:` 目标的依赖）。它们的挂载配置直接写在 `~/.dsh/profiles/web/cordis.patch.yml` 的
-`insert` 层里（`browser-use` 与 `browser-use-chrome-devtools-mcp` 两行，后者带 `mode: launch` / `headless` /
-`executablePath`），依赖则手写在 profile 的 `dependencies` 中，版本跟随运行中的 `dsh --version`（它们的
-`peerDependencies` 钉着 cordis / dsh-agent / dsh-tools 等）。这两项属于 profile 的本地配置，仓库脚本增删插件时
-不再触碰它们。
+浏览器控制插件（browser-use 家族）不属于本仓库的 `dsh-*` 插件：它们是普通插件、没有 `dsh.bundle`，
+依赖与 `cordis.patch.yml` 的 `insert` 行都手写在 profile 里，仓库脚本既不发现也不管理它们。本机已从
+web profile 卸载这组 rc.1 版本（与 DSH 0.2.2-rc.2 不兼容）；以后要再接回浏览器工具，需按运行中的 DSH
+版本自行选择兼容版本。
 
 DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效策略是 `RemoteSigned` 也会被拒
 （报「未对文件进行数字签名」或 `AuthorizationManager check failed`；`RemoteSigned` / `Unrestricted` 都拦，只有

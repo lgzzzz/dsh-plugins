@@ -12,7 +12,7 @@
     {"id":"modal-selector","plugin":"dsh-keyboard-shortcuts","token":"[role=\"dialog\"][aria-modal=\"true\"], [role=\"menu\"]","paths":["dsh-web-frontend/dist/assets"],"hint":"模态选择器变了（本条锚在运行产物里那份字面量上）：捕获路（审批键、页面循环、会话导航）与固定通道对『模态下让位』的判定会不一致，模态层打开时捕获路可能仍然认领按键"},
     {"id":"automatic-focus-mark","plugin":"dsh-keyboard-shortcuts","token":"data-dsh-automatic-focus","paths":["dsh-web-frontend/dist/assets"],"hint":"官方『无环聚焦』标记改名：插件打的标记不再被主题认领，作答后那张卡片会重新出现焦点边框（最坏是边框，不误动作）"},
     {"id":"automatic-focus-rule","plugin":"dsh-keyboard-shortcuts","pattern":"data-dsh-automatic-focus[^}]{0,160}outline:none","paths":["dsh-client-ui-theme/lib"],"hint":"主题不再把该标记翻成 outline:none：同上，作答后卡片重新出现焦点边框"},
-    {"id":"xterm-root","plugin":"dsh-keyboard-shortcuts","pattern":"classList\\.add\\(\"xterm\"\\)","paths":["dsh-client-ui-sidebar-terminal/lib"],"hint":"终端根类不再是 xterm：捕获路认不出终端，终端内按页面切换 / 会话导航键到不了固定通道，那几对键在终端里失效"},
+    {"id":"xterm-root","plugin":"dsh-keyboard-shortcuts","pattern":"classList\\.add\\([\"'`]xterm[\"'`]\\)","paths":["dsh-client-ui-sidebar-terminal/lib"],"hint":"终端根类不再是 xterm：捕获路认不出终端，终端内按页面切换 / 会话导航键到不了固定通道，那几对键在终端里失效"},
     {"id":"xterm-helper-textarea","plugin":"dsh-keyboard-shortcuts","token":"xterm-helper-textarea","paths":["dsh-client-ui-sidebar-terminal/lib"],"hint":"终端输入面改名：切页 / 展开后的键盘交接下探不到终端输入框，只聚焦 pane 容器（要再点一下才能打字）"},
     {"id":"sidebar-right-session","plugin":"dsh-keyboard-shortcuts","token":"data-sidebar-right-session","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏会话根标记消失：自动聚焦与页签行窗口保持都找不到会话根，切页后只切页、不交还键盘"},
     {"id":"sidebar-right-open","plugin":"dsh-keyboard-shortcuts","token":"data-sidebar-right-open","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏『已展开』标记消失：取不到内层会话根、dock pane 查找落空，自动聚焦退化成 no-op"},

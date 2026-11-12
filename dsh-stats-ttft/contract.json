@@ -11,14 +11,14 @@
     {
       "id": "dock-render",
       "plugin": "dsh-stats-ttft",
-      "pattern": "renderSlot\\(\\s*\"conversation\\.composer\\.dock\"",
+      "pattern": "renderSlot\\(\\s*[\"'`]conversation\\.composer\\.dock[\"'`]",
       "paths": ["dsh-client-ui-conversation/lib"],
       "hint": "输入框下方不再渲染 composer.dock 出口：即使槽键还在，遮蔽项也不会被渲染，TTFT 不显示"
     },
     {
       "id": "activity-id",
       "plugin": "dsh-stats-ttft",
-      "pattern": "id: \"activity\",\\s*order: 0",
+      "pattern": "id:\\s*[\"'`]activity[\"'`]\\s*,\\s*order:\\s*0",
       "paths": ["dsh-client-ui-chat/lib"],
       "hint": "性能统计按钮的注册 id/order 改了：账本上找不到源项，自检窗口走完后告警一次「未找到」，按钮保持原读数"
     },
@@ -32,14 +32,14 @@
     {
       "id": "counts-call",
       "plugin": "dsh-stats-ttft",
-      "pattern": "t\\(\"stats\\.counts\", \\{\\s*turns: stats\\.turns,\\s*steps: stats\\.steps",
+      "pattern": "t\\([\"'`]stats\\.counts[\"'`]\\s*,\\s*\\{\\s*turns:\\s*stats\\.turns\\s*,\\s*steps:\\s*stats\\.steps",
       "paths": ["dsh-client-ui-chat/lib"],
       "hint": "统计按钮不再用 t(\"stats.counts\") 拼第一段：追加目标不存在，TTFT 静默不显示"
     },
     {
       "id": "reading-shares-counts",
       "plugin": "dsh-stats-ttft",
-      "pattern": "reading\\(counts, speed\\)",
+      "pattern": "reading\\(\\s*counts\\s*,\\s*speed\\s*\\)",
       "paths": ["dsh-client-ui-chat/lib"],
       "hint": "按钮读数不再由 counts 与 speed 组成：即使 counts 被改写，也不一定进按钮，TTFT 可能只出现在气泡标题里"
     },
@@ -60,14 +60,14 @@
     {
       "id": "duration-round-seconds",
       "plugin": "dsh-stats-ttft",
-      "pattern": "Math\\.round\\(s \\* 10\\) / 10",
+      "pattern": "Math\\.round\\(\\s*s\\s*\\*\\s*10\\s*\\)\\s*/\\s*10",
       "paths": ["dsh-client-ui-chat/lib"],
       "hint": "上游 formatDuration 的秒级取整规则变了：本插件的显示格式将与气泡里的 TTFT 行分叉"
     },
     {
       "id": "duration-round-minutes",
       "plugin": "dsh-stats-ttft",
-      "pattern": "minutes: Math\\.floor\\(whole / 60\\),\\s*seconds: whole % 60",
+      "pattern": "minutes:\\s*Math\\.floor\\(\\s*whole\\s*/\\s*60\\s*\\)\\s*,\\s*seconds:\\s*whole\\s*%\\s*60",
       "paths": ["dsh-client-ui-chat/lib"],
       "hint": "上游 formatDuration 的分级取整规则变了：本插件的显示格式将与气泡里的 TTFT 行分叉"
     },
@@ -81,7 +81,7 @@
     {
       "id": "component-read",
       "plugin": "dsh-stats-ttft",
-      "token": "const Comp = entry.component;",
+      "token": "const Comp=entry.component;",
       "paths": ["dsh-client-ui-renderer/lib"],
       "hint": "渲染器不再在渲染期读取条目的 component：遮蔽注册仍然成功（因此没有任何告警），但包装层不会被渲染，TTFT 静默不显示"
     },
@@ -109,7 +109,7 @@
     {
       "id": "chat-hook",
       "plugin": "dsh-stats-ttft",
-      "pattern": "hooks: \\[\"chat\"\\]",
+      "pattern": "hooks:\\s*\\[\\s*[\"'`]chat[\"'`]\\s*\\]",
       "paths": ["dsh-client-ui-chat/lib"],
       "hint": "ui-chat 不再提供 chat 标准 hook：包装层拿不到 useChat，窗口兜底失效；投影仍在时按钮仍显示，但历史分页后的兜底会缺失"
     }

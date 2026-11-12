@@ -180,13 +180,16 @@ The directory follows the profile that declares this plugin (found under `$DSH_H
 
 ## Development
 
+This package is a member of the repo workspace: its devDependencies are hoisted to the repo-root `node_modules`, and the package directory has no dependencies of its own. Run from the repo root:
+
 ```sh
 pnpm install
-pnpm run build      # tsdown → lib/ (host bundle + client bundle)
-pnpm test           # vitest run (tests/**/*.spec.ts)
-pnpm run test:qoder # node --test (tests/qoder/*.test.ts, the Qoder transport suite)
-pnpm run typecheck  # tsc across the host and client tsconfigs
-pnpm run check      # typecheck + test + test:qoder + build in one gate
+
+pnpm --filter dsh-qoder-connect build      # tsdown → lib/ (host bundle + client bundle)
+pnpm --filter dsh-qoder-connect test       # vitest run (tests/**/*.spec.ts, using vitest from the repo-root node_modules)
+pnpm --filter dsh-qoder-connect test:qoder # node --test (tests/qoder/*.test.ts, the Qoder transport suite)
+pnpm --filter dsh-qoder-connect typecheck  # tsc across the host and client tsconfigs
+pnpm --filter dsh-qoder-connect check      # typecheck + test + test:qoder + build in one gate
 ```
 
 The upstream `node:test` suite for the Qoder transport layer now lives in `tests/qoder/` (run it with `pnpm run test:qoder`; the pristine `reference-qoder-tests/` copy has been removed) — `package.json` scripts are the source of truth.

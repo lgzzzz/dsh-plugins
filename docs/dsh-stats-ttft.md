@@ -121,6 +121,5 @@ node dsh-stats-ttft/check-css.mjs --dsh-root /opt/homebrew/lib/node_modules
 ## 进一步探索
 
 - [仓库文档索引](README.md) —— 构建、挂载与全部插件的入口。
-- [dsh-jobs-optimize](dsh-jobs-optimize.md) —— 同一套「按 id 遮蔽 + 包装源组件」机制的另一份实现与契约写法。
 - [`dsh.client.inject` 完整说明](dsh-client-inject.md) —— 客户端半部的加载顺序与服务注入边界。
 - [DSH 插件五种「名字」](plugin-naming.md) —— 包名、patch id/name、导出 name 的分工。
