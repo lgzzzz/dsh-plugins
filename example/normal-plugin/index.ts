@@ -30,10 +30,11 @@ export function apply(ctx: Context) {
       render: (_args, value) => [{ type: 'text', text: value }],
     },
     async execute(args) {
-      return `Hello, ${args.name}!`
+      return `Hi, ${args.name}!`
     },
   }))
 
+  // 可选服务:有则记录一次加载事件,缺席就跳过。
   const metrics = ctx.get('metrics')
   metrics?.record('plugin_loaded', 1)
 }
