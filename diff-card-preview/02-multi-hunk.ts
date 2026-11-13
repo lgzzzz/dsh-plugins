@@ -4,7 +4,8 @@ export interface HunkOptions {
 
 export function firstHunk(opts: HunkOptions): string {
   const label = `first: ${opts.title}`;
-  return label.trim();
+  const normalized = label.trim();
+  return normalized.toLowerCase();
 }
 
 // 下面这一大段用于制造两处相距较远的改动，

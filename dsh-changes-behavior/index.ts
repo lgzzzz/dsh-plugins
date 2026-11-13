@@ -10,20 +10,29 @@ import { installSingleCardPatch, type ClientModulesFace } from './src/host/singl
 export const name = 'dsh-changes-behavior'
 
 /**
- * 等 `clientModules` 就绪后安装补丁。
+ * 宿主依赖：`clientModules` 登记好客户端产物之后才应用本插件。
  *
- * 没有 web 产物的运行（例如纯 CLI）里该服务缺席或 `clientPath` 为空，
- * `installSingleCardPatch` 只记一条告警并返回空操作，不会影响启动。
- * @param ctx - 宿主 Context。
- * @returns 插件函数：`ctx.inject` 的 fiber 负责在卸载时恢复上游产物。
+ * 用静态 inject 而不是 `ctx.inject(...)`：服务刚注册时产物表可能还是空的，
+ * 静态依赖让 cordis 等到服务真正可用再调用 `apply`。
+ */
+export const inject = ['clientModules']
+
+/**
+ * 启动期安装单文件卡片补丁。
+ *
+ * 诊断走 `console.error`（stderr）：`dsh web` 的日志里能看到插件用 console 打的
+ * 行，而 `ctx.logger` 在当前发行版的 web 启动下不一定落到同一份日志。
+ * 产物登记有延迟时由 `installSingleCardPatch` 轮询等待。
+ * @param ctx - 宿主 Context，携带 `clientModules`。
  */
 export function apply(ctx: Context): void {
-  ctx.inject(['clientModules'], (scope) => {
-    const modules = scope.get('clientModules') as ClientModulesFace | undefined
-    if (modules === undefined) return
-    return installSingleCardPatch(modules, {
-      info: message => ctx.logger.info(message),
-      warn: message => ctx.logger.warn(message),
-    })
-  })
+  const modules = ctx.get('clientModules') as ClientModulesFace | undefined
+  if (modules === undefined) {
+    console.error('[dsh-changes-single-card] clientModules 缺席，跳过单文件卡片补丁')
+    return
+  }
+  ctx.effect(() => installSingleCardPatch(modules, {
+    info: message => { console.error(message) },
+    warn: message => { console.error(message) },
+  }, { retryMs: 100, timeoutMs: 15_000 }))
 }

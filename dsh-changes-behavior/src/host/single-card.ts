@@ -67,67 +67,104 @@ export interface Diagnostics {
   warn(message: string): void
 }
 
+/** 重试参数：产物还没登记进 `clientModules` 时轮询，直到登记或超时。 */
+export interface RetryOptions {
+  /** 轮询间隔（毫秒）。省略时只尝试一次。 */
+  readonly retryMs?: number
+  /** 总超时（毫秒），默认 15 秒。 */
+  readonly timeoutMs?: number
+}
+
 /**
  * 安装启动期补丁并返回卸载函数。
  *
  * 任何一步失败都收敛为「只记一条告警、不动上游」，因此可以在 `apply` 里直接调用：
  * 插件挂载不应因为上游产物不可写而失败。
+ *
+ * `clientModules` 服务刚注册时表可能还没填完（`clientPath` 返回 undefined），
+ * 传 `retryMs` 后会在超时前轮询，等 entry 登记好再打补丁。
  * @param modules - 宿主 `clientModules` 服务。
  * @param diagnostics - 诊断输出。
+ * @param options - 轮询参数；省略时只尝试一次。
  * @returns 卸载函数：文件仍是本插件写下的那份时恢复原内容。
  */
 export function installSingleCardPatch(
   modules: ClientModulesFace,
   diagnostics: Diagnostics = console,
+  options: RetryOptions = {},
 ): () => void {
-  let path: string | undefined
-  try {
-    path = modules.clientPath(UPSTREAM_ID)
-  } catch (error) {
-    diagnostics.warn(`[${MARKER}] clientPath(${UPSTREAM_ID}) failed: ${messageOf(error)}`)
-    return () => {}
-  }
-  if (path === undefined) {
-    diagnostics.warn(`[${MARKER}] ${UPSTREAM_ID} 没有已登记的客户端产物，跳过单文件卡片补丁`)
-    return () => {}
+  let disposed = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = options.retryMs === undefined ? 0 : Date.now() + (options.timeoutMs ?? 15_000)
+  /** 打完补丁后的原文与补丁文，供卸载恢复。 */
+  let patchedState: { path: string, original: string, patched: string } | undefined
+
+  const attempt = (): void => {
+    timer = undefined
+    if (disposed) return
+    let path: string | undefined
+    try {
+      path = modules.clientPath(UPSTREAM_ID)
+    } catch (error) {
+      diagnostics.warn(`[${MARKER}] clientPath(${UPSTREAM_ID}) failed: ${messageOf(error)}`)
+      return
+    }
+    if (path === undefined) {
+      if (options.retryMs !== undefined && Date.now() < deadline) {
+        timer = setTimeout(attempt, options.retryMs)
+        return
+      }
+      diagnostics.warn(`[${MARKER}] ${UPSTREAM_ID} 没有已登记的客户端产物，跳过单文件卡片补丁`)
+      return
+    }
+
+    let original: string
+    try {
+      original = readFileSync(path, 'utf8')
+    } catch (error) {
+      diagnostics.warn(`[${MARKER}] 读取 ${path} 失败：${messageOf(error)}`)
+      return
+    }
+
+    const result = patchBundleText(original)
+    if (result.status === 'missing') {
+      diagnostics.warn(`[${MARKER}] ${UPSTREAM_ID} 里找不到 singleFile 初始化，单文件卡片保持上游形制；锚点可能已变`)
+      return
+    }
+    if (result.status === 'already') {
+      diagnostics.info(`[${MARKER}] 单文件卡片补丁已在 ${path} 上，跳过`)
+      return
+    }
+
+    const patched = result.text as string
+    try {
+      writeFileSync(path, patched)
+    } catch (error) {
+      diagnostics.warn(`[${MARKER}] 写入 ${path} 失败：${messageOf(error)}；单文件卡片保持上游形制`)
+      return
+    }
+    try {
+      modules.rebuilt(UPSTREAM_ID)
+    } catch (error) {
+      diagnostics.warn(`[${MARKER}] rebuilt(${UPSTREAM_ID}) 失败：${messageOf(error)}；刷新后可能仍是旧产物`)
+    }
+    patchedState = { path, original, patched }
+    diagnostics.info(`[${MARKER}] 单文件卡片已改为汇总形制：${path}`)
   }
 
-  let original: string
-  try {
-    original = readFileSync(path, 'utf8')
-  } catch (error) {
-    diagnostics.warn(`[${MARKER}] 读取 ${path} 失败：${messageOf(error)}`)
-    return () => {}
-  }
-
-  const result = patchBundleText(original)
-  if (result.status === 'missing') {
-    diagnostics.warn(`[${MARKER}] ${UPSTREAM_ID} 里找不到 singleFile 初始化，单文件卡片保持上游形制；锚点可能已变`)
-    return () => {}
-  }
-  if (result.status === 'already') {
-    diagnostics.info(`[${MARKER}] 单文件卡片补丁已在 ${path} 上，跳过`)
-    return () => {}
-  }
-
-  const patched = result.text as string
-  try {
-    writeFileSync(path, patched)
-  } catch (error) {
-    diagnostics.warn(`[${MARKER}] 写入 ${path} 失败：${messageOf(error)}；单文件卡片保持上游形制`)
-    return () => {}
-  }
-  try {
-    modules.rebuilt(UPSTREAM_ID)
-  } catch (error) {
-    diagnostics.warn(`[${MARKER}] rebuilt(${UPSTREAM_ID}) 失败：${messageOf(error)}；刷新后可能仍是旧产物`)
-  }
-  diagnostics.info(`[${MARKER}] 单文件卡片已改为汇总形制：${path}`)
+  attempt()
 
   return () => {
+    disposed = true
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      timer = undefined
+    }
+    const state = patchedState
+    if (state === undefined) return
     try {
-      if (readFileSync(path as string, 'utf8') !== patched) return
-      writeFileSync(path as string, original)
+      if (readFileSync(state.path, 'utf8') !== state.patched) return
+      writeFileSync(state.path, state.original)
     } catch {
       // 卸载期恢复失败不改变退出结果；下次启动仍会重新检测。
     }

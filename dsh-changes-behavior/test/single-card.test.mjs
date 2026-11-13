@@ -143,5 +143,48 @@ check('容忍空白差异与 undefined', patchBundleText(spaced).status, 'patche
   checkTrue('文件被替换后卸载不恢复', readFileSync(path, 'utf8').includes('dsh 升级替换了整个文件'))
 }
 
+// ---- 产物登记有延迟：轮询到就绪再打 ----
+
+{
+  const { path } = fixture(BUNDLE)
+  let calls = 0
+  const modules = {
+    clientPath() {
+      calls += 1
+      return calls < 3 ? undefined : path
+    },
+    rebuilt() { return 'rev' },
+  }
+  const log = diagnostics()
+  const dispose = installSingleCardPatch(modules, log, { retryMs: 5, timeoutMs: 500 })
+  await new Promise(resolve => setTimeout(resolve, 60))
+  check('轮询后写入补丁', readFileSync(path, 'utf8').includes(MARKER), true)
+  check('轮询期间没有 warn', log.lines.warn.length, 0)
+  check('登记前访问了几次', calls >= 3, true)
+  dispose()
+  check('轮询成功后卸载恢复', readFileSync(path, 'utf8'), BUNDLE)
+}
+
+{
+  let calls = 0
+  const modules = {
+    clientPath() { calls += 1; return undefined },
+    rebuilt() { throw new Error('不应被调用') },
+  }
+  const log = diagnostics()
+  let threw = false
+  let dispose = () => {}
+  try {
+    dispose = installSingleCardPatch(modules, log, { retryMs: 5, timeoutMs: 20 })
+    await new Promise(resolve => setTimeout(resolve, 80))
+  } catch {
+    threw = true
+  }
+  dispose()
+  check('超时后不抛错', threw, false)
+  check('超时后记录 warn', log.lines.warn.length, 1)
+  check('超时后仍在轮询过', calls >= 2, true)
+}
+
 rmSync(dir, { recursive: true, force: true })
 finish()
