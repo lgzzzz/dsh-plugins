@@ -248,8 +248,8 @@ function report(ctx: Context, moved: number, announced: boolean): void {
 /**
  * `llm/retry` 事件里规划需要的字段。
  *
- * 该事件由 `@deepseek-ai/dsh-llm-retry` 追加到会话日志。插件不引入它的包，按公开事件的
- * 结构读取；不是该事件或字段不完整时返回 undefined（宁可不判定，也不误判）。
+ * 返回类型是上游 `LlmRetryEventData` 的投影（见 `RequestRetry`）；读取仍按公开事件结构逐字段
+ * 校验：恢复的旧日志或字段不完整的事件一律返回 undefined（宁可不判定，也不误判）。
  */
 function retryEventData(event: SessionEvent): RequestRetry | undefined {
   const raw = event as unknown as { type: string; data?: Record<string, unknown> }

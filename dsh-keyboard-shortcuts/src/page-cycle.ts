@@ -30,7 +30,7 @@
  */
 import { captureContext, captureGesture, composedElement, terminalTarget } from './capture.ts'
 import { bindingKeycaps, bindingMatches, enabledBinding, fixedRowOwns } from './binding.ts'
-import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
+import { isKeydown, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import { captureStripScroll, installInstantStripScroll, restoreStripScroll } from './strip-scroll.ts'
 import { activateViewTab, displayedViewTabs, steppedViewTab, type DisplayedViewTab, type ViewCycleStep } from './view-cycle.ts'
 import type {
@@ -150,7 +150,7 @@ export function steppedPageId<T extends string>(
  * 持有焦点且页面有自己的输入面时，继续下探到该输入面。
  * @returns 是否找到可见 pane 并持有键盘。
  */
-export function focusShownPage(sessionId: string): boolean {
+export function focusShownPage(sessionId: SessionId): boolean {
   const root = sidebarRoot(sessionId)
   if (root === undefined) return false
   const pane = activePane(root)
@@ -188,7 +188,7 @@ function pageInput(pane: Element): Element | undefined {
  * 某 Session 的右栏根节点：按 `data-sidebar-right-session` 属性值比较，而不是把 id
  * 拼进选择器。返回该根节点或 undefined。
  */
-function sidebarRoot(sessionId: string): Element | undefined {
+function sidebarRoot(sessionId: SessionId): Element | undefined {
   if (typeof document === 'undefined') return undefined
   const roots = [...document.querySelectorAll('[data-sidebar-right-session]')]
     .filter((node) => node.getAttribute('data-sidebar-right-session') === sessionId)
@@ -262,7 +262,7 @@ export function pageCycleTarget(
 
 /** 一次解析出的切换：所在 Session 与要聚焦的页。 */
 export interface PageStepTarget {
-  readonly sessionId: string
+  readonly sessionId: SessionId
   /** 目标页的 id，取自上游页记录的 `id`（品牌化的 `TabId`，可直接交给 `focus`）。 */
   readonly nextId: TabId
 }
@@ -429,7 +429,7 @@ let expandHandOverActive = false
  * 在下一帧运行交付(在 toggle 留下的 pane 焦点之后)；pane 容器自身持有焦点时补上
  * 页面自己的输入面，页面已自行取得焦点则不动。窗口内始终未展开则放弃。
  */
-function expandHandOver(sidebar: Sidebar, sessionId: string): void {
+function expandHandOver(sidebar: Sidebar, sessionId: SessionId): void {
   if (expandHandOverActive) return
   expandHandOverActive = true
   let remaining = Math.ceil(EXPAND_WINDOW_MS / EXPAND_PROBE_MS)

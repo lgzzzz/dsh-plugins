@@ -7,15 +7,18 @@
  */
 import { HEADER_ACTION_ORDER, HEADER_ACTION_SLOT, applyHeaderActionOrder } from './order.ts'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+// 空类型导入(不引入任何名字):加载渲染器对 `Context.slots` 的服务声明,以及
+// ui-conversation 对 `SlotMap` 的键声明(`conversation.session.header.actions`)。
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 export const name = 'dsh-header-action-order'
 
 export const inject = ['slots']
 
-function getSlots(ctx: Context): SlotRegistry | undefined {
+function getSlots(ctx: Context): Context['slots'] | undefined {
   if (ctx.get === undefined || ctx.get === null) return undefined
-  const value = ctx.get('slots') as SlotRegistry | undefined
+  const value = ctx.get('slots') as Context['slots'] | undefined
   return value === null || value === undefined ? undefined : value
 }
 

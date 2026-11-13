@@ -6,9 +6,19 @@
  *   - `frontMove`：把它提到最前需要注册表的哪一次 `insertBefore`（DOM insertBefore 语义）；
  *   - `planPendingFronts`：新会话还没有归属时先登记，等归属出现再认领；
  *   - `taskOutcome`：一次回合结束算不算任务终点（完成，或模型请求重试耗尽后的报错）。
+ *
+ * 本文件的 interface 大多是插件私有的规划中间事实（上游没有对应公开类型）：上游 `Workspace`
+ * 带品牌 id、方法与持久化语义，这里只保留纯规划要比较的字符串投影；`RequestRetry` 与
+ * `TurnEndFacts` 的字段则从上游事件类型投影。
  */
+import type { LlmRetryEventData } from '@deepseek-ai/dsh-llm-retry'
+import type { TurnEndReason } from '@deepseek-ai/dsh-session'
 
-/** 规划只读到的工作区字段。 */
+/**
+ * 规划只读到的工作区字段：上游 `Workspace` 实体的字符串投影。
+ *
+ * 规划按字符串比较 id 与会话归属，不引入品牌 id 与方法，因此不直接用上游 `Workspace`。
+ */
 export interface WorkspaceRow {
   /** 注册表记录 id 的字符串形态。 */
   readonly id: string
@@ -16,7 +26,7 @@ export interface WorkspaceRow {
   readonly sessionIds: readonly string[]
 }
 
-/** 已登记、还没认领工作区的新会话。 */
+/** 已登记、还没认领工作区的新会话（插件私有的登记事实）。 */
 export interface PendingSession {
   /** 会话 id 的字符串形态。 */
   readonly sessionId: string
@@ -24,7 +34,7 @@ export interface PendingSession {
   readonly since: number
 }
 
-/** 一次上浮请求；`reason` 只用于测试断言，不参与判定，也不进日志。 */
+/** 一次上浮请求（插件私有的规划动作）；`reason` 只用于测试断言，不参与判定，也不进日志。 */
 export interface FrontRequest {
   /** 要提到最前的工作区。 */
   readonly workspaceId: string
@@ -47,28 +57,29 @@ export const PENDING_TTL_MS = 60_000
  */
 export const SYNTHETIC_FAILURE_CODES: readonly string[] = ['UNKNOWN', 'TOOL_ACTIVATION_FAILED']
 
-/** 一次 `llm/retry` 事件里规划关心的字段。 */
-export interface RequestRetry {
-  /** 重试策略模式；`always` 不设上限，也就不会「耗尽」。 */
-  readonly mode: 'normal' | 'always'
-  /** 重试所属的回合号。 */
-  readonly turn: number
-  /** 已排定的重试序号；等于上限时，下一次尝试就是最后一次。 */
-  readonly retry: number
-  /** `normal` 模式允许的重试次数上限。 */
-  readonly maxRetries?: number
-}
+/**
+ * 一次 `llm/retry` 事件里规划关心的字段：直接由上游 `LlmRetryEventData` 投影。
+ *
+ * `mode` / `turn` / `retry` 是两种模式共有的字段；`maxRetries` 只在上游 `normal` 分支出现，
+ * 这里放宽为可选——事件还要经过 `index.ts` 的运行时校验（缺字段的一律不判定），
+ * 校验通过后才进入规划。
+ */
+export type RequestRetry = Pick<LlmRetryEventData, 'mode' | 'turn' | 'retry'> &
+  Partial<Pick<Extract<LlmRetryEventData, { mode: 'normal' }>, 'maxRetries'>>
 
-/** 一次回合结束里规划关心的字段。 */
+/** 出错时的错误码类型：上游 `TurnEndReason` 错误变体里的 `LlmFailure['code']`。 */
+type TurnEndFailureCode = Extract<TurnEndReason, { kind: 'error' }>['error']['code']
+
+/** 一次回合结束里规划关心的字段；`kind` 与 `failureCode` 直接投影上游 `TurnEndReason`。 */
 export interface TurnEndFacts {
   /** 结束的回合号。 */
   readonly turn: number
-  /** `turn/end.reason.kind`。 */
-  readonly kind: string
+  /** `turn/end.reason.kind`（上游 `TurnEndReason` 的判别字段）。 */
+  readonly kind: TurnEndReason['kind']
   /** 本会话当前 step 最近一次 `llm/retry`；没有重试时为 undefined。 */
   readonly retry: RequestRetry | undefined
   /** 出错时的错误码（`kind === 'error'` 时有意义）。 */
-  readonly failureCode?: string
+  readonly failureCode?: TurnEndFailureCode
   /** 这个回合是否真的跑过至少一个 step（即模型产出了内容）。 */
   readonly hadStep: boolean
 }
@@ -130,7 +141,7 @@ export function planActivityFronts(
   return fronts
 }
 
-/** 一轮里待落位新会话的三种归宿。 */
+/** 一轮里待落位新会话的三种归宿（插件私有的规划结果）。 */
 export interface PendingPlan {
   /** 按登记先后给出的上浮请求；越晚登记的越靠后。 */
   readonly fronts: readonly FrontRequest[]

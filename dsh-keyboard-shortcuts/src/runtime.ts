@@ -14,7 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 /** 插件 id：模块表 id、诊断前缀与固定输入标签都用它。 */
 export const name = 'dsh-keyboard-shortcuts'
 
-/** Session 标识，取自目录行自身的 id 字段。 */
+/** Session 标识：直接取上游 `SessionSummary.id` 的类型（含品牌），不另定义。 */
 export type SessionId = SessionSummary['id']
 
 /** 注册表发布的固定输入中的一次 keydown。 */

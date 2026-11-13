@@ -86,7 +86,7 @@ pnpm install
 - **顺序的真源在宿主**：侧边栏 Workspace 分组的顺序是 Workspace 注册表的持久顺序（会话顺序存在浏览器本地，Workspace 分组的拖拽顺序由 Host 持久化）。插件把顺序写回注册表，所有消费方一次对齐。
 - **依据用事件**：用户消息提交由 `api-session/activity` 给出，侧边栏会话行右侧显示的时间是同一事实(`max(会话 createdAt, 最后一条用户消息时间)`)；任务终点读会话日志里的 `turn/end`，模型请求重试靠 `llm/retry` 计数。插件不冷读会话历史、不维护活动时间表，也没有重启后需要恢复的状态。
 - **任务终点的判定在纯函数里**：`taskOutcome`（`src/bump.ts`）只接收回合号、终止原因、当前 step 的重试记录与「是否跑过 step」，返回 `'completed'` / `'error'` / undefined，全部终止原因都由它一处裁决。
-- **`llm/retry` 按结构读取**：该事件由 `@deepseek-ai/dsh-llm-retry` 追加到会话日志，插件不引入它的包；字段不完整时宁可不判定，也不误判。
+- **`llm/retry` 按结构读取**：该事件由 `@deepseek-ai/dsh-llm-retry` 追加到会话日志，插件只 `import type` 它的 `LlmRetryEventData`，不引入运行时依赖；字段不完整时宁可不判定，也不误判。
 - **重试记录跟着 step 走**：`step/start` 清空该会话的记录，`turn/end` 判定后清空，会话销毁时一并作废。
 - **归属查询用注册表自己的账**：会话属于哪个工作区，读注册表实体的 `sessionIds`，不做 cwd 字符串匹配。
 - **只用公开 API**：`workspaceRegistry.insertBefore(id, beforeId)` 语义同 DOM `insertBefore`（移到锚点之前）；「已经在最前」时它一次写盘都不做，插件也提前跳过，所以在同一个工作区里连续聊天不会反复写盘。

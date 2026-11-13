@@ -7,18 +7,32 @@
  * 末行，`←` / `→` 与滚轮到两端同样绕回。差别只在候选来源与
  * 确认动作：这里的一行是一个模型，确认后切换当前会话使用的模型。
  *
- * 本文件不 import React、不碰 DOM 服务、也不读任何上游快照 —— `client.ts` 把候选喂进来、
+ * 本文件不 import React、不碰 DOM 服务、也不读任何上游运行时快照 —— `client.ts` 把候选喂进来、
  * 把动作接出去，所以这些规则可以被 Node 直接驱动。DOM 只出现在两个安装函数
  * （{@link installPaletteKeys} / {@link installPaletteWheel}）里，它们同样不依赖 React。
+ * 固定行的键位、平台与手势事实直接取快捷键服务包（`@deepseek-ai/dsh-client-shortcuts`）的
+ * 公开类型，本文件不再自己重写一遍。
  *
  * 候选顺序就是传进来的顺序（设置页里列表的顺序），本层不排序也不截断。
  */
 
+import type {
+  ShortcutBinding,
+  ShortcutCommandId,
+  ShortcutPlatform,
+} from '@deepseek-ai/dsh-client-shortcuts/protocol'
+import type { ShortcutGesture } from '@deepseek-ai/dsh-client-shortcuts/client'
+
 /** 浮层一屏最多列出的行数；更多候选用 ← / → 翻页或滚轮连续滑动。 */
 export const PAGE_SIZE = 10
 
-/** 模型浮层的固定行 id（占用 `primary+alt+U`，并出现在快捷键目录里）。 */
-export const MODEL_SWITCH_ID = 'dsh-model-quick-switch.model-switch'
+/**
+ * 模型浮层的固定行 id（占用 `primary+alt+U`，并出现在快捷键目录里）。
+ *
+ * 上游把命令 id 品牌化成 `ShortcutCommandId`，品牌只在类型层；运行期仍是这个字符串，
+ * 这里在常量声明处一次性标记，后续注册与目录比对全程沿用上游类型。
+ */
+export const MODEL_SWITCH_ID: ShortcutCommandId = 'dsh-model-quick-switch.model-switch' as ShortcutCommandId
 
 /**
  * 模型浮层的逻辑组合：`primary+alt+U`。
@@ -32,8 +46,8 @@ export const MODEL_SWITCH_BINDING = {
   modifiers: ['primary', 'alt'],
 } as const
 
-/** 接收输入的设备平台；`primary` 按它展开成 `meta`（macOS）或 `control`（其余）。 */
-export type QuickSwitchPlatform = 'macos' | 'windows' | 'linux'
+/** 接收输入的设备平台（上游 `ShortcutPlatform`）；`primary` 按它展开成 `meta`（macOS）或 `control`（其余）。 */
+export type QuickSwitchPlatform = ShortcutPlatform
 
 /** `primary` 在给定平台上展开成的物理修饰键。 */
 export function primaryModifier(platform: QuickSwitchPlatform): 'meta' | 'control' {
@@ -53,20 +67,14 @@ export function modelSwitchKeys(platform: QuickSwitchPlatform): string[] {
   return platform === 'macos' ? ['⌘', '⌥', 'U'] : ['Ctrl', 'Alt', 'U']
 }
 
-/** 一次按键里本插件要读的修饰键事实（KeyboardEvent 结构上满足它）。 */
-export interface ModelSwitchGesture {
-  readonly code?: string
-  readonly control?: boolean
-  readonly alt?: boolean
-  readonly shift?: boolean
-  readonly meta?: boolean
-}
-
-/** 一条固定行的逻辑组合（`code` + 逻辑修饰键）。 */
-export interface LogicalBinding {
-  readonly code: string
-  readonly modifiers: readonly string[]
-}
+/**
+ * 一次按键里本插件要读的修饰键事实。
+ *
+ * 字段名与含义全部来自上游 `ShortcutGesture`；固定通道读数与 `KeyboardEvent` 都只带其中一部分
+ * （`KeyboardEvent` 用 `ctrlKey` 等、没有 `composing`），所以这里取上游类型的 `Partial`，
+ * 读者函数只按 `=== true` 判断需要的字段。
+ */
+export type ModelSwitchGesture = Partial<ShortcutGesture>
 
 /**
  * 这次按键是否就是给定逻辑组合在给定平台上的物理形态。
@@ -74,13 +82,13 @@ export interface LogicalBinding {
  * 要求修饰键集合**完全相等**：`primary` 落成 `meta`（macOS）或 `control`（其余），
  * `alt` / `shift` 原样；多按或漏按任何一个都不算。
  * @param platform - 接收输入的设备平台。
- * @param binding - 固定行声明的逻辑组合。
+ * @param binding - 固定行声明的逻辑组合（上游 `ShortcutBinding`）。
  * @param gesture - 按键事实。
  * @returns 完全匹配时为 true。
  */
 export function bindingPress(
   platform: QuickSwitchPlatform,
-  binding: LogicalBinding,
+  binding: ShortcutBinding,
   gesture: ModelSwitchGesture,
 ): boolean {
   if (gesture.code !== binding.code) return false

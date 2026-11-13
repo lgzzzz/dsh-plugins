@@ -60,7 +60,6 @@ import {
   keepOptionVisible,
   modelSwitchKeys,
   windowSlice,
-  type LogicalBinding,
   type ModelSwitchGesture,
   type PaletteRow,
   type PaletteStore,
@@ -83,7 +82,6 @@ import {
   selectionOfChoice,
   selectionOfEffort,
   type CatalogModelRow,
-  type CatalogFailure,
   type CatalogGroup,
   type EffortChoice,
   type ModelChoice,
@@ -97,6 +95,31 @@ import {
   type PaletteStage,
 } from './model-data.ts'
 import { PALETTE_CSS, SETTINGS_CSS } from './styles.ts'
+
+// 上游类型：服务面与数据契约全部直接用包导出的名字，本文件不再自己重写一份同名形状。
+import type { Context } from '@deepseek-ai/cordis'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { RemoteResult, RemoteStreamHandle } from '@deepseek-ai/dsh-typert-protocol'
+import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
+import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ForgePanelState } from '@deepseek-ai/dsh-experimental-client-ui-forge/types'
+import type { ShortcutFixedCommand, Shortcuts } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { ConfigForm, ConfigForms, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SettingsPathOpView } from '@deepseek-ai/dsh-settings/types'
+// 空类型导入：只为加载上游包的模块增强，不产生任何运行时导入 —— `Context.remote` 与
+// `remote.session` / `remote.forgePanel` / `remote.agentTeams` 三个命名空间、ui-layout 声明的
+// `shell.overlay` 槽位键、`retainedBy.mainView` 计数、`agentTeam` 投影键。
+// （`settings.section` 键、`modelSelection` 与 `forgeWorktree` 投影键随上面同包的命名导入生效。）
+import type {} from '@deepseek-ai/dsh-api-gateway/client'
+import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
+import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
+import type {} from '@deepseek-ai/dsh-agent-team/remote'
+import type {} from '@deepseek-ai/dsh-agent-team/types'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 
 export { name }
 export { paletteAction } from './palette.ts'
@@ -148,151 +171,13 @@ export const EFFORT_VIEW: PaletteView = {
   enterHint: 'Enter 切换模型',
 }
 
-/** 浮层组件的类型：注册进槽位的是**组件本体**，不是渲染出来的元素。 */
-type OverlayComponent = (props: any) => React.ReactElement | null
-
-/** 固定行的形状（快捷键目录里的一条只读输入动作）。 */
-export interface FixedCommand {
-  readonly id: string
-  readonly label: () => string
-  readonly keys: readonly string[]
-  readonly bindings: readonly unknown[]
-  readonly group: 'application'
-}
-
-/** 快捷键目录面：只用到固定行注册、固定输入观察与设备平台。 */
-export interface ShortcutsFace {
-  registerFixed: (command: FixedCommand) => () => void
-  observeFixedInput: (listener: (input: unknown) => void) => () => void
-  readonly platform?: QuickSwitchPlatform
-  readonly fixedCatalog?: {
-    getSnapshot(): readonly { readonly id?: string }[]
-  }
-}
-
-/** 槽位注册表面：只用到「等声明 + 注册」。 */
-export interface SlotsFace {
-  inject(key: string, callback: () => undefined | (() => void)): () => void
-  register(options: Record<string, unknown>, component: OverlayComponent): unknown
-}
-
-/** 本插件注入依赖的收窄视图；Cordis 的 `Context` 结构上满足它。 */
-export interface ClientScope {
-  effect(callback: () => undefined | void | (() => void), label?: string): unknown
-  get(name: string): unknown
-  inject(names: readonly string[], setup: (scope: ClientScope) => void): unknown
-}
-
-/** 设置文档里一次路径写入。 */
-type SettingsPathOpLike =
-  | { readonly op: 'set'; readonly path: readonly string[]; readonly value: unknown }
-  | { readonly op: 'unset'; readonly path: readonly string[] }
-
-/** 配置表单快照里本插件读的字段。 */
-interface ConfigFormSnapshotLike {
-  readonly status: 'loading' | 'ready' | 'unavailable'
-  readonly value?: unknown
-  readonly writable?: boolean
-}
-
-/** 一个设置命名空间的表单。 */
-interface ConfigFormFace {
-  getSnapshot(): ConfigFormSnapshotLike
-  subscribe(listener: () => void): () => void
-  mutate(ops: readonly SettingsPathOpLike[], expectedRevision?: number): Promise<boolean>
-}
-
-/** 设置表单服务面。 */
-interface ConfigFormsFace {
-  get(entryId: string): ConfigFormFace
-}
-
-/** `modelSelection` 投影的客户端形状。 */
-interface ModelSelectionProjectionLike {
-  readonly lastUsed?: ModelSelectionLike | null
-  readonly next?: ModelSelectionLike | null
-}
-
-/** 会话投影里本插件读的三份读数（其余投影不读）。 */
-interface ProjectionValuesLike {
-  readonly modelSelection?: ModelSelectionProjectionLike
-  readonly forgeWorktree?: unknown
-  readonly agentTeam?: unknown
-}
-
-/** 会话摘要里本插件读的字段。 */
-interface SessionSummaryLike {
-  readonly retainedBy?: { readonly mainView?: number }
-  readonly projectionValues?: ProjectionValuesLike
-}
-
-/** 会话目录快照。 */
-interface SessionListSnapshotLike {
-  readonly ids: readonly string[]
-  readonly byId: Readonly<Record<string, SessionSummaryLike | undefined>>
-}
-
-/** 会话目录面。 */
-interface SessionsFace {
-  readonly list: {
-    getSnapshot(): SessionListSnapshotLike
-    subscribe(listener: () => void): () => void
-  }
-}
-
-/** 模型目录（Remote 返回）。 */
-interface ModelCatalogValueLike {
-  readonly default?: ModelSelectionLike
-  readonly groups?: readonly CatalogGroup[]
-  readonly failures?: readonly CatalogFailure[]
-}
-
-/** Remote 失败形状。 */
-interface RemoteFailureLike {
-  readonly code?: string
-  readonly message?: string
-}
-
-/** Remote 结果形状。 */
-type RemoteResultLike<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: RemoteFailureLike }
-
-/** 会话 Remote 里本插件用到的两个方法。 */
-interface SessionRemoteLike {
-  modelCatalog?(): Promise<RemoteResultLike<ModelCatalogValueLike>>
-  selectModel?(request: {
-    sessionId: string
-    provider: string
-    model: string
-    reasoningEffort?: string
-  }): Promise<RemoteResultLike<{ selected?: ModelSelectionLike }>>
-}
-
-/** forge 面板里与工作树请求相关的方法。 */
-interface ForgePanelRemoteLike {
-  requestWorktree?(sessionId: string, from: string | null): Promise<RemoteResultLike<unknown>>
-  cancelWorktree?(sessionId: string): Promise<RemoteResultLike<unknown>>
-  /** 面板状态流；每帧是完整的 `ForgePanelState`（这里只读 `checkout.state`）。 */
-  follow?(sessionId: string, signal?: AbortSignal): ForgeStreamLike
-}
-
-/** 面板状态流的客户端形状（结构上满足 `RemoteStreamHandle`）。 */
-interface ForgeStreamLike extends AsyncIterable<unknown> {
-  dispose(): void
-}
-
-/** 团队协作服务里本插件用到的方法。 */
-interface AgentTeamsRemoteLike {
-  setEnabled?(sessionId: string, enabled: boolean): Promise<RemoteResultLike<unknown>>
-}
-
-/** 远程服务面。 */
-interface RemoteFace {
-  readonly session?: SessionRemoteLike
-  readonly forgePanel?: ForgePanelRemoteLike
-  readonly agentTeams?: AgentTeamsRemoteLike
-}
+/*
+ * 服务面与数据契约不再本地重写：`ctx.slots` 是 `SlotRegistry`、`ctx.shortcuts` 是 `Shortcuts`、
+ * `ctx.configForms` 是 `ConfigForms`（表单是 `ConfigForm<T>`）、`ctx.sessions` 是
+ * `Context['sessions']`，三个远程命名空间是 `Context['remote']` 的 `session` / `forgePanel` /
+ * `agentTeams`；投影与摘要全部走会话语义包的命名导出。下面只保留本插件自己的领域类型
+ * （浮层、设置页 props 与动作面）。
+ */
 
 /** 设置页里可执行的动作。 */
 export interface SettingsActions {
@@ -374,11 +259,12 @@ export function optionDomId(view: PaletteView, index: number): string {
  * 固定输入读数里的按键事实；不是 keydown 或没有 gesture 时返回 undefined。
  * @param input - 固定输入读数。
  */
-function fixedGesture(input: unknown): Partial<Record<string, unknown>> | undefined {
+function fixedGesture(input: unknown): ModelSwitchGesture | undefined {
   if (typeof input !== 'object' || input === null) return undefined
   const candidate = input as { readonly type?: unknown; readonly gesture?: unknown }
   if (candidate.type !== 'keydown') return undefined
-  const gesture = candidate.gesture as Partial<Record<string, unknown>> | undefined
+  // 固定通道读数是不透明的线上值：只按上游手势类型取字段，形状不合的字段在读取处按 undefined 处理。
+  const gesture = candidate.gesture as ModelSwitchGesture | undefined
   return gesture === null ? undefined : gesture
 }
 
@@ -393,19 +279,19 @@ function fixedGesture(input: unknown): Partial<Record<string, unknown>> | undefi
  * @returns 是否归本插件。
  */
 export function ownedModelSwitch(
-  shortcuts: ShortcutsFace,
+  shortcuts: Shortcuts,
   platform: QuickSwitchPlatform,
-  gesture: Partial<Record<string, unknown>> | undefined,
+  gesture: ModelSwitchGesture | undefined,
 ): boolean {
   if (gesture === undefined) return false
   if (gesture.composing === true || gesture.repeat === true || gesture.defaultPrevented === true) return false
-  if (!bindingPress(platform, MODEL_SWITCH_BINDING as LogicalBinding, gesture as ModelSwitchGesture)) return false
+  if (!bindingPress(platform, MODEL_SWITCH_BINDING, gesture)) return false
   const rows = shortcuts.fixedCatalog?.getSnapshot()
   return rows === undefined || rows.some((row) => row.id === MODEL_SWITCH_ID)
 }
 
 /** 从一次原生 keydown 里取出本插件要读的手势事实（捕获阶段 `defaultPrevented` 恒为 false）。 */
-function keyGesture(event: KeyboardEvent): Record<string, unknown> {
+function keyGesture(event: KeyboardEvent): ModelSwitchGesture {
   return {
     code: event.code,
     control: event.ctrlKey,
@@ -431,47 +317,70 @@ function consumeFixedInput(input: unknown): void {
   if (typeof face.consume === 'function') (face.consume as () => void)()
 }
 
-/** 从注入面读槽位表。 */
-function readSlots(scope: ClientScope): SlotsFace | undefined {
+/**
+ * 从注入面读槽位表。
+ *
+ * 读数用 `ctx.get` 取（`Context` 之上由 ui-renderer 声明的 `slots` 面），先做运行时形状检查
+ * 再交给上游类型：服务缺席时调用方整块不安装，而不是让浮层带着半个槽位表跑。
+ * @param scope - 当前等待子 fiber 的客户端上下文。
+ * @returns `SlotRegistry`，或服务不可用时的 undefined。
+ */
+function readSlots(scope: Context): SlotRegistry | undefined {
   const value = scope.get('slots')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<SlotsFace>
+  const face = value as Partial<SlotRegistry>
   if (typeof face.inject !== 'function' || typeof face.register !== 'function') return undefined
-  return face as SlotsFace
+  return face as SlotRegistry
 }
 
-/** 从注入面读快捷键目录。 */
-function readShortcuts(scope: ClientScope): ShortcutsFace | undefined {
+/**
+ * 从注入面读快捷键目录。
+ * @param scope - 当前客户端上下文。
+ * @returns `Shortcuts`，或服务不可用时的 undefined。
+ */
+function readShortcuts(scope: Context): Shortcuts | undefined {
   const value = scope.get('shortcuts')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<ShortcutsFace>
+  const face = value as Partial<Shortcuts>
   if (typeof face.registerFixed !== 'function' || typeof face.observeFixedInput !== 'function') return undefined
-  return face as ShortcutsFace
+  return face as Shortcuts
 }
 
-/** 从注入面读设置表单服务。 */
-function readConfigForms(scope: ClientScope): ConfigFormsFace | undefined {
+/**
+ * 从注入面读设置表单服务。
+ * @param scope - 当前客户端上下文。
+ * @returns `ConfigForms`，或服务不可用时的 undefined。
+ */
+function readConfigForms(scope: Context): ConfigForms | undefined {
   const value = scope.get('configForms')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<ConfigFormsFace>
+  const face = value as Partial<ConfigForms>
   if (typeof face.get !== 'function') return undefined
-  return face as ConfigFormsFace
+  return face as ConfigForms
 }
 
-/** 从注入面读会话目录。 */
-function readSessions(scope: ClientScope): SessionsFace | undefined {
+/**
+ * 从注入面读会话目录。
+ * @param scope - 当前客户端上下文。
+ * @returns `ctx.sessions` 的公开面，或服务不可用时的 undefined。
+ */
+function readSessions(scope: Context): Context['sessions'] | undefined {
   const value = scope.get('sessions')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<SessionsFace>
+  const face = value as Partial<Context['sessions']>
   if (face.list === undefined || typeof face.list.getSnapshot !== 'function') return undefined
-  return face as SessionsFace
+  return face as Context['sessions']
 }
 
-/** 从注入面读远程服务。 */
-function readRemote(scope: ClientScope): RemoteFace | undefined {
+/**
+ * 从注入面读远程服务。
+ * @param scope - 当前客户端上下文。
+ * @returns 上游 `Context['remote']` 面，或服务不可用时的 undefined。
+ */
+function readRemote(scope: Context): Context['remote'] | undefined {
   const value = scope.get('remote')
   if (typeof value !== 'object' || value === null) return undefined
-  return value as RemoteFace
+  return value as Context['remote']
 }
 
 /**
@@ -480,7 +389,7 @@ function readRemote(scope: ClientScope): RemoteFace | undefined {
  * 只等 `slots` / `shortcuts`；`sessions` / `configForms` / `remote` 通过等待子 fiber 接上。
  * @param ctx - 客户端上下文。
  */
-export function apply(ctx: { inject(names: readonly string[], setup: (scope: ClientScope) => void): unknown }): void {
+export function apply(ctx: Context): void {
   ctx.inject(inject, (scope) => {
     const slots = readSlots(scope)
     if (slots === undefined) return
@@ -494,16 +403,16 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
     const platform: QuickSwitchPlatform = shortcuts.platform ?? 'windows'
     const data = createModelDataStore()
     const palette = createPaletteStore()
-    let form: ConfigFormFace | undefined
+    let form: ConfigForm<unknown> | undefined
     // `remote.session` 是生成出来的命名空间：没在 fiber 的 inject 里声明就直接读会抛
     // 「cannot get property "remote.session" without inject」，所以先等子 fiber 把它接上。
-    let sessionRemote: SessionRemoteLike | undefined
+    let sessionRemote: Context['remote']['session'] | undefined
     // 快捷操作的两条链路各自晚到：forge 面板负责工作树请求与 Git 检查，团队服务负责 agentTeam 开关。
-    let forgePanelRemote: ForgePanelRemoteLike | undefined
-    let agentTeamsRemote: AgentTeamsRemoteLike | undefined
+    let forgePanelRemote: Context['remote']['forgePanel'] | undefined
+    let agentTeamsRemote: Context['remote']['agentTeams'] | undefined
     // 只为「当前目录是不是 Git 仓库」维持一条 forge 面板状态流；会话切换时换一条。
-    let forgePanelStream: ForgeStreamLike | undefined
-    let forgePanelStreamSession: string | null = null
+    let forgePanelStream: RemoteStreamHandle<ForgePanelState, never> | undefined
+    let forgePanelStreamSession: SessionId | null = null
     let catalogInFlight: Promise<void> | undefined
     // 浮层的两步：先选模型，确认后再把候选换成这个模型的思考等级。
     let stage: PaletteStage = 'models'
@@ -518,7 +427,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
         data.set({ choices: [], configStatus: 'unavailable', writable: false })
         return
       }
-      const snapshot = entry.getSnapshot()
+      const snapshot: ConfigFormSnapshot<unknown> = entry.getSnapshot()
       data.set({
         choices: readChoices(snapshot.value),
         configStatus: snapshot.status,
@@ -533,7 +442,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
      * 流断开时保留最后一次读数（不把 Git 仓库误判成非仓库）。
      * @param sessionId - 当前主视图会话；没有会话时为 null。
      */
-    const startForgeFollow = (sessionId: string | null): void => {
+    const startForgeFollow = (sessionId: SessionId | null): void => {
       forgePanelStream?.dispose()
       forgePanelStream = undefined
       forgePanelStreamSession = sessionId
@@ -542,7 +451,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
       const remote = forgePanelRemote
       const follow = remote?.follow
       if (remote === undefined || typeof follow !== 'function') return
-      let stream: ForgeStreamLike
+      let stream: RemoteStreamHandle<ForgePanelState, never>
       try {
         stream = follow.call(remote, sessionId)
       } catch {
@@ -568,7 +477,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
      * 会话变化时换一条面板流；没变就不重复订阅。
      * @param sessionId - 当前主视图会话；没有会话时为 null。
      */
-    const syncForgeFollow = (sessionId: string | null): void => {
+    const syncForgeFollow = (sessionId: SessionId | null): void => {
       if (forgePanelStreamSession === sessionId) return
       startForgeFollow(sessionId)
     }
@@ -577,9 +486,9 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
      * 读主视图会话与它的当前选择 / 两个快捷操作的状态投影。
      * @returns 会话 id；没有打开的会话时为 null。
      */
-    const refreshSession = (): string | null => {
+    const refreshSession = (): SessionId | null => {
       const sessions = readSessions(scope)
-      const snapshot = sessions?.list.getSnapshot()
+      const snapshot: SessionListState | undefined = sessions?.list.getSnapshot()
       if (snapshot === undefined) {
         data.set({ sessionId: null, current: null, worktree: null, team: null })
         syncForgeFollow(null)
@@ -591,8 +500,9 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
         syncForgeFollow(null)
         return null
       }
-      const values = snapshot.byId[id]?.projectionValues
-      const projection = values?.modelSelection
+      const summary: SessionSummary | undefined = snapshot.byId[id]
+      const values = summary?.projectionValues
+      const projection: ModelSelectionProjection | undefined = values?.modelSelection
       data.set({
         sessionId: id,
         current: projection?.next ?? projection?.lastUsed ?? null,
@@ -644,18 +554,19 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
       data.set({ catalogStatus: 'loading', catalogError: null })
       const operation = (async (): Promise<void> => {
         try {
-          const response = await modelCatalog.call(sessionRemote)
+          const response: RemoteResult<ModelCatalog> = await modelCatalog.call(sessionRemote)
           if (!response.ok) {
             data.set({ catalogStatus: 'error', catalogError: describeRemoteFailure(response.error) })
             return
           }
-          const value = response.value
+          // 成功值就是上游 `ModelCatalog`：分组、失败与默认选择都按它自己的字段读。
+          const catalog = response.value
           data.set({
             catalogStatus: 'ready',
             catalogError: null,
-            groups: value.groups ?? [],
-            failures: value.failures ?? [],
-            defaultSelection: value.default ?? null,
+            groups: catalog.groups ?? [],
+            failures: catalog.failures ?? [],
+            defaultSelection: catalog.default ?? null,
           })
         } catch (error) {
           data.set({ catalogStatus: 'error', catalogError: messageOf(error) })
@@ -905,7 +816,10 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
           model: choice.model,
           ...choice.reasoningEffort === undefined ? {} : { reasoningEffort: choice.reasoningEffort },
         }))
-        const accepted = await entry.mutate([{ op: 'set', path: ['models'], value }])
+        // 上游 `SettingsPathOpView['value']` 是 `JsonValue`：可选字段在类型层是 `string | undefined`，
+        // 但条件展开让它在值对象里缺席，运行期仍是合法 JSON，边界处一次性收窄。
+        const ops: readonly SettingsPathOpView[] = [{ op: 'set', path: ['models'], value: value as unknown as JsonValue }]
+        const accepted = await entry.mutate(ops)
         if (!accepted) data.set({ writeError: 'Host 拒绝了这次写入：设置不可写，或列表没有通过校验。' })
         return accepted
       } catch (error) {
@@ -938,7 +852,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
 
     // 固定行要先挂载，固定输入观察者才读得到它。
     scope.effect(() => {
-      const command: FixedCommand = {
+      const command: ShortcutFixedCommand = {
         id: MODEL_SWITCH_ID,
         label: () => '模型快速切换',
         keys: modelSwitchKeys(platform),
@@ -949,7 +863,8 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
         return shortcuts.registerFixed(command)
       } catch (error) {
         warn(`固定行注册失败（${command.keys.join('+')} 未占用）：`, error)
-        return undefined
+        // 没注册成功就没有要撤的东西；effect 契约要求交回一个清理函数，给个空动作。
+        return () => {}
       }
     }, `${name}: model switch fixed row`)
 
@@ -993,7 +908,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
             inject: () => ({ store: palette, data, view: MODEL_VIEW, effortView: EFFORT_VIEW, onBack: backToModels }),
           },
           ModelOverlay,
-        ) as () => void
+        )
         return () => {
           disposeOverlay?.()
           disposeOverlay = undefined
@@ -1017,7 +932,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
             inject: () => ({ data, actions }),
           },
           ModelSettingsSection,
-        ) as () => void
+        )
         return () => {
           disposeSection?.()
           disposeSection = undefined
@@ -1032,7 +947,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Cli
     scope.inject(['configForms'], (inner) => {
       const forms = readConfigForms(inner)
       if (forms === undefined) return
-      let entry: ConfigFormFace
+      let entry: ConfigForm<unknown>
       try {
         entry = forms.get(CONFIG_ENTRY_ID)
       } catch (error) {
@@ -1500,6 +1415,17 @@ function modelSubtitle(model: CatalogGroup['models'][number]): string {
   return `${model.id} · ${efforts.map((effort) => effort.name ?? effort.id).join(' / ')}`
 }
 
+/**
+ * 目录角标的可显示文本。
+ *
+ * 上游 `ModelCatalogModel['badge']` 的 `text` 是 `LocalizedText`（字符串或按语言分键）；
+ * 设置页只画一行，按 `en` 兜底，避免把结构对象直接交给 React。
+ */
+function badgeText(badge: CatalogModelRow['badge']): string {
+  if (badge === undefined) return ''
+  return typeof badge.text === 'string' ? badge.text : badge.text.en
+}
+
 /** 「添加模型」面板：按提供方分组列出目录里的模型。 */
 function catalogPicker(
   groups: readonly CatalogGroup[],
@@ -1543,7 +1469,8 @@ function catalogPicker(
                   React.createElement('span', { className: 'dsh-model-quick-switch-settings-model-name-text' }, presentation.title),
                   model.badge === undefined
                     ? null
-                    : React.createElement('span', { className: 'dsh-model-quick-switch-settings-badge' }, model.badge),
+                    // 上游 0.2.2-rc.2 的角标是 `{ text, tone }` 结构，本设置的展示槽只画一行文本。
+                    : React.createElement('span', { className: 'dsh-model-quick-switch-settings-badge' }, badgeText(model.badge)),
                 ),
                 React.createElement('span', { className: 'dsh-model-quick-switch-settings-model-id' }, modelSubtitle(model)),
               ),

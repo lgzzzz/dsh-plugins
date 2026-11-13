@@ -10,12 +10,12 @@
  * 上游锚点、已知边界与验证方式见 docs/dsh-stats-ttft.md。
  */
 import * as React from 'react'
+import type { Context } from '@deepseek-ai/cordis'
 import { STATS_ID, STATS_SLOT, createShadowState, reconcileShadow, withdrawShadow } from './shadow.ts'
 import { averageTTFT, formatDuration, withDuration } from './ttft.ts'
 import type {
-  AssistantNode,
-  ClientContext,
-  SessionStatsReading,
+  ChatNodes,
+  SessionStatsProjection,
   ShadowSlots,
   Translate,
   UseChat,
@@ -69,8 +69,8 @@ export function withTTFTDuration(Inner: unknown): unknown {
     ) as UseProjection
     const useChat = (typeof props.useChat === 'function' ? props.useChat : useNoChat) as UseChat
 
-    const projection = useProjection('sessionStats') as SessionStatsReading | undefined
-    const nodes = useChat((snapshot) => snapshot?.legacy?.nodes) as readonly AssistantNode[] | undefined
+    const projection: SessionStatsProjection | undefined = useProjection('sessionStats')
+    const nodes: ChatNodes | undefined = useChat((snapshot) => snapshot?.legacy?.nodes)
     const average = averageTTFT(projection, nodes)
     const segment = average === null || typeof t !== 'function'
       ? null
@@ -89,7 +89,7 @@ export function withTTFTDuration(Inner: unknown): unknown {
 }
 
 /** 读取 `slots` 服务；服务缺席或形状不符时返回 undefined。 */
-function getSlots(ctx: ClientContext): ShadowSlots | undefined {
+function getSlots(ctx: Context): ShadowSlots | undefined {
   if (typeof ctx.get !== 'function') return undefined
   const value = ctx.get(SLOTS_SERVICE)
   if (value === null || typeof value !== 'object') return undefined
@@ -111,7 +111,7 @@ function whenLater(ms: number, run: () => void): void {
 }
 
 /** 在一个客户端上下文上安装遮蔽。 */
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: Context): void {
   const slots = getSlots(ctx)
   if (slots === undefined) return
 

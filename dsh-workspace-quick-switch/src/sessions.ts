@@ -18,32 +18,10 @@
  *
  * 本文件不 import React、不碰 DOM、也不读任何服务:与 `palette.ts` 一样只做规则。
  */
+import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { PaletteRow } from './palette.ts'
-
-/**
- * 宿主侧一条会话(本插件只读这些字段;形状沿用 Session 控制器 `list.byId` 的元素)。
- */
-export interface HostSession {
-  readonly id: string
-  /** 持久化标题;缺席或空白时按左侧栏的文案退回「未命名」。 */
-  readonly title?: string
-  /** 空白会话(「新会话」占位行)。 */
-  readonly blank?: boolean
-  /** 粗粒度来源;`subagent` 的子会话在左侧栏不可见。 */
-  readonly origin?: string
-  /** 最近更新时间(毫秒);「最近更新」排序的依据。 */
-  readonly updatedAt: number
-  readonly running?: boolean
-  readonly cwd?: string
-  /** 本地持有计数;主视图会话的 `mainView` 大于 0。 */
-  readonly retainedBy?: { readonly mainView?: number }
-}
-
-/** 会话目录的快照面(本插件只读 `ids` / `byId`)。 */
-export interface HostSessionList {
-  readonly ids: readonly string[]
-  readonly byId: Readonly<Record<string, HostSession | undefined>>
-}
 
 /**
  * 会话浮层里的一行(就是 {@link PaletteRow} 的形状)。
@@ -51,27 +29,23 @@ export interface HostSessionList {
  * 第二行是「工作区 · 相对时间」;`badges` 按 置顶 / 进行中 的顺序给出角标。
  */
 export interface SessionPaletteEntry extends PaletteRow {
-  readonly sessionId: string
+  readonly sessionId: SessionId
   readonly updatedAt: number
   /** 所属工作区的显示名;不属于任何工作区时是 cwd 的末段(可能为空)。 */
   readonly workspace: string
 }
 
-/** 会话行的取舍依据:置顶集合与归档集合。 */
-export interface SessionRowState {
-  readonly pinnedSessionIds?: readonly string[]
-  readonly archivedSessionIds?: readonly string[]
-}
+/**
+ * 会话行的取舍依据:置顶集合与归档集合。
+ *
+ * 直接取工作区快照上的两个集合;本地只留名字,不再重复字段定义。
+ */
+export type SessionRowState = Pick<WorkspaceSnapshot, 'archivedSessionIds' | 'pinnedSessionIds'>
 
 /** 会话浮层的候选来源面:目录 + 工作区归属 + 置顶/归档集合。 */
 export interface SessionCandidateSource {
-  readonly sessions: HostSessionList
-  readonly workspaces: readonly {
-    readonly workspaceId: string
-    readonly title: string
-    readonly path: string
-    readonly sessionIds?: readonly string[]
-  }[]
+  readonly sessions: SessionListState
+  readonly workspaces: readonly WorkspaceView[]
   readonly rowState: SessionRowState
 }
 
@@ -94,7 +68,7 @@ export const RUNNING_BADGE = '进行中'
  * @param list - 会话目录快照。
  * @returns 主视图会话 id;没有时 undefined。
  */
-export function mainViewSessionId(list: HostSessionList): string | undefined {
+export function mainViewSessionId(list: SessionListState): SessionId | undefined {
   for (const id of list.ids) {
     const summary = list.byId[id]
     if (summary !== undefined && (summary.retainedBy?.mainView ?? 0) > 0) return summary.id
@@ -107,7 +81,7 @@ export function mainViewSessionId(list: HostSessionList): string | undefined {
  * @param session - 会话摘要。
  * @returns 「新会话」/「未命名」或持久标题。
  */
-export function sessionDisplayTitle(session: HostSession): string {
+export function sessionDisplayTitle(session: SessionSummary): string {
   if (session.blank === true) return BLANK_SESSION_TITLE
   const title = session.title?.trim() ?? ''
   return title === '' ? UNTITLED_SESSION_TITLE : title
@@ -119,8 +93,8 @@ export function sessionDisplayTitle(session: HostSession): string {
  * @param current - 主视图会话 id;空白会话只保留它。
  * @returns 成员摘要(按目录顺序)。
  */
-export function flatMembers(list: HostSessionList, current: string | undefined): HostSession[] {
-  const members: HostSession[] = []
+export function flatMembers(list: SessionListState, current: SessionId | undefined): SessionSummary[] {
+  const members: SessionSummary[] = []
   for (const id of list.ids) {
     const summary = list.byId[id]
     if (summary === undefined) continue
@@ -136,7 +110,7 @@ export function flatMembers(list: HostSessionList, current: string | undefined):
  * @param members - 参与排序的成员。
  * @returns 排好序的新数组(不改入参)。
  */
-export function orderByRecency(members: readonly HostSession[]): HostSession[] {
+export function orderByRecency(members: readonly SessionSummary[]): SessionSummary[] {
   return [...members].sort((a, b) => {
     if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt
     return a.id < b.id ? -1 : 1
@@ -149,7 +123,7 @@ export function orderByRecency(members: readonly HostSession[]): HostSession[] {
  * @param current - 主视图会话 id。
  * @returns 新数组。
  */
-export function pinCurrentBlank(ordered: readonly HostSession[], current: string | undefined): HostSession[] {
+export function pinCurrentBlank(ordered: readonly SessionSummary[], current: SessionId | undefined): SessionSummary[] {
   if (current === undefined) return [...ordered]
   const picked = ordered.find((session) => session.id === current && session.blank === true)
   if (picked === undefined) return [...ordered]
@@ -165,13 +139,13 @@ export function pinCurrentBlank(ordered: readonly HostSession[], current: string
  * @returns 渲染顺序的成员。
  */
 export function sectionMembers(
-  members: readonly HostSession[],
+  members: readonly SessionSummary[],
   pinned: ReadonlySet<string>,
   archived: ReadonlySet<string>,
-): HostSession[] {
-  const blanks: HostSession[] = []
-  const leading: HostSession[] = []
-  const rest: HostSession[] = []
+): SessionSummary[] {
+  const blanks: SessionSummary[] = []
+  const leading: SessionSummary[] = []
+  const rest: SessionSummary[] = []
   for (const member of members) {
     if (member.blank === true) blanks.push(member)
     else if (!archived.has(member.id) && pinned.has(member.id)) leading.push(member)
@@ -187,8 +161,8 @@ export function sectionMembers(
  * @returns 显示名,可能为空串(既无归属又无 cwd)。
  */
 export function workspaceLabel(
-  workspaces: readonly { readonly title: string; readonly sessionIds?: readonly string[] }[],
-  session: HostSession,
+  workspaces: readonly WorkspaceView[],
+  session: SessionSummary,
 ): string {
   const owner = workspaces.find((workspace) => workspace.sessionIds?.includes(session.id) === true)
   if (owner !== undefined) return owner.title

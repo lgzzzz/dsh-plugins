@@ -10,7 +10,8 @@
  * 显示只输出时长本身（`2.3秒` / `2分5秒`），不带「首 token 平均（TTFT）」字样；
  * 时长格式与上游 `formatDuration` 逐字一致。
  */
-import type { AssistantNode, SessionStatsReading, Translate } from './types.ts'
+import type { ConversationNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { SessionStatsProjection, Translate } from './types.ts'
 
 /** 窗口折叠的 TTFT 合计与样本数。 */
 export interface FoldedTTFT {
@@ -29,7 +30,7 @@ export interface FoldedTTFT {
  * @param nodes - 已落定的窗口节点。
  * @returns 求和与样本数；没有节点时两者都是 0。
  */
-export function foldTTFT(nodes: readonly AssistantNode[] | undefined): FoldedTTFT {
+export function foldTTFT(nodes: readonly ConversationNode[] | undefined): FoldedTTFT {
   let ms = 0
   let steps = 0
   if (nodes === undefined) return { ms, steps }
@@ -51,8 +52,8 @@ export function foldTTFT(nodes: readonly AssistantNode[] | undefined): FoldedTTF
  * @returns 平均毫秒数；没有样本或数值不合法时返回 null。
  */
 export function averageTTFT(
-  projection: SessionStatsReading | undefined,
-  nodes: readonly AssistantNode[] | undefined,
+  projection: SessionStatsProjection | undefined,
+  nodes: readonly ConversationNode[] | undefined,
 ): number | null {
   if (projection !== undefined) {
     if (!Number.isFinite(projection.ttftMs) || !Number.isFinite(projection.ttftSteps)) return null

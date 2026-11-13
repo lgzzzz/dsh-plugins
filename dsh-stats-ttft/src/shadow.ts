@@ -26,7 +26,7 @@
  *
  * 上游锚点、已知边界与验证方式见 docs/dsh-stats-ttft.md。
  */
-import type { LedgerEntry, ShadowSlots } from './types.ts'
+import type { ShadowSlots, StoredEntry } from './types.ts'
 
 /** 承载输入框下方统计按钮的槽。 */
 export const STATS_SLOT = 'conversation.composer.dock'
@@ -37,7 +37,7 @@ export const STATS_ID = 'activity'
 /** 本插件的记账：源项、我们注册的包装组件、以及注册的撤销函数。 */
 export interface ShadowState {
   /** 当前被遮蔽的源项。 */
-  source?: LedgerEntry
+  source?: StoredEntry
   /** 交给 `register()` 的包装组件（它同时是「哪一项是我们的」的身份凭据）。 */
   wrapped?: unknown
   /** `register()` 返回的撤销函数。 */
@@ -77,7 +77,7 @@ export function createShadowState(): ShadowState {
  * @param wrapped - 我们注册的包装组件；用它排除我们自己的条目。
  * @returns 源项；账本上没有（或只剩我们自己的项）时返回 undefined。
  */
-export function findSourceEntry(entries: readonly LedgerEntry[], wrapped: unknown): LedgerEntry | undefined {
+export function findSourceEntry(entries: readonly StoredEntry[], wrapped: unknown): StoredEntry | undefined {
   return entries.find((entry) => entry.options?.id === STATS_ID && entry.component !== wrapped)
 }
 
@@ -88,7 +88,7 @@ export function findSourceEntry(entries: readonly LedgerEntry[], wrapped: unknow
  * @param source - 被遮蔽的源项。
  * @returns 交给 `slots.register()` 的选项。
  */
-export function shadowOptions(source: LedgerEntry): Record<string, unknown> {
+export function shadowOptions(source: StoredEntry): Record<string, unknown> {
   const options: Record<string, unknown> = { name: STATS_SLOT, id: STATS_ID }
   const order = source.options?.order
   if (order !== undefined) options.order = order

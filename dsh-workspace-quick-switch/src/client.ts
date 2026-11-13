@@ -48,6 +48,24 @@
  * 键位冲突、启用方式与已知边界见 docs/dsh-workspace-quick-switch.md。
  */
 import * as React from 'react'
+import type { Context } from '@deepseek-ai/cordis'
+import type {
+  ShortcutBinding,
+  ShortcutCommandId,
+  ShortcutFixedCommand,
+  ShortcutFixedInput,
+  ShortcutGesture,
+  ShortcutPlatform,
+  Shortcuts,
+} from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { UiWorkspace } from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+// 只取模块增强:`Context['sessions'].list` 的 `SessionSummary.retainedBy.mainView`
+// 由 ui-session 合并进 `SessionReferenceSourceMap`。
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { name } from './runtime.ts'
 import {
   PAGE_SIZE,
@@ -64,17 +82,11 @@ import {
   windowSlice,
   quickSwitchKeys,
   sessionSwitchKeys,
-  type HostWorkspace,
-  type LogicalBinding,
   type PaletteRow,
   type PaletteStore,
   type PaletteView,
-  type QuickSwitchPlatform,
 } from './palette.ts'
-import {
-  sessionPaletteEntries,
-  type HostSessionList,
-} from './sessions.ts'
+import { sessionPaletteEntries } from './sessions.ts'
 
 export { name }
 
@@ -443,95 +455,11 @@ export interface PaletteEventLike {
   readonly defaultPrevented?: boolean
 }
 
-/** 快捷键目录面:只用到固定行注册、固定输入观察与设备平台。 */
-export interface ShortcutsFace {
-  registerFixed: (command: FixedCommand) => () => void
-  observeFixedInput: (listener: (input: unknown) => void) => () => void
-  /** 接收输入的设备平台;`primary` 按它展开成 `meta`(macOS)或 `control`(其它)。 */
-  readonly platform?: QuickSwitchPlatform
-  readonly fixedCatalog?: {
-    getSnapshot(): readonly { readonly id?: string }[]
-  }
-}
+/** 会话目录服务面:上游 `ctx.sessions`(候选来源与「主视图会话」标记)。 */
+type Sessions = Context['sessions']
 
-/** 固定行的形状(快捷键目录里的一条只读输入动作)。 */
-export interface FixedCommand {
-  readonly id: string
-  readonly label: () => string
-  readonly keys: readonly string[]
-  readonly bindings: readonly unknown[]
-  readonly group: 'application'
-}
-
-/** 浮层组件的类型:注册进槽位的是**组件本体**,不是渲染出来的元素。 */
-export type OverlayComponent = (props: OverlayProps) => React.ReactElement | null
-
-/** 槽位注册表面:只用到「等声明 + 注册」。 */
-export interface SlotsFace {
-  /**
-   * 等某个槽被声明后再跑回调。
-   *
-   * 槽已经声明时回调**同步**执行并返回它交出来的清理函数;否则回调排队,等声明落地再跑,
-   * 返回的仍是同一个清理函数。两种情形下都必须能立刻拿到清理函数。
-   */
-  inject(key: string, callback: () => undefined | (() => void)): () => void
-  /**
-   * 注册一个条目。
-   *
-   * 第二个参数必须是**组件本体**,不能是 `React.createElement(...)` 出来的元素 —— 渲染器对
-   * 每个条目做的是 `jsx(entry.component, props)`,业务 props 只能由 `options.inject()` 交出来。
-   *
-   * 本方法与 {@link SlotsFace.inject} 都是上游**使用 `this` 的原型方法**:必须以槽位服务
-   * 对象本身为接收者调用(`slots.register(...)`),由 Cordis 的服务代理把 `this.ctx` 换成
-   * 调用方 scope;一旦把方法 bind/apply 到别处,上游读 `this.ctx` 就会直接抛错。
-   */
-  register(options: Record<string, unknown>, component: OverlayComponent): unknown
-}
-
-/** 浮层动作面:`uiWorkspace` 的公开动词里本插件要用的两个。 */
-export interface WorkspaceNavigation {
-  /** 在指定工作区新建会话(左侧栏工作区分组上的「新建会话」)。 */
-  startSession(workspaceId: string): void
-  /** 打开指定会话(点击左侧栏那一行)。 */
-  openSession?(sessionId: string): void
-}
-
-/** 宿主工作区控制器面:纯快照源(含置顶 / 归档集合)。 */
-export interface WorkspacesFace {
-  readonly list: {
-    getSnapshot(): {
-      readonly items: readonly HostWorkspace[]
-      /** 注册表全局的归档集合;缺席按空集处理(等于「没有会话被归档」)。 */
-      readonly archivedSessionIds?: readonly string[]
-      /** 注册表全局的置顶集合;缺席按空集处理。 */
-      readonly pinnedSessionIds?: readonly string[]
-    }
-    subscribe(listener: () => void): () => void
-  }
-}
-
-/** 会话目录面:候选来源,以及把「主视图会话」映射回工作区/初始选中行。 */
-export interface SessionsFace {
-  readonly list: {
-    getSnapshot(): HostSessionList & { readonly phase?: string }
-    /** 订阅面(真实 `ISessions.list` 是 `ObservableSnapshot`);缺席只影响候选的实时性。 */
-    subscribe?(listener: () => void): () => void
-  }
-}
-
-/** 本插件注入依赖的收窄视图;Cordis 的 `Context` 结构上满足它。 */
-export interface PaletteScope {
-  effect(callback: () => undefined | (() => void), label?: string): unknown
-  get(name: string): unknown
-  /**
-   * 等某个服务可用后再跑回调 —— Cordis 的子 fiber:服务齐了就运行,服务消失或换实现时先卸载
-   * (回调里用 `scope.effect` 登记的清理函数随之跑掉)再重跑。
-   *
-   * 上游服务由远程链路提供、比本插件激活晚时,这是唯一能补上读数的做法:当场 `get` 一次只会
-   * 读到 undefined,而且再也不会回头。
-   */
-  inject(names: readonly string[], setup: (scope: PaletteScope) => void): unknown
-}
+/** 宿主工作区服务面:上游 `ctx.workspaces`(候选来源与置顶/归档集合)。 */
+type Workspaces = Context['workspaces']
 
 /** 往 `<head>` 挂一张样式表,并返回移除它的函数。 */
 function installStyleTag(): () => void {
@@ -567,9 +495,9 @@ export function paletteAction(event: PaletteEventLike): PaletteAction | undefine
 
 /** 主视图会话所属的工作区 id;两处读数都不全时不返回(浮层就不标「当前」)。 */
 function currentWorkspaceId(
-  sessions: SessionsFace | undefined,
-  workspaces: readonly HostWorkspace[],
-): string | undefined {
+  sessions: Sessions | undefined,
+  workspaces: readonly WorkspaceView[],
+): WorkspaceId | undefined {
   const list = sessions?.list.getSnapshot()
   if (list === undefined) return undefined
   const current = list.ids.find((id) => (list.byId[id]?.retainedBy?.mainView ?? 0) > 0)
@@ -814,9 +742,9 @@ function activate(store: PaletteStore, index: number): void {
 }
 
 /** 工作区浮层的固定行:占据 `primary+alt+M`,键帽按平台格式化。 */
-function workspaceFixedCommand(platform: QuickSwitchPlatform): FixedCommand {
+function workspaceFixedCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
   return {
-    id: QUICK_SWITCH_ID,
+    id: QUICK_SWITCH_ID as ShortcutCommandId,
     label: () => '工作区快速切换',
     keys: quickSwitchKeys(platform),
     bindings: [QUICK_SWITCH_BINDING],
@@ -825,9 +753,9 @@ function workspaceFixedCommand(platform: QuickSwitchPlatform): FixedCommand {
 }
 
 /** 会话浮层的固定行:占据 `primary+alt+I`,键帽按平台格式化。 */
-function sessionFixedCommand(platform: QuickSwitchPlatform): FixedCommand {
+function sessionFixedCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
   return {
-    id: SESSION_SWITCH_ID,
+    id: SESSION_SWITCH_ID as ShortcutCommandId,
     label: () => '会话快速切换',
     keys: sessionSwitchKeys(platform),
     bindings: [SESSION_SWITCH_BINDING],
@@ -843,7 +771,7 @@ function sessionFixedCommand(platform: QuickSwitchPlatform): FixedCommand {
  * `uiWorkspace` 缺席时固定行照旧在(快捷键目录里可见),按键不做动作。
  * @param ctx - 客户端上下文。
  */
-export function apply(ctx: { inject(names: readonly string[], setup: (scope: PaletteScope) => void): unknown }): void {
+export function apply(ctx: Context): void {
   ctx.inject(inject, (scope) => {
     const slots = readSlots(scope)
     if (slots === undefined) return
@@ -856,7 +784,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
     const workspaceStore = createPaletteStore()
     const sessionStore = createPaletteStore()
     // 平台只决定 `primary` 往哪边展开;服务缺席时按 Windows/Linux 的 `Ctrl+Alt` 兜底。
-    const platform: QuickSwitchPlatform = shortcuts.platform ?? 'windows'
+    const platform: ShortcutPlatform = (shortcuts.platform as ShortcutPlatform | undefined) ?? 'windows'
 
     /**
      * 把上游当前读数投影进两个 store:候选、当前标记与选中行一起对齐。
@@ -961,7 +889,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
     scope.effect(() => {
       let disposeWorkspace: undefined | (() => void)
       let disposeSession: undefined | (() => void)
-      // `slots.inject` / `slots.register` 都以槽位服务对象本身为接收者调用:它们是上游使用
+      // `slots.inject` / `slots.register` 以槽位服务对象本身为接收者调用:它们是上游使用
       // `this` 的原型方法,服务代理会据此把 `this.ctx` 换成我们这个 scope(于是注册项与
       // 清理函数都挂在同一个 fiber 上)。自己 bind 到 scope 会让上游连 `this.ctx` 都读不到。
       slots.inject('shell.overlay', () => {
@@ -974,7 +902,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
             inject: () => ({ store: workspaceStore, view: WORKSPACE_VIEW }),
           },
           PaletteOverlay,
-        ) as () => void
+        )
         disposeSession = slots.register(
           {
             name: 'shell.overlay',
@@ -983,7 +911,7 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
             inject: () => ({ store: sessionStore, view: SESSION_VIEW }),
           },
           PaletteOverlay,
-        ) as () => void
+        )
         return () => {
           disposeWorkspace?.()
           disposeSession?.()
@@ -1018,11 +946,11 @@ export function apply(ctx: { inject(names: readonly string[], setup: (scope: Pal
 
 /**
  * 注册一条固定行;注册失败只告警(该组合键不归本插件),不影响另一条。
- * @param shortcuts - 快捷键目录面。
+ * @param shortcuts - 快捷键服务。
  * @param command - 固定行声明。
  * @returns 注销函数;注册失败时为 undefined。
  */
-function registerFixedRow(shortcuts: ShortcutsFace, command: FixedCommand): (() => void) | undefined {
+function registerFixedRow(shortcuts: Shortcuts, command: ShortcutFixedCommand): (() => void) | undefined {
   try {
     return shortcuts.registerFixed(command)
   } catch (error) {
@@ -1032,7 +960,7 @@ function registerFixedRow(shortcuts: ShortcutsFace, command: FixedCommand): (() 
 }
 
 /** 打开工作区浮层:动作为「在选中工作区新建会话」,初始选中行落在当前会话所在的工作区。 */
-function openWorkspaceStore(store: PaletteStore, navigation: WorkspaceNavigation | undefined): void {
+function openWorkspaceStore(store: PaletteStore, navigation: UiWorkspace | undefined): void {
   if (navigation === undefined) {
     warn('uiWorkspace 服务不可用:无法新建会话')
     return
@@ -1043,7 +971,7 @@ function openWorkspaceStore(store: PaletteStore, navigation: WorkspaceNavigation
     const picked = index < 0 ? undefined : snapshot.entries[index]
     if (picked === undefined) return
     try {
-      navigation.startSession(picked.key)
+      navigation.startSession(picked.key as WorkspaceId)
     } catch (error) {
       warn(`新建会话失败(${picked.key}):`, error)
     }
@@ -1058,7 +986,7 @@ function openWorkspaceStore(store: PaletteStore, navigation: WorkspaceNavigation
  * `openSession` 缺席(上游换了动词名)时只告警、不开浮层 —— 打开一个按 Enter 什么也不做的
  * 列表比不打开更让人困惑。
  */
-function openSessionStore(store: PaletteStore, navigation: WorkspaceNavigation | undefined): void {
+function openSessionStore(store: PaletteStore, navigation: UiWorkspace | undefined): void {
   const openSession = navigation?.openSession
   if (navigation === undefined || typeof openSession !== 'function') {
     warn('uiWorkspace 服务不可用:无法打开会话')
@@ -1070,7 +998,7 @@ function openSessionStore(store: PaletteStore, navigation: WorkspaceNavigation |
     const picked = index < 0 ? undefined : snapshot.entries[index]
     if (picked === undefined) return
     try {
-      navigation.openSession?.(picked.key)
+      navigation.openSession?.(picked.key as SessionId)
     } catch (error) {
       warn(`打开会话失败(${picked.key}):`, error)
     }
@@ -1080,12 +1008,10 @@ function openSessionStore(store: PaletteStore, navigation: WorkspaceNavigation |
 }
 
 /** 固定输入读数里的按键事实;不是 keydown 或没有 gesture 时返回 undefined。 */
-function fixedGesture(input: unknown): Partial<Record<string, unknown>> | undefined {
-  if (typeof input !== 'object' || input === null) return undefined
-  const candidate = input as { readonly type?: unknown; readonly gesture?: unknown }
-  if (candidate.type !== 'keydown') return undefined
-  const gesture = candidate.gesture as Partial<Record<string, unknown>> | undefined
-  return gesture === null ? undefined : gesture
+function fixedGesture(input: ShortcutFixedInput): ShortcutGesture | undefined {
+  if (input.type !== 'keydown') return undefined
+  // 上游类型保证 keydown 一定带 gesture;测试替身可能省略或给 null,按「缺席」处理。
+  return (input.gesture as ShortcutGesture | null | undefined) ?? undefined
 }
 
 /** 命中的是哪张浮层。 */
@@ -1097,15 +1023,15 @@ export type PaletteKind = 'workspace' | 'session'
  * 两条投递路径(固定通道的观察者与终端前的捕获拦截)共用本判定:平台物理组合完全匹配
  * (先试工作区的 `⌘⌥M` / `Ctrl+Alt+M`,再试会话的 `⌘⌥I` / `Ctrl+Alt+I`)、不是组字 / 长按 /
  * 已被消费的输入,且对应的固定行真的还挂在目录里(被别的注册者挤掉时这一按就"无主")。
- * @param shortcuts - 快捷键目录面。
+ * @param shortcuts - 快捷键服务。
  * @param platform - 接收输入的设备平台。
  * @param gesture - 按键事实(KeyboardEvent 或固定通道读数结构上都满足);缺席时无主。
  * @returns 归属的浮层;不归本插件时 undefined。
  */
 export function ownedPalette(
-  shortcuts: ShortcutsFace,
-  platform: QuickSwitchPlatform,
-  gesture: Partial<Record<string, unknown>> | undefined,
+  shortcuts: Shortcuts,
+  platform: ShortcutPlatform,
+  gesture: ShortcutGesture | undefined,
 ): PaletteKind | undefined {
   if (gesture === undefined) return undefined
   if (gesture.composing === true || gesture.repeat === true || gesture.defaultPrevented === true) return undefined
@@ -1116,11 +1042,11 @@ export function ownedPalette(
 
 /** 物理组合匹配 + 固定行仍在目录里。 */
 function bindingOwns(
-  shortcuts: ShortcutsFace,
-  platform: QuickSwitchPlatform,
-  binding: LogicalBinding,
+  shortcuts: Shortcuts,
+  platform: ShortcutPlatform,
+  binding: ShortcutBinding,
   id: string,
-  gesture: Partial<Record<string, unknown>>,
+  gesture: ShortcutGesture,
 ): boolean {
   if (!bindingPress(platform, binding, gesture)) return false
   const rows = shortcuts.fixedCatalog?.getSnapshot()
@@ -1133,24 +1059,24 @@ function bindingOwns(
  * 保留为独立导出:终端捕获与固定通道共用 `ownedPalette`,这里只回答「是不是工作区那张」。
  */
 export function quickSwitchOwns(
-  shortcuts: ShortcutsFace,
-  platform: QuickSwitchPlatform,
-  gesture: Partial<Record<string, unknown>> | undefined,
+  shortcuts: Shortcuts,
+  platform: ShortcutPlatform,
+  gesture: ShortcutGesture | undefined,
 ): boolean {
   return ownedPalette(shortcuts, platform, gesture) === 'workspace'
 }
 
 /** 这次固定输入是否就是会话浮层那条组合(macOS `⌘⌥I`,Windows/Linux `Ctrl+Alt+I`)。 */
 export function sessionSwitchOwns(
-  shortcuts: ShortcutsFace,
-  platform: QuickSwitchPlatform,
-  gesture: Partial<Record<string, unknown>> | undefined,
+  shortcuts: Shortcuts,
+  platform: ShortcutPlatform,
+  gesture: ShortcutGesture | undefined,
 ): boolean {
   return ownedPalette(shortcuts, platform, gesture) === 'session'
 }
 
 /** 从一次原生 keydown 里取出本插件要读的手势事实(捕获阶段 `defaultPrevented` 恒为 false)。 */
-function keyGesture(event: KeyboardEvent): Record<string, unknown> {
+function keyGesture(event: KeyboardEvent): ShortcutGesture {
   return {
     code: event.code,
     control: event.ctrlKey,
@@ -1182,57 +1108,51 @@ function composedElement(event: KeyboardEvent): Element | null {
  * 这一条。消费必须发生在按键派发的同一拍里,而固定通道本来就是同步回调。
  * @param input - 固定输入读数;没有 `consume` 的替身输入(测试夹具)直接跳过。
  */
-function consumeFixedInput(input: unknown): void {
-  if (typeof input !== 'object' || input === null) return
-  const face = input as { readonly consume?: unknown }
-  if (typeof face.consume === 'function') (face.consume as () => void)()
+function consumeFixedInput(input: ShortcutFixedInput): void {
+  if (input.type !== 'keydown') return
+  if (typeof input.consume === 'function') input.consume()
 }
 
-/** 从注入面读槽位表。 */
-function readSlots(scope: PaletteScope): SlotsFace | undefined {
+/** 从注入面读槽位服务。 */
+function readSlots(scope: Context): SlotRegistry | undefined {
   const value = scope.get('slots')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<SlotsFace>
-  if (typeof face.inject !== 'function' || typeof face.register !== 'function') return undefined
-  return face as SlotsFace
+  if (typeof value.inject !== 'function' || typeof value.register !== 'function') return undefined
+  return value
 }
 
-/** 从注入面读快捷键目录。 */
-function readShortcuts(scope: PaletteScope): ShortcutsFace | undefined {
+/** 从注入面读快捷键服务。 */
+function readShortcuts(scope: Context): Shortcuts | undefined {
   const value = scope.get('shortcuts')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<ShortcutsFace>
-  if (typeof face.registerFixed !== 'function' || typeof face.observeFixedInput !== 'function') return undefined
-  return face as ShortcutsFace
+  if (typeof value.registerFixed !== 'function' || typeof value.observeFixedInput !== 'function') return undefined
+  return value
 }
 
 /** 从注入面读 `uiWorkspace`。 */
-function readNavigation(scope: PaletteScope): WorkspaceNavigation | undefined {
+function readNavigation(scope: Context): UiWorkspace | undefined {
   const value = scope.get('uiWorkspace')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<WorkspaceNavigation>
-  if (typeof face.startSession !== 'function') return undefined
-  return face as WorkspaceNavigation
+  if (typeof value.startSession !== 'function') return undefined
+  return value
 }
 
 /** 从注入面读宿主工作区控制器(缺席时浮层按空候选打开)。 */
-function readWorkspaces(scope: PaletteScope): WorkspacesFace | undefined {
+function readWorkspaces(scope: Context): Workspaces | undefined {
   const value = scope.get('workspaces')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<WorkspacesFace>
-  if (face.list === undefined || typeof face.list.getSnapshot !== 'function' || typeof face.list.subscribe !== 'function') {
+  if (value.list === undefined || typeof value.list.getSnapshot !== 'function' || typeof value.list.subscribe !== 'function') {
     return undefined
   }
-  return face as WorkspacesFace
+  return value
 }
 
 /** 从注入面读会话目录(缺席时两张浮层都只是空候选)。 */
-function readSessions(scope: PaletteScope): SessionsFace | undefined {
+function readSessions(scope: Context): Sessions | undefined {
   const value = scope.get('sessions')
   if (typeof value !== 'object' || value === null) return undefined
-  const face = value as Partial<SessionsFace>
-  if (face.list === undefined || typeof face.list.getSnapshot !== 'function') return undefined
-  return face as SessionsFace
+  if (value.list === undefined || typeof value.list.getSnapshot !== 'function') return undefined
+  return value
 }
 
 /** 输出一行带插件前缀的诊断。 */

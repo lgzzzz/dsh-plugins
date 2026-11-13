@@ -48,26 +48,19 @@ import type {ISessions, SessionListState} from '@deepseek-ai/dsh-api-session-con
 // 空导入：让 TS 加载本包对 `@deepseek-ai/cordis` 的模块增强(`ctx.uiSession`)与
 // `SessionPendingInteractionMap` 的域声明;type-only 导入在打包前被擦除。
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type {SessionStatusSnapshot} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {SessionStatusSnapshot, UiSession} from '@deepseek-ai/dsh-client-ui-session/client'
+// 会话导航面（`UiWorkspace`）的公开类型；同时加载它对 `Context.uiWorkspace` 的模块增强。
+import type {UiWorkspace} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {Context} from '@deepseek-ai/cordis'
 
-/** Cordis 增强声明的会话 UI 状态面;本插件只读它的 `sessionStatus`。 */
-type UiSession = Context['uiSession']
-
 /**
- * 会话导航面:上游 `UiWorkspace` 的公开面里本插件唯一要用的动词。
+ * 会话导航面:上游 `UiWorkspace` 公开面里本插件唯一要用的动词。
  *
- * 该服务由 Workspace browser 所在的上游客户端包提供。本插件不为它多拉一个类型依赖,
- * 只按这份结构读取 `scope.get('uiWorkspace')`;该服务由注入列表声明,因此读取时它必然
- * 已经激活 —— 形状不符(上游改了方法名)时才告警一次并整体不安装。
+ * `openSession` 的类型直接取自上游导出;该服务由 Workspace browser 所在的上游客户端包
+ * 提供。本插件只按 `Pick` 读取 `scope.get('uiWorkspace')`,不复制它的签名。该服务由注入
+ * 列表声明,因此读取时它必然已经激活 —— 形状不符(上游改了方法名)时才告警一次并整体不安装。
  */
-export interface SessionNavigation {
-  /**
-   * 选中一个会话、把它的 Conversation 显示出来 —— 与点击侧栏那一行是同一个操作。
-   * @param target - 已知会话身份。
-   */
-  openSession(target: SessionId): void
-}
+export type SessionNavigation = Pick<UiWorkspace, 'openSession'>
 
 /** 一次按键在会话导航中的方向。 */
 export type SessionStep = 'previous' | 'next'

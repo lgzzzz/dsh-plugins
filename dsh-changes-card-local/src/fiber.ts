@@ -16,7 +16,7 @@
 /** React 挂在 DOM 节点上的内部属性前缀（后缀是随机串）。 */
 const FIBER_PREFIX = '__reactFiber$'
 
-/** fiber 对象中本模块用到的字段。 */
+/** fiber 对象中本模块用到的字段（React 内部结构，上游没有公开类型，保留为测试接缝）。 */
 interface FiberLike {
   readonly memoizedProps?: unknown
 }

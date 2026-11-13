@@ -1,7 +1,11 @@
 /** 本插件的 Web 字典。文案与模型菜单里的团队开关保持同一套说法。 */
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
 /** 本插件拥有的 locale 命名空间。 */
 export const NS = 'dsh-agent-team-hero-toggle'
+
+/** 本插件命名空间的类型形态（字面量类型，供槽位 `locale:` 与 `t` 座位使用）。 */
+export type HeroLocaleNS = typeof NS
 
 /** 简体中文字典，同时是键的源集合。 */
 export const zh = {
@@ -21,3 +25,10 @@ export const en = {
   description: 'Coordinate multiple agents with a shared task board for better results on complex tasks, at a correspondingly higher token cost.',
   failed: 'Could not confirm the agent teamwork setting was saved. Try again: {message}',
 } satisfies Record<HeroToggleKey, string>
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** 本插件的字典命名空间；注册项的 `locale:` 与 `t` 座位都按它取键。 */
+    'dsh-agent-team-hero-toggle': HeroToggleKey
+  }
+}

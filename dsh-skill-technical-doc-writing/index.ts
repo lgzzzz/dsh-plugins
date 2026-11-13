@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { BUNDLED_SKILL_RANK } from '@deepseek-ai/dsh-skill'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SkillCandidate, SkillDefinition, SkillLookupOptions, SkillProvider } from '@deepseek-ai/dsh-skill'
+import type { SkillCandidate, SkillDefinition, SkillLookupOptions, SkillProvider, SkillResourceBase } from '@deepseek-ai/dsh-skill'
 
 /** 插件标识（日志名，与包名一致）。 */
 export const name = 'dsh-skill-technical-doc-writing'
@@ -28,9 +28,12 @@ const SKILL_NAME = 'technical-doc'
 const SKILL_DESCRIPTION =
   '编写、审查、精简或恢复任意项目的技术文档与文案时使用——README、Markdown 文档、JSDoc 与代码/测试注释、提示词、工具与技能描述、诊断信息、CLI/UI 文案，不限于某个具体仓库。'
 
-/** 正文资产与相对资源根：按模块 URL 解析，因此与进程 cwd 无关。 */
+/** 正文资产与相对资源根：按模块 URL 解析，因此与进程 cwd 无关；类型取上游 `SkillResourceBase`。 */
 const SKILL_BODY_URL = new URL('./assets/technical-doc-writing.md', import.meta.url)
-const RESOURCE_BASE = { kind: 'directory', path: fileURLToPath(new URL('./assets/', import.meta.url)) } as const
+const RESOURCE_BASE: SkillResourceBase = {
+  kind: 'directory',
+  path: fileURLToPath(new URL('./assets/', import.meta.url)),
+}
 
 /** 唯一候选：这里只声明身份与调用策略，正文留在 `get()` 里读。 */
 const CANDIDATE: SkillCandidate = {

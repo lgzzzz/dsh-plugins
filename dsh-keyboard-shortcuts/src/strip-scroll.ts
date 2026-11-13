@@ -27,7 +27,7 @@
  *
  * 机制推导与上游锚点见 docs/dsh-keyboard-shortcuts/03-fixed-input-and-pane-keys.md。
  */
-import { name } from './runtime.ts'
+import { name, type SessionId } from './runtime.ts'
 import type {Context} from '@deepseek-ai/cordis'
 
 /** 页面芯片的属性名：dockkit 放在每个页签芯片上，取值就是 tab id。 */
@@ -123,7 +123,7 @@ export interface StripScrollPosition {
  * 同时要求芯片的最近会话根就是本会话（页面 id 由各面自己铸造，不跨面比较）。浮动 pane 的
  * 标题、尚未挂载的页面都没有这个芯片，返回 undefined。
  */
-function renderedChip(sessionId: string, tabId: string): Element | undefined {
+function renderedChip(sessionId: SessionId, tabId: string): Element | undefined {
   if (typeof document === 'undefined') return undefined
   return [...document.querySelectorAll(`[${CHIP_ATTRIBUTE}]`)].find((chip) =>
     chip.getAttribute(CHIP_ATTRIBUTE) === tabId
@@ -141,7 +141,7 @@ function chipBox(chip: Element): HTMLElement | undefined {
  * 必须在 `sidebar.focus()` **之前**调用（那之后当前页就换人了）。找不到该芯片的条带
  * （浮动 pane、页面尚未挂载、没有 document）时返回 undefined，调用方照常切页。
  */
-export function captureStripScroll(sessionId: string, tabId: string | undefined): StripScrollPosition | undefined {
+export function captureStripScroll(sessionId: SessionId, tabId: string | undefined): StripScrollPosition | undefined {
   if (tabId === undefined) return undefined
   const chip = renderedChip(sessionId, tabId)
   const box = chip === undefined ? undefined : chipBox(chip)
@@ -163,7 +163,7 @@ export function captureStripScroll(sessionId: string, tabId: string | undefined)
  */
 export function restoreStripScroll(
   position: StripScrollPosition | undefined,
-  sessionId: string,
+  sessionId: SessionId,
   tabId: string,
 ): void {
   if (position === undefined) return

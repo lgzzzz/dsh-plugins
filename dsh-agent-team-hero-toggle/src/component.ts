@@ -12,39 +12,40 @@
  */
 import { createElement, useState } from 'react'
 import type { ReactNode } from 'react'
-import { failureMessage, messageOf, shouldRender, type RemoteResult } from './logic.ts'
+import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { GlobalStandardProps, SessionStandardProps, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+// 空类型导入(不引入任何名字):加载 ui-session 对标准 props 的合并
+// (`useSession` / `useProjection` / `useSessions`) 与 ui-conversation 的 `agentTeam`
+// 投影键声明,不产生运行时导入。
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-agent-team/types'
+import { failureMessage, messageOf, shouldRender } from './logic.ts'
+import type { HeroLocaleNS } from './locales.ts'
 import { CLASS } from './styles.ts'
 
-/** 会话快照里本控件用到的字段。 */
-export interface HeroSessionSnapshot {
-  /** 子代理血缘；根会话为 null。 */
-  readonly subagent: unknown
-}
-
-/** 会话目录行里本控件用到的字段。 */
-export interface HeroSessionRow {
-  /** `'subagent'` 表示这一行来自子代理会话。 */
-  readonly origin?: string
-}
-
-/** 槽位标准 props 中本控件使用的读值钩子。 */
-export interface HeroToggleHooks {
-  readonly useSession: <T>(selector: (snapshot: HeroSessionSnapshot) => T) => T
-  readonly useSessions: <T>(selector: (
-    state: { readonly byId: Readonly<Record<string, HeroSessionRow | undefined>> },
-  ) => T) => T
-  readonly useProjection: (key: 'agentTeam') => { readonly enabled: boolean } | undefined
-}
+/**
+ * 槽位标准 props 中本控件使用的读值钩子。
+ *
+ * 直接取上游标准 props 的命名座位:Session 生命周期选择器、会话目录选择器与
+ * projection 读取座位都由 ui-session / ui-slots 声明,本插件不再本地复写
+ * `HeroSessionSnapshot` / `HeroSessionRow` 之类的行列形状。
+ */
+export type HeroToggleHooks = Pick<
+  SessionStandardProps & GlobalStandardProps,
+  'useSession' | 'useSessions' | 'useProjection'
+>
 
 /** 注册项 `inject` 交出的会话绑定。 */
 export interface HeroToggleInjected {
-  readonly setEnabled: (enabled: boolean) => Promise<RemoteResult>
+  readonly setEnabled: (enabled: boolean) => Promise<RemoteResult<void>>
 }
 
 /** 完整组件 props：标准 props + 注入面 + 本插件字典的 `t`。 */
 export interface HeroToggleProps extends HeroToggleHooks, HeroToggleInjected {
-  readonly sessionId: string
-  readonly t: (key: string, params?: Record<string, string | number>) => string
+  readonly sessionId: SessionId
+  readonly t: TranslateNS<HeroLocaleNS>
 }
 
 /**
@@ -55,8 +56,10 @@ export interface HeroToggleProps extends HeroToggleHooks, HeroToggleInjected {
  */
 export function TeamModeHeroToggle(props: HeroToggleProps): ReactNode {
   const { sessionId, useSession, useSessions, useProjection, setEnabled, t } = props
-  const addressedChild = useSession(snapshot => snapshot.subagent !== null)
-  const listedChild = useSessions(state => state.byId[sessionId]?.origin === 'subagent')
+  const addressedChild = useSession((snapshot: SessionSnapshot) => snapshot.subagent !== null)
+  const listedChild = useSessions(
+    (state: SessionListState) => state.byId[sessionId]?.origin === 'subagent',
+  )
   const projection = useProjection('agentTeam')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)

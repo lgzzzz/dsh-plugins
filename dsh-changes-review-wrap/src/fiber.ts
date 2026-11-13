@@ -14,6 +14,8 @@
  *
  * fiber 上的 `memoizedProps` 是 React 内部结构（属性名不会被压缩器改写，`__reactFiber$…`
  * 键在开发 / 生产构建里都有），因此这里只做**能力探测**：找不到就返回 null，由调用方降级。
+ * 上游没有公开这个结构（cordis 的 `Fiber` 是插件生命周期实例，不是 React fiber），
+ * 下面的 `FiberLike` 因此保留为本地测试接缝。
  *
  * @see docs/dsh-changes-review-wrap.md
  */
@@ -21,7 +23,7 @@
 /** React 挂在 DOM 节点上的内部属性前缀（后缀是随机串）。 */
 const FIBER_PREFIX = '__reactFiber$'
 
-/** fiber 对象中本模块用到的字段。 */
+/** fiber 对象中本模块用到的字段（React 内部结构，上游无公开类型，测试接缝）。 */
 interface FiberLike {
   readonly memoizedProps?: unknown
 }

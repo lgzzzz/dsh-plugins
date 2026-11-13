@@ -30,109 +30,54 @@ import {
   fixedIdOf,
   keycaps,
   targetForGesture,
-  type Gesture,
-  type LogicalBinding,
-  type ShortcutPlatform,
   type TargetSpec,
 } from './shortcuts.ts'
+import type {
+  ShortcutCatalogEntry,
+  ShortcutCommandId,
+  ShortcutContext,
+  ShortcutFixedCommand,
+  ShortcutFixedInput,
+  ShortcutGesture,
+  ShortcutPlatform,
+  Shortcuts,
+} from '@deepseek-ai/dsh-client-shortcuts/client'
+// 这个 type-only 导入同时加载本包对 `@deepseek-ai/cordis` 的模块增强，`ctx.sidebarRight`
+// 由它声明；`Context['sidebarRight']` 是取到控制器的公开途径（控制器类本身不在 `/client`
+// 导出名单里，公开导出的是它实现的面与 `SidebarRightTarget`）。
+import type { SidebarRightTarget } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { Context } from '@deepseek-ai/cordis'
 
-/** 官方目录行里本插件用到的字段（标签跟随官方文案）。 */
-export interface ShortcutCatalogRow {
-  readonly id: string
-  readonly label?: string
-}
-
-/** 固定行的形状（官方服务只读这一小块）。 */
-export interface FixedCommand {
-  readonly id: string
-  readonly label: () => string
-  readonly keys: readonly string[]
-  readonly bindings: readonly LogicalBinding[]
-  readonly group: 'application'
-}
-
-/** 固定输入里的按键上下文。 */
-export interface FixedContext {
-  readonly region?: string
-  readonly modal?: string | null
-  readonly target?: Element | null
-}
-
-/** 固定输入读数；`reset` 表示序列作废，不执行动作。 */
-export interface FixedInput {
-  readonly type: 'keydown' | 'reset'
-  readonly gesture?: Gesture
-  readonly context?: FixedContext
-  consume?(): void
-}
-
-/** 右栏捕捉到的面板目标；插件只原样回传给 `sidebarRight`。 */
-export interface PaneTarget {
-  readonly sessionId: string
-  readonly paneId: string
-  readonly host: string
-  readonly tabId?: string
-  readonly occurrence?: unknown
-  readonly navigationRevision?: number
-}
-
-/** 右侧栏公开面里面板全屏桥要用的部分。 */
-export interface SidebarFace {
-  isExpanded(): boolean
-  focusedTarget(element?: Element | null): PaneTarget | undefined
-  commandTarget(element?: Element | null): PaneTarget | undefined
-  isTargetCurrent(target: PaneTarget): boolean
-  toggleFullscreen(target: PaneTarget): void
-  canCloseTarget(target: PaneTarget): boolean
-  closeTarget(target: PaneTarget): void
-}
+/** Cordis 增强声明的 Right-Sidebar 面；面板全屏 / 关页桥只用这几个动词。 */
+type Sidebar = Context['sidebarRight']
 
 /** 面板全屏 / 关闭页面的免聚焦桥；`handle` 返回 true 表示已消费并接管这一按。 */
 export interface FocusFreeBridge {
-  handle(input: FixedInput): boolean
+  handle(input: ShortcutFixedInput): boolean
 }
 
 /** 面板全屏桥的返回类型；与页面关闭桥同形。 */
 export type FullscreenBridge = FocusFreeBridge
 
-/** 官方命令注册表里本插件唯一要用的动词。 */
+/**
+ * 官方命令注册表里本插件唯一要用的动词。
+ *
+ * 官方服务把注册表放在实例的 private `registry` 字段上，公开的 `Shortcuts` 面没有它；
+ * 这里只按结构读取该字段的 `invoke` 签名，参数与返回类型都取上游 `ShortcutContext` /
+ * `ShortcutCommandId`，不复制注册表本身的类型。
+ */
 export interface RegistryFace {
-  invoke(id: string, context: {
-    readonly source?: string
-    readonly region: string
-    readonly modal: string | null
-    readonly target: Element | null
-  }): void
+  invoke(id: ShortcutCommandId, context: ShortcutContext): void
 }
 
-/** 本插件用到的官方快捷键服务面。 */
-export interface ShortcutsFace {
-  readonly platform?: ShortcutPlatform
-  readonly runtime?: 'desktop' | 'web'
-  readonly catalog: {
-    getSnapshot(): readonly ShortcutCatalogRow[]
-  }
-  registerFixed(command: FixedCommand): () => void
-  observeFixedInput(listener: (input: FixedInput) => void): () => void
+/** `Shortcuts` 公开面之外的内部字段：官方服务实例上的命令注册表。 */
+interface RegistryAccess {
   readonly registry?: RegistryFace
 }
 
-/** Cordis 客户端上下文里本插件实际用到的最小面。 */
-export interface ClientContext {
-  effect(callback: () => undefined | (() => void), label?: string): unknown
-  inject?<T>(deps: readonly string[], callback: (scope: T) => void): unknown
-}
-
-/** `inject` 回调拿到的子上下文；`shortcuts` 由官方快捷键服务提供。 */
-export interface ClientScope {
-  readonly shortcuts: ShortcutsFace
-  effect(callback: () => undefined | (() => void), label?: string): unknown
-}
-
-/** 右栏服务注入回调拿到的子上下文。 */
-export interface SidebarScope {
-  readonly sidebarRight: SidebarFace
-  effect(callback: () => undefined | (() => void), label?: string): unknown
+/** 读取官方服务实例上的命令注册表；字段缺席时返回 undefined。 */
+function registryOf(shortcuts: Shortcuts): RegistryFace | undefined {
+  return (shortcuts as Shortcuts & RegistryAccess).registry
 }
 
 /**
@@ -142,10 +87,10 @@ export interface SidebarScope {
  * `sidebarRight.commandTarget()` 解析活动 dock 面板，消费按键后执行与官方命令相同的
  * 动作；解析不出目标时仍交回官方命令。
  */
-export function installFixedKeyBridge(ctx: ClientContext): void {
-  ctx.inject?.(['shortcuts'], (scope: ClientScope) => {
+export function installFixedKeyBridge(ctx: Context): void {
+  ctx.inject(['shortcuts'], (scope) => {
     const shortcuts = scope.shortcuts
-    const registry = shortcuts.registry
+    const registry = registryOf(shortcuts)
     if (registry === undefined || registry === null) {
       warn('官方命令注册表不可用：固定行未安装')
       return
@@ -159,9 +104,9 @@ export function installFixedKeyBridge(ctx: ClientContext): void {
     // 面板全屏 / 关页的免聚焦桥：右栏服务可选挂载，缺席时这些键仍走官方命令。
     let fullscreen: FocusFreeBridge | undefined
     let pageClose: FocusFreeBridge | undefined
-    ctx.inject?.(['sidebarRight'], (sidebarScope: SidebarScope) => {
+    ctx.inject(['sidebarRight'], (sidebarScope) => {
       if (scope.shortcuts.runtime !== 'web') return
-      const sidebar = sidebarScope.sidebarRight
+      const sidebar: Sidebar = sidebarScope.sidebarRight
       const fullscreenBridge = createFullscreenBridge(sidebar)
       const pageCloseBridge = createPageCloseBridge(sidebar)
       fullscreen = fullscreenBridge
@@ -178,7 +123,7 @@ export function installFixedKeyBridge(ctx: ClientContext): void {
           return shortcuts.registerFixed(fixedCommand(shortcuts, target, platform))
         } catch (error) {
           warn(`固定行注册失败（${keycaps(target, platform).join('+')} 未占用）：`, error)
-          return undefined
+          return () => {}
         }
       }, `${name}: ${fixedIdOf(target)}`)
     }
@@ -204,10 +149,10 @@ export function installFixedKeyBridge(ctx: ClientContext): void {
 
 /** 一条固定行：官方命令的标签、平台键帽与逻辑绑定。 */
 export function fixedCommand(
-  shortcuts: ShortcutsFace,
+  shortcuts: Shortcuts,
   target: TargetSpec,
   platform: ShortcutPlatform,
-): FixedCommand {
+): ShortcutFixedCommand {
   return {
     id: fixedIdOf(target),
     label: () => officialLabel(shortcuts, target.id),
@@ -218,8 +163,10 @@ export function fixedCommand(
 }
 
 /** 固定行显示官方命令自己的本地化标签；命令尚未注册时退回 id。 */
-function officialLabel(shortcuts: ShortcutsFace, id: string): string {
-  const row = shortcuts.catalog.getSnapshot().find((candidate) => candidate.id === id)
+function officialLabel(shortcuts: Shortcuts, id: string): string {
+  const row = shortcuts.catalog.getSnapshot().find(
+    (candidate: ShortcutCatalogEntry) => candidate.id === id,
+  )
   const label = row?.label
   return typeof label === 'string' && label !== '' ? label : id
 }
@@ -234,9 +181,9 @@ function officialLabel(shortcuts: ShortcutsFace, id: string): string {
  *
  * 只在 Web 运行时安装：Desktop 上这些键由原生键盘桥接另外派发，DOM 侧再执行一次会切换两次。
  */
-export function createFullscreenBridge(sidebar: SidebarFace): FullscreenBridge {
+export function createFullscreenBridge(sidebar: Sidebar): FullscreenBridge {
   return {
-    handle(input: FixedInput): boolean {
+    handle(input: ShortcutFixedInput): boolean {
       if (input.type !== 'keydown' || input.gesture === undefined) return false
       if (!isActionable(input.gesture)) return false
       if ((input.context?.modal ?? null) !== null) return false
@@ -245,7 +192,7 @@ export function createFullscreenBridge(sidebar: SidebarFace): FullscreenBridge {
       const element = input.context?.target ?? activeElement()
       // 面板已聚焦时交给官方命令，保留它自己的可用性判断与失败原因。
       if (sidebar.focusedTarget(element) !== undefined) return false
-      const target = sidebar.commandTarget(element)
+      const target: SidebarRightTarget | undefined = sidebar.commandTarget(element)
       if (target === undefined) return false
       // 先消费再动作：否则官方命令会解析为 command.noFocus 并自行 preventDefault。
       input.consume?.()
@@ -266,9 +213,9 @@ export function createFullscreenBridge(sidebar: SidebarFace): FullscreenBridge {
  *
  * 只在 Web 运行时安装：Desktop 上窗口那一半由原生命令处理，DOM 侧再执行一次会多关一层。
  */
-export function createPageCloseBridge(sidebar: SidebarFace): FocusFreeBridge {
+export function createPageCloseBridge(sidebar: Sidebar): FocusFreeBridge {
   return {
-    handle(input: FixedInput): boolean {
+    handle(input: ShortcutFixedInput): boolean {
       if (input.type !== 'keydown' || input.gesture === undefined) return false
       if (!isActionable(input.gesture)) return false
       // 模态下这一按归弹窗：`page.close` 声明了模态，官方命令会关掉最上面那层。
@@ -278,7 +225,7 @@ export function createPageCloseBridge(sidebar: SidebarFace): FocusFreeBridge {
       if (sidebar.focusedTarget(element) !== undefined) return false
       // 折叠时没有「当前显示的页面」；展开本身会把焦点交给活动面板。
       if (!sidebar.isExpanded()) return false
-      const target = sidebar.commandTarget(element)
+      const target: SidebarRightTarget | undefined = sidebar.commandTarget(element)
       if (target === undefined) return false
       // 关不掉的页面（空面板 / 身份已变）不消费：内置命令会照原样收场。
       if (!sidebar.canCloseTarget(target)) return false
@@ -301,7 +248,7 @@ function activeElement(): Element | undefined {
 export function handleFixedInput(
   registry: RegistryFace,
   platform: ShortcutPlatform,
-  input: FixedInput,
+  input: ShortcutFixedInput,
   fullscreen?: FocusFreeBridge,
   pageClose?: FocusFreeBridge,
 ): void {
@@ -392,8 +339,8 @@ export function installTerminalCapture(
 /** 调官方命令；命令不存在、被模态层拒绝或 resolver 抛错都不影响后续按键。 */
 function invoke(
   registry: RegistryFace,
-  id: string,
-  context: { region: string; modal: string | null; target: Element | null },
+  id: ShortcutCommandId,
+  context: ShortcutContext,
 ): void {
   try {
     registry.invoke(id, { ...context, source: 'keyboard' })
@@ -403,12 +350,12 @@ function invoke(
 }
 
 /** 长按、输入法组合中、已被前面的处理器消费的按键都不执行。 */
-function isActionable(gesture: Gesture): boolean {
+function isActionable(gesture: ShortcutGesture): boolean {
   return gesture.repeat !== true && gesture.composing !== true && gesture.defaultPrevented !== true
 }
 
 /** 从浏览器键盘事件读出一次手势。 */
-function gestureFromEvent(event: KeyboardEvent): Gesture {
+function gestureFromEvent(event: KeyboardEvent): ShortcutGesture {
   return {
     code: event.code,
     control: event.ctrlKey === true,
@@ -444,7 +391,7 @@ function currentModal(): string | null {
 }
 
 /** 检查官方快捷键服务面是否齐全。 */
-function hasShortcutApi(shortcuts: ShortcutsFace | undefined): shortcuts is ShortcutsFace {
+function hasShortcutApi(shortcuts: Shortcuts | undefined): shortcuts is Shortcuts {
   return shortcuts !== undefined
     && shortcuts !== null
     && shortcuts.catalog !== undefined

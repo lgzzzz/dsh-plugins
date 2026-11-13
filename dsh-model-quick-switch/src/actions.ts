@@ -12,8 +12,12 @@
  *     行为一致，不做停用确认（首轮前的入口）。
  *
  * 本文件不 import React、不碰 DOM，也不读上游服务：投影形状在这里收窄成两种事实，`client.ts`
- * 只负责把事实喂进来、把动作接出去，测试可以直接驱动这些规则。
+ * 只负责把事实喂进来、把动作接出去，测试可以直接驱动这些规则。Git 检查结果与团队投影的
+ * 公开类型直接取上游包（`dsh-experimental-client-ui-forge/types`、`dsh-agent-team/types`），
+ * 这里不再各自重写一份字段表。
  */
+import type { ForgeCheckoutState } from '@deepseek-ai/dsh-experimental-client-ui-forge/types'
+import type { TeamProjection } from '@deepseek-ai/dsh-agent-team/types'
 import type { PaletteRow } from './palette.ts'
 
 /** 工作树那一行的稳定 key（不会和模型行的 JSON 数组 key 撞车）。 */
@@ -25,10 +29,16 @@ export const ACTION_TEAM_KEY = 'action:team'
 /** 浮层里快捷操作的标识。 */
 export type QuickAction = 'worktree' | 'team'
 
-/** forge 面板对当前目录的 Git 检查结果（只取 `checkout.state`）。 */
-export type CheckoutState = 'ready' | 'none' | 'pending' | 'failed'
+/** forge 面板对当前目录的 Git 检查结果（上游 `ForgeCheckoutState['state']`，只取状态那一项）。 */
+export type CheckoutState = ForgeCheckoutState['state']
 
-/** 工作树投影里本插件读的字段（`forgeWorktree`，只取展示与切换需要的部分）。 */
+/**
+ * 工作树投影里本插件读的字段（`forgeWorktree`，只取展示与切换需要的部分）。
+ *
+ * 上游 `ForgeWorktreeState` 是 Host 侧的完整状态；客户端投影公开的视图只保留已创建的工作树
+ * （`ForgeSessionWorktree`），但本插件按 Host 状态的字段读 request / created / locked / stepped，
+ * 所以这里保留收窄后的本地形状，运行时字段名不变（见 {@link worktreeFacts} 的说明）。
+ */
 export interface WorktreeFacts {
   /** 打开的请求；null 表示没有请求。 */
   readonly request: { readonly from: string | null } | null
@@ -40,10 +50,8 @@ export interface WorktreeFacts {
   readonly stepped: boolean
 }
 
-/** `agentTeam` 投影里本插件读的字段。 */
-export interface TeamFacts {
-  readonly enabled: boolean
-}
+/** `agentTeam` 投影里本插件读的字段（上游 `TeamProjection` 的 `enabled`）。 */
+export type TeamFacts = Pick<TeamProjection, 'enabled'>
 
 /** 一行快捷操作的投影输入。 */
 export interface QuickActionRowsInput {

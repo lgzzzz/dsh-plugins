@@ -17,15 +17,18 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
-// 三个空导入(不引入任何名字):分别加载各包对 Context / AssembleContext 的模块扩展 ——
-// dsh-tools 给 ctx.on('tools/pre-execute') 的类型,dsh-system-prompt 给 ctx.systemPrompt,
-// dsh-agent 给组装上下文上的 agent。
-import type {} from '@deepseek-ai/dsh-tools'
+// 三个类型导入(均为 type-only):dsh-tools 给 ctx.on('tools/pre-execute') 与 PreToolDecision 的类型,
+// dsh-system-prompt 给 ctx.systemPrompt,dsh-agent 给组装上下文上的 agent。
+import type { PreToolDecision } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 
 type SessionRef = NonNullable<Parameters<SandboxPolicyService['resolve']>[0]>['session']
 
+/**
+ * shell 工具的参数形状。上游把 `ToolExecution.arguments` 暴露为 `unknown`，没有公开的
+ * shell 参数类型，所以这里只做一次结构收窄：只读插件需要的 `command` 字段。
+ */
 interface ShellArguments {
   readonly command?: unknown
 }
@@ -341,8 +344,11 @@ const ASK_SUBCOMMANDS: Record<string, string> = {
   'filter-repo': `git filter-repo 会改写历史, ${ASK_SUFFIX}`,
 }
 
-interface AskDecision {
-  readonly kind: 'ask'
+/**
+ * 一次「请用户许可」的判定：上游 `PreToolDecision` 的 ask 变体，加上插件内部的
+ * `destructive` 优先级标记。上游允许无理由的 ask，本插件的每次判定都给出 `reason`，故收窄为必填。
+ */
+type AskDecision = Extract<PreToolDecision, { kind: 'ask' }> & {
   readonly reason: string
   readonly destructive: boolean
 }

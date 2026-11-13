@@ -52,7 +52,7 @@ export const MAX_ATTEMPTS = 8
 /** 一次同步的结论，供测试与诊断。 */
 export type WrapOutcome = 'wrapped' | 'already' | 'skipped' | 'detached' | 'retry' | 'gave-up'
 
-/** 可被本插件读写的最小元素形状（生产环境是 `Element`）。 */
+/** 可被本插件读写的最小元素形状（生产环境是 `Element`；上游无公开类型，测试接缝）。 */
 export interface ElementLike {
   getAttribute?(name: string): string | null
   setAttribute?(name: string, value: string): void
@@ -66,12 +66,12 @@ export interface ElementLike {
   readonly disabled?: boolean
 }
 
-/** 变更记录里本插件用到的字段。 */
+/** 变更记录里本插件用到的字段（MutationRecord 的测试接缝）。 */
 export interface MutationRecordLike {
   readonly addedNodes?: ArrayLike<unknown>
 }
 
-/** 可观察节点树的最小文档形状；生产环境是 `Document`。 */
+/** 可观察节点树的最小文档形状；生产环境是 `Document`（上游无公开类型，测试接缝）。 */
 export interface DocumentLike {
   readonly body?: ElementLike | null
   readonly documentElement?: ElementLike | null
@@ -79,16 +79,16 @@ export interface DocumentLike {
   querySelectorAll?(selector: string): ArrayLike<ElementLike>
 }
 
-/** 观察器的最小子集（生产环境是 `MutationObserver`）。 */
+/** 观察器的最小子集（生产环境是 `MutationObserver`；测试接缝）。 */
 export interface ObserverLike {
   observe(target: ElementLike, options: { childList: boolean; subtree: boolean }): void
   disconnect(): void
 }
 
-/** 观察器构造器；生产环境是 `MutationObserver`。 */
+/** 观察器构造器；生产环境是 `MutationObserver`（测试接缝）。 */
 export type ObserverConstructor = new (callback: (records: MutationRecordLike[]) => void) => ObserverLike
 
-/** 运行期可注入项：测试用它替换调度器与告警。 */
+/** 运行期可注入项（测试接缝）：替换调度器与告警，上游没有对应类型。 */
 export interface WrapRuntime {
   /** 安排一次下一帧的重试。 */
   readonly schedule?: (callback: () => void) => void

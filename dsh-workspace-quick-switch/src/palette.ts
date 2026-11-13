@@ -13,8 +13,10 @@
  * 会话候选的顺序由 `sessions.ts` 自己按左侧栏的「单列表 + 最近更新 + 隐藏已归档」投影。
  *
  * 本文件不 import React(连类型也不):这样它在没有任何前端依赖的 Node 里也能被直接
- * 加载,测试可以只驱动规则本身。
+ * 加载,测试可以只驱动规则本身。上游只以 `import type` 出现(擦除后不留下任何运行时依赖)。
  */
+import type { ShortcutBinding, ShortcutGesture, ShortcutPlatform } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 
 /** 浮层一页最多列出的行数;更多候选用 ← / → 翻页。 */
 export const PAGE_SIZE = 10
@@ -34,19 +36,16 @@ export const SESSION_SWITCH_ID = 'dsh-workspace-quick-switch.session-switch'
 export const QUICK_SWITCH_BINDING = {
   code: 'KeyM',
   modifiers: ['primary', 'alt'],
-} as const
+} as const satisfies ShortcutBinding
 
 /** 会话浮层的逻辑组合:`primary+alt+I`(macOS `⌘⌥I`,Windows/Linux `Ctrl+Alt+I`)。 */
 export const SESSION_SWITCH_BINDING = {
   code: 'KeyI',
   modifiers: ['primary', 'alt'],
-} as const
-
-/** 接收输入的设备平台;只管 `primary` 往哪边展开。 */
-export type QuickSwitchPlatform = 'macos' | 'windows' | 'linux'
+} as const satisfies ShortcutBinding
 
 /** `primary` 在给定平台上展开成的物理修饰键。 */
-export function primaryModifier(platform: QuickSwitchPlatform): 'meta' | 'control' {
+export function primaryModifier(platform: ShortcutPlatform): 'meta' | 'control' {
   return platform === 'macos' ? 'meta' : 'control'
 }
 
@@ -58,7 +57,7 @@ export function primaryModifier(platform: QuickSwitchPlatform): 'meta' | 'contro
  * @param platform - 接收输入的设备平台。
  * @returns 固定行的三个键帽。
  */
-export function quickSwitchKeys(platform: QuickSwitchPlatform): string[] {
+export function quickSwitchKeys(platform: ShortcutPlatform): string[] {
   return platform === 'macos' ? ['⌘', '⌥', 'M'] : ['Ctrl', 'Alt', 'M']
 }
 
@@ -67,27 +66,8 @@ export function quickSwitchKeys(platform: QuickSwitchPlatform): string[] {
  * @param platform - 接收输入的设备平台。
  * @returns 固定行的三个键帽。
  */
-export function sessionSwitchKeys(platform: QuickSwitchPlatform): string[] {
+export function sessionSwitchKeys(platform: ShortcutPlatform): string[] {
   return platform === 'macos' ? ['⌘', '⌥', 'I'] : ['Ctrl', 'Alt', 'I']
-}
-
-/** 一次按键里本插件要读的修饰键事实(KeyboardEvent 结构上满足它)。 */
-export interface QuickSwitchGesture {
-  readonly code?: string
-  readonly control?: boolean
-  readonly alt?: boolean
-  readonly shift?: boolean
-  readonly meta?: boolean
-}
-
-/**
- * 一条固定行的逻辑组合(`code` + 逻辑修饰键)。
- *
- * `primary` 是平台相关的那一个;其余修饰键是逻辑名,与物理键一一对应。
- */
-export interface LogicalBinding {
-  readonly code: string
-  readonly modifiers: readonly string[]
 }
 
 /**
@@ -101,9 +81,9 @@ export interface LogicalBinding {
  * @returns 完全匹配时为 true。
  */
 export function bindingPress(
-  platform: QuickSwitchPlatform,
-  binding: LogicalBinding,
-  gesture: QuickSwitchGesture,
+  platform: ShortcutPlatform,
+  binding: ShortcutBinding,
+  gesture: ShortcutGesture,
 ): boolean {
   if (gesture.code !== binding.code) return false
   const wanted = new Set(binding.modifiers.map((modifier) => (modifier === 'primary' ? primaryModifier(platform) : modifier)))
@@ -122,7 +102,7 @@ export function bindingPress(
  * @param gesture - 按键事实。
  * @returns 完全匹配时为 true。
  */
-export function quickSwitchPress(platform: QuickSwitchPlatform, gesture: QuickSwitchGesture): boolean {
+export function quickSwitchPress(platform: ShortcutPlatform, gesture: ShortcutGesture): boolean {
   return bindingPress(platform, QUICK_SWITCH_BINDING, gesture)
 }
 
@@ -132,17 +112,8 @@ export function quickSwitchPress(platform: QuickSwitchPlatform, gesture: QuickSw
  * @param gesture - 按键事实。
  * @returns 完全匹配时为 true。
  */
-export function sessionSwitchPress(platform: QuickSwitchPlatform, gesture: QuickSwitchGesture): boolean {
+export function sessionSwitchPress(platform: ShortcutPlatform, gesture: ShortcutGesture): boolean {
   return bindingPress(platform, SESSION_SWITCH_BINDING, gesture)
-}
-
-/** 宿主侧的一个工作区(本插件只读这几个字段;形状沿用 Workspace 控制器的 `items` 元素)。 */
-export interface HostWorkspace {
-  readonly workspaceId: string
-  readonly title: string
-  readonly path: string
-  /** 账下会话(只读;用来把主视图会话映射回它所属的工作区)。 */
-  readonly sessionIds?: readonly string[]
 }
 
 /**
@@ -242,7 +213,7 @@ export interface PaletteStore<T = PaletteRow> {
  * @returns 浮层候选行。
  */
 export function paletteEntries(
-  workspaces: readonly HostWorkspace[],
+  workspaces: readonly WorkspaceView[],
   activeId: string | undefined,
 ): PaletteRow[] {
   return workspaces.map((workspace) => {

@@ -9,14 +9,22 @@
  * `tag` 按会话与原因区分,投递方配 `renotify: true` 使用:同一 tag 的后一条通知替换前一条;
  * 正文统一裁到 `BODY_LIMIT`。
  */
-import type { SessionPendingInteraction, SessionStatus } from '@deepseek-ai/dsh-client-ui-session/client'
-import type { SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+import type {
+  SessionPendingInteraction,
+  SessionStatus,
+  SessionStatusSnapshot,
+} from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 export type NotifyReason = 'turn-complete' | 'approval' | 'question' | 'plan-review'
 
+/** 一次观察到的会话状态:UI 状态快照与会话目录行,都是上游的命名导出。 */
 export interface PolicySnapshot {
-  statuses: ReadonlyMap<string, SessionStatus>
-  rows: Readonly<Record<string, SessionSummary>>
+  /** `uiSession.sessionStatus` 的快照。 */
+  statuses: SessionStatusSnapshot
+  /** `sessions.list` 快照里的会话目录行。 */
+  rows: SessionListState['byId']
 }
 
 export interface PlannedNotification {
@@ -74,10 +82,10 @@ function detailOf(interaction: SessionPendingInteraction): string {
 }
 
 export function createNotifyPolicy(): NotifyPolicy {
-  let baseline: Map<string, SessionStatus> | undefined
+  let baseline: SessionStatusSnapshot | undefined
   return {
     observe(snapshot) {
-      const next = new Map<string, SessionStatus>()
+      const next = new Map<SessionId, SessionStatus>()
       for (const [sessionId, status] of snapshot.statuses) next.set(sessionId, status)
 
       const plans: PlannedNotification[] = []

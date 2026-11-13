@@ -19,7 +19,7 @@
 import { installApprovalBridge } from './approval-keys.ts'
 import { installChangesOpenBridge } from './changes-open.ts'
 import { installChatPaging } from './chat-paging.ts'
-import { installFixedKeyBridge, type ClientContext } from './fixed-keys.ts'
+import { installFixedKeyBridge } from './fixed-keys.ts'
 import { installFocusComposerBridge } from './focus-composer.ts'
 import { installFocusPageBridge } from './focus-page.ts'
 import { installFullscreenDismissBridge } from './fullscreen-dismiss.ts'
@@ -51,5 +51,5 @@ export function apply(ctx: Context): void {
   installPageCycleBridge(ctx)
   installSessionCycleBridge(ctx)
   installPaneSplitBridge(ctx)
-  installFixedKeyBridge(ctx as unknown as ClientContext)
+  installFixedKeyBridge(ctx)
 }

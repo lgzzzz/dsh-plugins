@@ -10,88 +10,72 @@
  * 命令的 `resolve()` / `run()`，本模块不实现任何业务动作。
  */
 
-/** 本插件会触发的官方命令 id。 */
-export type OfficialCommandId =
-  | 'session.new'
-  | 'sidebar.left.toggle'
-  | 'workspace.openLocal'
-  | 'sidebar.right.toggle'
-  | 'workspace.files'
-  | 'terminal.new'
-  | 'pane.fullscreen.toggle'
-  | 'page.close'
-
-/** 逻辑绑定：`primary` 由官方服务按设备展开成 `meta`（macOS）或 `control`。 */
-export interface LogicalBinding {
-  readonly code: string
-  readonly modifiers: readonly ['primary', 'alt']
-}
+import type {
+  ShortcutBinding,
+  ShortcutCommandId,
+  ShortcutPlatform,
+} from '@deepseek-ai/dsh-client-shortcuts/protocol'
+import type { ShortcutGesture } from '@deepseek-ai/dsh-client-shortcuts/client'
 
 /** 一条目标：官方命令 id 与要占用的逻辑组合。 */
 export interface TargetSpec {
-  readonly id: OfficialCommandId
-  readonly binding: LogicalBinding
+  readonly id: ShortcutCommandId
+  readonly binding: ShortcutBinding
+}
+
+/**
+ * 把本文件硬编码的官方命令 id 标成上游品牌类型。
+ *
+ * `ShortcutCommandId` 的品牌只在类型层，运行期仍是同一个字符串；这里就是本插件与
+ * 上游品牌类型的边界。
+ */
+function commandId(id: string): ShortcutCommandId {
+  return id as ShortcutCommandId
 }
 
 /** 八条目标绑定；顺序与需求列表一致。 */
 export const TARGETS: readonly TargetSpec[] = [
   {
-    id: 'session.new',
+    id: commandId('session.new'),
     binding: { code: 'KeyN', modifiers: ['primary', 'alt'] },
   },
   {
-    id: 'sidebar.left.toggle',
+    id: commandId('sidebar.left.toggle'),
     binding: { code: 'KeyB', modifiers: ['primary', 'alt'] },
   },
   {
-    id: 'workspace.openLocal',
+    id: commandId('workspace.openLocal'),
     binding: { code: 'KeyP', modifiers: ['primary', 'alt'] },
   },
   {
-    id: 'sidebar.right.toggle',
+    id: commandId('sidebar.right.toggle'),
     binding: { code: 'KeyO', modifiers: ['primary', 'alt'] },
   },
   {
-    id: 'workspace.files',
+    id: commandId('workspace.files'),
     binding: { code: 'Backslash', modifiers: ['primary', 'alt'] },
   },
   {
-    id: 'terminal.new',
+    id: commandId('terminal.new'),
     binding: { code: 'KeyL', modifiers: ['primary', 'alt'] },
   },
   {
-    id: 'pane.fullscreen.toggle',
+    id: commandId('pane.fullscreen.toggle'),
     binding: { code: 'Enter', modifiers: ['primary', 'alt'] },
   },
   {
-    id: 'page.close',
+    id: commandId('page.close'),
     binding: { code: 'Comma', modifiers: ['primary', 'alt'] },
   },
 ]
 
-/** 接收输入的设备平台；与官方快捷键服务的 `platform` 同值。 */
-export type ShortcutPlatform = 'macos' | 'windows' | 'linux'
-
-/** 一次按键的物理事实；浏览器事件与固定输入读数都满足它。 */
-export interface Gesture {
-  readonly code: string
-  readonly secondCode?: string
-  readonly control?: boolean
-  readonly alt?: boolean
-  readonly shift?: boolean
-  readonly meta?: boolean
-  readonly repeat?: boolean
-  readonly composing?: boolean
-  readonly defaultPrevented?: boolean
-}
-
 /** 固定行 id：与官方命令 id 区分开，避免 `registerFixed` 的重复 id 检查。 */
-export function fixedIdOf(target: TargetSpec): string {
-  return `dsh-keyboard-shortcuts.${target.id}`
+export function fixedIdOf(target: TargetSpec): ShortcutCommandId {
+  return `dsh-keyboard-shortcuts.${target.id}` as ShortcutCommandId
 }
 
 /** 固定行声明：逻辑 `primary+alt`，由官方注册表按平台展开。 */
-export function bindingOf(target: TargetSpec): LogicalBinding {
+export function bindingOf(target: TargetSpec): ShortcutBinding {
   return { code: target.binding.code, modifiers: ['primary', 'alt'] }
 }
 
@@ -117,7 +101,7 @@ function keycapOf(code: string): string {
  */
 export function targetForGesture(
   platform: ShortcutPlatform,
-  gesture: Gesture,
+  gesture: ShortcutGesture,
 ): TargetSpec | undefined {
   if (gesture.secondCode !== undefined) return undefined
   if (gesture.alt !== true || gesture.shift === true) return undefined
@@ -130,6 +114,6 @@ export function targetForGesture(
 }
 
 /** 目标表里的官方命令 id；测试与诊断用。 */
-export function targetIds(): OfficialCommandId[] {
+export function targetIds(): ShortcutCommandId[] {
   return TARGETS.map((target) => target.id)
 }

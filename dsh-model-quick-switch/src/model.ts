@@ -12,11 +12,21 @@
  *   - **当前选择可能是默认值**：Host 的 `modelSelection` 投影在会话从未选过模型时是 `null`，
  *     这时上游用目录里的 `default`；调用方把 `current ?? defaultSelection` 传进来即可。
  *
- * 本文件不 import React、不碰 DOM，也不读任何上游服务。
+ * 本文件不 import React、不碰 DOM，也不读任何上游服务：模型目录、当前选择与目录失败都只是
+ * 调用方交进来的值。这些数据契约直接用会话语义包（`@deepseek-ai/dsh-api-session-controller/types`）
+ * 的公开类型，本文件只在它们之上加展示用的投影。
  */
+import type {
+  ModelCatalogFailure,
+  ModelCatalogModel,
+  ModelProviderGroup,
+  ModelReasoning,
+  ModelReasoningEffort,
+  ModelSelection,
+} from '@deepseek-ai/dsh-api-session-controller/types'
 import type { PaletteRow } from './palette.ts'
 
-/** 一条可选模型（与宿主 Config 的 `models[]` 同形）。 */
+/** 一条可选模型（与宿主 Config 的 `models[]` 同形；插件私有配置领域类型）。 */
 export interface ModelChoice {
   /** 已注册的提供方路由。 */
   readonly provider: string
@@ -26,46 +36,26 @@ export interface ModelChoice {
   readonly reasoningEffort?: string
 }
 
-/** 当前选择（`modelSelection` 投影 / 目录默认值 / 本插件写回的那一份）。 */
-export interface ModelSelectionLike {
-  readonly provider: string
-  readonly model: string
-  readonly reasoningEffort?: string
-}
+/** 当前选择（`modelSelection` 投影 / 目录默认值 / 本插件写回的那一份）；上游 `ModelSelection`。 */
+export type ModelSelectionLike = ModelSelection
 
-/** 模型目录里的一个推理强度。 */
-export interface CatalogEffort {
-  readonly id: string
-  readonly name?: string
-}
+/** 模型目录里的一个推理强度；上游 `ModelReasoningEffort`。 */
+export type CatalogEffort = ModelReasoningEffort
 
-/** 模型目录里一个模型的推理元数据。 */
-export interface CatalogReasoning {
-  readonly efforts?: readonly CatalogEffort[]
-  readonly defaultEffort?: string
-}
+/** 模型目录里一个模型的推理元数据；上游 `ModelReasoning`。 */
+export type CatalogReasoning = ModelReasoning
 
-/** 模型目录里的一个模型（只取本插件显示的字段）。 */
-export interface CatalogModelEntry {
-  readonly id: string
-  readonly name?: string
-  readonly badge?: string
-  readonly reasoning?: CatalogReasoning
-}
+/** 模型目录里的一个模型；上游 `ModelCatalogModel`。 */
+export type CatalogModelEntry = ModelCatalogModel
 
-/** 模型目录里的一个提供方分组。 */
-export interface CatalogGroup {
-  readonly id: string
-  readonly name?: string
-  readonly models: readonly CatalogModelEntry[]
-}
+/** 模型目录里的一个提供方分组；上游 `ModelProviderGroup`。 */
+export type CatalogGroup = ModelProviderGroup
 
-/** 模型目录里加载失败的提供方。 */
-export interface CatalogFailure {
-  readonly id: string
-  readonly name?: string
-  readonly message?: string
-}
+/** 模型目录里加载失败的提供方；上游 `ModelCatalogFailure`。 */
+export type CatalogFailure = ModelCatalogFailure
+
+/** 目录模型公布的角标；上游 `ModelCatalogModel['badge']`（`LlmModelBadge` 的展示数据）。 */
+export type CatalogModelBadge = NonNullable<ModelCatalogModel['badge']>
 
 /** 目录展开后的一行：分组名 + 模型名，供设置页按提供方分组渲染。 */
 export interface CatalogModelRow {
@@ -73,7 +63,8 @@ export interface CatalogModelRow {
   readonly providerName: string
   readonly model: string
   readonly modelName: string
-  readonly badge?: string
+  /** 上游目录模型上的角标（`ModelCatalogModel['badge']`），设置页原样交给渲染方。 */
+  readonly badge?: CatalogModelBadge
   readonly efforts: readonly CatalogEffort[]
   readonly defaultEffort?: string
 }
@@ -346,10 +337,13 @@ export function effortChoices(choice: ModelSelectionLike, row: CatalogModelRow |
     },
   ]
   for (const effort of row?.efforts ?? []) {
+    // 上游把 `name` 声明为必填，但目录缺席时的读数与测试替身可能只带 id：运行时仍按缺席处理，
+    // 这里收成可选字符串再判，不上游类型更窄而改掉兜底行为。
+    const name: string | undefined = effort.name
     choices.push({
       reasoningEffort: effort.id,
-      title: effort.name ?? effort.id,
-      subtitle: effort.name === undefined || effort.name === effort.id ? '思考等级' : effort.id,
+      title: name ?? effort.id,
+      subtitle: name === undefined || name === effort.id ? '思考等级' : effort.id,
     })
   }
   return choices

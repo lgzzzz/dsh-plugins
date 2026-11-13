@@ -386,7 +386,7 @@ function diagnose(state: PinState): void {
   )
 }
 
-/** 安装期依赖的最小 document 形状（测试可注入）。 */
+/** 安装期依赖的最小 document 形状（测试接缝，上游无公开类型）。 */
 export interface PinDocument {
   querySelectorAll(selector: string): ArrayLike<Element>
   createElement?(tag: string): {
@@ -401,7 +401,7 @@ export interface PinDocument {
   defaultView?: { MutationObserver?: typeof MutationObserver; setTimeout?: typeof setTimeout; clearTimeout?: typeof clearTimeout }
 }
 
-/** 安装期依赖的最小 MutationObserver 形状。 */
+/** 安装期依赖的最小 MutationObserver 形状（测试接缝）。 */
 interface ObserverLike {
   observe(target: Element, options: MutationObserverInit): void
   disconnect(): void

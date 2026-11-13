@@ -4,21 +4,7 @@
  * 独立成文件是为了让 `node test/*.test.mjs` 能直接 import（Node 的类型擦除）
  * 而不必拉进 React；组件只做「读投影 + 调回调 + 画控件」。
  */
-
-/** 远程调用失败：与 typert `RemoteResult` 的失败分支同形。 */
-export interface RemoteFailure {
-  readonly ok: false
-  readonly error: { readonly message: string }
-}
-
-/** 远程调用成功：成功分支的 value 本控件不消费。 */
-export interface RemoteSuccess {
-  readonly ok: true
-  readonly value: void
-}
-
-/** `remote.agentTeams.setEnabled` 的返回形状。 */
-export type RemoteResult = RemoteSuccess | RemoteFailure
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 
 /** 控件可见性输入：两类子代理判定 + 投影是否已到达。 */
 export interface VisibilityInput {
@@ -46,10 +32,10 @@ export function shouldRender(input: VisibilityInput): boolean {
 /**
  * 读取一次写入失败的原因；成功返回 null。
  *
- * @param result - 远程调用结果。
+ * @param result - `remote.agentTeams.setEnabled` 的返回结果（上游 `RemoteResult`）。
  * @returns 失败原因，或 null。
  */
-export function failureMessage(result: RemoteResult): string | null {
+export function failureMessage(result: RemoteResult<void>): string | null {
   return result.ok ? null : result.error.message
 }
 

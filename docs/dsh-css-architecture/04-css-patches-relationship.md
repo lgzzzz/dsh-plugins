@@ -16,7 +16,9 @@
 1. **只注入一条 `<style data-plugin="dsh-ui-css-patches">`**：规则全部写在一个字符串 `CSS` 里（[`../../dsh-ui-css-patches/src/css.ts`](../../dsh-ui-css-patches/src/css.ts)），`installStyles` 一次挂载（[`../../dsh-ui-css-patches/src/client.ts`](../../dsh-ui-css-patches/src/client.ts)）：
 
    ```ts
-   function installStyles(ctx?: ClientContext): void {
+   import type { Context } from '@deepseek-ai/cordis'
+
+   function installStyles(ctx?: Context): void {
      const tag = document.createElement('style')
      tag.dataset.plugin = name
      tag.textContent = CSS

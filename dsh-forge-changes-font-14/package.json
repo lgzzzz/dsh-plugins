@@ -29,6 +29,7 @@
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
     "tsdown": "^0.23.5",
     "typescript": "^5.9.3"
   }

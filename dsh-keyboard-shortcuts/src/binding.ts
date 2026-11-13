@@ -8,7 +8,7 @@ import type {
   ShortcutFixedCatalogEntry,
   ShortcutGesture,
 } from '@deepseek-ai/dsh-client-shortcuts/client'
-import type {NormalizedBinding, ShortcutModifier, ShortcutPlatform} from '@deepseek-ai/dsh-client-shortcuts/protocol'
+import type {NormalizedBinding, ShortcutBinding, ShortcutPlatform} from '@deepseek-ai/dsh-client-shortcuts/protocol'
 
 /** 一个规范化修饰键名，取值同注册表发布的名字。 */
 export type ModifierName = NormalizedBinding['modifiers'][number]
@@ -44,7 +44,7 @@ export function primaryModifier(platform: ShortcutPlatform): 'meta' | 'control' 
  * @returns 该平台上按声明顺序排列的键帽。
  */
 export function bindingKeycaps(
-  binding: { readonly modifiers: readonly ShortcutModifier[] },
+  binding: Pick<ShortcutBinding, 'modifiers'>,
   platform: ShortcutPlatform,
   keycap: string,
 ): string[] {

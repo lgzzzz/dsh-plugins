@@ -19,8 +19,19 @@
  * 不会被压缩器改写，`__reactFiber$…` 键在开发/生产构建里都有），因此这里只做**能力探测**：
  * 找不到就返回 null，由调用方降级；不抛错、不缓存跨元素的结果。
  *
+ * 类型上：cordis 的 `Fiber` 是插件生命周期实例（没有 `memoizedProps` / `return`），不是
+ * React fiber，所以 `FiberLike` 保留为本地接缝；fiber props 上读到的 `turnProcess` 与
+ * store 动作则直接引用上游 `@deepseek-ai/dsh-client-ui-chat/client` 导出的
+ * `TurnProcessSpec` / `TurnProcessOwnerProps` / `ChatStore` 类型。
+ *
  * @see docs/dsh-turn-process-open.md
  */
+import type { BoundActions } from '@deepseek-ai/dsh-client-store'
+import type {
+  ChatStore,
+  TurnProcessOwnerProps,
+  TurnProcessSpec,
+} from '@deepseek-ai/dsh-client-ui-chat/client'
 
 /** React 挂在 DOM 节点上的内部属性前缀（后缀是随机串）。 */
 const FIBER_PREFIX = '__reactFiber$'
@@ -28,20 +39,26 @@ const FIBER_PREFIX = '__reactFiber$'
 /** 父链最多走多深；正常标题到 ChatFlow 只有十几层，超过它一定是结构变了。 */
 const MAX_DEPTH = 64
 
-/** 一个 Turn process owner 的可用字段（上游 `TurnProcessOwnerProps` 的子集）。 */
+/**
+ * 从 fiber props 的 `turnProcess`（上游 `TurnProcessOwnerProps`）读到的投影。
+ *
+ * 字段类型全部取上游：`turn` 来自 `TurnProcessSpec`，`setOpen` 来自 `TurnProcessOwnerProps`；
+ * 只有 `answerStep` 单独收窄成 `number`——上游允许 `number | null`，这里按上游
+ * `spec.answerStep ?? 0` 的规则先归一化。
+ */
 export interface TurnProcessHandle {
-  /** 轮次序号。 */
-  readonly turn: number
+  /** 轮次序号（上游 `TurnProcessSpec['turn']`）。 */
+  readonly turn: TurnProcessSpec['turn']
   /** 当前回答代次；缺失按 0 处理，与上游 `spec.answerStep ?? 0` 一致。 */
   readonly answerStep: number
   /** 上游的 `setOpen(open)`；`alwaysOpen` 时是 no-op。 */
-  readonly setOpen: ((open: boolean) => void) | undefined
+  readonly setOpen: TurnProcessOwnerProps['setOpen'] | undefined
 }
 
-/** store handle 暴露的绑定动作：`(turn, answerStep, open)`。 */
-export type SetTurnProcessOpen = (turn: number, answerStep: number, open: boolean) => void
+/** 上游 `ChatStore` 的绑定动作 `setTurnProcessOpen`（`(turn, answerStep, open)`）。 */
+export type SetTurnProcessOpen = BoundActions<ChatStore>['setTurnProcessOpen']
 
-/** fiber 对象中本模块用到的字段。 */
+/** fiber 对象中本模块用到的字段（React 内部结构，上游无公开类型，测试接缝）。 */
 interface FiberLike {
   readonly return?: FiberLike | null
   readonly memoizedProps?: unknown

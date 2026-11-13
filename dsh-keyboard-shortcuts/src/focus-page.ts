@@ -33,7 +33,7 @@ import {
   terminalTarget,
 } from './capture.ts'
 import { bindingKeycaps, fixedRowOwns } from './binding.ts'
-import { isKeydown, name, warn, type KeydownInput } from './runtime.ts'
+import { isKeydown, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import { focusShownPage } from './page-cycle.ts'
 import type {
   ShortcutContext,
@@ -106,14 +106,14 @@ export function focusPageTarget(
 
 /** 一次解析出的交棒：键盘要落到的右栏所在 Session。 */
 export interface FocusPageTarget {
-  readonly sessionId: string
+  readonly sessionId: SessionId
 }
 
 /**
  * 把键盘交给该 Session 右栏当前显示的页面（页面已自行持有键盘时不动它）。
  * @returns 是否找到可见 pane 并持有键盘。
  */
-export function focusPage(sessionId: string): boolean {
+export function focusPage(sessionId: SessionId): boolean {
   return focusShownPage(sessionId)
 }
 

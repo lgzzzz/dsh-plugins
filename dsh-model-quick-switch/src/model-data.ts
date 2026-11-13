@@ -7,6 +7,7 @@
  *
  * 本文件不 import React。
  */
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { CheckoutState, QuickAction, TeamFacts, WorktreeFacts } from './actions.ts'
 import type { CatalogFailure, CatalogGroup, CatalogModelRow, ModelChoice, ModelSelectionLike } from './model.ts'
 import { flattenCatalog } from './model.ts'
@@ -43,7 +44,7 @@ export interface ModelDataState {
   /** 主视图会话当前的选择（来自 `modelSelection` 投影；可能为 null）。 */
   readonly current: ModelSelectionLike | null
   /** 主视图会话 id；没有打开的会话时为 null。 */
-  readonly sessionId: string | null
+  readonly sessionId: SessionId | null
   /** 主视图会话的 `forgeWorktree` 投影；没有会话或投影缺席时为 null。 */
   readonly worktree: WorktreeFacts | null
   /** 主视图会话的 `agentTeam` 投影；没有会话或投影缺席时为 null。 */

@@ -29,9 +29,15 @@
  * 上游锚点、边界与验证方式见 docs/dsh-changes-card-local.md。
  */
 import type { Context } from '@deepseek-ai/cordis'
+// 空导入：加载上游客户端包对 `@deepseek-ai/cordis` 的模块增强
+// （`ctx.sidebarRight` / `ctx.sidebarRightTabs` / `ctx.contextMenus` / `ctx.locale`）。
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type { SidebarRightTabClaim } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { clickElement, isModified, type DocumentLike, type ElementLike, type EventLike } from './dom.ts'
 import { findClickHandler } from './fiber.ts'
-import { NS, translateOf, zh, en, type LocaleLike } from './locales.ts'
+import { NS, translateOf, zh, en } from './locales.ts'
 
 /** 插件 id：诊断前缀、标记与菜单贡献 id 都用它。 */
 export const name = 'dsh-changes-card-local'
@@ -75,67 +81,38 @@ export const MENU_CONTRIBUTION_ID = 'dsh-changes-card-local/changed-turn'
 /** 菜单动作 id。 */
 export const MENU_ACTION_ID = 'open-snapshot'
 
-/** 右栏导航服务：打开资源、读当前会话，以及切全屏用的命令面。 */
-export interface SidebarLike {
-  readonly mounted: { getSnapshot(): string | undefined }
-  openResource(address: string, options?: { readonly params?: unknown }): void
-  /** 活动页；没有屏幕上的会话时为 undefined。 */
-  active?(): TabRecordLike | undefined
-  /** 右栏当前是否展开。 */
-  isExpanded?(): boolean
-  /**
-   * 捕获当前活动的 dock 页。传 `null` 表示从布局读，而不是从 DOM 焦点读。
-   * @param element - 显式输入目标；`null` 表示不读焦点。
-   * @returns 捕获的页身份，或 undefined。
-   */
-  commandTarget?(element: unknown): unknown
-  /** 捕获的目标是否仍然有效（会话、面板、页的生命周期都没变）。 */
-  isTargetCurrent?(target: unknown): boolean
-  /** 切换右栏呈现方式（`push` ↔ `fullscreen`）。 */
-  toggleFullscreen?(target: unknown): void
+/**
+ * 本插件在上下文菜单里的目标族。
+ *
+ * 上游 `ContextMenuTargetMap` 是留给外部插件合并的开放点：这里补上本插件自己的种类，
+ * 于是 `ContextMenus.register` / `open` 都能按上游类型校验这个目标（而不是退化成 unknown）。
+ */
+declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
+  interface ContextMenuTargetMap {
+    /** 本插件自己的右键目标：`serial` 每次打开递增，让同一位置的重复右键重新打开。 */
+    readonly 'dsh-changes-card-local/changed-turn': {
+      readonly serial: number
+    }
+  }
 }
 
-/** 标签注册表认领一个地址后的结果里本插件用到的字段。 */
-export interface TabClaimLike {
-  /** 认领该地址的标签类型；用于确认刚打开的是不是这一页。 */
-  readonly kind?: string
-  /** 该页的内容 id；资源页通常就是地址本身。 */
-  readonly contentId?: string
-}
+/** 右栏导航服务：上游 `SidebarRightController`（`ctx.sidebarRight`）。 */
+type Sidebar = Context['sidebarRight']
 
-/** 右栏当前页（`TabRecord`）里本插件用到的字段。 */
-export interface TabRecordLike {
-  readonly kind?: string
-  readonly contentId?: string
-}
-
-/** 右栏的呈现方式。 */
+/** 右栏的呈现方式：面板根 `data-sidebar-right-panel` 的两个公开取值。 */
 export type PanelMode = 'push' | 'fullscreen'
 
-/** 右栏标签类型注册表：只用来确认目标地址确实有类型认领。 */
-export interface TabRegistryLike {
-  claim(address: string, kind?: string): TabClaimLike
-}
 
-/** 菜单动作（宿主 `MenuAction` 里本插件用到的字段）。 */
-export interface MenuActionLike {
-  readonly id: string
-  readonly label: string
-  run(): void
-}
+/** 右栏标签类型注册表：上游 `SidebarRightTabRegistry`（`ctx.sidebarRightTabs`）。 */
+type TabRegistry = Context['sidebarRightTabs']
 
-/** 宿主上下文菜单服务的最小面。 */
-export interface ContextMenusLike {
-  open(target: unknown, point: { readonly x: number; readonly y: number }): void
-  register(contribution: {
-    readonly id: string
-    readonly target: string
-    readonly order: number
-    readonly resolve: (target: unknown, signal: AbortSignal) => readonly MenuActionLike[]
-  }): () => void
-}
+/** 宿主上下文菜单服务：上游 `ContextMenus`（`ctx.contextMenus`）。 */
+type ContextMenus = Context['contextMenus']
 
-/** 运行期可注入项：测试用它替换告警输出。 */
+/** locale 服务：上游 `LocaleRuntime`（`ctx.locale`）。 */
+type Locale = Context['locale']
+
+/** 运行期可注入项（测试接缝）：上游没有对应类型，测试用它替换告警输出。 */
 export interface Runtime {
   /** 输出一条带插件前缀的诊断。 */
   readonly warn?: (message: string) => void
@@ -203,10 +180,10 @@ export function panelMode(doc: DocumentLike, sessionId: string): PanelMode | und
  * @returns 是否执行了切换。
  */
 export function presentFullscreen(
-  sidebar: SidebarLike,
+  sidebar: Sidebar,
   doc: DocumentLike,
   sessionId: string,
-  claim: TabClaimLike | undefined,
+  claim: SidebarRightTabClaim | undefined,
 ): boolean {
   const toggle = sidebar.toggleFullscreen
   if (typeof toggle !== 'function') return false
@@ -289,7 +266,7 @@ export function installCardLocal(
 ): () => void {
   if (doc === undefined) return () => {}
   const warn = runtime.warn ?? defaultWarn
-  const locale = serviceOf<LocaleLike>(ctx, 'locale')
+  const locale = serviceOf<Locale>(ctx, 'locale')
   let disposeLocale: (() => void) | undefined
   if (locale !== undefined) {
     try {
@@ -308,8 +285,8 @@ export function installCardLocal(
   /** 每次打开菜单换一个序号，让同一位置的重复右键重新打开而不是被当成「再点一次关闭」。 */
   let serial = 0
 
-  const ensureMenu = (): ContextMenusLike | undefined => {
-    const menus = serviceOf<ContextMenusLike>(ctx, 'contextMenus')
+  const ensureMenu = (): ContextMenus | undefined => {
+    const menus = serviceOf<ContextMenus>(ctx, 'contextMenus')
     if (menus === undefined) return undefined
     if (disposeMenu !== undefined) return menus
     try {
@@ -317,7 +294,7 @@ export function installCardLocal(
         id: MENU_CONTRIBUTION_ID,
         target: MENU_TARGET,
         order: 0,
-        resolve: () => {
+        resolve: (): readonly MenuAction[] => {
           const run = opener
           if (run === null) return []
           return [{
@@ -341,14 +318,14 @@ export function installCardLocal(
    * @returns 是否已接管这次点击（接管后调用方才会阻止冒泡）。
    */
   const openLocalChanges = (): boolean => {
-    const sidebar = serviceOf<SidebarLike>(ctx, 'sidebarRight')
+    const sidebar = serviceOf<Sidebar>(ctx, 'sidebarRight')
     if (sidebar === undefined) return false
     const sessionId = sidebar.mounted.getSnapshot()
     if (sessionId === undefined) return false
     const address = localChangesAddress(sessionId)
-    const tabs = serviceOf<TabRegistryLike>(ctx, 'sidebarRightTabs')
+    const tabs = serviceOf<TabRegistry>(ctx, 'sidebarRightTabs')
     if (tabs === undefined) return false
-    let claim: TabClaimLike | undefined
+    let claim: SidebarRightTabClaim | undefined
     try {
       claim = tabs.claim(address)
     } catch {

@@ -3,7 +3,9 @@
  *
  * 独立成纯模块，测试可以直接 import，不必拉进 React 或浏览器环境。
  */
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { HeroToggleInjected } from './component.ts'
+import type { HeroLocaleNS } from './locales.ts'
 
 /** 新会话行右侧的插件选项槽（forge 的「新建工作树」也在这里）。 */
 export const HERO_OPTIONS_SLOT = 'conversation.hero.options'
@@ -14,6 +16,20 @@ export const HERO_OPTIONS_ID = 'agent-team.hero'
 /** 排在工作树（默认 order 0）右侧。 */
 export const HERO_OPTIONS_ORDER = 10
 
+/** 交给 `slots.register()` 的注册选项（本插件自己的注册契约）。 */
+export interface HeroRegisterOptions {
+  /** 目标槽键。 */
+  readonly name: typeof HERO_OPTIONS_SLOT
+  /** 注册 id。 */
+  readonly id: string
+  /** 槽内显示顺序。 */
+  readonly order: number
+  /** 本插件字典命名空间。 */
+  readonly locale: HeroLocaleNS
+  /** 按会话给出写入回调的注入面。 */
+  readonly inject: (sessionId: SessionId) => HeroToggleInjected
+}
+
 /**
  * 构造 `slots.register()` 的选项。
  *
@@ -22,9 +38,9 @@ export const HERO_OPTIONS_ORDER = 10
  * @returns 注册选项。
  */
 export function heroRegisterOptions(
-  locale: string,
-  inject: (sessionId: string) => HeroToggleInjected,
-): Record<string, unknown> {
+  locale: HeroLocaleNS,
+  inject: (sessionId: SessionId) => HeroToggleInjected,
+): HeroRegisterOptions {
   return {
     name: HERO_OPTIONS_SLOT,
     id: HERO_OPTIONS_ID,

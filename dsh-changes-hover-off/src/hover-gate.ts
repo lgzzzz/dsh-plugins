@@ -45,39 +45,39 @@ export const PREVIEW_ATTRIBUTE = 'data-changes-hover-preview'
  */
 export const HOVER_GESTURES = ['pointerover', 'pointerenter', 'mouseover', 'mouseenter'] as const
 
-/** 本闸门拦下的手势类型。 */
+/** 本闸门拦下的手势类型；由本地常量 `HOVER_GESTURES` 派生，不是上游类型。 */
 export type HoverGesture = (typeof HOVER_GESTURES)[number]
 
-/** 可打标记的元素(生产环境是 `HTMLElement`)。 */
+/** 可打标记的元素(生产环境是 `HTMLElement`；上游无公开类型，测试接缝)。 */
 export interface MarkedElement {
   setAttribute(name: string, value: string): void
   removeAttribute(name: string): void
 }
 
-/** 可否决显示的元素(生产环境是 portal 外壳 `HTMLElement`)。 */
+/** 可否决显示的元素(生产环境是 portal 外壳 `HTMLElement`；测试接缝)。 */
 export interface ConcealableElement {
   style: { display: string }
   matches?(selector: string): boolean
   querySelector?(selector: string): unknown
 }
 
-/** 最小 MutationObserver 形状,便于测试替身。 */
+/** 最小 MutationObserver 形状,便于测试替身(上游无公开类型)。 */
 export interface MutationObserverLike {
   observe(target: unknown, options: { childList: boolean }): void
   disconnect(): void
 }
 
-/** 最小 MutationObserver 构造器形状(生产环境是 `window.MutationObserver`)。 */
+/** 最小 MutationObserver 构造器形状(生产环境是 `window.MutationObserver`;测试接缝)。 */
 export interface MutationObserverCtor {
   new (callback: (records: readonly MutationRecordLike[]) => void): MutationObserverLike
 }
 
-/** 只读取 `addedNodes` 的变更记录形状。 */
+/** 只读取 `addedNodes` 的变更记录形状(MutationRecord 的测试接缝)。 */
 export interface MutationRecordLike {
   readonly addedNodes: ArrayLike<unknown>
 }
 
-/** 闸门需要的文档能力;只用到捕获监听、根标记与 `body` 观察,便于测试替身。 */
+/** 闸门需要的文档能力;只用到捕获监听、根标记与 `body` 观察,便于测试替身(上游无公开类型)。 */
 export interface HoverGateDocument {
   addEventListener(type: string, listener: (event: Event) => void, capture: boolean): void
   removeEventListener(type: string, listener: (event: Event) => void, capture: boolean): void

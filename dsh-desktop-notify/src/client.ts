@@ -9,9 +9,6 @@
  * 没有 window / document(非浏览器环境)时直接返回,不注册任何东西。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { UiSession } from '@deepseek-ai/dsh-client-ui-session/client'
 import { createNotifySettingsRow, ensureNotifySettingsStyles } from './notify-settings.ts'
 import { createBrowserDelivery } from './notify-delivery.ts'
 import { createBrowserNotifyEnv } from './notify-env.ts'
@@ -28,19 +25,19 @@ const SETTINGS_ITEM_ID = 'desktop-notify'
 
 const SETTINGS_ITEM_ORDER = 30
 
-function getService(ctx: Context, serviceName: string): unknown {
+function getService<K extends keyof NotifyServices>(ctx: Context, serviceName: K): NotifyServices[K] {
   if (ctx.get === undefined || ctx.get === null) return undefined
   const value = ctx.get(serviceName)
-  return value === null || value === undefined ? undefined : value
+  return value === null || value === undefined ? undefined : value as NotifyServices[K]
 }
 
 export function apply(ctx: Context): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
 
   const services: NotifyServices = {
-    sessions: getService(ctx, 'sessions') as ISessions | undefined,
-    uiSession: getService(ctx, 'uiSession') as UiSession | undefined,
-    slots: getService(ctx, 'slots') as SlotRegistry | undefined,
+    sessions: getService(ctx, 'sessions'),
+    uiSession: getService(ctx, 'uiSession'),
+    slots: getService(ctx, 'slots'),
   }
 
   const store = createNotifyStore(createBrowserNotifyEnv(window))
