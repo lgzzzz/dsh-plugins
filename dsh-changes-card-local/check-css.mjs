@@ -3,14 +3,16 @@
 // 验证 dsh-changes-card-local 依赖的上游事实是否仍存在于 DSH 客户端构建产物中。
 // 无需运行时、无需浏览器。
 //
-// 本插件在 document 捕获阶段改写改动文件卡片的标题点击（打开右栏「本地变更」），并在右键时
+// 本插件在 document 捕获阶段改写改动文件卡片的标题点击（打开右栏「本地变更」并切全屏），并在右键时
 // 用宿主 contextMenus 提供「查看本轮快照 diff」（调用卡片按钮上的上游 onClick）。会**静默**
 // 退化的是这些上游事实：
 //   1. [data-changed-files] / data-single / 行容器 <li> / aria-expanded 折叠按钮改名或换结构 ——
 //      标题判定会把文件行或折叠按钮当成标题，点击落点错位；
 //   2. 标题不再调用 openReview(0) —— 右键菜单回到本轮快照的语义变了；
 //   3. forge 的本地变更地址前缀或标题键改名 —— 拼出的地址无人认领，标题点击退化为放行；
-//   4. 右栏 openResource / mounted / claim 或 contextMenus.open 改名 —— 打开与右键菜单整体失效。
+//   4. 右栏 openResource / mounted / claim 或 contextMenus.open 改名 —— 打开与右键菜单整体失效；
+//   5. 右栏 data-sidebar-right-panel / commandTarget / isTargetCurrent / toggleFullscreen 改名 ——
+//      切全屏整体失效，标题点击退化为只打开本地变更。
 // 这里在构建后把清单逐条对上游产物 grep 一遍，缺一条就显式失败，提示里写明后果。
 //
 // 用法(本脚本与 contract.json 同目录):

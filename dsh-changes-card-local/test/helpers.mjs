@@ -126,6 +126,24 @@ export class FakeDocument {
   constructor() {
     this.listeners = new Map()
     this.documentElement = new FakeRootElement()
+    this.roots = []
+  }
+
+  /** 把一棵假 DOM 树挂到文档上，供 `querySelectorAll` 查询。 */
+  mount(...nodes) {
+    this.roots.push(...nodes)
+    return nodes[0]
+  }
+
+  /** 只支持本插件用到的简单选择器（标签名 / `[attr]` / `[attr="value"]`）。 */
+  querySelectorAll(selector) {
+    const found = []
+    const visit = (node) => {
+      if (matchesSelector(node, selector)) found.push(node)
+      for (const child of node.children ?? []) visit(child)
+    }
+    for (const root of this.roots) visit(root)
+    return found
   }
 
   addEventListener(type, listener, capture) {
@@ -177,17 +195,62 @@ export function pointerEvent(target, extra = {}) {
   return event
 }
 
-/** 假右栏面：记录 `openResource` 的地址。 */
-export function fakeSidebar({ sessionId = 'session-1', signedOut = false, fail = false } = {}) {
+/**
+ * 假右栏面：记录 `openResource` 的地址、活动页与全屏切换。
+ *
+ * `command=false` 时省略全屏命令面（模拟没有 `toggleFullscreen` 的面）；
+ * `active` 覆写打开后的活动页，用来模拟打开落在别的页面 / 浮层里。
+ */
+export function fakeSidebar({
+  sessionId = 'session-1',
+  signedOut = false,
+  fail = false,
+  command = true,
+  expanded = true,
+  targetCurrent = true,
+  active,
+} = {}) {
   const sidebar = {
     opened: [],
+    toggles: [],
+    targets: [],
+    activeTab: undefined,
     mounted: { getSnapshot: () => (signedOut ? undefined : sessionId) },
     openResource(address) {
       if (fail) throw new Error('sidebar unloaded')
       sidebar.opened.push(address)
+      sidebar.activeTab = active ?? { kind: 'forge-changes', contentId: address }
     },
   }
+  if (command) {
+    sidebar.isExpanded = () => expanded
+    sidebar.active = () => sidebar.activeTab
+    sidebar.commandTarget = (element) => {
+      sidebar.targets.push(element)
+      return { sessionId, paneId: 'pane-1', host: 'dock' }
+    }
+    sidebar.isTargetCurrent = () => targetCurrent
+    sidebar.toggleFullscreen = (target) => { sidebar.toggles.push(target) }
+  }
   return sidebar
+}
+
+/**
+ * 在假文档里挂一块右栏面板：`hidden` 模拟留在 DOM 里的其它会话视图。
+ * @returns 面板根（带 `data-sidebar-right-panel`）。
+ */
+export function attachSidebarPanel(doc, { sessionId = 'session-1', mode = 'push', hidden = false } = {}) {
+  const panel = new FakeElement('div', {
+    'data-sidebar-right-session': sessionId,
+    'data-sidebar-right-panel': mode,
+  })
+  const view = new FakeElement('div', {
+    'data-sidebar-right-session': sessionId,
+    ...(hidden ? { hidden: '' } : {}),
+  })
+  view.append(panel)
+  doc.mount(view)
+  return panel
 }
 
 /** 假标签注册表：`claimable=false` 时模拟「本地变更」类型没注册。 */

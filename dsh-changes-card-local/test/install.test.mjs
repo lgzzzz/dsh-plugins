@@ -22,6 +22,7 @@ import {
   FakeDocument,
   FakeElement,
   attachClickHandler,
+  attachSidebarPanel,
   check,
   checkTrue,
   fakeLocale,
@@ -54,9 +55,9 @@ function singleCard() {
 }
 
 /** 装配一次安装；默认带齐四个服务。 */
-function setup({ sessionId = 'session-1', signedOut = false, claimable = true, sidebarFail = false, withMenus = true, locale } = {}) {
+function setup({ sessionId = 'session-1', signedOut = false, claimable = true, sidebarFail = false, withMenus = true, locale, sidebar: sidebarOptions = {} } = {}) {
   const doc = new FakeDocument()
-  const sidebar = fakeSidebar({ sessionId, signedOut, fail: sidebarFail })
+  const sidebar = fakeSidebar({ sessionId, signedOut, fail: sidebarFail, ...sidebarOptions })
   const tabs = fakeTabs({ claimable })
   const menus = fakeMenus()
   const services = { sidebarRight: sidebar, sidebarRightTabs: tabs }
@@ -315,6 +316,103 @@ console.log('--- V⑲ 地址编码：会话 id 里的特殊字符 ---')
 {
   check('编码会话 id', localChangesAddress('a/b:c'), 'dsh-resource://forge-changes/a%2Fb%3Ac/local')
   check('前缀常量', CARD_SELECTOR, '[data-changed-files]')
+}
+
+console.log('--- V⑳ 推挤呈现：打开后切成全屏 ---')
+{
+  const { doc, sidebar, warns } = setup()
+  attachSidebarPanel(doc, { mode: 'push' })
+  const { header } = multiCard()
+  const event = pointerEvent(header)
+  doc.dispatch('click', event)
+  check('打开本地变更', sidebar.opened, ['dsh-resource://forge-changes/session-1/local'])
+  check('切换全屏一次', sidebar.toggles.length, 1)
+  check('目标从布局读（传 null，不读焦点）', sidebar.targets, [null])
+  check('阻止冒泡', event.stopped, 1)
+  check('不告警', warns, [])
+}
+
+console.log('--- V㉑ 已经全屏：不再切换（避免切回推挤） ---')
+{
+  const { doc, sidebar } = setup()
+  attachSidebarPanel(doc, { mode: 'fullscreen' })
+  const { header } = multiCard()
+  const event = pointerEvent(header)
+  doc.dispatch('click', event)
+  check('打开本地变更', sidebar.opened, ['dsh-resource://forge-changes/session-1/local'])
+  check('不切换呈现方式', sidebar.toggles, [])
+  check('仍阻止冒泡', event.stopped, 1)
+}
+
+console.log('--- V㉒ 面板还没画出来：打开但不切屏，仍接管点击 ---')
+{
+  const { doc, sidebar } = setup()
+  const { header } = multiCard()
+  const event = pointerEvent(header)
+  doc.dispatch('click', event)
+  check('打开本地变更', sidebar.opened, ['dsh-resource://forge-changes/session-1/local'])
+  check('不切换（读不到现值）', sidebar.toggles, [])
+  check('阻止冒泡', event.stopped, 1)
+}
+
+console.log('--- V㉓ 活动页不是本地变更（打开落在浮层 / 别的页）：不切屏 ---')
+{
+  const { doc, sidebar } = setup({ sidebar: { active: { kind: 'file', contentId: 'dsh-resource://file/x.md' } } })
+  attachSidebarPanel(doc, { mode: 'push' })
+  const { header } = multiCard()
+  const event = pointerEvent(header)
+  doc.dispatch('click', event)
+  check('打开本地变更', sidebar.opened, ['dsh-resource://forge-changes/session-1/local'])
+  check('不切换无关页面', sidebar.toggles, [])
+}
+
+console.log('--- V㉔ 右栏面没有全屏命令（老版本 / 别的实现）：只打开 ---')
+{
+  const { doc, sidebar, warns } = setup({ sidebar: { command: false } })
+  attachSidebarPanel(doc, { mode: 'push' })
+  const { header } = multiCard()
+  const event = pointerEvent(header)
+  doc.dispatch('click', event)
+  check('打开本地变更', sidebar.opened, ['dsh-resource://forge-changes/session-1/local'])
+  check('没有切换入口时不动作', sidebar.toggles, [])
+  check('阻止冒泡', event.stopped, 1)
+  check('不告警（合法的缺席）', warns, [])
+}
+
+console.log('--- V㉕ 其它会话视图里的全屏面板不算：当前会话仍从推挤切全屏 ---')
+{
+  const { doc, sidebar } = setup()
+  attachSidebarPanel(doc, { mode: 'fullscreen', hidden: true })
+  attachSidebarPanel(doc, { mode: 'push' })
+  const { header } = multiCard()
+  const event = pointerEvent(header)
+  doc.dispatch('click', event)
+  check('切换全屏一次', sidebar.toggles.length, 1)
+}
+
+console.log('--- V㉖ 目标已陈旧：不切屏 ---')
+{
+  const { doc, sidebar } = setup({ sidebar: { targetCurrent: false } })
+  attachSidebarPanel(doc, { mode: 'push' })
+  const { header } = multiCard()
+  const event = pointerEvent(header)
+  doc.dispatch('click', event)
+  check('打开本地变更', sidebar.opened, ['dsh-resource://forge-changes/session-1/local'])
+  check('陈旧目标不切换', sidebar.toggles, [])
+  check('仍阻止冒泡', event.stopped, 1)
+}
+
+console.log('--- V㉗ 切屏抛错：只告警，已完成的打开与点击接管不受影响 ---')
+{
+  const { doc, sidebar, warns } = setup()
+  attachSidebarPanel(doc, { mode: 'push' })
+  sidebar.toggleFullscreen = () => { throw new Error('stale target') }
+  const { header } = multiCard()
+  const event = pointerEvent(header)
+  doc.dispatch('click', event)
+  check('打开本地变更', sidebar.opened, ['dsh-resource://forge-changes/session-1/local'])
+  check('阻止冒泡', event.stopped, 1)
+  check('记录一条告警', warns.length, 1)
 }
 
 finish()

@@ -13,14 +13,18 @@
  *
  *   1. **左键点标题**（卡片内、不在 `li` 里、不带 `aria-expanded` 的按钮）→ 调用
  *      `sidebarRight.openResource('dsh-resource://forge-changes/<session>/local')` 打开
- *      「本地变更」标签页，并 `stopPropagation()` 阻止上游打开本轮审查页；
+ *      「本地变更」标签页，右栏原本是推挤呈现时再 `toggleFullscreen()` 切成全屏，
+ *      最后 `stopPropagation()` 阻止上游打开本轮审查页；
  *   2. **左键点文件行**（`li` 里的按钮）→ 不处理，保持上游的「本轮文件 diff」；
  *   3. **右键标题或文件行** → 用宿主 `contextMenus` 打开上下文菜单，贡献一条「查看本轮快照
  *      diff」，执行时调用该按钮读到的 React `onClick`，回到上游原本的审查标签页。
  *
+ * 全屏只在「刚打开 / 聚焦的确实是本地变更」且右栏当前是 `push` 时切：已经全屏（含窄窗口
+ * 自动全屏）、面板还没画出来、活动页不是那一页、右栏面没有全屏命令，都保持现状。
+ *
  * 失败一律收敛为「不动作」：右栏不在、本地变更类型没注册、地址无法认领、拿不到会话、
  * 按钮上没有可读的 `onClick`、`contextMenus` 服务缺席，都把这次手势留给上游 / 浏览器。
- * 只有确认能打开时才 `stopPropagation()`，不会吞掉点击。
+ * 只有确认能打开时才 `stopPropagation()`，不会吞掉点击；切全屏失败不影响已经完成的打开。
  *
  * 上游锚点、边界与验证方式见 docs/dsh-changes-card-local.md。
  */
@@ -50,6 +54,18 @@ export const LOCAL_CHANGES_PREFIX = 'dsh-resource://forge-changes/'
 /** 「本地变更」标签页地址的固定尾段。 */
 export const LOCAL_CHANGES_SOURCE = 'local'
 
+/** 右栏面板根的呈现方式属性：`push`（推挤）或 `fullscreen`（全屏，含窄窗口自动全屏）。 */
+export const PANEL_ATTRIBUTE = 'data-sidebar-right-panel'
+
+/** 面板所属会话的属性；只读当前会话的那块面板。 */
+export const PANEL_SESSION_ATTRIBUTE = 'data-sidebar-right-session'
+
+/** 推挤呈现：右栏占一列，不是全屏。 */
+export const PUSH_MODE = 'push'
+
+/** 全屏呈现。 */
+export const FULLSCREEN_MODE = 'fullscreen'
+
 /** 本插件在上下文菜单里拥有的目标种类（只用于它自己弹出的菜单）。 */
 export const MENU_TARGET = 'dsh-changes-card-local/changed-turn'
 
@@ -59,15 +75,46 @@ export const MENU_CONTRIBUTION_ID = 'dsh-changes-card-local/changed-turn'
 /** 菜单动作 id。 */
 export const MENU_ACTION_ID = 'open-snapshot'
 
-/** 右栏导航服务：打开资源、读当前会话。 */
+/** 右栏导航服务：打开资源、读当前会话，以及切全屏用的命令面。 */
 export interface SidebarLike {
   readonly mounted: { getSnapshot(): string | undefined }
   openResource(address: string, options?: { readonly params?: unknown }): void
+  /** 活动页；没有屏幕上的会话时为 undefined。 */
+  active?(): TabRecordLike | undefined
+  /** 右栏当前是否展开。 */
+  isExpanded?(): boolean
+  /**
+   * 捕获当前活动的 dock 页。传 `null` 表示从布局读，而不是从 DOM 焦点读。
+   * @param element - 显式输入目标；`null` 表示不读焦点。
+   * @returns 捕获的页身份，或 undefined。
+   */
+  commandTarget?(element: unknown): unknown
+  /** 捕获的目标是否仍然有效（会话、面板、页的生命周期都没变）。 */
+  isTargetCurrent?(target: unknown): boolean
+  /** 切换右栏呈现方式（`push` ↔ `fullscreen`）。 */
+  toggleFullscreen?(target: unknown): void
 }
+
+/** 标签注册表认领一个地址后的结果里本插件用到的字段。 */
+export interface TabClaimLike {
+  /** 认领该地址的标签类型；用于确认刚打开的是不是这一页。 */
+  readonly kind?: string
+  /** 该页的内容 id；资源页通常就是地址本身。 */
+  readonly contentId?: string
+}
+
+/** 右栏当前页（`TabRecord`）里本插件用到的字段。 */
+export interface TabRecordLike {
+  readonly kind?: string
+  readonly contentId?: string
+}
+
+/** 右栏的呈现方式。 */
+export type PanelMode = 'push' | 'fullscreen'
 
 /** 右栏标签类型注册表：只用来确认目标地址确实有类型认领。 */
 export interface TabRegistryLike {
-  claim(address: string, kind?: string): unknown
+  claim(address: string, kind?: string): TabClaimLike
 }
 
 /** 菜单动作（宿主 `MenuAction` 里本插件用到的字段）。 */
@@ -118,6 +165,62 @@ export function serviceOf<T>(ctx: Context, key: string): T | undefined {
  */
 export function localChangesAddress(sessionId: string): string {
   return `${LOCAL_CHANGES_PREFIX}${encodeURIComponent(sessionId)}/${LOCAL_CHANGES_SOURCE}`
+}
+
+/**
+ * 读当前会话的右栏呈现方式。
+ *
+ * 面板根的 `[data-sidebar-right-panel]` 是布局状态的公开读数（`push` / `fullscreen`）；
+ * 其它会话的视图仍留在 DOM 里（带 `hidden`），先排除掉，否则会把别的会话的全屏当成自己的。
+ * @param doc - 目标文档。
+ * @param sessionId - 当前屏幕上的会话。
+ * @returns 呈现方式；面板还没画出、读不到属性或没有文档查询能力时为 undefined。
+ */
+export function panelMode(doc: DocumentLike, sessionId: string): PanelMode | undefined {
+  const panels = doc.querySelectorAll?.(`[${PANEL_ATTRIBUTE}]`)
+  if (panels === undefined) return undefined
+  for (let index = 0; index < panels.length; index += 1) {
+    const panel = panels[index]
+    if (panel === undefined) continue
+    if (panel.getAttribute?.(PANEL_SESSION_ATTRIBUTE) !== sessionId) continue
+    if (panel.closest?.('[hidden]') != null) continue
+    const mode = panel.getAttribute?.(PANEL_ATTRIBUTE)
+    if (mode === PUSH_MODE) return 'push'
+    if (mode === FULLSCREEN_MODE) return 'fullscreen'
+  }
+  return undefined
+}
+
+/**
+ * 把刚打开的「本地变更」切成全屏。
+ *
+ * 只从 `push` 切到 `fullscreen`：已经全屏（含窄窗口自动全屏）时再 `toggleFullscreen()`
+ * 会把它切回推挤，窄窗口下甚至会把右栏收起来，所以先读面板现值。
+ * @param sidebar - 右栏面。
+ * @param doc - 目标文档。
+ * @param sessionId - 当前屏幕上的会话。
+ * @param claim - 刚打开那一页的认领结果；用来确认活动页确实是它。
+ * @returns 是否执行了切换。
+ */
+export function presentFullscreen(
+  sidebar: SidebarLike,
+  doc: DocumentLike,
+  sessionId: string,
+  claim: TabClaimLike | undefined,
+): boolean {
+  const toggle = sidebar.toggleFullscreen
+  if (typeof toggle !== 'function') return false
+  if (sidebar.isExpanded?.() === false) return false
+  const current = sidebar.active?.()
+  if (current === undefined) return false
+  if (claim?.kind !== undefined && current.kind !== claim.kind) return false
+  if (claim?.contentId !== undefined && current.contentId !== claim.contentId) return false
+  if (panelMode(doc, sessionId) !== PUSH_MODE) return false
+  const target = sidebar.commandTarget?.(null)
+  if (target === undefined || target === null) return false
+  if (sidebar.isTargetCurrent?.(target) === false) return false
+  toggle.call(sidebar, target)
+  return true
 }
 
 /**
@@ -234,7 +337,7 @@ export function installCardLocal(
   }
 
   /**
-   * 标题被左键点了：打开「本地变更」。
+   * 标题被左键点了：打开「本地变更」，右栏原本是推挤呈现时再切成全屏。
    * @returns 是否已接管这次点击（接管后调用方才会阻止冒泡）。
    */
   const openLocalChanges = (): boolean => {
@@ -245,8 +348,9 @@ export function installCardLocal(
     const address = localChangesAddress(sessionId)
     const tabs = serviceOf<TabRegistryLike>(ctx, 'sidebarRightTabs')
     if (tabs === undefined) return false
+    let claim: TabClaimLike | undefined
     try {
-      tabs.claim(address)
+      claim = tabs.claim(address)
     } catch {
       // 没有注册「本地变更」类型（forge bundle 未挂载）：这次点击留给上游，仍打开本轮审查页。
       return false
@@ -257,6 +361,12 @@ export function installCardLocal(
       // 右栏在点击与调用之间卸载等情形：这次点击留给上游，不吞点击。
       warn(`open local changes failed: ${messageOf(error)}`)
       return false
+    }
+    try {
+      presentFullscreen(sidebar, doc, sessionId, claim)
+    } catch (error) {
+      // 已经打开成功：切全屏失败只记一条诊断，不改变这次点击已被接管的事实。
+      warn(`present fullscreen failed: ${messageOf(error)}`)
     }
     return true
   }

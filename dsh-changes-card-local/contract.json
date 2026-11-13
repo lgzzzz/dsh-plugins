@@ -1,5 +1,5 @@
 {
-  "description": "dsh-changes-card-local 依赖的上游事实：改动文件卡片的标题 / 文件行 / 折叠按钮的 DOM 形状、卡片按钮上的上游 onClick、本地变更标签页的地址与标题、右栏公开面里本插件用到的 openResource / mounted / claim，以及宿主上下文菜单的 open 与 contextMenus 服务。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
+  "description": "dsh-changes-card-local 依赖的上游事实：改动文件卡片的标题 / 文件行 / 折叠按钮的 DOM 形状、卡片按钮上的上游 onClick、本地变更标签页的地址与标题、右栏公开面里本插件用到的 openResource / mounted / claim 与切全屏的 commandTarget / isTargetCurrent / toggleFullscreen、面板呈现方式属性 data-sidebar-right-panel，以及宿主上下文菜单的 open 与 contextMenus 服务。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
   "checks": [
     {"id":"changed-files-attr","plugin":"dsh-changes-card-local","token":"data-changed-files","paths":["dsh-client-ui-deliverables/lib"],"hint":"改动文件卡片根元素的 data-changed-files 属性消失，点击捕获的作用域落空，标题不再打开本地变更"},
     {"id":"single-file-marker","plugin":"dsh-changes-card-local","token":"data-single","paths":["dsh-client-ui-deliverables/lib"],"hint":"单文件卡片的 data-single 标记消失：标题判定可能把单文件行误判成多文件标题"},
@@ -12,6 +12,10 @@
     {"id":"sidebar-open-resource","plugin":"dsh-changes-card-local","token":"openResource(address","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏公开面不再提供 openResource(address：打开本地变更的调用消失，插件必须改用新的导航入口"},
     {"id":"sidebar-mounted","plugin":"dsh-changes-card-local","token":"mounted","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏公开面不再提供 mounted 读数：拿不到当前会话，标题点击退化为放行"},
     {"id":"tab-claim","plugin":"dsh-changes-card-local","token":"claim(address","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"标签注册表不再提供 claim(address：无法预检目标地址是否有类型认领，点击可能抛错"},
+    {"id":"sidebar-panel-mode","plugin":"dsh-changes-card-local","token":"data-sidebar-right-panel","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"面板根不再输出 data-sidebar-right-panel：读不到现值就不会切全屏，标题点击退化为只打开本地变更"},
+    {"id":"sidebar-toggle-fullscreen","plugin":"dsh-changes-card-local","token":"toggleFullscreen(target)","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏面不再提供 toggleFullscreen(target：标题点击不会再把本地变更切成全屏"},
+    {"id":"sidebar-command-target","plugin":"dsh-changes-card-local","token":"commandTarget(element=document.activeElement)","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏面不再提供 commandTarget(element=…)：拿不到切全屏的目标，标题点击退化为只打开本地变更"},
+    {"id":"sidebar-target-current","plugin":"dsh-changes-card-local","token":"isTargetCurrent(target)","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏面不再提供 isTargetCurrent(target)：无法确认目标仍然有效，切全屏可能作用到陈旧页面"},
     {"id":"context-menus-service","plugin":"dsh-changes-card-local","token":"contextMenus","paths":["dsh-client-ui-context-menu/lib"],"hint":"宿主不再提供 contextMenus 服务：右键菜单整体退化为浏览器原生菜单"},
     {"id":"context-menu-open","plugin":"dsh-changes-card-local","token":"open(target","paths":["dsh-client-ui-context-menu/lib"],"hint":"上下文菜单不再提供 open(target：右键手势无法弹出宿主菜单"}
   ]

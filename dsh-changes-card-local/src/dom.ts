@@ -41,11 +41,13 @@ export interface MarkedElement {
   removeAttribute(name: string): void
 }
 
-/** 本插件需要的文档能力：三个捕获监听、读根元素写生效标记。 */
+/** 本插件需要的文档能力：三个捕获监听、读根元素写生效标记、查右栏面板。 */
 export interface DocumentLike {
   readonly documentElement?: MarkedElement | null
   addEventListener(type: string, listener: (event: EventLike) => void, capture: boolean): void
   removeEventListener(type: string, listener: (event: EventLike) => void, capture: boolean): void
+  /** 查面板根等元素；测试替身提供同样的最小实现。 */
+  querySelectorAll?(selectors: string): ArrayLike<ElementLike>
 }
 
 /** 鸭子类型判定「可 `closest` 的节点」，与仓库内其它捕获层同一手法。 */

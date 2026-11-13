@@ -17,6 +17,7 @@ import {
   FakeDocument,
   FakeElement,
   attachClickHandler,
+  attachSidebarPanel,
   check,
   checkTrue,
   fakeLocale,
@@ -83,9 +84,10 @@ console.log('--- V① lib/client.js 注册与声明 ---')
   checkTrue('apply 为函数', typeof plugin.apply === 'function')
 }
 
-console.log('--- V② 装配后点标题打开本地变更，右键弹出快照菜单 ---')
+console.log('--- V② 装配后点标题打开本地变更并切全屏，右键弹出快照菜单 ---')
 {
   const doc = new FakeDocument()
+  attachSidebarPanel(doc, { sessionId: 'session-9', mode: 'push' })
   const sidebar = fakeSidebar({ sessionId: 'session-9' })
   const tabs = fakeTabs()
   const menus = fakeMenus()
@@ -106,6 +108,7 @@ console.log('--- V② 装配后点标题打开本地变更，右键弹出快照�
   doc.dispatch('click', click)
   check('标题打开本地变更', sidebar.opened, ['dsh-resource://forge-changes/session-9/local'])
   check('标题点击阻止冒泡', click.stopped, 1)
+  check('推挤呈现切成全屏', sidebar.toggles.length, 1)
 
   let upstream = 0
   attachClickHandler(rowButton, () => { upstream += 1 })
@@ -125,7 +128,7 @@ console.log('--- V② 装配后点标题打开本地变更，右键弹出快照�
 console.log('--- V③ 产物里的稳定契约 ---')
 {
   const text = readFileSync(join(pluginRoot, 'lib', 'client.js'), 'utf8')
-  for (const token of [CARD_SELECTOR, LOCAL_CHANGES_PREFIX, 'aria-expanded', 'li', 'contextmenu', 'click', 'true', MARKER_ATTRIBUTE, MENU_TARGET, '__reactFiber$']) {
+  for (const token of [CARD_SELECTOR, LOCAL_CHANGES_PREFIX, 'aria-expanded', 'li', 'contextmenu', 'click', 'true', MARKER_ATTRIBUTE, MENU_TARGET, '__reactFiber$', 'data-sidebar-right-panel', 'toggleFullscreen']) {
     checkTrue(`产物含 ${token}`, text.includes(token))
   }
 }
