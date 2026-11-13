@@ -1,6 +1,6 @@
 # dsh-keyboard-shortcuts
 
-Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**的只读固定行，命中后调用官方命令注册表；另一层为内置命令够不着的状态补上免聚焦桥接（连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`、`⌘\` 分屏、`⌘⌥Y` 打开变更请求）。面板全屏与关闭当前页面在 Web 上还会在焦点不在右栏时回退到当前 Session 的活动 dock 面板；`⌘⌥←/→` 这一对按右栏状态分两档——右栏展开切右栏页面，右栏折叠切**会话视图**标签（对话／轨迹／插件注册的 View）；`⌘⌥Y` 直接打开「变更请求」面板，不预先读 git、不判断有没有本地变更；消息滚动口内的 PageUp/PageDown 按可见消息带翻页，Space 的原生翻页被吞掉。
+Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**的只读固定行，命中后调用官方命令注册表；另一层为内置命令够不着的状态补上免聚焦桥接（连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`、`⌘\` 分屏、`⌘⌥Y` 打开变更请求）。面板全屏与关闭当前页面在 Web 上还会在焦点不在右栏时回退到当前 Session 的活动 dock 面板；`⌘⌥←/→` 这一对按右栏状态分两档——右栏展开切右栏页面，右栏折叠切**会话视图**标签（对话／轨迹／插件注册的 View）；`⌘⌥Y` 直接打开「变更请求」面板，不预先读 git、不判断有没有本地变更，右栏原本是推挤呈现时再切成全屏；消息滚动口内的 PageUp/PageDown 按可见消息带翻页，Space 的原生翻页被吞掉。
 
 ## 目录
 
@@ -47,7 +47,7 @@ Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**
 | 切换会话 | `⌘↑` / `⌘↓` | 左侧栏前三个工作区当前显示的会话行之间环状导航 |
 | 切换活跃会话 | `⌘⌥↑` / `⌘⌥↓` | 只在行上有状态点的活跃会话之间切换 |
 | 分屏 | `⌘\` | 焦点不在面板内时回退到活动 dock 面板并分屏 |
-| 打开变更请求 | `⌘⌥Y` / `Ctrl+Alt+Y` | 打开（或聚焦）「变更请求」面板；右栏折叠时自动展开 |
+| 打开变更请求 | `⌘⌥Y` / `Ctrl+Alt+Y` | 打开（或聚焦）「变更请求」面板；右栏折叠时自动展开。面板原本是推挤呈现（`push`）时再切成全屏（`fullscreen`）；已是全屏或窄窗口自动全屏时不动 |
 
 固定键与 `⌘⌥J` / `⌘⌥K` / 切页 / 会话键在终端 `.xterm` 内同样生效：终端会在自己的处理器里 `preventDefault()+stopPropagation()`，所以各桥另挂 window **捕获阶段**监听，在事件进入终端前判定并吞掉这一按，既不误动作，也不把按键当输入送进 shell。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
 
@@ -81,7 +81,7 @@ Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行�
 7. 模态层、区域、目标面板与失败原因由官方命令的 `resolve()` 判断；插件只把 `region / modal / target` 原样交过去；
 8. `⌘⌥←/→` 按右栏展开状态分两档：展开时切右栏页面（`sidebarRight.focus()`，下一帧再把键盘交给新页面）；折叠时切会话视图——读当前渲染出来的 `[data-conversation-tabs] [role="tab"]`，按 `aria-selected` 认出当前视图，环状步进后 `click()` 目标页签（与用户点标签是同一次上游 `selectView`）。页签不足两颗时不动作、不消费；
 9. 消息滚动口另挂一条与固定键无关的 window 捕获监听：PageUp/PageDown 按 `clientHeight - composerHeight - 50` 翻页，并用 rAF 缓动；Space 直接吞掉；输入框、按钮、终端、模态层与内层可滚动区不接管；
-10. `⌘⌥Y` 先消费按键，再直接 `sidebarRight.openTab('forge-panel')` 打开「变更请求」面板；页面由上游 forge 包注册，本插件只触发，不读 git、不判断有没有本地变更；
+10. `⌘⌥Y` 先消费按键，再直接 `sidebarRight.openTab('forge-panel')` 打开「变更请求」面板；页面由上游 forge 包注册，本插件只触发，不读 git、不判断有没有本地变更。打开成功后若右栏面板标记为 `push`，再对活动 dock 面板调用 `toggleFullscreen()`；已经是 `fullscreen`（含窄窗口自动全屏）或页面落在浮动面板里时不动作；
 
 `registry` 是官方快捷键服务实例上的内部字段（公开的 `Shortcuts` 接口没有「按 id 调命令」的方法）。插件对它做结构检查：`invoke` 缺席时告警并完全不安装固定行，而不是退回自己调用业务服务。
 
@@ -151,7 +151,7 @@ dsh plugin --profile web remove dsh-keyboard-shortcuts
 | 模态层打开 | 官方 `invoke()` 按命令声明的 `modals` 决定是否执行；插件不越过模态层 |
 | 会话导航候选 | 只取左侧栏此刻渲染出来的会话行；折叠工作区、被「展开更多」挡住的行、归档行、搜索过滤与窄侧栏都不算候选 |
 | 会话视图切换候选 | 只取此刻渲染在标签行里的页签：被宽度预算折进「更多会话视图」菜单的 View 不算候选；少于两颗页签时 `⌘⌥←/→` 在折叠态不动作、不消费 |
-| `⌘⌥Y` 的判定 | 命中即开「变更请求」面板；不读 git、不判断有没有本地变更，因此没有读失败、超时或 Remote 缺席这类退化分支 |
+| `⌘⌥Y` 的判定 | 命中即开「变更请求」面板；不读 git、不判断有没有本地变更，因此没有读失败、超时或 Remote 缺席这类退化分支。打开后只在右栏为 `push` 呈现、活动页正是 `forge-panel` 时切全屏；浮层、自动全屏或已陈旧的目标都不动作 |
 | `⌘⌥Y` 遇上未启用的 forge 包 | 固定行仍占用组合；`openTab()` 抛错时告警、不动作。面板由 `@deepseek-ai/dsh-experimental-client-ui-forge` 注册，本插件不复制面板内容，也不在包里造替代页 |
 | 消息滚动口缺少 composer / 滚动口标记 | PageUp/PageDown/Space 不接管，保持原生 | 翻页补偿只在能算出可见消息带时生效；`css-contract.json` 的 `conversation-scroll` / `composer-seat` 兜住锚点 |
 
@@ -163,7 +163,7 @@ dsh plugin --profile web remove dsh-keyboard-shortcuts
 |---|---|
 | [1. 行为差异与影响面](dsh-keyboard-shortcuts/01-behavior-difference.md) | 固定键层与免聚焦桥接层、仍然依赖焦点或状态的内置快捷键、全屏右栏 `Esc`；DOM / 焦点 / `keydown` / `closest()` / `preventDefault()` 预备知识 |
 | [2. 归属判定](dsh-keyboard-shortcuts/02-ownership-resolution.md) | 键盘事件的完整链路；分屏、关页、停止序列、审批面板、提问卡片与全屏右栏 `Esc` 各自的归属判定 |
-| [3. 固定输入通道与固定键桥接](dsh-keyboard-shortcuts/03-fixed-input-and-pane-keys.md) | 机制总览；固定键、分屏、关页回退；固定输入与「消费即让位」；`enabledBinding`；右栏页签行的滚动补偿 |
+| [3. 固定输入通道与固定键桥接](dsh-keyboard-shortcuts/03-fixed-input-and-pane-keys.md) | 机制总览；固定键、分屏、关页回退；固定输入与「消费即让位」；`enabledBinding`；右栏页签行的滚动补偿；变更请求打开后的默认全屏 |
 | [4. 停止桥接（`Esc Esc`）](dsh-keyboard-shortcuts/04-stop-sequence-bridge.md) | `handleStopInput`；轮次身份；双按序列；归属不重叠 |
 | [5. 审批键与提问卡片桥接](dsh-keyboard-shortcuts/05-approval-key-bridge.md) | `handleApprovalInput`；捕获路径；提问卡片取消；全屏右栏关栏桥（5.11）；各桥的归属不重叠 |
 | [6. 边界与依赖契约](dsh-keyboard-shortcuts/06-boundaries-and-contracts.md) | 与内置命令的对照表；已知边界与失败模式；依赖的非正式契约 |

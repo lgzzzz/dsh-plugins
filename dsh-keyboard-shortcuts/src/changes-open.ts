@@ -1,7 +1,9 @@
 /**
  * `⌘⌥Y`（macOS）/ `Ctrl+Alt+Y`（Windows、Linux）打开右栏的「变更请求」面板：
  * 直接 `sidebarRight.openTab('forge-panel')`，不读 git、不判断当前会话有没有本地变更。
- * 面板里本来就有本地变更卡片与变更请求列表，用户从那里继续。
+ * 面板里本来就有本地变更卡片与变更请求列表，用户从那里继续。打开后若右栏原本是推挤
+ * 呈现（面板根标记为 `push`），再把活动 dock 面板切成全屏（`fullscreen`）；已经是全屏
+ * 或窄窗口自动全屏时不动作，见 fullscreen-present.ts。
  *
  * 为什么只开一个页面：「变更请求」是 forge 包注册的**页面**（kind `forge-panel`），
  * 由 `openTab()` 打开；本插件只经公开的 Right-Sidebar 面触发，不复制面板内容。
@@ -24,6 +26,7 @@ import {
   terminalTarget,
 } from './capture.ts'
 import { bindingKeycaps, fixedRowOwns } from './binding.ts'
+import { presentSidebarFullscreen } from './fullscreen-present.ts'
 import { isKeydown, name, warn } from './runtime.ts'
 import type {
   ShortcutContext,
@@ -88,7 +91,7 @@ export function changesOpenTarget(
   return sidebar.mounted.getSnapshot() !== undefined
 }
 
-/** 打开（或聚焦已打开的）「变更请求」面板。 */
+/** 打开（或聚焦已打开的）「变更请求」面板，并在面板原本是推挤呈现时切成全屏。 */
 function openForgePanel(sidebar: Sidebar): void {
   if (typeof sidebar.openTab !== 'function') {
     warn('sidebarRight exposes no openTab; forge panel not opened')
@@ -98,6 +101,12 @@ function openForgePanel(sidebar: Sidebar): void {
     sidebar.openTab(FORGE_PANEL_KIND)
   } catch (error) {
     warn('打开变更请求面板失败：', error)
+    return
+  }
+  try {
+    presentSidebarFullscreen(sidebar, FORGE_PANEL_KIND)
+  } catch (error) {
+    warn('切换变更请求面板全屏失败：', error)
   }
 }
 

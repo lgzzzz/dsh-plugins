@@ -17,6 +17,8 @@
     {"id":"sidebar-right-session","plugin":"dsh-keyboard-shortcuts","token":"data-sidebar-right-session","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏会话根标记消失：自动聚焦与页签行窗口保持都找不到会话根，切页后只切页、不交还键盘"},
     {"id":"sidebar-right-open","plugin":"dsh-keyboard-shortcuts","token":"data-sidebar-right-open","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏『已展开』标记消失：取不到内层会话根、dock pane 查找落空，自动聚焦退化成 no-op"},
     {"id":"sidebar-right-panel","plugin":"dsh-keyboard-shortcuts","token":"data-sidebar-right-panel","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏呈现方式标记消失：Esc 认不出『全屏呈现』的右栏，全屏下按 Esc 不再关栏（不误动作）"},
+    {"id":"sidebar-right-panel-push","plugin":"dsh-keyboard-shortcuts","pattern":"data-sidebar-right-panel\":fullscreen\\?","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"面板标记不再同时输出 fullscreen / push 两个值：⌘⌥Y 打开变更请求后无法判断当前是不是全屏，默认全屏退化为 no-op（不误切）"},
+    {"id":"sidebar-inactive-hidden","plugin":"dsh-keyboard-shortcuts","pattern":"hidden:!active,\"data-sidebar-right-session\"","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"不活跃会话视图不再用 hidden 标记：⌘⌥Y 的默认全屏可能拿另一个会话的 push 标记把当前全屏切回去"},
     {"id":"dockkit-pane","plugin":"dsh-keyboard-shortcuts","token":"data-dockkit-pane","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit pane 标记消失：自动聚焦的 pane 选择与面板归属判定一并落空"},
     {"id":"dockkit-pane-active","plugin":"dsh-keyboard-shortcuts","token":"data-dockkit-pane-active","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 活动 pane 标记消失：自动聚焦退化为『第一个可见 pane』，分屏时可能交还键盘给另一块面板"},
     {"id":"dockkit-float","plugin":"dsh-keyboard-shortcuts","token":"data-dockkit-float","paths":["dsh-web-frontend/dist/assets"],"hint":"dockkit 浮动 pane 标记消失：浮动面板的自动聚焦落空"},

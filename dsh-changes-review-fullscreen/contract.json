@@ -1,0 +1,15 @@
+{
+  "description": "dsh-changes-review-fullscreen 依赖的上游事实：改动文件卡片的根与打开审查页的按钮形状、右栏呈现方式的 DOM 读数、审查标签页的 kind，以及右栏公开面里本插件用到的四个方法。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
+  "checks": [
+    {"id":"changed-files-attr","plugin":"dsh-changes-review-fullscreen","token":"data-changed-files","paths":["dsh-client-ui-deliverables/lib"],"hint":"改动文件卡片根元素的 data-changed-files 属性消失，点击捕获的作用域落空，卡片点击不再默认全屏"},
+    {"id":"card-fold-toggle","plugin":"dsh-changes-review-fullscreen","pattern":"\"aria-expanded\":\\s*expanded","paths":["dsh-client-ui-deliverables/lib"],"hint":"卡片折叠按钮的 aria-expanded 读数消失：插件认不出『展开全部文件』，点它会把当前标签页误切成全屏"},
+    {"id":"sidebar-panel-mode","plugin":"dsh-changes-review-fullscreen","token":"data-sidebar-right-panel","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏呈现方式标记消失：读不到 push / fullscreen，插件会保守地不动作，卡片点击不再默认全屏"},
+    {"id":"sidebar-panel-values","plugin":"dsh-changes-review-fullscreen","pattern":"data-sidebar-right-panel\":fullscreen\\?","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"面板标记不再同时输出 fullscreen / push 两个值：插件无法判断当前是不是全屏，默认全屏退化为 no-op"},
+    {"id":"sidebar-session-view","plugin":"dsh-changes-review-fullscreen","token":"data-sidebar-right-session","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"会话视图根标记消失：插件分不清当前视图与保留在 DOM 里的其它会话视图，可能拿别的会话的呈现方式误切全屏"},
+    {"id":"inactive-view-hidden","plugin":"dsh-changes-review-fullscreen","pattern":"hidden:!active,\"data-sidebar-right-session\"","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"不活跃会话视图不再用 hidden 标记：:not([hidden]) 作用域失去区分能力，跨会话切换后可能误读呈现方式"},
+    {"id":"review-kind","plugin":"dsh-changes-review-fullscreen","pattern":"CHANGES_REVIEW_KIND=.changes-review.","paths":["dsh-client-ui-deliverables/lib"],"hint":"审查标签页的 kind 不再是 changes-review：活动标签页判定恒为假，卡片点击不再默认全屏"},
+    {"id":"sidebar-active-api","plugin":"dsh-changes-review-fullscreen","token":"active(){","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏公开面不再提供 active()：插件无法确认打开的是审查标签页，默认全屏退化为 no-op"},
+    {"id":"sidebar-command-target-api","plugin":"dsh-changes-review-fullscreen","token":"commandTarget(","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏公开面不再提供 commandTarget()：解析不出活动 dock 面板，默认全屏退化为 no-op"},
+    {"id":"sidebar-fullscreen-api","plugin":"dsh-changes-review-fullscreen","token":"toggleFullscreen(","paths":["dsh-client-ui-sidebar-right/lib"],"hint":"右栏公开面不再提供 toggleFullscreen()：切换全屏的调用消失，插件必须改用新的呈现入口"}
+  ]
+}

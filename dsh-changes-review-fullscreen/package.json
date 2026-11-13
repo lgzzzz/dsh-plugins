@@ -1,0 +1,38 @@
+{
+  "name": "dsh-changes-review-fullscreen",
+  "version": "1.0.0",
+  "private": true,
+  "description": "点击「改动文件卡片」打开右栏改动审查（changes-review）标签页时默认切成全屏呈现：在 document 捕获阶段接住卡片里打开审查页的按钮，等 React 把标签页放进右栏后对活动 dock 面板调用 toggleFullscreen()；本来就是全屏（含窄窗口自动全屏）时不动作，折叠按钮与卡片外的点击不受影响。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "^0.2.2-rc.2",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}

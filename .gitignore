@@ -17,6 +17,7 @@ package-lock.json
 # clone 后须先构建才能被 DSH 加载(profile 以 link: 指向本目录,读取 lib/client.js)。
 dsh-changes-hover-off/lib/
 dsh-changes-review-wrap/lib/
+dsh-changes-review-fullscreen/lib/
 dsh-desktop-notify/lib/
 dsh-header-action-order/lib/
 dsh-stats-ttft/lib/

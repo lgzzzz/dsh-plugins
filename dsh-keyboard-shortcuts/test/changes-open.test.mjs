@@ -6,6 +6,7 @@
  * 运行：`node test/changes-open.test.mjs`（或 pnpm test 跑全部）。
  */
 import { installChangesOpenBridge as apply } from '../src/changes-open.ts'
+import { presentSidebarFullscreen } from '../src/fullscreen-present.ts'
 import {
   captureWarnings,
   check,
@@ -21,7 +22,13 @@ import {
 } from './focus-helpers.mjs'
 
 /** 打开变更请求要用的右栏假面。`sessionId: null` 表示没有屏幕会话。 */
-function fakeSidebar({ sessionId = 's1' } = {}) {
+function fakeSidebar({
+  sessionId = 's1',
+  activeKind = 'forge-panel',
+  expanded = true,
+  target = { host: 'dock' },
+  current = true,
+} = {}) {
   let mounted = sessionId === null ? undefined : sessionId
   const sidebar = {
     mounted: { getSnapshot: () => mounted },
@@ -29,11 +36,28 @@ function fakeSidebar({ sessionId = 's1' } = {}) {
       mounted = next
     },
     kinds: [],
+    calls: [],
+    targets: [],
     openTab(kind) {
       sidebar.kinds.push(kind)
     },
+    active: () => (activeKind === null ? undefined : { kind: activeKind }),
+    isExpanded: () => expanded,
+    commandTarget: (element) => {
+      sidebar.targets.push(element)
+      return target
+    },
+    isTargetCurrent: () => current,
+    toggleFullscreen: (value) => sidebar.calls.push(['fullscreen', value]),
   }
   return sidebar
+}
+
+/** 置入一个带呈现方式标记的假右栏文档；`mode` 是 `push` / `fullscreen` / `none`。 */
+function withSidebarPanel(mode) {
+  const app = new FakeElement('div', { 'data-app': '' })
+  if (mode !== 'none') app.append(new FakeElement('div', { 'data-sidebar-right-panel': mode }))
+  return withWindowDom({ root: app })
 }
 
 /**
@@ -79,9 +103,9 @@ function fakeCtx({ shortcuts, sidebarRight }) {
 }
 
 /** 装配一次本桥，返回部件。 */
-function harness({ sessionId = 's1', platform = 'windows', runtime = 'web' } = {}) {
+function harness({ sessionId = 's1', platform = 'windows', runtime = 'web', ...sidebarOptions } = {}) {
   const shortcuts = fakeShortcuts({ runtime, platform, rows: [], fixedRows: [] })
-  const sidebarRight = fakeSidebar({ sessionId })
+  const sidebarRight = fakeSidebar({ sessionId, ...sidebarOptions })
   const ctx = fakeCtx({ shortcuts, sidebarRight })
   const warnings = captureWarnings(() => { apply(ctx) })
   return { ctx, shortcuts, sidebarRight, warnings }
@@ -181,6 +205,86 @@ console.log('--- C⑦ 打开失败:openTab 抛错时告警,按键仍已消费 --
   const warnings = captureWarnings(() => { shortcuts.emit(press.input) })
   check('消费', press.consumed.count, 1)
   checkTrue('有失败告警', warnings.some((line) => line.includes('打开变更请求面板失败')))
+  check('打开失败不切全屏', sidebarRight.calls, [])
+}
+
+console.log('--- C⑧ 面板原本是 push:打开后切成全屏 ---')
+{
+  const dom = withSidebarPanel('push')
+  try {
+    const { shortcuts, sidebarRight } = harness()
+    const press = keydown(PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    check('消费', press.consumed.count, 1)
+    check('打开变更请求面板', sidebarRight.kinds, ['forge-panel'])
+    check('切全屏', sidebarRight.calls, [['fullscreen', { host: 'dock' }]])
+    check('按活动 dock 面板解析（传 null）', sidebarRight.targets, [null])
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- C⑨ 已经是全屏 / 没有面板 / 活动页不是变更请求 / 目标陈旧:不切 ---')
+{
+  const cases = [
+    ['窄窗口自动全屏或手动全屏', 'fullscreen', {}, 0],
+    ['读不到面板', 'none', {}, 0],
+    ['活动页不是变更请求', 'push', { activeKind: 'changes-review' }, 0],
+    ['没有活动页', 'push', { activeKind: null }, 0],
+    ['目标已陈旧', 'push', { current: false }, 0],
+    ['右栏折叠', 'push', { expanded: false }, 0],
+  ]
+  for (const [label, mode, options, expected] of cases) {
+    const dom = withSidebarPanel(mode)
+    try {
+      const { shortcuts, sidebarRight } = harness(options)
+      const press = keydown(PRESS, shortcutContext({ target: null }))
+      shortcuts.emit(press.input)
+      check(`${label}:打开面板`, sidebarRight.kinds, ['forge-panel'])
+      check(`${label}:不切全屏`, sidebarRight.calls.length, expected)
+    } finally {
+      dom.restore()
+    }
+  }
+
+  const dom = withSidebarPanel('push')
+  try {
+    const { shortcuts, sidebarRight } = harness()
+    sidebarRight.commandTarget = () => undefined
+    const press = keydown(PRESS, shortcutContext({ target: null }))
+    shortcuts.emit(press.input)
+    check('解析不出目标:不切全屏', sidebarRight.calls, [])
+  } finally {
+    dom.restore()
+  }
+}
+
+console.log('--- C⑩ 呈现方式读数只看当前会话视图 ---')
+{
+  const previous = globalThis.document
+  const installDocument = (query) => { globalThis.document = { querySelector: query } }
+  try {
+    // 当前会话是 push，另一个保留的会话视图是全屏：仍按 push 切一次。
+    installDocument((selector) => {
+      if (selector.includes(':not([hidden])')) return selector.includes('"fullscreen"') ? null : { tag: 'push' }
+      return selector.includes('"fullscreen"') ? { tag: 'hidden-fullscreen' } : null
+    })
+    const pushing = fakeSidebar()
+    check('当前 push：切全屏', presentSidebarFullscreen(pushing, 'forge-panel'), true)
+    check('调用一次', pushing.calls, [['fullscreen', { host: 'dock' }]])
+
+    // 当前会话已经是全屏，另一个保留的会话视图是 push：不切。
+    installDocument((selector) => {
+      if (selector.includes(':not([hidden])')) return selector.includes('"fullscreen"') ? { tag: 'fullscreen' } : null
+      return selector.includes('"push"') ? { tag: 'hidden-push' } : null
+    })
+    const fullscreen = fakeSidebar()
+    check('当前全屏：不切', presentSidebarFullscreen(fullscreen, 'forge-panel'), false)
+    check('不调用', fullscreen.calls, [])
+  } finally {
+    if (previous === undefined) delete globalThis.document
+    else globalThis.document = previous
+  }
 }
 
 finish()
