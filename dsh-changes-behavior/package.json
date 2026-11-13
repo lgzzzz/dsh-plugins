@@ -1,0 +1,43 @@
+{
+  "name": "dsh-changes-behavior",
+  "version": "1.0.0",
+  "private": true,
+  "description": "右栏改动视图的统一行为：打开指定入口（改动卡片标题、⌘⌥Y）时默认全屏，其余打开一律非全屏；改动审查标签页按面板呈现方式默认分栏并默认换行；关掉改动卡片的悬停浮层；「本地变更」「变更请求」字号统一为 14px，文件树宽度拖动后记住并在重新打开时恢复。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-client-locale": "^0.2.2-rc.2",
+    "@deepseek-ai/dsh-client-shortcuts": "^0.2.2-rc.2",
+    "@deepseek-ai/dsh-client-ui-context-menu": "^0.2.2-rc.2",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "^0.2.2-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-rc.2",
+    "dsh-shortcut-utils": "workspace:*",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}

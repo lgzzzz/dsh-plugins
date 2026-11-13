@@ -1,0 +1,446 @@
+{
+  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟，以及 forge 与审查页的字号锚点。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
+  "checks": [
+    {
+      "id": "changed-files-attr",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-changed-files",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "改动文件卡片根元素的 data-changed-files 属性消失，点击捕获 / 悬停闸门的作用域落空"
+    },
+    {
+      "id": "single-file-marker",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-single",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "单文件卡片的 data-single 标记消失：标题判定可能把单文件行误判成多文件标题"
+    },
+    {
+      "id": "card-rows-in-li",
+      "plugin": "dsh-changes-behavior",
+      "token": "(`li`",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "文件行不再渲染在 <li> 里：标题判定会把文件行当成标题，点行也跳去本地变更"
+    },
+    {
+      "id": "card-row-describedby",
+      "plugin": "dsh-changes-behavior",
+      "token": "${pathDescriptionId}-${index}",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "文件行的 aria-describedby 序号模板消失：上游行结构变了，标题 / 行的区分需要重新核对"
+    },
+    {
+      "id": "card-fold-toggle",
+      "plugin": "dsh-changes-behavior",
+      "token": "aria-expanded\":expanded",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "折叠按钮的 aria-expanded 读数消失：插件认不出「展开全部文件」，点它会去开本地变更"
+    },
+    {
+      "id": "header-opens-review",
+      "plugin": "dsh-changes-behavior",
+      "token": "openReview(0)",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "标题按钮不再调用 openReview(0)：右键菜单依赖的「上游 onClick」语义变了，回到本轮快照的落点需要重新核对"
+    },
+    {
+      "id": "local-changes-address",
+      "plugin": "dsh-changes-behavior",
+      "token": "dsh-resource://forge-changes/",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "「本地变更」标签页的地址前缀不再由 forge 生成：本插件拼出的地址无人认领，点击退化为放行"
+    },
+    {
+      "id": "local-changes-title",
+      "plugin": "dsh-changes-behavior",
+      "token": "changes.local.title",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "「本地变更」的标签页标题键消失：forge 的标签类型可能改名，地址与 kind 需要重新核对"
+    },
+    {
+      "id": "context-menus-service",
+      "plugin": "dsh-changes-behavior",
+      "token": "contextMenus",
+      "paths": [
+        "dsh-client-ui-context-menu/lib"
+      ],
+      "hint": "宿主不再提供 contextMenus 服务：右键菜单整体退化为浏览器原生菜单"
+    },
+    {
+      "id": "context-menu-open",
+      "plugin": "dsh-changes-behavior",
+      "token": "open(target",
+      "paths": [
+        "dsh-client-ui-context-menu/lib"
+      ],
+      "hint": "上下文菜单不再提供 open(target：右键手势无法弹出宿主菜单"
+    },
+    {
+      "id": "sidebar-open-resource",
+      "plugin": "dsh-changes-behavior",
+      "token": "openResource(address",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "右栏公开面不再提供 openResource(address：打开「本地变更」的调用消失，插件必须改用新的导航入口"
+    },
+    {
+      "id": "sidebar-open-tab",
+      "plugin": "dsh-changes-behavior",
+      "token": "openTab(kind",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "右栏公开面不再提供 openTab(kind：⌘⌥Y 打开「变更请求」的调用消失"
+    },
+    {
+      "id": "sidebar-open-resource-in",
+      "plugin": "dsh-changes-behavior",
+      "token": "openResourceIn(sessionId,address",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "Tab 动作 / 上下文菜单使用的 openResourceIn(sessionId,address 消失：非全屏策略漏掉这一类打开入口"
+    },
+    {
+      "id": "sidebar-open-tab-in",
+      "plugin": "dsh-changes-behavior",
+      "token": "openTabIn(sessionId,kind",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "Tab 动作 / 上下文菜单使用的 openTabIn(sessionId,kind 消失：非全屏策略漏掉这一类打开入口"
+    },
+    {
+      "id": "sidebar-mounted",
+      "plugin": "dsh-changes-behavior",
+      "token": "mounted",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "右栏公开面不再提供 mounted 读数：拿不到当前会话，标题点击退化为放行"
+    },
+    {
+      "id": "tab-claim",
+      "plugin": "dsh-changes-behavior",
+      "token": "claim(address",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "标签注册表不再提供 claim(address：无法预检目标地址是否有类型认领，点击可能抛错"
+    },
+    {
+      "id": "sidebar-panel-mode",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-sidebar-right-panel",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "面板根不再输出 data-sidebar-right-panel：读不到现值，全屏 / 非全屏策略都会静默失效"
+    },
+    {
+      "id": "panel-values",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "data-sidebar-right-panel\":fullscreen\\?",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "面板标记不再同时输出 fullscreen / push 两个值：无法判断当前是不是全屏"
+    },
+    {
+      "id": "sidebar-toggle-fullscreen",
+      "plugin": "dsh-changes-behavior",
+      "token": "toggleFullscreen(target)",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "右栏面不再提供 toggleFullscreen(target：指定入口不会切成全屏，其余入口也不会切回推挤"
+    },
+    {
+      "id": "sidebar-command-target",
+      "plugin": "dsh-changes-behavior",
+      "token": "commandTarget(element=document.activeElement)",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "右栏面不再提供 commandTarget(element=…)：拿不到切呈现方式的目标"
+    },
+    {
+      "id": "sidebar-target-current",
+      "plugin": "dsh-changes-behavior",
+      "token": "isTargetCurrent(target)",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "右栏面不再提供 isTargetCurrent(target)：无法确认目标仍然有效，切屏可能作用到陈旧页面"
+    },
+    {
+      "id": "auto-fullscreen-width",
+      "plugin": "dsh-changes-behavior",
+      "token": "viewportWidth<768",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "窄窗口自动全屏的 768px 断点变了：非全屏策略可能在窄窗口把右栏收起，需要重新核对"
+    },
+    {
+      "id": "tab-occurrence",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-sidebar-right-occurrence",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "标签页占位实例锚点消失：审查默认分栏 / 换行退回会话 id + 标签页 id，跨会话去重可能失真"
+    },
+    {
+      "id": "tab-id",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-sidebar-right-tab",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "标签页 id 锚点消失，身份回退失效"
+    },
+    {
+      "id": "session-id",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-sidebar-right-session",
+      "paths": [
+        "dsh-client-ui-sidebar-right/lib"
+      ],
+      "hint": "会话 id 锚点消失，回退身份无法区分不同会话的同名标签页"
+    },
+    {
+      "id": "review-root",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-changes-review",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "审查标签页根元素锚点消失：默认分栏 / 换行与 14px 字号覆盖都没有作用范围"
+    },
+    {
+      "id": "review-body",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-review-view",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "diff 正文锚点消失，无法确认换行是否已开启"
+    },
+    {
+      "id": "review-wrap-attr",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-review-wrap",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "换行态属性消失，上游可能改了换行的 DOM 表达"
+    },
+    {
+      "id": "split-tool",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "\"data-review-tool\":\\s*[\"'`]split[\"'`]",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "工具栏分栏按钮锚点消失，无从切换默认分栏"
+    },
+    {
+      "id": "split-handler",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "onClick:\\(\\)=>\\{actions\\.toggledSplit\\(tab\\.id\\)\\}",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "分栏按钮的 onClick 不再调用 actions.toggledSplit(tab.id)：fiber 上取到的 handler 可能不再写 review store"
+    },
+    {
+      "id": "split-pressed",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "\"aria-pressed\":split",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "分栏按钮不再用 aria-pressed 反映 split 状态，无法判断默认值是否已经生效"
+    },
+    {
+      "id": "wrap-tool",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "\"data-review-tool\":\\s*[\"'`]wrap[\"'`]",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "工具栏换行按钮锚点消失，无从触发默认换行"
+    },
+    {
+      "id": "review-seed-defaults",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "split:\\s*true,\\s*wrap:\\s*false",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "review store 的首次 seed 不再默认 split:true / wrap:false：默认分栏 / 换行的前提失效"
+    },
+    {
+      "id": "wrap-action",
+      "plugin": "dsh-changes-behavior",
+      "token": "toggledWrap",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "换行动作名消失，换行按钮的 onClick 可能不再写 review store"
+    },
+    {
+      "id": "hover-open-delay",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "openDelayMs:\\s*500",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "上游不再用 500ms 悬停打开改动浮层（可能已提供开关或改走别的路径），悬停闸门可能已多余"
+    },
+    {
+      "id": "hover-preview-attr",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-changes-hover-preview",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "浮层内容标记消失，说明上游重写了这条预览，需要重新确认拦停位置"
+    },
+    {
+      "id": "changes-root-attr",
+      "plugin": "dsh-changes-behavior",
+      "token": "\"data-forge-changes\":source.kind",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "变更视图根不再输出 data-forge-changes={source.kind}：本地变更与各变更请求 diff 回到上游字号"
+    },
+    {
+      "id": "panel-root-attr",
+      "plugin": "dsh-changes-behavior",
+      "token": "\"data-forge-panel\":",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "变更请求面板根不再输出 data-forge-panel：面板回到上游字号"
+    },
+    {
+      "id": "no-important-font-size-forge",
+      "plugin": "dsh-changes-behavior",
+      "forbid": "font-size:[^;}]*!important",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "forge 开始用 !important 钉字号：本插件的 !important 可能被更高特异性或更晚的压过"
+    },
+    {
+      "id": "no-important-font-size-deliverables",
+      "plugin": "dsh-changes-behavior",
+      "forbid": "font-size:[^;}]*!important",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "审查页开始用 !important 钉字号：本插件的 !important 可能被更高特异性或更晚的压过"
+    },
+    {
+      "id": "shortcuts-register-fixed",
+      "plugin": "dsh-changes-behavior",
+      "token": "registerFixed(command",
+      "paths": [
+        "dsh-client-shortcuts/lib"
+      ],
+      "hint": "快捷键服务不再提供 registerFixed(command：⌘⌥Y 固定行注册失败，变更请求键不会生效"
+    },
+    {
+      "id": "shortcuts-observe-fixed",
+      "plugin": "dsh-changes-behavior",
+      "token": "observeFixedInput(listener",
+      "paths": [
+        "dsh-client-shortcuts/lib"
+      ],
+      "hint": "快捷键服务不再提供 observeFixedInput(listener)：⌘⌥Y 的 DOM 投递路径消失"
+    },
+    {
+      "id": "shortcuts-fixed-catalog",
+      "plugin": "dsh-changes-behavior",
+      "token": "fixedCatalog",
+      "paths": [
+        "dsh-client-shortcuts/lib"
+      ],
+      "hint": "快捷键服务不再输出 fixedCatalog：无法确认固定行仍然占用这一按"
+    },
+    {
+      "id": "shortcuts-platform",
+      "plugin": "dsh-changes-behavior",
+      "token": "platform",
+      "paths": [
+        "dsh-client-shortcuts/lib"
+      ],
+      "hint": "快捷键服务不再输出 platform：固定行键帽无法按平台格式化"
+    },
+    {
+      "id": "forge-changes-tree-root",
+      "plugin": "dsh-changes-behavior",
+      "token": "data-forge-changes",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "改动视图根元素的 data-forge-changes 属性消失：文件树宽度记忆没有作用范围"
+    },
+    {
+      "id": "tree-separator-role",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "role:\\s*[`\"']separator",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "文件树分隔条不再是 role=separator：本插件找不到可拖动的那条边"
+    },
+    {
+      "id": "tree-separator-controls",
+      "plugin": "dsh-changes-behavior",
+      "token": "\"aria-controls\":id",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "分隔条的 aria-controls 输出消失：本插件无法把它与右栏其它可拖动元素区分开"
+    },
+    {
+      "id": "tree-width-value",
+      "plugin": "dsh-changes-behavior",
+      "token": "\"aria-valuenow\":shown",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "分隔条的 aria-valuenow 不再渲染当前宽度：用户调整后本插件读不到要记住的值"
+    },
+    {
+      "id": "tree-width-bounds",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "MIN_WIDTH=200;const MAX_WIDTH=600",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "文件树宽度上下限不再是 200 / 600：存储值的清洗范围需要重新核对"
+    }
+  ]
+}

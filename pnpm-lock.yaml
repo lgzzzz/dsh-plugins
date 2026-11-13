@@ -60,12 +60,15 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  dsh-changes-card-local:
+  dsh-changes-behavior:
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: ~4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
       '@deepseek-ai/dsh-client-locale':
+        specifier: ^0.2.2-rc.2
+        version: 0.2.2-rc.2(@deepseek-ai/cordis@4.1.0)
+      '@deepseek-ai/dsh-client-shortcuts':
         specifier: ^0.2.2-rc.2
         version: 0.2.2-rc.2(@deepseek-ai/cordis@4.1.0)
       '@deepseek-ai/dsh-client-ui-context-menu':
@@ -77,45 +80,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: ^0.2.2-rc.2
         version: 0.2.2-rc.2(@deepseek-ai/cordis@4.1.0)
-      tsdown:
-        specifier: ^0.23.5
-        version: 0.23.5(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  dsh-changes-hover-off:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: ~4.1.0
-        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
-      tsdown:
-        specifier: ^0.23.5
-        version: 0.23.5(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  dsh-changes-review-fullscreen:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: ~4.1.0
-        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
-      '@deepseek-ai/dsh-client-ui-sidebar-right':
-        specifier: ^0.2.2-rc.2
-        version: 0.2.2-rc.2(@deepseek-ai/cordis@4.1.0)
-      tsdown:
-        specifier: ^0.23.5
-        version: 0.23.5(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  dsh-changes-review-wrap:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: ~4.1.0
-        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
+      dsh-shortcut-utils:
+        specifier: workspace:*
+        version: link:../dsh-shortcut-utils
       tsdown:
         specifier: ^0.23.5
         version: 0.23.5(typescript@5.9.3)
@@ -163,18 +130,6 @@ importers:
         version: 5.9.3
 
   dsh-directory-picker-browse: {}
-
-  dsh-forge-changes-font-14:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: ~4.1.0
-        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
-      tsdown:
-        specifier: ^0.23.5
-        version: 0.23.5(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   dsh-git-guard:
     devDependencies:
@@ -253,6 +208,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: ^0.2.2-rc.2
         version: 0.2.2-rc.2(@deepseek-ai/cordis@4.1.0)
+      dsh-shortcut-utils:
+        specifier: workspace:*
+        version: link:../dsh-shortcut-utils
       tsdown:
         specifier: ^0.23.5
         version: 0.23.5(typescript@5.9.3)
@@ -326,6 +284,15 @@ importers:
       tsdown:
         specifier: ^0.23.5
         version: 0.23.5(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  dsh-shortcut-utils:
+    devDependencies:
+      '@deepseek-ai/dsh-client-shortcuts':
+        specifier: ^0.2.2-rc.2
+        version: 0.2.2-rc.2(@deepseek-ai/cordis@4.1.0)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

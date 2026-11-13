@@ -268,7 +268,7 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
    与卡片自己的 [data-single=true] 是同一套写法,取值变了选择器就整条落空,
    由 css-contract.json 的 changed-files-attr 在构建后报失效。
    500ms 悬停预览(ChangedFilePreview)是 HoverCard 的内容、portal 到 document.body,
-   不在卡片子树里,字号不由这条规则负责(装 dsh-changes-hover-off 后它也不再打开)。 */
+   不在卡片子树里,字号不由这条规则负责(装 dsh-changes-behavior 后它也不再打开)。 */
 [data-changed-files="true"],
 [data-changed-files="true"] * {
   font-size: var(--dsh-content-font-size, 14px) !important;

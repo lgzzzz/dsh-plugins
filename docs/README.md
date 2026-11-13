@@ -22,19 +22,17 @@
 | `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |
 | `dsh-agent-team-hero-toggle` | 空白新会话行的「新建工作树」右侧加「团队协作」开关：读 `agentTeam` 投影、写 `remote.agentTeams.setEnabled`，模型菜单旧入口保留（A2）；首轮后随 hero 行消失 | [说明](dsh-agent-team-hero-toggle.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
-| `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏、`⌘⌥Y` 打开变更请求），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
+| `dsh-changes-behavior` | 改动视图统一行为：改动卡片标题与 `⌘⌥Y` 打开 changes 页面时默认全屏，其余任何打开右栏的入口（文件行、过程链接、上下文菜单、其它插件）默认非全屏；审查标签页按呈现方式默认分栏并默认换行；关掉卡片 500ms 悬停浮层；「本地变更」「变更请求」字号统一 14px、文件树宽度拖动后记住并在新挂载时恢复；`⌘⌥Y` 也由本插件注册 | [说明](dsh-changes-behavior.md) |
+| `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
-| `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
-| `dsh-changes-review-wrap` | 让右栏的改动审查（changes-review）标签页默认开启自动换行：新标签页首次挂载时调用换行按钮的 React `onClick` 写入 `wrap=true`，工具栏开关照常可用；切页重挂不重写，关闭重开重新默认开启 | [说明](dsh-changes-review-wrap.md) |
-| `dsh-changes-review-fullscreen` | 右栏改动审查（changes-review）标签页的默认 diff 布局：非全屏（push）默认单栏，全屏（fullscreen，含窄窗口自动全屏）默认左右对比；首次挂载与面板呈现方式切换时按现值写入 review store 的 split，打开标签页时不再自动全屏；工具栏分栏按钮照常可开关，同一呈现方式内切页重挂不改写用户选择 | [说明](dsh-changes-review-fullscreen.md) |
-| `dsh-changes-card-local` | 改动文件卡片：左键点标题打开右栏「本地变更」标签页并切成全屏（右栏原本是推挤呈现时；文件行左键仍是上游的本轮文件 diff）；右键标题或文件行弹出宿主菜单的「查看本轮快照 diff」，执行时调用卡片按钮的上游 `onClick` 回到本轮审查页 | [说明](dsh-changes-card-local.md) |
-| `dsh-forge-changes-font-14` | 把右栏「本地变更」「变更请求」标签页整棵子树的字号统一为 14px（只改字号，不动字体族、行高与布局） | [说明](dsh-forge-changes-font-14.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
 | `dsh-directory-picker-browse` | 应用内目录浏览选择器 | — |
 | `dsh-git-guard` | git 操作保护 | — |
 
 > `dsh-jobs-optimize` 已退役并从仓库移除：0.2.2-rc.2 起上游后台任务控件原生实现悬停 150ms 展开、离开 120ms 折叠与点击钉住，插件不再必要。
+
+> `dsh-shortcut-utils` 不是可安装插件，不在上表：它是 `dsh-keyboard-shortcuts` 与 `dsh-changes-behavior` 共用的纯函数包（固定行绑定匹配、键帽格式化、捕获层手势 / 归属读取），见[说明](dsh-shortcut-utils.md)。
 
 ## 主题文档
 
@@ -50,8 +48,7 @@
 （`pnpm check:css`，不挂在 `pnpm build` 上）：把清单逐条对 DSH 安装产物 grep 一遍，上游改名 /
 删 token 时显式失败，而不是让补丁在页面上静默失效（选择器落空不报错），或让插件写出格式校验
 器会拒绝的会话事件。每个插件目录都有自己的 `check-css.mjs`，默认读同目录的清单
-（`css-contract.json`；`dsh-changes-hover-off`、`dsh-stats-ttft`、
-`dsh-changes-review-wrap`、`dsh-changes-review-fullscreen`、`dsh-changes-card-local` 是 `contract.json`），可用 `--manifest`
+（`css-contract.json`；`dsh-changes-behavior`、`dsh-stats-ttft` 是 `contract.json`），可用 `--manifest`
 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
 | 插件 | 清单 | 校验的契约 |
@@ -59,18 +56,14 @@
 | `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + `role` / `aria-label` 文案（含一条反向的 `forbid`）+ CSS 变量 + 槽位键 |
 | `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点（含 `aria-expanded` 同元素）+ 标题右侧箭头的图标与 `chevron` 局部类名 + fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话槽位与会话作用域 + 折叠目标 / 聊天行 / 轮次 / 跟随尾部 / 上游动画 / 封口锚点 |
-| `dsh-changes-hover-off` | [`contract.json`](../dsh-changes-hover-off/contract.json) | 改动文件卡片锚点 + 悬停延迟 |
+| `dsh-changes-behavior` | [`contract.json`](../dsh-changes-behavior/contract.json) | 改动卡片锚点 + 本地变更地址 + 右栏四个打开入口 / `mounted` / `claim` / `data-sidebar-right-panel` / `commandTarget` / `isTargetCurrent` / `toggleFullscreen` / 窄窗口断点 + 审查根 / 分栏 / 换行 / review store seed + 快捷键固定行服务 + 悬停延迟 + 两个 forge 字号锚点与反向 `!important` + 文件树分隔条 / `aria-valuenow` / 宽度上下限（共 49 条） |
 | `dsh-stats-ttft` | [`contract.json`](../dsh-stats-ttft/contract.json) | `conversation.composer.dock` 槽与 `activity` 注册 / order + 同 id 遮蔽规则 + 渲染期读取条目 component + `stats.counts` 键与调用 + 两个时长单位与上游取整规则 + `sessionStats` 的 TTFT 字段 + `useProjection` / `useChat` 标准 props |
 | `dsh-agent-team-hero-toggle` | [`css-contract.json`](../dsh-agent-team-hero-toggle/css-contract.json) | `conversation.hero.options` 槽 + forge 工作树注册 id + `agentTeam` 投影 + `agentTeams/setEnabled` 端点 + 11 个 `--dsw-*` 令牌 |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-model-quick-switch` | [`css-contract.json`](../dsh-model-quick-switch/css-contract.json) | `shell.overlay` / `settings.section` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
-| `dsh-changes-review-wrap` | [`contract.json`](../dsh-changes-review-wrap/contract.json) | 审查根 / 正文 / 换行按钮 / 换行态锚点 + review store 的默认 `wrap:false` + `toggledWrap` + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
-| `dsh-changes-review-fullscreen` | [`contract.json`](../dsh-changes-review-fullscreen/contract.json) | 审查根 / 分栏按钮的 `data-review-tool="split"`、`aria-pressed` 与 `toggledSplit(tab.id)` + review store 首次 seed 的 `split:true` + 右栏 `data-sidebar-right-panel` 的 push / fullscreen 两值 + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
-| `dsh-forge-changes-font-14` | [`css-contract.json`](../dsh-forge-changes-font-14/css-contract.json) | 两个标签页根的 `data-forge-*` 锚点 + 上游没有 `font-size: … !important`（反向） |
-| `dsh-changes-card-local` | [`contract.json`](../dsh-changes-card-local/contract.json) | 改动文件卡片根 / 单文件标记 / 行容器 `<li>` / 行 `aria-describedby` 序号 / 折叠按钮 `aria-expanded` / 标题的 `openReview(0)` + 本地变更地址与标题键 + 右栏 `openResource(address` / `mounted` / `claim(address` / `data-sidebar-right-panel` / `commandTarget(element=…` / `isTargetCurrent(target)` / `toggleFullscreen(target)` + 上下文菜单 `contextMenus` / `open(target` |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 13 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 9 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
@@ -94,7 +87,8 @@ pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
 `.cmd` 只是包装：用 `powershell -NoProfile -ExecutionPolicy Bypass -File` 调用同名 `.ps1`。两个脚本都不维护
 插件清单：
 
-- `add-plugins` 运行时发现仓库根下所有 `dsh-*` 目录，`example/` 等非 `dsh-*` 目录不参与；新增插件只要建好
+- `add-plugins` 运行时发现仓库根下所有 `dsh-*` 目录，但只挂载 `package.json` 里带 `dsh.bundle` 的目录；
+  `example/` 等非 `dsh-*` 目录与 `dsh-shortcut-utils` 这类共享工具包不参与。新增插件只要建好
   目录，删除插件只要删掉目录。
 - `add-plugins` 在挂载每个插件前先补齐客户端半部产物：仓库根的 `node_modules/.bin/tsdown` 缺失时先跑一次
   `pnpm install`，然后对 `package.json` 的 `exports` 里写明、但磁盘上不存在的 `.js`（即 `.gitignore` 里的
@@ -121,4 +115,4 @@ DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效
 dsh home 在跑，而写入冲突本身会由 pnpm 的 `EACCES … package.json.lock` 暴露出来。它只改 profile
 （`dependencies` 与 `dsh.profile.bundles` 由 pnpm 和 `dsh` 重算），不删除本仓库里的插件目录。
 
-新插件挂载后刷新浏览器即可生效。**客户端半部(`lib/client.js`)改动后必须重新构建**；Host 在合成那一刻就把产物字节读进快照(`dsh-client-modules` 的 `initialBundleSnapshot`)，所以重新构建后仅刷新页面可能仍拿到旧字节——还要重启 `dsh web`，或在「设置 → 插件」里关掉再打开本插件，再刷新页面(完整说明见 [`dsh-changes-hover-off.md`](dsh-changes-hover-off.md#挂载与启用))。
+新插件挂载后刷新浏览器即可生效。**客户端半部(`lib/client.js`)改动后必须重新构建**；Host 在合成那一刻就把产物字节读进快照(`dsh-client-modules` 的 `initialBundleSnapshot`)，所以重新构建后仅刷新页面可能仍拿到旧字节——还要重启 `dsh web`，或在「设置 → 插件」里关掉再打开本插件，再刷新页面(完整说明见 [`dsh-changes-behavior.md`](dsh-changes-behavior.md#挂载与启用))。

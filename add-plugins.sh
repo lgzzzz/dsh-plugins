@@ -36,6 +36,17 @@ fi
 # 判断某个插件是否需要先构建:只认 package.json 里 exports 写明的 .js 产物,
 # 不按 lib/ 目录硬编码。宿主半部(src/*.ts 由 Node 直接加载、没有产物)或本来就没有
 # build 脚本的插件一律返回非零,不会被误构建。
+# 判断某个目录是不是可挂载插件:只认 package.json 里的 dsh.bundle。共享工具包
+# (如 dsh-shortcut-utils)没有 bundle 清单,不参与整仓挂载。
+has_bundle() {
+  node - "$1" <<'NODE'
+const fs = require('node:fs')
+const path = require('node:path')
+const manifest = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.json'), 'utf8'))
+process.exit(manifest.dsh && manifest.dsh.bundle ? 0 : 1)
+NODE
+}
+
 needs_build() {
   node - "$1" <<'NODE'
 const fs = require('node:fs')
@@ -67,6 +78,10 @@ for dir in "${dirs[@]}"; do
   if [ ! -f "$dir/package.json" ]; then
     echo "跳过(缺少 package.json): $dir"
     failed+=("$name")
+    continue
+  fi
+  if ! has_bundle "$dir"; then
+    echo "跳过(不是插件,没有 dsh.bundle): $name"
     continue
   fi
   if needs_build "$dir"; then

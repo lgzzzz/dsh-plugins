@@ -27,8 +27,6 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | `src/approval-keys.ts` | 审批键 `Enter` 允许一次 / `Esc` 拒绝 |
 | `src/focus-composer.ts` | 聚焦输入框 `primary+alt+J`（macOS `⌘⌥J` / Windows/Linux `Ctrl+Alt+J`；固定键，终端内另走捕获拦截） |
 | `src/focus-page.ts` | 聚焦右栏当前显示的页面 `primary+alt+K`（macOS `⌘⌥K` / Windows/Linux `Ctrl+Alt+K`；复用页面切换桥的 `focusShownPage`；Web 上占用 `session.search` 的默认键位） |
-| `src/changes-open.ts` | 变更请求键 `primary+alt+Y`（macOS `⌘⌥Y` / Windows/Linux `Ctrl+Alt+Y`）：消费按键后直接 `openTab('forge-panel')` 打开「变更请求」面板，不读 git；`openTab` 抛错时告警 |
-| `src/fullscreen-present.ts` | 打开页面后的呈现收尾：面板根为 `push` 且活动页正是刚打开的 kind 时，对活动 dock 面板调用 `toggleFullscreen()`；已全屏 / 浮层 / 陈旧目标都不动作 |
 | `src/page-cycle.ts` | 页面循环 `primary+alt+←` / `primary+alt+→`：右栏展开时切页并自动聚焦新页面，折叠时改切会话视图（分档与投递都在这里） |
 | `src/view-cycle.ts` | 会话视图标签的读数与步进：只认当前渲染出来的 `[data-conversation-tabs] [role="tab"]`，环状步进后 `click()` 目标页签 |
 | `src/strip-scroll.ts` | 右栏页签行的滚动补偿：`scroll-behavior: auto` + 切页前后保持观察窗口；纯视图补偿，不消费按键 |
@@ -48,7 +46,7 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 
 - **固定键与判定**：`bridge.test.mjs`（目标表、固定行 id、平台修饰键）、`install.test.mjs`（固定行装配、固定输入、终端捕获、卸载）、`fullscreen.test.mjs`（全屏免聚焦桥）、`page-close.test.mjs`（关页免聚焦回退）、`artifact-client.test.mjs`（`lib/client.js` 的模块 id / 插件名 / `inject` 与八条固定行）；
 - **纯决策**：`focus-decide-binding.test.mjs`（绑定匹配、`enabledBinding`、分屏归属）、`focus-decide-escape.test.mjs`、`focus-decide-ownership.test.mjs`、`focus-decide-stop-sequence.test.mjs`、`focus-decide-approval.test.mjs`、`focus-decide-question.test.mjs`、`focus-decide-focus-composer.test.mjs`、`focus-decide-focus-page.test.mjs`、`focus-decide-page-cycle.test.mjs`、`focus-decide-session-cycle.test.mjs`、`focus-decide-fullscreen-dismiss.test.mjs`；
-- **桥接**：`focus-bridge-pane-split.test.mjs`（分屏回退）、`focus-bridge-stop-sequence.test.mjs`、`focus-bridge-approval-keys.test.mjs`、`focus-bridge-question-keys.test.mjs`、`focus-bridge-focus-composer.test.mjs`、`focus-bridge-focus-page.test.mjs`、`focus-bridge-page-cycle.test.mjs`、`focus-bridge-session-cycle.test.mjs`、`focus-bridge-fullscreen-dismiss.test.mjs`、`changes-open.test.mjs`（变更请求固定行、命中即开面板、打开后默认全屏、全屏 / 自动全屏 / 浮层 / 陈旧目标不切、终端捕获与卸载）；
+- **桥接**：`focus-bridge-pane-split.test.mjs`（分屏回退）、`focus-bridge-stop-sequence.test.mjs`、`focus-bridge-approval-keys.test.mjs`、`focus-bridge-question-keys.test.mjs`、`focus-bridge-focus-composer.test.mjs`、`focus-bridge-focus-page.test.mjs`、`focus-bridge-page-cycle.test.mjs`、`focus-bridge-session-cycle.test.mjs`、`focus-bridge-fullscreen-dismiss.test.mjs`；
 - **端到端与补偿**：`focus-bridge-platform-keys.test.mjs`（macOS / Windows 物理键与键帽）、`focus-strip-scroll.test.mjs`（页签行滚动）、`chat-paging.test.mjs`（翻页步长、边界钳制、Space 屏蔽、rAF 平滑滚动 / 连按 / 取消 / 减少动态效果、内层滚动让位与捕获监听卸载）、`focus-artifact-client.test.mjs`（真产物装配：固定键、全屏 / 关页回退、停止 / 审批 / 提问、会话导航、终端捕获、全屏关栏）。
 
 > `test/run-all.mjs` 的 `ORDER` 先跑固定键层与判定，再跑各桥，最后跑产物与滚动补偿；不在 `ORDER` 里的文件按文件名补在最后。

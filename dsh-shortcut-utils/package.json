@@ -1,0 +1,19 @@
+{
+  "name": "dsh-shortcut-utils",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DSH Web 快捷键插件的共享纯函数：固定行绑定匹配、键帽格式化，以及捕获阶段的键盘手势 / 归属上下文读取。被 dsh-keyboard-shortcuts 与 dsh-changes-behavior 共用；无运行时状态，客户端构建时内联进各自 bundle。",
+  "type": "module",
+  "exports": {
+    "./binding.ts": "./binding.ts",
+    "./capture.ts": "./capture.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-client-shortcuts": "^0.2.2-rc.2",
+    "typescript": "^5.9.3"
+  }
+}

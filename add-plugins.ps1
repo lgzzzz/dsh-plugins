@@ -44,6 +44,14 @@ function Invoke-Native {
   return $code
 }
 
+# 判断某个目录是不是可挂载插件:只认 package.json 里的 dsh.bundle。共享工具包
+# (如 dsh-shortcut-utils)没有 bundle 清单,不参与整仓挂载。
+function Test-IsPlugin {
+  param([string]$Dir)
+  $manifest = Get-Content -LiteralPath (Join-Path $Dir 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+  return [bool]($manifest.dsh -and $manifest.dsh.bundle)
+}
+
 # 判断某个插件是否需要先构建:只认 package.json 里 exports 写明的 .js 产物,
 # 不按 lib/ 目录硬编码。宿主半部(src/*.ts 由 Node 直接加载、没有产物)或本来就没有
 # build 脚本的插件一律返回 $false,不会被误构建。
@@ -94,6 +102,10 @@ foreach ($plugin in $Plugins) {
   if (-not (Test-Path -LiteralPath (Join-Path $dir 'package.json'))) {
     Write-Host "跳过(缺少 package.json): $dir"
     $failed += $name
+    continue
+  }
+  if (-not (Test-IsPlugin -Dir $dir)) {
+    Write-Host "跳过(不是插件,没有 dsh.bundle): $name"
     continue
   }
   if (Test-NeedsBuild -Dir $dir) {
