@@ -2,7 +2,7 @@
  * 跑完 test/ 下所有 `*.test.mjs`，按主题顺序执行并汇总结果。
  *
  *   node test/run-all.mjs                 # 全部
- *   node test/run-all.mjs fullscreen      # 只跑文件名 / 主题匹配 "fullscreen" 的
+ *   node test/run-all.mjs split           # 只跑文件名 / 主题匹配 "split" 的
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -13,7 +13,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 
 // 主题顺序；其余文件按名字补在后面。
 const ORDER = [
-  'fullscreen.test.mjs',
+  'split-default.test.mjs',
   'artifact-client.test.mjs',
 ]
 

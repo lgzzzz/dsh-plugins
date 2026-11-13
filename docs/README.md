@@ -27,7 +27,7 @@
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-changes-review-wrap` | 让右栏的改动审查（changes-review）标签页默认开启自动换行：新标签页首次挂载时调用换行按钮的 React `onClick` 写入 `wrap=true`，工具栏开关照常可用；切页重挂不重写，关闭重开重新默认开启 | [说明](dsh-changes-review-wrap.md) |
-| `dsh-changes-review-fullscreen` | 点击「改动文件卡片」打开右栏改动审查标签页时默认切成全屏呈现；捕获阶段接住打开审查页的按钮，等 React 打开后对活动 dock 面板调用 `toggleFullscreen()`，已是全屏（含窄窗口自动全屏）时不动 | [说明](dsh-changes-review-fullscreen.md) |
+| `dsh-changes-review-fullscreen` | 右栏改动审查（changes-review）标签页的默认 diff 布局：非全屏（push）默认单栏，全屏（fullscreen，含窄窗口自动全屏）默认左右对比；首次挂载与面板呈现方式切换时按现值写入 review store 的 split，打开标签页时不再自动全屏；工具栏分栏按钮照常可开关，同一呈现方式内切页重挂不改写用户选择 | [说明](dsh-changes-review-fullscreen.md) |
 | `dsh-changes-card-local` | 改动文件卡片：左键点标题打开右栏「本地变更」标签页并切成全屏（右栏原本是推挤呈现时；文件行左键仍是上游的本轮文件 diff）；右键标题或文件行弹出宿主菜单的「查看本轮快照 diff」，执行时调用卡片按钮的上游 `onClick` 回到本轮审查页 | [说明](dsh-changes-card-local.md) |
 | `dsh-forge-changes-font-14` | 把右栏「本地变更」「变更请求」标签页整棵子树的字号统一为 14px（只改字号，不动字体族、行高与布局） | [说明](dsh-forge-changes-font-14.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
@@ -66,7 +66,7 @@
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-model-quick-switch` | [`css-contract.json`](../dsh-model-quick-switch/css-contract.json) | `shell.overlay` / `settings.section` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-changes-review-wrap` | [`contract.json`](../dsh-changes-review-wrap/contract.json) | 审查根 / 正文 / 换行按钮 / 换行态锚点 + review store 的默认 `wrap:false` + `toggledWrap` + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
-| `dsh-changes-review-fullscreen` | [`contract.json`](../dsh-changes-review-fullscreen/contract.json) | 改动文件卡片根 / 折叠按钮的 `aria-expanded` + 右栏 `data-sidebar-right-panel` 的 push / fullscreen 两值 + `changes-review` kind + 右栏 `active()` / `commandTarget()` / `toggleFullscreen()` |
+| `dsh-changes-review-fullscreen` | [`contract.json`](../dsh-changes-review-fullscreen/contract.json) | 审查根 / 分栏按钮的 `data-review-tool="split"`、`aria-pressed` 与 `toggledSplit(tab.id)` + review store 首次 seed 的 `split:true` + 右栏 `data-sidebar-right-panel` 的 push / fullscreen 两值 + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
 | `dsh-forge-changes-font-14` | [`css-contract.json`](../dsh-forge-changes-font-14/css-contract.json) | 两个标签页根的 `data-forge-*` 锚点 + 上游没有 `font-size: … !important`（反向） |
 | `dsh-changes-card-local` | [`contract.json`](../dsh-changes-card-local/contract.json) | 改动文件卡片根 / 单文件标记 / 行容器 `<li>` / 行 `aria-describedby` 序号 / 折叠按钮 `aria-expanded` / 标题的 `openReview(0)` + 本地变更地址与标题键 + 右栏 `openResource(address` / `mounted` / `claim(address` / `data-sidebar-right-panel` / `commandTarget(element=…` / `isTargetCurrent(target)` / `toggleFullscreen(target)` + 上下文菜单 `contextMenus` / `open(target` |
 

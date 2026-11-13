@@ -1,6 +1,6 @@
 /**
- * dsh-changes-review-fullscreen 行为测试的共享装置：断言与失败计数、假元素 / 假文档 / 假右栏面、
- * 可控调度器，以及产物加载器。
+ * dsh-changes-review-fullscreen 行为测试的共享装置：断言与失败计数、假元素 / 假文档 / 假观察器、
+ * 可控调度器与告警收集器，以及产物加载器。
  *
  * 跑全部请用 `node test/run-all.mjs`（或 pnpm test）。
  * 依赖 Node 22+ 的 Type Stripping 直接 import .ts。
@@ -9,18 +9,12 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
-import {
-  CARD_SELECTOR,
-  FULLSCREEN_PANEL_SELECTOR,
-  MARKER_ATTRIBUTE,
-  PUSH_PANEL_SELECTOR,
-  REVIEW_KIND,
-} from '../src/fullscreen.ts'
+import { REVIEW_SELECTOR } from '../src/split-default.ts'
 
 /** 本插件的包根目录（测试文件在 test/ 下，所以是上一级）。 */
 export const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-export { CARD_SELECTOR, FULLSCREEN_PANEL_SELECTOR, MARKER_ATTRIBUTE, PUSH_PANEL_SELECTOR, REVIEW_KIND }
+export { REVIEW_SELECTOR }
 
 let failures = 0
 
@@ -49,14 +43,20 @@ export function finish() {
   process.exitCode = failures === 0 ? 0 : 1
 }
 
-/** 属性与结构都可查询的假元素。 */
+/** 属性、结构、fiber 与连接态都可查询的假元素。 */
 export class FakeElement {
-  constructor(tag = 'div', attributes = {}) {
+  constructor(tag = 'div', attributes = {}, options = {}) {
     this.tag = tag
     this.attributes = new Map(Object.entries(attributes))
     this.parent = null
     this.children = []
-    this.disabled = false
+    this.queryMap = options.queryMap ?? new Map()
+    this.closestMap = options.closestMap ?? new Map()
+    this.isConnected = options.isConnected ?? true
+    this.disabled = options.disabled ?? false
+    if (typeof options.handler === 'function') {
+      this['__reactFiber$fake'] = { memoizedProps: { onClick: options.handler } }
+    }
   }
 
   append(child) {
@@ -81,15 +81,37 @@ export class FakeElement {
     return this.attributes.has(name)
   }
 
+  matches(selector) {
+    return matchesSelector(this, selector)
+  }
+
   closest(selector) {
+    if (this.closestMap.has(selector)) return this.closestMap.get(selector)
     for (let node = this; node !== null; node = node.parent) {
       if (matchesSelector(node, selector)) return node
     }
     return null
   }
+
+  querySelector(selector) {
+    if (this.queryMap.has(selector)) return this.queryMap.get(selector)
+    return this.querySelectorAll(selector)[0] ?? null
+  }
+
+  querySelectorAll(selector) {
+    const out = []
+    const walk = (node) => {
+      for (const child of node.children) {
+        if (matchesSelector(child, selector)) out.push(child)
+        walk(child)
+      }
+    }
+    walk(this)
+    return out
+  }
 }
 
-/** 选择器只覆盖本插件用到的三种：`button` / `[attr]` / `[attr="value"]`。 */
+/** 选择器只覆盖本插件用到的三种：`tag` / `[attr]` / `[attr="value"]`。 */
 function matchesSelector(node, selector) {
   const valued = selector.match(/^\[([a-zA-Z-]+)="([^"]*)"\]$/)
   if (valued !== null) return node.getAttribute(valued[1]) === valued[2]
@@ -121,83 +143,166 @@ export class FakeRootElement {
   }
 }
 
-/** 记录捕获监听与面板呈现方式的假文档。`hiddenMode` 模拟另一个保留在 DOM 里的会话视图。 */
+/** 记录 observe / disconnect 与回调的假 MutationObserver。 */
+export class FakeObserver {
+  static instances = []
+
+  constructor(callback) {
+    this.callback = callback
+    this.observed = []
+    this.disconnected = false
+    FakeObserver.instances.push(this)
+  }
+
+  observe(target, options) {
+    this.observed.push({ target, options })
+  }
+
+  disconnect() {
+    this.disconnected = true
+  }
+
+  /** 把一批变更记录交给回调。 */
+  emit(records) {
+    this.callback(records)
+  }
+
+  static last() {
+    return FakeObserver.instances[FakeObserver.instances.length - 1]
+  }
+
+  static reset() {
+    FakeObserver.instances = []
+  }
+}
+
+/** 假文档：body / documentElement / 初始审查根 / window.MutationObserver。 */
 export class FakeDocument {
-  constructor({ mode = 'push', hiddenMode = 'none' } = {}) {
-    this.mode = mode
-    this.hiddenMode = hiddenMode
-    this.listeners = new Map()
+  constructor(options = {}) {
+    this.body = options.withBody === false ? undefined : new FakeElement()
     this.documentElement = new FakeRootElement()
+    this.defaultView = options.withObserver === false ? {} : { MutationObserver: FakeObserver }
+    this.initialRoots = options.roots ?? []
   }
 
-  addEventListener(type, listener, capture) {
-    const list = this.listeners.get(type) ?? []
-    list.push({ listener, capture })
-    this.listeners.set(type, list)
-  }
-
-  removeEventListener(type, listener, capture) {
-    const list = (this.listeners.get(type) ?? []).filter(
-      (item) => item.listener !== listener || item.capture !== capture,
-    )
-    if (list.length === 0) this.listeners.delete(type)
-    else this.listeners.set(type, list)
-  }
-
-  querySelector(selector) {
-    const wanted = selector.includes('"fullscreen"') ? 'fullscreen'
-      : selector.includes('"push"') ? 'push'
-        : null
-    if (wanted === null) return null
-    // 带 `:not([hidden])` 的是当前会话视图，只回答本视图的呈现方式。
-    if (selector.includes(':not([hidden])')) return this.mode === wanted ? { tag: 'panel' } : null
-    if (this.mode === wanted) return { tag: 'panel' }
-    return this.hiddenMode === wanted ? { tag: 'hidden-panel' } : null
-  }
-
-  /** 只派发给捕获阶段监听器（本插件只挂捕获阶段）。 */
-  dispatch(type, event) {
-    for (const item of this.listeners.get(type) ?? []) {
-      if (item.capture === true) item.listener(event)
-    }
-  }
-
-  /** 当前有监听的类型。 */
-  get types() {
-    return [...this.listeners.keys()]
+  querySelectorAll(selector) {
+    return selector === REVIEW_SELECTOR ? this.initialRoots : []
   }
 }
 
-/** 假 click 事件：`composedPath` 返回点击目标本身。 */
-export function clickEvent(target) {
+/** 可控调度器：把回调排队，由测试决定何时、执行几次。 */
+export function makeScheduler() {
+  const queue = []
   return {
-    target,
-    composedPath() {
-      return [target]
+    schedule(callback) {
+      queue.push(callback)
+    },
+    /** 依次执行排队的回调；返回执行次数。 */
+    drain(limit = 64) {
+      let ran = 0
+      while (queue.length > 0 && ran < limit) {
+        ran += 1
+        queue.shift()()
+      }
+      return ran
+    },
+    get size() {
+      return queue.length
     },
   }
 }
 
-/** 假右栏面：记录 `toggleFullscreen` 调用与 `commandTarget` 的入参。 */
-export function fakeSidebar({
-  activeKind = REVIEW_KIND,
-  expanded = true,
-  target = { host: 'dock' },
-  current = true,
-} = {}) {
-  const sidebar = {
-    calls: [],
-    commandTargets: [],
-    active: () => (activeKind === null ? undefined : { kind: activeKind }),
-    commandTarget: (element) => {
-      sidebar.commandTargets.push(element)
-      return target
+/** 收集告警文本。 */
+export function makeWarningSink() {
+  const messages = []
+  return {
+    warn(message) {
+      messages.push(message)
     },
-    isExpanded: () => expanded,
-    isTargetCurrent: () => current,
-    toggleFullscreen: (value) => sidebar.calls.push(['fullscreen', value]),
+    get messages() {
+      return messages
+    },
+    get size() {
+      return messages.length
+    },
   }
-  return sidebar
+}
+
+/**
+ * 搭一个审查标签页：面板根 + 审查根 + 工具栏分栏按钮 + 正文 + 侧栏身份祖先。
+ *
+ * @param {object} options
+ * @param {'push'|'fullscreen'} [options.mode] 面板呈现方式。
+ * @param {boolean} [options.pressed] 分栏按钮当前的 aria-pressed（true = 左右对比）。
+ * @param {string|null} [options.occurrence] 占位实例 id；null 表示属性缺席。
+ * @param {string|null} [options.tab] 标签页 id；null 表示属性缺席。
+ * @param {string|null} [options.session] 会话 id；null 表示属性缺席。
+ * @param {Function|null} [options.handler] 分栏按钮的 onClick；null 表示 fiber 上没有 handler。
+ * @param {boolean} [options.button] false 表示根里没有分栏按钮。
+ * @param {boolean} [options.connected] 根是否仍连接在文档上。
+ */
+export function makeReview(options = {}) {
+  const calls = []
+  const panel = new FakeElement('div', { 'data-sidebar-right-panel': options.mode ?? 'push' })
+
+  const button = options.button === false
+    ? null
+    : new FakeElement('button', { 'aria-pressed': options.pressed === true ? 'true' : 'false' })
+
+  // 默认 handler 模拟 React 的 toggle：翻转 aria-pressed，让连续调用与真实 store 一致。
+  const handler = options.handler === undefined
+    ? () => {
+        const next = button.getAttribute('aria-pressed') !== 'true'
+        button.setAttribute('aria-pressed', next ? 'true' : 'false')
+        calls.push(next ? 'split' : 'unified')
+      }
+    : options.handler
+  if (button !== null && handler !== null) {
+    button['__reactFiber$fake'] = { memoizedProps: { onClick: handler } }
+  }
+
+  const body = new FakeElement('div', { 'data-review-view': options.pressed === true ? 'split' : 'unified' })
+  const queryMap = new Map()
+  if (button !== null) queryMap.set('[data-review-tool="split"]', button)
+  queryMap.set('[data-review-view]', body)
+
+  const closestMap = new Map()
+  if (options.occurrence !== null) {
+    closestMap.set('[data-sidebar-right-occurrence]', new FakeElement('span', {
+      'data-sidebar-right-occurrence': options.occurrence ?? 'occ-1',
+    }))
+  }
+  if (options.tab !== null) {
+    closestMap.set('[data-sidebar-right-tab]', new FakeElement('div', {
+      'data-sidebar-right-tab': options.tab ?? 'tab2',
+    }))
+  }
+  if (options.session !== null) {
+    closestMap.set('[data-sidebar-right-session]', new FakeElement('div', {
+      'data-sidebar-right-session': options.session ?? 'session-1',
+    }))
+  }
+
+  const root = new FakeElement('div', { 'data-changes-review': '' }, {
+    queryMap,
+    closestMap,
+    isConnected: options.connected ?? true,
+  })
+  panel.append(root)
+
+  return {
+    panel,
+    root,
+    button,
+    body,
+    calls,
+    setPressed(value) {
+      button?.setAttribute('aria-pressed', value ? 'true' : 'false')
+    },
+    setMode(mode) {
+      panel.setAttribute('data-sidebar-right-panel', mode)
+    },
+  }
 }
 
 /** 以假 `window.__ModuleLoader__` 载入构建产物，返回注册对象。 */

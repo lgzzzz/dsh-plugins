@@ -3,13 +3,15 @@
 // 验证 dsh-changes-review-fullscreen 依赖的上游事实是否仍存在于 DSH 客户端构建产物中。
 // 无需运行时、无需浏览器。
 //
-// 本插件在 document 捕获阶段接住改动文件卡片里「打开审查页」的按钮，等 React 打开标签页后
-// 对活动 dock 面板调用 sidebarRight.toggleFullscreen()。会**静默**退化的是这些上游事实：
-//   1. [data-changed-files] 锚点被改名 —— 捕获作用域落空，卡片点击不再默认全屏；
-//   2. 折叠按钮不再带 aria-expanded —— 点「展开全部文件」会把当前标签页误切成全屏；
-//   3. 右栏不再输出 push / fullscreen 两种呈现读数 —— 插件无法判断是否已全屏，保守地不动作；
-//   4. changes-review 的 kind 或右栏 active() / commandTarget() / toggleFullscreen() 改名 ——
-//      打开的是不是审查页无法确认，默认全屏退化为 no-op。
+// 本插件在审查标签页首次挂载与右栏呈现方式变化时，读取面板根的 push / fullscreen，再调用
+// 工具栏分栏按钮 fiber 上的 onClick 把 review store 的 split 写成对应的默认值。会**静默**
+// 退化的是这些上游事实：
+//   1. [data-changes-review] 锚点被改名 —— 默认分栏没有作用范围；
+//   2. 分栏按钮的 data-review-tool="split"、aria-pressed 或 onClick 改形 —— 插件认不出按钮、
+//      读不到当前状态或写不进 store；
+//   3. review store 首次 seed 不再默认 split:true —— “等 seed 后再切单栏”的前提失效；
+//   4. 右栏不再输出 push / fullscreen 两种呈现读数 —— 插件无法判断当前是不是全屏；
+//   5. 标签页占位实例 / 标签页 / 会话三个身份属性改名 —— 跨会话去重与切页重挂的判定失真。
 // 这里在构建后把清单逐条对上游产物 grep 一遍，缺一条就显式失败，提示里写明后果。
 //
 // 用法(本脚本与 contract.json 同目录):
