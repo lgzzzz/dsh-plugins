@@ -8,7 +8,7 @@
  * @see docs/dsh-changes-behavior.md
  */
 
-/** 可被 `closest` / 属性读取 / 取矩形的最小元素形状。 */
+/** 可被 `closest` / 属性读取的最小元素形状。 */
 export interface ElementLike {
   /** 标签名（小写），用于测试替身判断 `button` / `li`。生产元素上没有这个字段也不会被读。 */
   readonly tag?: string
@@ -17,7 +17,6 @@ export interface ElementLike {
   closest?(selector: string): ElementLike | null
   hasAttribute?(attribute: string): boolean
   getAttribute?(attribute: string): string | null
-  getBoundingClientRect?(): { readonly left: number; readonly bottom: number }
 }
 
 /** 一次点击事件里本插件用到的字段。 */
@@ -25,7 +24,6 @@ export interface EventLike {
   readonly target?: unknown
   readonly defaultPrevented?: boolean
   composedPath?(): unknown[]
-  preventDefault(): void
   stopPropagation(): void
 }
 

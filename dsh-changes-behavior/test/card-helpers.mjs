@@ -1,6 +1,6 @@
 /**
  * dsh-changes-behavior 行为测试的共享装置：断言与失败计数、假元素 / 假文档 / 假事件、
- * 假右栏 / 假标签注册表 / 假上下文菜单 / 假 locale，以及产物加载器。
+ * 假右栏 / 假标签注册表，以及产物加载器。
  *
  * 跑全部请用 `node test/run-all.mjs`（或 pnpm test）。
  * 依赖 Node 22+ 的 Type Stripping 直接 import .ts。
@@ -71,10 +71,6 @@ export class FakeElement {
     return this.attributes.has(name)
   }
 
-  getBoundingClientRect() {
-    return { left: 24, bottom: 120, top: 100, right: 240 }
-  }
-
   closest(selector) {
     for (let node = this; node !== null; node = node.parent) {
       if (matchesSelector(node, selector)) return node
@@ -90,12 +86,6 @@ function matchesSelector(node, selector) {
   const present = selector.match(/^\[([a-zA-Z-]+)\]$/)
   if (present !== null) return node.hasAttribute(present[1])
   return node.tag === selector
-}
-
-/** 把一份 React `onClick` 挂到元素上，模拟 fiber 上的 `memoizedProps`。 */
-export function attachClickHandler(element, handler) {
-  element['__reactFiber$test'] = { memoizedProps: { onClick: handler } }
-  return element
 }
 
 /** 文档根元素的假替身：记录 data-* 标记。 */
