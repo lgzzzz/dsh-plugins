@@ -22,6 +22,7 @@ const ORDER = [
   'tree-width.test.mjs',
   'hover-gate.test.mjs',
   'artifact-client.test.mjs',
+  'single-card.test.mjs',
 ]
 
 const filters = process.argv.slice(2)

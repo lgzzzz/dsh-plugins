@@ -7,9 +7,10 @@
 - 改动审查（`changes-review`）标签页按面板呈现方式默认分栏（非全屏单栏、全屏左右对比），并默认开启自动换行；
 - 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层；
 - 「本地变更」「变更请求」标签页整棵子树字号统一 14px；
-- 记住「本地变更」「变更请求」文件树的宽度：拖动 / 键盘调整后写入 `localStorage`，新挂载的文件树恢复上次的宽度。
+- 记住「本地变更」「变更请求」文件树的宽度：拖动 / 键盘调整后写入 `localStorage`，新挂载的文件树恢复上次的宽度；
+- **单文件改动卡片也按汇总形制渲染**：标题是 `已编辑 1 个文件`，下面列出那一个文件（启动期给上游客户端产物打一行补丁，见下文）。
 
-纯客户端插件：不注册服务、不占 slot、没有配置项。装上即生效，从 profile 移除即恢复上游默认。原先的 `dsh-changes-card-local`、`dsh-changes-review-fullscreen`、`dsh-changes-review-wrap`、`dsh-changes-hover-off`、`dsh-forge-changes-font-14` 已全部并入本包；「变更请求」快捷键也从 `dsh-keyboard-shortcuts` 迁来。
+宿主 + 客户端插件：宿主半部只在启动时做那行补丁，其余行为全在浏览器半部；不注册服务、不占 slot、没有配置项。装上即生效，从 profile 移除即恢复上游默认（补丁在卸载时也会还原）。原先的 `dsh-changes-card-local`、`dsh-changes-review-fullscreen`、`dsh-changes-review-wrap`、`dsh-changes-hover-off`、`dsh-forge-changes-font-14` 已全部并入本包；「变更请求」快捷键也从 `dsh-keyboard-shortcuts` 迁来。
 
 -----
 
@@ -45,16 +46,57 @@
 
 | 元素 | 上游默认行为 | 本插件行为 |
 |---|---|---|
-| 标题（多文件卡片，也是单文件卡片唯一的按钮） | 打开本轮审查标签页（`changes-review`），定位到第 1 个文件 | **打开右栏「本地变更」标签页并切成全屏** |
+| 标题（多文件卡片；打完补丁后单文件卡片也走这条） | 打开本轮审查标签页（`changes-review`），定位到第 1 个文件 | **打开右栏「本地变更」标签页并切成全屏** |
 | 文件行（`<li>` 里的按钮） | 打开本轮审查标签页，定位到该文件 | 不变（但仍受「非全屏」策略约束） |
 | 「展开全部文件」折叠按钮（带 `aria-expanded`） | 只展开 / 折叠列表 | 不变 |
 | 标题或文件行的**右键** | 浏览器原生菜单 | **宿主上下文菜单 + 「查看本轮快照 diff」** |
 
-判定只看卡片的两条结构事实：标题是卡片内、**不在 `<li>` 里**、且**不带 `aria-expanded`** 的按钮；文件行在 `<li>` 里；折叠按钮带 `aria-expanded`。单文件卡片没有列表，标题就是唯一一行。
+判定只看卡片的两条结构事实：标题是卡片内、**不在 `<li>` 里**、且**不带 `aria-expanded`** 的按钮；文件行在 `<li>` 里；折叠按钮带 `aria-expanded`。单文件卡片打完补丁后也有列表，标题依旧不在 `<li>` 里，所以判定不变。
 
 右键时先读该按钮由 React 绑定的 `onClick`，再让宿主 `contextMenus` 在指针位置弹出菜单，贡献一条「查看本轮快照 diff」。执行菜单动作就是调用上游原本的 `onClick`，坐标由上游闭包给出，本插件不在 DOM 上重建会话 / 轮次 / 文件下标。读不到 `onClick` 时保留浏览器原生菜单。
 
 `⌘` / `Ctrl` / `Alt` / `Shift` + 左键标题不接管：这是保留给「直接看本轮快照 diff」的逃生口。
+
+-----
+
+## 单文件卡片也按汇总形制
+
+上游 `ChangedFiles` 只用一行初始化区分两种卡片：
+
+```js
+const singleFile = changes.total === 1 ? changes.files[0] : undefined
+```
+
+有值时是紧凑卡（标题 `已编辑 <文件名>`、文件类型图标、没有文件行），为空时才是汇总卡（标题 `已编辑 N 个文件`、通用 code 图标、下面一份文件行列表）。上游没有开关，所以本插件在**宿主启动时**把已安装的 `@deepseek-ai/dsh-client-ui-deliverables` 产物里那一行改成恒为 `void 0`：
+
+```js
+const singleFile=void 0;/*dsh-changes-single-card*/
+```
+
+于是单文件也走汇总卡：标题 `已编辑 1 个文件`，下面一行 `路径  +N -M`。文件行左键打开本轮审查第 1 个文件，标题左键仍是「本地变更」——与多文件卡片完全一致。
+
+### 为什么必须写在启动期
+
+- 卡片是上游 bundle 里的 React 代码，浏览器插件改不了它的渲染；
+- `@deepseek-ai/dsh-client-modules` 在启动组网（seed）时就把每个 entry 的 `lib/client.js` 读进内存，之后 `/plugins/...` 的 GET 直接发这份缓冲。只写文件不够，必须再调 `clientModules.rebuilt(id)` 让服务重读、发布新的 rev，刷新页面才会拿到补丁后的 bundle；
+- 产物路径不靠猜：`clientModules.clientPath('@deepseek-ai/dsh-client-ui-deliverables')` 给出组网时登记的绝对路径；
+- 页面若在补丁前已经拉过 bundle，`rebuilt()` 发布的新 rev 会让下一次刷新拿到补丁版；首次切换后刷新一次即可。
+
+### 幂等、失败与恢复
+
+| 情形 | 行为 |
+|---|---|
+| 文件里已有 `dsh-changes-single-card` 标记 | 视为已打过：不写、不 `rebuilt`（这次 seed 已经读到补丁内容） |
+| 命中初始化锚点 | 写入补丁 → `rebuilt(id)` → 日志一行 info |
+| 找不到锚点（上游重写了这段） | 只记 warn，单文件保持上游紧凑形制，启动不受影响 |
+| 产物只读 / 权限不足 | 同上，只记 warn |
+| 服务缺席或 `clientPath` 为空（例如纯 CLI 运行） | 只记 warn，空操作 |
+| dsh 升级后产物被替换 | 标记消失、锚点回来 → 下次启动自动重新打上 |
+| 插件移除 / 卸载 | 文件仍是本插件写下的那份时恢复原内容；若期间被升级替换则不动 |
+
+### 怎么确认
+
+启动日志里应出现一行 `[dsh-changes-single-card] 单文件卡片已改为汇总形制：<产物路径>`。如果只看到 `找不到 singleFile 初始化`，按 [`contract.json`](../dsh-changes-behavior/contract.json) 的 `single-card-initializer` 条目核对上游产物，必要时更新锚点。
 
 -----
 
@@ -168,6 +210,17 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
    localStorage.getItem('dsh-changes-behavior:tree-width')   // 同一个值
    ```
 
+9. 只改了一个文件的一轮：卡片标题是 `已编辑 1 个文件`，`data-single` 不再出现，下面有一行文件行：
+
+   ```js
+   const card = document.querySelector('[data-changed-files]')
+   card?.hasAttribute('data-single')          // false（补丁生效）
+   card?.querySelector('button span')?.textContent  // '已编辑 1 个文件'
+   card?.querySelector('li button')           // 那一个文件的文件行
+   ```
+
+   启动日志里对应的证据是 `[dsh-changes-single-card] 单文件卡片已改为汇总形制：<产物路径>`。
+
 - 标记为 `false` → 浏览器这一页没有加载到本插件，先硬刷新；仍为 `false` 说明 Host 还没有重新合成 profile，需要重启 `dsh web`（或在「设置 → 插件」里关掉再打开本插件）。
 - 标记为 `true`、行为不对 → 对照 [`contract.json`](../dsh-changes-behavior/contract.json) 运行 `pnpm --filter dsh-changes-behavior check:css`，清单会指出是哪条上游锚点失效。
 
@@ -178,7 +231,9 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | | 结果 |
 |---|---|
 | 多文件卡片标题左键 | 打开 / 聚焦「本地变更」并切成全屏 |
-| 单文件卡片标题左键 | 同上（该卡片唯一的入口就是标题） |
+| 单文件卡片标题左键 | 同上（补丁后它的文件行才打开本轮审查） |
+| 单文件卡片（补丁后） | 与多文件卡片一致：标题 + 一行文件行 |
+| 上游产物只读 / 锚点缺失 / 服务缺席 | 只记一条告警，单文件卡片保持上游紧凑形制 |
 | 文件行左键 | 上游行为：打开本轮审查页；由打开策略切成非全屏 |
 | 「展开全部文件」 | 只展开 / 折叠列表 |
 | 标题 / 文件行右键 | 宿主菜单，含「查看本轮快照 diff」 |
@@ -204,6 +259,8 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 
 | 文件 | 职责 |
 |---|---|
+| [`index.ts`](../dsh-changes-behavior/index.ts) | 宿主入口：等 `clientModules` 就绪后安装 / 卸载启动期补丁 |
+| [`src/host/single-card.ts`](../dsh-changes-behavior/src/host/single-card.ts) | 单文件卡片补丁：文本三态、写产物、`rebuilt`、卸载恢复 |
 | [`src/client.ts`](../dsh-changes-behavior/src/client.ts) | 浏览器入口：先装 changes 面板行为，再装 `⌘⌥Y` 桥 |
 | [`src/install.ts`](../dsh-changes-behavior/src/install.ts) | 总装：逐条安装、单条失败不阻断其余、逆序卸载 |
 | [`src/presentation.ts`](../dsh-changes-behavior/src/presentation.ts) | 面板呈现方式读数、指定入口全屏、四个打开入口的非全屏包层、全屏意图 |
@@ -217,7 +274,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | [`src/changes-open.ts`](../dsh-changes-behavior/src/changes-open.ts) | `⌘⌥Y` 固定行、固定输入观察者、终端捕获 |
 | [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`（分栏 / 换行 / 右键共用） |
 | [`dsh-shortcut-utils`](dsh-shortcut-utils.md) | 快捷键判定与捕获层；共享纯函数包，客户端构建时内联 |
-| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（49 条） |
+| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（50 条） |
 | [`check-css.mjs`](../dsh-changes-behavior/check-css.mjs) | 构建后逐条校验上面的清单 |
 
 快捷键的共享纯函数（固定行绑定匹配、键帽格式化、捕获阶段手势 / 归属上下文）放在 [`dsh-shortcut-utils`](dsh-shortcut-utils.md)，由 `dsh-keyboard-shortcuts` 与 `dsh-changes-behavior` 共用；它是纯函数包，没有运行时状态，客户端构建时分别内联进两个 bundle。
@@ -248,13 +305,15 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-changes-behavior
 
 然后刷新 GUI 页面。客户端半部改动后要重新构建；Host 在页面加载时重新读产物，通常刷新即可，若仍拿到旧字节，用「设置 → 插件」关掉再打开本插件，或重启 `dsh web`。
 
+本包现在带宿主半部：**单文件卡片补丁在 `dsh web` 启动时执行**，所以改完宿主代码或第一次装上本包后需要重启 `dsh web` 才生效（重启后刷新页面）。从 profile 移除本插件时，卸载钩子会把上游产物恢复原样；若进程被强杀未走到卸载，产物会保持打过补丁的形态，下次启动会被识别为「已打过」而直接跳过（不会重复写）。
+
 -----
 
 ## 上游契约与校验
 
 [`check-css.mjs`](../dsh-changes-behavior/check-css.mjs) 按 [`contract.json`](../dsh-changes-behavior/contract.json) 对 DSH 安装产物逐条 grep，`pnpm check:css` 触发（不挂在 `pnpm build` 上）。校验的是：
 
-- 改动卡片根 / 单文件标记 / 行容器 `<li>` / 行 `aria-describedby` 序号 / 折叠按钮 `aria-expanded` / 标题的 `openReview(0)`；
+- 改动卡片根 / 单文件标记 / `singleFile` 初始化（启动期补丁的锚点）/ 行容器 `<li>` / 行 `aria-describedby` 序号 / 折叠按钮 `aria-expanded` / 标题的 `openReview(0)`；
 - 本地变更地址前缀与标题键；
 - 右栏的 `openResource(address` / `openTab(kind` / `openResourceIn(sessionId,address` / `openTabIn(sessionId,kind` / `mounted` / `claim(address` / `toggleFullscreen(target)` / `commandTarget(element=…` / `isTargetCurrent(target)` / 窄窗口 `viewportWidth<768` 断点；
 - 面板 `data-sidebar-right-panel` 与 push / fullscreen 两值；

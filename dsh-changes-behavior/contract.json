@@ -1,5 +1,5 @@
 {
-  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟，以及 forge 与审查页的字号锚点。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
+  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、单文件卡片初始化（启动期补丁的锚点）、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟，以及 forge 与审查页的字号锚点。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
   "checks": [
     {
       "id": "changed-files-attr",
@@ -18,6 +18,15 @@
         "dsh-client-ui-deliverables/lib"
       ],
       "hint": "单文件卡片的 data-single 标记消失：标题判定可能把单文件行误判成多文件标题"
+    },
+    {
+      "id": "single-card-initializer",
+      "plugin": "dsh-changes-behavior",
+      "token": "const singleFile=",
+      "paths": [
+        "dsh-client-ui-deliverables/lib"
+      ],
+      "hint": "改动卡片的 singleFile 初始化消失：启动期补丁找不到锚点，单文件卡片会悄悄退回上游紧凑形态"
     },
     {
       "id": "card-rows-in-li",
