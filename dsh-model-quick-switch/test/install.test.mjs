@@ -396,6 +396,71 @@ console.log('--- C⑩b 快捷操作:工作树与团队协作都能只用键盘�
   off()
 }
 
+console.log('--- C⑩b2 关闭浮层再打开:刚写入的开关状态不被旧投影盖回去 ---')
+{
+  // 工作树：面板流只在打开时推过一帧，写入后没有新帧；旧实现会去读 `forgeWorktree`
+  // 投影（客户端视图里没有 request），重开就变回关闭。
+  const worktreeFixture = setup()
+  await worktreeFixture.open()
+  const offWorktree = installPaletteKeys(worktreeFixture.store, worktreeFixture.dom.document)
+  worktreeFixture.store.select(0)
+  worktreeFixture.dom.pressKey('Enter')
+  await tick()
+  check('工作树写入后开启', worktreeFixture.store.getSnapshot().entries[0].subtitle, '已开启')
+  worktreeFixture.store.close()
+  await tick()
+  await worktreeFixture.open()
+  check('重开后工作树仍是开启', worktreeFixture.store.getSnapshot().entries[0].subtitle, '已开启')
+  offWorktree()
+
+  // 团队协作：会话目录里的投影还是写前的 false，重开时不能被它盖回去。
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' } },
+    projections: { agentTeam: { enabled: false } },
+  })
+  const teamFixture = setup({ sessions })
+  await teamFixture.open()
+  const offTeam = installPaletteKeys(teamFixture.store, teamFixture.dom.document)
+  teamFixture.store.select(1)
+  teamFixture.dom.pressKey('Enter')
+  await tick()
+  check('团队写入后开启', teamFixture.store.getSnapshot().entries[1].subtitle, '已开启')
+  teamFixture.store.close()
+  await tick()
+  await teamFixture.open()
+  check('重开后团队仍是开启', teamFixture.store.getSnapshot().entries[1].subtitle, '已开启')
+  check('目录里迟到的旧值没有覆盖写入结果', teamFixture.data.getSnapshot().team, { enabled: true })
+  sessions.list.setProjections({ agentTeam: { enabled: true } })
+  await tick()
+  check('投影追上目标后仍显示开启', teamFixture.store.getSnapshot().entries[1].subtitle, '已开启')
+  sessions.list.setProjections({ agentTeam: { enabled: false } })
+  await tick()
+  check('别处改回关闭后跟着变', teamFixture.store.getSnapshot().entries[1].subtitle, '已关闭')
+  offTeam()
+}
+
+console.log('--- C⑩b3 换会话后不沿用上一条会话的写入状态 ---')
+{
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' }, s2: { id: 's2' } },
+    projections: { agentTeam: { enabled: false } },
+  })
+  const fixture = setup({ sessions })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.store.select(1)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('s1 开启团队', fixture.store.getSnapshot().entries[1].subtitle, '已开启')
+  sessions.list.setCurrent('s2')
+  await tick()
+  check('换到 s2 后团队回到关闭', fixture.store.getSnapshot().entries[1].subtitle, '已关闭')
+  check('换会话后数据快照也回到关闭', fixture.data.getSnapshot().team, { enabled: false })
+  off()
+}
+
 console.log('--- C⑩c 快捷操作失败与不可用:留在浮层里给可读原因 ---')
 {
   const remote = fakeRemote({
@@ -414,19 +479,20 @@ console.log('--- C⑩c 快捷操作失败与不可用:留在浮层里给可读�
   off()
 }
 {
-  const sessions = fakeSessions({
-    current: 's1',
-    byId: { s1: { id: 's1' } },
-    projections: {
-      forgeWorktree: {
+  // 工作树状态来自 forge 面板流：客户端 `forgeWorktree` 投影只保留已创建的工作树，
+  // 光看它读不出「请求中」，已创建时面板流里的 `worktree.created` 才是开启依据。
+  const remote = fakeRemote({
+    catalog: DEFAULT_CATALOG,
+    followFrames: [{
+      checkout: { state: 'ready' },
+      worktree: {
+        editable: false,
         request: null,
         created: { path: '/tmp/wt', branch: 'forge/s1', from: null, baseCommit: 'abc', repositoryRoot: '/repo' },
-        locked: true,
-        stepped: true,
       },
-    },
+    }],
   })
-  const fixture = setup({ sessions })
+  const fixture = setup({ remote })
   await fixture.open()
   const off = installPaletteKeys(fixture.store, fixture.dom.document)
   check('已创建时副标题只报开启', fixture.store.getSnapshot().entries[0].subtitle, '已开启')

@@ -33,11 +33,15 @@
  */
 import * as React from 'react'
 import {
+  EMPTY_TEAM_FACTS,
+  EMPTY_WORKTREE_FACTS,
   actionOfKey,
   actionRowCount,
   checkoutStateOf,
   firstModelRowIndex,
   quickActionRows,
+  sameTeamFacts,
+  sameWorktreeFacts,
   teamFacts,
   worktreeFacts,
   type CheckoutState,
@@ -112,7 +116,7 @@ import type { SettingsPathOpView } from '@deepseek-ai/dsh-settings/types'
 // 空类型导入：只为加载上游包的模块增强，不产生任何运行时导入 —— `Context.remote` 与
 // `remote.session` / `remote.forgePanel` / `remote.agentTeams` 三个命名空间、ui-layout 声明的
 // `shell.overlay` 槽位键、`retainedBy.mainView` 计数、`agentTeam` 投影键。
-// （`settings.section` 键、`modelSelection` 与 `forgeWorktree` 投影键随上面同包的命名导入生效。）
+// （`settings.section` 键、`modelSelection` 投影键随上面同包的命名导入生效。）
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
 import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
@@ -410,9 +414,24 @@ export function apply(ctx: Context): void {
     // 快捷操作的两条链路各自晚到：forge 面板负责工作树请求与 Git 检查，团队服务负责 agentTeam 开关。
     let forgePanelRemote: Context['remote']['forgePanel'] | undefined
     let agentTeamsRemote: Context['remote']['agentTeams'] | undefined
-    // 只为「当前目录是不是 Git 仓库」维持一条 forge 面板状态流；会话切换时换一条。
+    // 只为「当前目录是不是 Git 仓库」与工作树请求维持一条 forge 面板状态流；会话切换时换一条。
     let forgePanelStream: RemoteStreamHandle<ForgePanelState, never> | undefined
     let forgePanelStreamSession: SessionId | null = null
+    /**
+     * 写入成功后的乐观读数。旧投影可能在响应之后才追上：在它变成我们写入的目标之前，
+     * 用它挡住旧值，否则关闭浮层再打开会把开关显示回旧状态。推来第三种值说明别处又改过
+     * 设置，这时撤掉覆盖、交给新读数。
+     */
+    let worktreeOverride: {
+      readonly sessionId: SessionId
+      readonly baseline: WorktreeFacts
+      readonly target: WorktreeFacts
+    } | null = null
+    let teamOverride: {
+      readonly sessionId: SessionId
+      readonly baseline: TeamFacts
+      readonly target: TeamFacts
+    } | null = null
     let catalogInFlight: Promise<void> | undefined
     // 浮层的两步：先选模型，确认后再把候选换成这个模型的思考等级。
     let stage: PaletteStage = 'models'
@@ -435,10 +454,56 @@ export function apply(ctx: Context): void {
       })
     }
 
+    /** 会话切换时丢弃上一条会话的乐观覆盖。 */
+    const clearActionOverrides = (): void => {
+      worktreeOverride = null
+      teamOverride = null
+    }
+
+    /**
+     * 把面板流 / 会话目录推来的工作树状态与刚写入的目标对齐。
+     *
+     * 写前旧值（baseline）或「未知」都保留目标；写成目标后撤掉覆盖；第三种值代表别处改过，
+     * 直接采用新读数。
+     * @param observed - 这一次推来的工作树事实。
+     * @returns 浮层应显示的事实。
+     */
+    const reconcileWorktree = (observed: WorktreeFacts | null): WorktreeFacts | null => {
+      const override = worktreeOverride
+      if (override === null) return observed
+      const current = observed ?? EMPTY_WORKTREE_FACTS
+      if (sameWorktreeFacts(current, override.target)) {
+        worktreeOverride = null
+        return observed
+      }
+      if (sameWorktreeFacts(current, override.baseline)) return override.target
+      worktreeOverride = null
+      return observed
+    }
+
+    /**
+     * 把会话目录推来的团队状态与刚写入的目标对齐（规则同 {@link reconcileWorktree}）。
+     * @param observed - 这一次推来的团队事实。
+     * @returns 浮层应显示的事实。
+     */
+    const reconcileTeam = (observed: TeamFacts | null): TeamFacts | null => {
+      const override = teamOverride
+      if (override === null) return observed
+      const current = observed ?? EMPTY_TEAM_FACTS
+      if (sameTeamFacts(current, override.target)) {
+        teamOverride = null
+        return observed
+      }
+      if (sameTeamFacts(current, override.baseline)) return override.target
+      teamOverride = null
+      return observed
+    }
+
     /**
      * 为「当前目录是不是 Git 仓库」维持一条 forge 面板状态流。
      *
-     * 只读 `checkout.state`：`none` 时工作树那一行整行隐藏。会话切换就换一条流；
+     * 同时读 `checkout.state` 与 `worktree`：`none` 时工作树那一行整行隐藏，工作树行与
+     * hero 勾选框读同一份 `worktree.request` / `worktree.created`。会话切换就换一条流；
      * 流断开时保留最后一次读数（不把 Git 仓库误判成非仓库）。
      * @param sessionId - 当前主视图会话；没有会话时为 null。
      */
@@ -446,7 +511,10 @@ export function apply(ctx: Context): void {
       forgePanelStream?.dispose()
       forgePanelStream = undefined
       forgePanelStreamSession = sessionId
-      data.set({ checkout: null })
+      data.set({
+        checkout: null,
+        worktree: worktreeOverride?.sessionId === sessionId ? worktreeOverride.target : null,
+      })
       if (sessionId === null) return
       const remote = forgePanelRemote
       const follow = remote?.follow
@@ -463,7 +531,14 @@ export function apply(ctx: Context): void {
           for await (const frame of stream) {
             if (forgePanelStream !== stream) return
             const checkout = checkoutStateOf(frame)
-            if (checkout !== null && checkout !== data.getSnapshot().checkout) data.set({ checkout })
+            const worktree = worktreeFacts(frame.worktree)
+            const patch: { checkout?: CheckoutState; worktree?: WorktreeFacts | null } = {}
+            if (checkout !== null && checkout !== data.getSnapshot().checkout) patch.checkout = checkout
+            if (worktree !== null) {
+              const next = reconcileWorktree(worktree)
+              if (!sameWorktreeFacts(next, data.getSnapshot().worktree)) patch.worktree = next
+            }
+            if (Object.keys(patch).length > 0) data.set(patch)
           }
         } catch {
           // 链路断开：保留最后一次读数，工作树行不因一次断线而消失。
@@ -487,27 +562,32 @@ export function apply(ctx: Context): void {
      * @returns 会话 id；没有打开的会话时为 null。
      */
     const refreshSession = (): SessionId | null => {
+      const previousId = data.getSnapshot().sessionId
       const sessions = readSessions(scope)
       const snapshot: SessionListState | undefined = sessions?.list.getSnapshot()
       if (snapshot === undefined) {
+        clearActionOverrides()
         data.set({ sessionId: null, current: null, worktree: null, team: null })
         syncForgeFollow(null)
         return null
       }
       const id = snapshot.ids.find((candidate) => (snapshot.byId[candidate]?.retainedBy?.mainView ?? 0) > 0)
       if (id === undefined) {
+        clearActionOverrides()
         data.set({ sessionId: null, current: null, worktree: null, team: null })
         syncForgeFollow(null)
         return null
       }
+      // 换会话时旧会话的乐观覆盖必须丢掉；同一会话重读时保留，直到投影追上或出现新值。
+      if (previousId !== id) clearActionOverrides()
       const summary: SessionSummary | undefined = snapshot.byId[id]
       const values = summary?.projectionValues
       const projection: ModelSelectionProjection | undefined = values?.modelSelection
+      // 工作树改由 forge 面板流提供（见 startForgeFollow）；会话目录只负责团队投影。
       data.set({
         sessionId: id,
         current: projection?.next ?? projection?.lastUsed ?? null,
-        worktree: worktreeFacts(values?.forgeWorktree),
-        team: teamFacts(values?.agentTeam),
+        team: reconcileTeam(teamFacts(values?.agentTeam)),
       })
       syncForgeFollow(id)
       return id
@@ -622,8 +702,9 @@ export function apply(ctx: Context): void {
     const runQuickAction = async (action: QuickAction): Promise<void> => {
       const state = data.getSnapshot()
       if (state.pending || state.actionPending !== null) return
-      // 不在这里重读会话投影：写入成功后的乐观状态会被尚未追上的旧投影盖掉，连按第二次
-      // 就会把「取消」又变成一次「请求」。会话切换由目录订阅负责刷新。
+      // 写入成功后的乐观读数由 worktreeOverride / teamOverride 挡住迟到的旧投影（见
+      // reconcileWorktree / reconcileTeam），所以这里可以不重读：重读只会把刚写入的状态
+      // 盖回旧值，连按第二次就会把「取消」又变成一次「请求」。会话切换由目录订阅负责刷新。
       const sessionId = state.sessionId ?? refreshSession()
       if (sessionId === null) {
         data.set({ error: '当前没有打开的会话：先在左侧栏打开或新建一个会话，再使用这里的开关。' })
@@ -655,16 +736,13 @@ export function apply(ctx: Context): void {
               error: `${pending ? '取消工作树' : '新建工作树'}失败：${describeRemoteFailure(result.error)}`,
             })
           } else {
-            // 投影会随后推同一份状态；先按写入结果更新，避免等待一拍才看到角标变化。
-            data.set({
-              actionPending: null,
-              worktree: {
-                request: pending ? null : { from: null },
-                created: facts?.created ?? null,
-                locked: facts?.locked ?? false,
-                stepped: facts?.stepped ?? false,
-              },
-            })
+            // 面板流会随后推同一份状态；先按写入结果更新，避免等待一拍才看到角标变化。
+            const target: WorktreeFacts = {
+              request: pending ? null : { from: null },
+              created: facts?.created ?? null,
+            }
+            worktreeOverride = { sessionId, baseline: facts ?? EMPTY_WORKTREE_FACTS, target }
+            data.set({ actionPending: null, worktree: target })
           }
         } catch (error) {
           data.set({
@@ -690,7 +768,9 @@ export function apply(ctx: Context): void {
         if (!result.ok) {
           data.set({ actionPending: null, error: `保存团队协作设置失败：${describeRemoteFailure(result.error)}` })
         } else {
-          data.set({ actionPending: null, team: { enabled: next } })
+          const target: TeamFacts = { enabled: next }
+          teamOverride = { sessionId, baseline: team ?? EMPTY_TEAM_FACTS, target }
+          data.set({ actionPending: null, team: target })
         }
       } catch (error) {
         data.set({ actionPending: null, error: `保存团队协作设置失败：${messageOf(error)}` })
@@ -998,7 +1078,8 @@ export function apply(ctx: Context): void {
         forgePanelStream?.dispose()
         forgePanelStream = undefined
         forgePanelStreamSession = null
-        data.set({ actionPending: null, checkout: null })
+        worktreeOverride = null
+        data.set({ actionPending: null, checkout: null, worktree: null })
         syncRows()
       }, `${name}: forge panel release`)
       syncRows()
@@ -1013,7 +1094,8 @@ export function apply(ctx: Context): void {
       inner.effect(() => () => {
         if (agentTeamsRemote !== agentTeams) return
         agentTeamsRemote = undefined
-        data.set({ actionPending: null })
+        teamOverride = null
+        data.set({ actionPending: null, team: null })
         syncRows()
       }, `${name}: agent teams release`)
       syncRows()

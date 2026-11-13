@@ -1,5 +1,5 @@
 /**
- * 快捷操作行的纯投影：`forgeWorktree` / `agentTeam` 投影收窄、两行的副标题与角标、
+ * 快捷操作行的纯投影：forge 面板的 `worktree` / `agentTeam` 投影收窄、两行的副标题与角标、
  * 以及「哪一行是操作」的判定。
  *
  * 运行：`node test/actions.test.mjs`（或 pnpm test 跑全部）。
@@ -7,11 +7,15 @@
 import {
   ACTION_TEAM_KEY,
   ACTION_WORKTREE_KEY,
+  EMPTY_TEAM_FACTS,
+  EMPTY_WORKTREE_FACTS,
   actionOfKey,
   actionRowCount,
   checkoutStateOf,
   firstModelRowIndex,
   quickActionRows,
+  sameTeamFacts,
+  sameWorktreeFacts,
   teamFacts,
   worktreeFacts,
 } from '../src/actions.ts'
@@ -26,7 +30,7 @@ function base(overrides = {}) {
     sessionOpen: true,
     worktreeAvailable: true,
     teamAvailable: true,
-    worktree: { request: null, created: null, locked: false, stepped: false },
+    worktree: { request: null, created: null },
     team: { enabled: false },
     checkout: 'ready',
     ...overrides,
@@ -57,15 +61,12 @@ console.log('--- A② 工作树行：副标题只报开启 / 关闭，非 Git �
   check('默认角标只有「操作」', closed[0].badges, ['操作'])
   check('默认副标题就是关闭', closed[0].subtitle, '已关闭')
 
-  const requested = quickActionRows(base({ worktree: { request: { from: null }, created: null, locked: false, stepped: false } }))
+  const requested = quickActionRows(base({ worktree: { request: { from: null }, created: null } }))
   check('已请求时副标题是开启', requested[0].subtitle, '已开启')
   check('已请求不额外加角标', requested[0].badges, ['操作'])
 
-  const created = quickActionRows(base({ worktree: { request: null, created: { branch: 'forge/s1', path: '/tmp/wt' }, locked: true, stepped: true } }))
+  const created = quickActionRows(base({ worktree: { request: null, created: { branch: 'forge/s1', path: '/tmp/wt' } } }))
   check('已创建也报开启', created[0].subtitle, '已开启')
-
-  const locked = quickActionRows(base({ worktree: { request: null, created: null, locked: true, stepped: false } }))
-  check('已开始但没请求就是关闭', locked[0].subtitle, '已关闭')
 
   const noSession = quickActionRows(base({ sessionOpen: false }))
   check('没有会话时两行都不显示', noSession, [])
@@ -81,7 +82,7 @@ console.log('--- A② 工作树行：副标题只报开启 / 关闭，非 Git �
   check('检查未完成时按关闭显示', pending[0].subtitle, '已关闭')
 
   const unknown = quickActionRows(base({ worktree: null }))
-  check('工作树投影尚未读取时按关闭显示', unknown[0].subtitle, '已关闭')
+  check('工作树事实尚未读取时按关闭显示', unknown[0].subtitle, '已关闭')
 }
 
 console.log('--- A③ 团队协作行：与工作树行同一套显示规则 ---')
@@ -100,35 +101,54 @@ console.log('--- A③ 团队协作行：与工作树行同一套显示规则 ---
   check('投影尚未读取时按关闭显示', teamRow(base({ team: null })).subtitle, '已关闭')
 }
 
-console.log('--- A④ 投影收窄：形状不认识时返回 null ---')
+console.log('--- A④ 事实收窄与同值比较 ---')
 {
   check('undefined 工作树投影', worktreeFacts(undefined), null)
   check('null 工作树投影', worktreeFacts(null), null)
   check('数组工作树投影', worktreeFacts([]), null)
   check('字符串工作树投影', worktreeFacts('x'), null)
-  check('完整工作树投影', worktreeFacts({
+  check('完整面板工作树事实', worktreeFacts({
+    editable: true,
     request: { from: 'main' },
     created: { path: '/tmp/wt', branch: 'forge/s1', from: 'main' },
-    locked: true,
-    stepped: false,
+    creation: null,
   }), {
     request: { from: 'main' },
     created: { branch: 'forge/s1', path: '/tmp/wt' },
-    locked: true,
-    stepped: false,
   })
-  check('坏字段收成 null', worktreeFacts({ request: {}, created: { branch: '' }, locked: 'yes' }), {
+  check('坏字段收成 null 字段', worktreeFacts({ request: {}, created: { branch: '' } }), {
     request: { from: null },
     created: { branch: null, path: null },
-    locked: false,
-    stepped: false,
   })
+  check('没有 request / created 的面板对象是关闭', worktreeFacts({ editable: true }), EMPTY_WORKTREE_FACTS)
 
   check('undefined 团队投影', teamFacts(undefined), null)
   check('null 团队投影', teamFacts(null), null)
   check('空团队投影', teamFacts({}), { enabled: false })
   check('开启的团队投影', teamFacts({ enabled: true }), { enabled: true })
   check('truthy 不算开启', teamFacts({ enabled: 'true' }), { enabled: false })
+}
+
+console.log('--- A⑥ 写入后的目标与迟到投影比较 ---')
+{
+  checkTrue('空工作树事实与关闭基准相同', sameWorktreeFacts(EMPTY_WORKTREE_FACTS, { request: null, created: null }))
+  checkTrue('同分支同请求相同', sameWorktreeFacts(
+    { request: { from: 'main' }, created: null },
+    { request: { from: 'main' }, created: null },
+  ))
+  check('请求基分支不同', sameWorktreeFacts(
+    { request: { from: 'main' }, created: null },
+    { request: { from: 'dev' }, created: null },
+  ), false)
+  check('创建结果不同', sameWorktreeFacts(
+    { request: null, created: { branch: 'forge/a', path: '/tmp/a' } },
+    { request: null, created: { branch: 'forge/b', path: '/tmp/b' } },
+  ), false)
+  check('null 与关闭不同', sameWorktreeFacts(null, EMPTY_WORKTREE_FACTS), false)
+
+  checkTrue('开启相同', sameTeamFacts({ enabled: true }, { enabled: true }))
+  check('开关不同', sameTeamFacts({ enabled: true }, { enabled: false }), false)
+  check('null 与关闭不同', sameTeamFacts(null, EMPTY_TEAM_FACTS), false)
 }
 
 console.log('--- A⑤ 面板流里的 Git 检查结果 ---')

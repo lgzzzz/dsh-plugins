@@ -45,7 +45,7 @@ export interface ModelDataState {
   readonly current: ModelSelectionLike | null
   /** 主视图会话 id；没有打开的会话时为 null。 */
   readonly sessionId: SessionId | null
-  /** 主视图会话的 `forgeWorktree` 投影；没有会话或投影缺席时为 null。 */
+  /** 主视图会话的 forge 面板流里的工作树事实；没有会话或还没读到时为 null。 */
   readonly worktree: WorktreeFacts | null
   /** 主视图会话的 `agentTeam` 投影；没有会话或投影缺席时为 null。 */
   readonly team: TeamFacts | null

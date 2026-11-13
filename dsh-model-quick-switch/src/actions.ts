@@ -4,12 +4,17 @@
  * 这些行不是模型，但和模型共用同一套浮层交互（`↑` / `↓` 选行、`Enter` 执行、`Esc` 关闭），
  * 所以作为普通的 {@link PaletteRow} 投影进来，排在模型行前面。它们作用于**当前主视图会话**：
  *
- *   - **新建工作树**：读同一次会话的 `forgeWorktree` 投影，把「请求 / 取消」写成 forge 面板的
+ *   - **新建工作树**：读同一次会话 forge 面板流（`remote.forgePanel.follow`）里的
+ *     `worktree.request` / `worktree.created`，把「请求 / 取消」写成 forge 面板的
  *     `requestWorktree` / `cancelWorktree`。和空白会话行上的同名勾选框一样，请求在发送首条
  *     消息时才真正创建工作树。副标题只报「已开启 / 已关闭」；会话的工作区不是 Git 仓库
  *     （forge 面板的 `checkout.state` 是 `none`）时这一行**整行隐藏**。
  *   - **团队协作**：读 `agentTeam` 投影，写 `remote.agentTeams.setEnabled`；与 hero 行上的开关
  *     行为一致，不做停用确认（首轮前的入口）。
+ *
+ * 工作树不能读 `forgeWorktree` 投影：它的客户端视图只保留已创建的工作树
+ * （`ForgeSessionWorktree | null`），看不到仍处于「请求中」的状态；面板流才是与 hero 勾选框
+ * 同源的完整读数。
  *
  * 本文件不 import React、不碰 DOM，也不读上游服务：投影形状在这里收窄成两种事实，`client.ts`
  * 只负责把事实喂进来、把动作接出去，测试可以直接驱动这些规则。Git 检查结果与团队投影的
@@ -33,25 +38,26 @@ export type QuickAction = 'worktree' | 'team'
 export type CheckoutState = ForgeCheckoutState['state']
 
 /**
- * 工作树投影里本插件读的字段（`forgeWorktree`，只取展示与切换需要的部分）。
+ * 工作树开关的两项事实，由 forge 面板流的一帧里 `worktree` 对象收窄而来。
  *
- * 上游 `ForgeWorktreeState` 是 Host 侧的完整状态；客户端投影公开的视图只保留已创建的工作树
- * （`ForgeSessionWorktree`），但本插件按 Host 状态的字段读 request / created / locked / stepped，
- * 所以这里保留收窄后的本地形状，运行时字段名不变（见 {@link worktreeFacts} 的说明）。
+ * 请求可能在首条消息发送前一直开着，此时还不会有创建结果；已创建时请求通常已经清掉。
+ * 两项都为空表示当前会话没有工作树（既没请求也没创建）。
  */
 export interface WorktreeFacts {
   /** 打开的请求；null 表示没有请求。 */
   readonly request: { readonly from: string | null } | null
   /** 已经创建的工作树；null 表示还没创建。 */
   readonly created: { readonly branch: string | null; readonly path: string | null } | null
-  /** 会话已经开始了回合；之后的请求 Host 不会再创建。 */
-  readonly locked: boolean
-  /** 会话已经开始过一步；之后不会再创建工作树。 */
-  readonly stepped: boolean
 }
+
+/** 工作树事实的「未知 / 关闭」基准，用于和迟到投影做同值比较。 */
+export const EMPTY_WORKTREE_FACTS: WorktreeFacts = { request: null, created: null }
 
 /** `agentTeam` 投影里本插件读的字段（上游 `TeamProjection` 的 `enabled`）。 */
 export type TeamFacts = Pick<TeamProjection, 'enabled'>
+
+/** 团队事实的「未知 / 关闭」基准，用于和迟到投影做同值比较。 */
+export const EMPTY_TEAM_FACTS: TeamFacts = { enabled: false }
 
 /** 一行快捷操作的投影输入。 */
 export interface QuickActionRowsInput {
@@ -61,7 +67,7 @@ export interface QuickActionRowsInput {
   readonly worktreeAvailable: boolean
   /** `remote.agentTeams` 链路是否就绪。 */
   readonly teamAvailable: boolean
-  /** 当前会话的 `forgeWorktree` 投影；没有投影时为 null。 */
+  /** 当前会话 forge 面板流里的工作树事实；还没读到时为 null。 */
   readonly worktree: WorktreeFacts | null
   /** 当前会话的 `agentTeam` 投影；没有投影时为 null。 */
   readonly team: TeamFacts | null
@@ -80,11 +86,10 @@ function nullableString(value: unknown): string | null {
 }
 
 /**
- * 把 `forgeWorktree` 投影收窄成 {@link WorktreeFacts}。
+ * 把 forge 面板一帧里的 `worktree` 收窄成 {@link WorktreeFacts}。
  *
- * 投影还没到达、形状不认识、插件被撤下时都返回 null —— 调用方据此显示「状态尚未读取」，
- * 而不是假设「没有请求」。
- * @param value - 会话 `projectionValues.forgeWorktree`。
+ * 投影还没到达、形状不认识时返回 null —— 调用方据此保留上一次读数，而不是假设「没有请求」。
+ * @param value - `ForgePanelState.worktree`（或同样带 request / created 的对象）。
  * @returns 收窄后的事实，或 null。
  */
 export function worktreeFacts(value: unknown): WorktreeFacts | null {
@@ -98,12 +103,25 @@ export function worktreeFacts(value: unknown): WorktreeFacts | null {
         path: nullableString(value.created.path),
       }
     : null
-  return {
-    request,
-    created,
-    locked: value.locked === true,
-    stepped: value.stepped === true,
-  }
+  return { request, created }
+}
+
+/**
+ * 两份工作树事实是否表示同一个开关状态。
+ *
+ * 只比较 UI 用到的字段（是否有请求、请求基分支、已创建的分支与路径），不比较服务端可能
+ * 额外携带的字段；null 只和 null 相等，调用方在比较迟到投影前先补上「关闭」基准。
+ * @param left - 一份事实或 null。
+ * @param right - 另一份事实或 null。
+ * @returns 相等时为 true。
+ */
+export function sameWorktreeFacts(left: WorktreeFacts | null, right: WorktreeFacts | null): boolean {
+  if (left === null || right === null) return left === right
+  return (left.request === null) === (right.request === null)
+    && (left.request?.from ?? null) === (right.request?.from ?? null)
+    && (left.created === null) === (right.created === null)
+    && (left.created?.branch ?? null) === (right.created?.branch ?? null)
+    && (left.created?.path ?? null) === (right.created?.path ?? null)
 }
 
 /**
@@ -114,6 +132,19 @@ export function worktreeFacts(value: unknown): WorktreeFacts | null {
 export function teamFacts(value: unknown): TeamFacts | null {
   if (!isRecord(value)) return null
   return { enabled: value.enabled === true }
+}
+
+/**
+ * 两份团队事实是否表示同一个开关状态。
+ *
+ * null 只和 null 相等，调用方在比较迟到投影前先补上「关闭」基准。
+ * @param left - 一份事实或 null。
+ * @param right - 另一份事实或 null。
+ * @returns 相等时为 true。
+ */
+export function sameTeamFacts(left: TeamFacts | null, right: TeamFacts | null): boolean {
+  if (left === null || right === null) return left === right
+  return left.enabled === right.enabled
 }
 
 /**

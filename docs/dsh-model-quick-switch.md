@@ -20,8 +20,8 @@
 
 两行在「有会话 + 对应服务可用」时出现在菜单顶部（工作树额外要求当前目录是 Git 仓库），只用键盘就能完成：
 
-- **新建工作树**：读当前会话的 `forgeWorktree` 投影。没有请求时 `Enter` 调 forge 面板的 `requestWorktree(sessionId, null)`（基于当前 HEAD），再按一次 `Enter` 取消请求。和空白新会话行上的同名勾选框完全等价：**请求不会立刻创建工作树**，首条消息发送时才真正创建。已创建（投影里有 `created`）时再按 `Enter` 只给出提示、不重复请求。副标题**只报「已开启 / 已关闭」**，不再写创建时机或分支名。当前目录不是 Git 仓库（forge 面板 `checkout.state === 'none'`）时这一行**整行隐藏**。
-- **团队协作**：读当前会话的 `agentTeam` 投影，`Enter` 调 `remote.agentTeams.setEnabled(sessionId, !enabled)`；成功与失败都**不关闭浮层**。与 hero 行上的开关行为一致，不做停用确认。
+- **新建工作树**：读当前会话 forge 面板流（`remote.forgePanel.follow`，与 hero 行勾选框同源）里的 `worktree.request` / `worktree.created`。没有请求时 `Enter` 调 forge 面板的 `requestWorktree(sessionId, null)`（基于当前 HEAD），再按一次 `Enter` 取消请求。和空白新会话行上的同名勾选框完全等价：**请求不会立刻创建工作树**，首条消息发送时才真正创建。已创建时再按 `Enter` 只给出提示、不重复请求。副标题**只报「已开启 / 已关闭」**，不再写创建时机或分支名。当前目录不是 Git 仓库（forge 面板 `checkout.state === 'none'`）时这一行**整行隐藏**。不读 `forgeWorktree` 投影：它的客户端视图只保留已创建的工作树，看不到仍处于「请求中」的状态。
+- **团队协作**：读当前会话的 `agentTeam` 投影，`Enter` 调 `remote.agentTeams.setEnabled(sessionId, !enabled)`；成功与失败都**不关闭浮层**。与 hero 行上的开关行为一致，不做停用确认。工作树请求与团队开关写入成功后都会保留一个「写前旧值 / 写入目标」覆盖：投影或面板流随后推来同一目标时才撤掉，所以关闭浮层再打开不会被还没追上的旧投影显示回旧状态。
 - **两行显示规则一致**：都在「有会话 + 对应服务可用」时出现，角标都只有「操作」，副标题都只报「已开启 / 已关闭」；工作树行额外要求当前目录是 Git 仓库。没有会话、服务未挂载时对应行直接隐藏，不再用副标题写「服务不可用」之类的提示。
 - **两行共用菜单交互**：`↑` / `↓` 选行、`Enter` 执行、`Esc` 关闭；打开菜单时选中行仍落在「当前」模型上，从当前模型往上按 `↑` 一两次就能到这两行。底栏在选中操作行时显示「Enter 执行」。执行过程中**不显示**「正在设置…」这类中间态，成功与否只体现在行上的角标与副标题。
 - **失败留在菜单里**：Host 拒绝时（例如会话已经开始后的 `forgePanel/session-started`、团队设置的写入失败）把原因显示在菜单底部，按 `Esc` 回到输入框。
@@ -78,10 +78,10 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-model-quick-switch
 | 设置页 | 注册进 `settings.section`（id `dsh-model-quick-switch`，`order: 70`，label「模型快速切换」）；Host 半部用 `settings.configure({ auto: false })` 关掉按 schema 自动生成的通用表单页，避免出现两张编辑同一字段的页面 |
 | 写入 | `form.mutate([{ op: 'set', path: ['models'], value }])` 整份替换（不是字段级 `set`，因为值是一个数组）；写入状态与 `writeError` 放在数据快照里，页面据此禁用按钮并显示原因 |
 | 当前选择 | 读 `sessions.list` 快照里主视图会话（`retainedBy.mainView > 0`）的 `projectionValues.modelSelection.next ?? lastUsed`；没有显式选择时回退到模型目录的 `default` |
-| 快捷操作行 | `src/actions.ts` 把 `projectionValues.forgeWorktree` / `agentTeam` 收窄成两种事实，投影成 `PaletteRow`（`key` 是 `action:worktree` / `action:team`），排在模型行前面。两行都在「有会话 + 对应服务可用」时出现（工作树额外要求 `checkout` 不是 `none`），副标题只报开启 / 关闭，角标只有「操作」。`syncRows` 重投影时按 key 找回选中行，避免前插操作行后选中行跳到「新建工作树」上 |
-| 工作树开关 | `remote.forgePanel.requestWorktree(sessionId, null)`（`null` = 当前 HEAD）/ `cancelWorktree(sessionId)`；成功不关浮层，先按写入结果更新快照里的 `worktree.request`，等 `forgeWorktree` 投影追上。已经创建（投影里有 `created`）时不再发请求；副标题只显示「已开启 / 已关闭」 |
-| Git 仓库检查 | `remote.forgePanel.follow(sessionId)` 每帧是完整的 `ForgePanelState`，只取 `checkout.state` 到快照的 `checkout`。`none` 时工作树行整行隐藏；流断开保留最后一次读数，会话切换时换一条流 |
-| 团队协作开关 | `remote.agentTeams.setEnabled(sessionId, !enabled)`；成功不关浮层，按写入结果更新快照里的 `team.enabled`，投影随后也会推同一个值 |
+| 快捷操作行 | `src/actions.ts` 把 forge 面板流的 `worktree` 与 `projectionValues.agentTeam` 收窄成两种事实，投影成 `PaletteRow`（`key` 是 `action:worktree` / `action:team`），排在模型行前面。两行都在「有会话 + 对应服务可用」时出现（工作树额外要求 `checkout` 不是 `none`），副标题只报开启 / 关闭，角标只有「操作」。`syncRows` 重投影时按 key 找回选中行，避免前插操作行后选中行跳到「新建工作树」上 |
+| 工作树开关 | 展示读 `remote.forgePanel.follow` 每帧的 `worktree.request` / `worktree.created`（与 hero 勾选框同源）；写入走 `requestWorktree(sessionId, null)`（`null` = 当前 HEAD）/ `cancelWorktree(sessionId)`。成功不关浮层，先按写入结果更新快照并记下写前旧值，面板流推来目标后才撤掉覆盖。已创建时不再发请求；副标题只显示「已开启 / 已关闭」 |
+| forge 面板流 | `remote.forgePanel.follow(sessionId)` 每帧是完整的 `ForgePanelState`：取 `checkout.state` 到快照的 `checkout`（`none` 时工作树行整行隐藏），取 `worktree` 到工作树事实。流断开保留最后一次读数，会话切换时换一条流 |
+| 团队协作开关 | `remote.agentTeams.setEnabled(sessionId, !enabled)`；成功不关浮层，按写入结果更新快照里的 `team.enabled` 并记下写前旧值。会话目录推来同一目标时撤掉覆盖，推来第三种值说明别处改过设置，直接采用新值 |
 | 快捷操作的服务链路 | `remote.forgePanel` / `remote.agentTeams` 各用一条等待子 fiber（`scope.inject`）接上；缺席时对应行直接隐藏。`remote.*` 是生成出来的命名空间，不能直接 `scope.get` |
 | 切换模型 | `remote.session.selectModel({ sessionId, provider, model, reasoningEffort? })`：请求只带一个会话与完整选择，Host 负责规范化并保存默认值；成功后把返回的 `selected` 写回快照，投影随后也会推同一个值 |
 | 模型目录 | `remote.session.modelCatalog()`：只在打开浮层或进入设置页时拉取，并发调用共用一次请求；`groups` 展开成设置页的分组与浮层的显示名，`failures` 原样显示 |
@@ -112,10 +112,10 @@ node test/run-all.mjs          # 七个测试文件
 | --- | --- |
 | `test/palette.test.mjs` | 纯状态：固定行的逻辑组合（`primary` 按平台展开成 ⌘⌥U / Ctrl+Alt+U，各平台只认自己那一组）、下标收敛、窗口（最大起点 / 收敛 / 按行滑动 / 整屏 / 贴边）、store 的连续滑动与循环绕回、滚轮一格一行、浮层六键 |
 | `test/model.test.mjs` | 配置读写（坏形状、去重、保序）、选择身份（强度算身份、分隔符不撞车）、当前匹配、目录排序 / 展开 / 显示名回退、候选行的「当前」与「目录外」、思考等级候选 / 当前标记 / 初始选中 / 写回形状 |
-| `test/actions.test.mjs` | 快捷操作行的纯投影：`forgeWorktree` / `agentTeam` 投影收窄（坏形状 → null）、面板流里的 Git 检查结果、工作树 / 团队行在各种状态下的副标题与角标（工作树只报开启 / 关闭，非 Git 仓库不出行）、操作行计数与「第一行模型」下标 |
+| `test/actions.test.mjs` | 快捷操作行的纯投影：forge 面板 `worktree` / `agentTeam` 事实收窄（坏形状 → null）、写前旧值与写入目标的同值比较、面板流里的 Git 检查结果、工作树 / 团队行在各种状态下的副标题与角标（工作树只报开启 / 关闭，非 Git 仓库不出行）、操作行计数与「第一行模型」下标 |
 | `test/host.test.mjs` | 宿主 Config：默认空列表、必填字段校验、`models` 带 `volatile`（设置文档才会投影它）、`apply` 只声明 `auto: false` |
 | `test/overlay.test.mjs` | 真 React 渲染：候选 / 当前角标 / 目录外角标 / 选中行、空态、错误与进行中提示、一屏 10 行与 2–11 窗口、六键接管（含第二步 `Esc` 返回）、滚轮、设置页的列表 / 只读 / 目录错误 / 不可用状态 |
-| `test/install.test.mjs` | 装配：固定行与两个槽位、`primary+alt+U` 打开并消费、顶部快捷操作（↑ 到操作行、`Enter` 请求 / 取消工作树、切换团队协作、失败留在浮层、已创建工作树 / 缺服务 / 没有会话 / 非 Git 仓库整行隐藏、不显示中间态）、两步选择（模型 → 思考等级）与 `Esc` 返回、候选来自设置与目录、`Enter` 走 `selectModel` 并在成功后关闭、失败留在浮层、没有会话 / 没有远程 / 设置服务晚到、全局捕获（终端 / 页面）与卸载清理、固定行被挤掉时两条通路都不抢、macOS 上认 ⌘⌥U 而不认 Ctrl+Alt+U、设置页增删与写入被拒 |
+| `test/install.test.mjs` | 装配：固定行与两个槽位、`primary+alt+U` 打开并消费、顶部快捷操作（↑ 到操作行、`Enter` 请求 / 取消工作树、切换团队协作、关闭再打开保留刚写入的状态、换会话不沿用上一条会话的覆盖、失败留在浮层、已创建工作树 / 缺服务 / 没有会话 / 非 Git 仓库整行隐藏、不显示中间态）、两步选择（模型 → 思考等级）与 `Esc` 返回、候选来自设置与目录、`Enter` 走 `selectModel` 并在成功后关闭、失败留在浮层、没有会话 / 没有远程 / 设置服务晚到、全局捕获（终端 / 页面）与卸载清理、固定行被挤掉时两条通路都不抢、macOS 上认 ⌘⌥U 而不认 Ctrl+Alt+U、设置页增删与写入被拒 |
 | `test/artifact-client.test.mjs` | 产物：模块 id / 插件名 / `inject`、只向模块表要 `react`、浮动行 + 浮层 + 设置页、候选与切换、设置页写入随产物发布、依赖缺失时只是不安装 |
 
 `test/run-all.mjs` 用 `spawnSync` 逐个跑；受限沙箱里 spawn 被拒时直接逐个执行：
