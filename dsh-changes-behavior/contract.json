@@ -56,15 +56,6 @@
       "hint": "折叠按钮的 aria-expanded 读数消失：插件认不出「展开全部文件」，点它会去开本地变更"
     },
     {
-      "id": "header-opens-review",
-      "plugin": "dsh-changes-behavior",
-      "token": "openReview(0)",
-      "paths": [
-        "dsh-client-ui-deliverables/lib"
-      ],
-      "hint": "标题按钮不再调用 openReview(0)：右键菜单依赖的「上游 onClick」语义变了，回到本轮快照的落点需要重新核对"
-    },
-    {
       "id": "local-changes-address",
       "plugin": "dsh-changes-behavior",
       "token": "dsh-resource://forge-changes/",
@@ -81,24 +72,6 @@
         "dsh-experimental-client-ui-forge/lib"
       ],
       "hint": "「本地变更」的标签页标题键消失：forge 的标签类型可能改名，地址与 kind 需要重新核对"
-    },
-    {
-      "id": "context-menus-service",
-      "plugin": "dsh-changes-behavior",
-      "token": "contextMenus",
-      "paths": [
-        "dsh-client-ui-context-menu/lib"
-      ],
-      "hint": "宿主不再提供 contextMenus 服务：右键菜单整体退化为浏览器原生菜单"
-    },
-    {
-      "id": "context-menu-open",
-      "plugin": "dsh-changes-behavior",
-      "token": "open(target",
-      "paths": [
-        "dsh-client-ui-context-menu/lib"
-      ],
-      "hint": "上下文菜单不再提供 open(target：右键手势无法弹出宿主菜单"
     },
     {
       "id": "sidebar-open-resource",

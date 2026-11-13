@@ -20,17 +20,10 @@ export interface ElementLike {
   getBoundingClientRect?(): { readonly left: number; readonly bottom: number }
 }
 
-/** 一次点击 / 右键 / 按键事件里本插件用到的字段。 */
+/** 一次点击事件里本插件用到的字段。 */
 export interface EventLike {
   readonly target?: unknown
   readonly defaultPrevented?: boolean
-  readonly metaKey?: boolean
-  readonly ctrlKey?: boolean
-  readonly altKey?: boolean
-  readonly shiftKey?: boolean
-  readonly clientX?: number
-  readonly clientY?: number
-  readonly key?: string
   composedPath?(): unknown[]
   preventDefault(): void
   stopPropagation(): void
@@ -64,7 +57,7 @@ export function hasClosest(value: unknown): value is ElementLike {
 
 /**
  * 事件派发的第一个元素；没有可用路径时退回 `event.target`。
- * @param event - 一次点击 / 右键事件。
+ * @param event - 一次点击事件。
  * @returns 事件目标元素，取不到则返回 null。
  */
 export function clickElement(event: EventLike): ElementLike | null {
@@ -73,16 +66,4 @@ export function clickElement(event: EventLike): ElementLike | null {
     if (hasClosest(value)) return value
   }
   return hasClosest(event.target) ? event.target : null
-}
-
-/**
- * 点击时是否按下了修饰键。
- *
- * 修饰键点击保留上游行为（打开本轮审查页），作为「标题改成打开本地变更」之后的逃生口：
- * 想直接看本轮快照 diff 又不想先右键时，`⌘`/`Ctrl` + 点击标题即可。
- * @param event - 一次点击事件。
- * @returns 是否带修饰键。
- */
-export function isModified(event: EventLike): boolean {
-  return event.metaKey === true || event.ctrlKey === true || event.altKey === true || event.shiftKey === true
 }

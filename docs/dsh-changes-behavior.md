@@ -40,7 +40,7 @@
 
 -----
 
-## 改动卡片：标题与右键
+## 改动卡片：标题
 
 上游 `@deepseek-ai/dsh-client-ui-deliverables` 把一轮的改动渲染成一张卡片（`[data-changed-files]`）：
 
@@ -49,13 +49,10 @@
 | 标题（多文件卡片；打完补丁后单文件卡片也走这条） | 打开本轮审查标签页（`changes-review`），定位到第 1 个文件 | **打开右栏「本地变更」标签页并切成全屏** |
 | 文件行（`<li>` 里的按钮） | 打开本轮审查标签页，定位到该文件 | 不变（但仍受「非全屏」策略约束） |
 | 「展开全部文件」折叠按钮（带 `aria-expanded`） | 只展开 / 折叠列表 | 不变 |
-| 标题或文件行的**右键** | 浏览器原生菜单 | **宿主上下文菜单 + 「查看本轮快照 diff」** |
 
 判定只看卡片的两条结构事实：标题是卡片内、**不在 `<li>` 里**、且**不带 `aria-expanded`** 的按钮；文件行在 `<li>` 里；折叠按钮带 `aria-expanded`。单文件卡片打完补丁后也有列表，标题依旧不在 `<li>` 里，所以判定不变。
 
-右键时先读该按钮由 React 绑定的 `onClick`，再让宿主 `contextMenus` 在指针位置弹出菜单，贡献一条「查看本轮快照 diff」。执行菜单动作就是调用上游原本的 `onClick`，坐标由上游闭包给出，本插件不在 DOM 上重建会话 / 轮次 / 文件下标。读不到 `onClick` 时保留浏览器原生菜单。
-
-`⌘` / `Ctrl` / `Alt` / `Shift` + 左键标题不接管：这是保留给「直接看本轮快照 diff」的逃生口。
+标题点击不区分修饰键：`⌘` / `Ctrl` / `Alt` / `Shift` + 左键标题与普通左键一样打开本地变更。标题与文件行上的右键不接管，保留浏览器原生菜单。
 
 -----
 
@@ -161,7 +158,7 @@ const singleFile=void 0;/*dsh-changes-single-card*/
 ```js
 document.documentElement.hasAttribute('data-dsh-changes-behavior')          // 总装
 document.documentElement.hasAttribute('data-dsh-changes-behavior-open')     // 打开呈现策略
-document.documentElement.hasAttribute('data-dsh-changes-behavior-card')     // 卡片标题 / 右键
+document.documentElement.hasAttribute('data-dsh-changes-behavior-card')     // 卡片标题
 document.documentElement.hasAttribute('data-dsh-changes-behavior-split')    // 审查分栏默认
 document.documentElement.hasAttribute('data-dsh-changes-behavior-wrap')     // 审查换行默认
 document.documentElement.hasAttribute('data-dsh-changes-behavior-hover')    // 悬停闸门
@@ -236,8 +233,8 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | 上游产物只读 / 锚点缺失 / 服务缺席 | 只记一条告警，单文件卡片保持上游紧凑形制 |
 | 文件行左键 | 上游行为：打开本轮审查页；由打开策略切成非全屏 |
 | 「展开全部文件」 | 只展开 / 折叠列表 |
-| 标题 / 文件行右键 | 宿主菜单，含「查看本轮快照 diff」 |
-| `⌘` / `Ctrl` / `Alt` / `Shift` + 左键标题 | 不接管，上游照常打开本轮审查页 |
+| 标题 / 文件行右键 | 不接管，保留浏览器原生菜单 |
+| `⌘` / `Ctrl` / `Alt` / `Shift` + 左键标题 | 与普通左键一样打开本地变更 |
 | 正文 / 过程中间链接、其它插件打开 | 打开目标页，非全屏 |
 | 窄窗口（< 768px） | 上游自动全屏；本插件不尝试切回推挤 |
 | 浮层（`destination: 'float'`） | 不改变停靠栏呈现方式 |
@@ -250,7 +247,6 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | 非浏览器环境（没有 `document`） | 空操作 |
 | `sidebarRight` 服务缺席 | 卡片 / 打开策略不装，其余行为照常；控制台告警一次 |
 | `shortcuts` 服务缺席 | `⌘⌥Y` 不装，其余行为照常 |
-| `contextMenus` 服务缺席 | 右键保留浏览器原生菜单 |
 | 分栏 / 换行按钮或 review store seed 变了 | 该标签页保持上游默认，告警一次；工具栏仍可手动开关 |
 
 -----
@@ -264,7 +260,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | [`src/client.ts`](../dsh-changes-behavior/src/client.ts) | 浏览器入口：先装 changes 面板行为，再装 `⌘⌥Y` 桥 |
 | [`src/install.ts`](../dsh-changes-behavior/src/install.ts) | 总装：逐条安装、单条失败不阻断其余、逆序卸载 |
 | [`src/presentation.ts`](../dsh-changes-behavior/src/presentation.ts) | 面板呈现方式读数、指定入口全屏、四个打开入口的非全屏包层、全屏意图 |
-| [`src/card.ts`](../dsh-changes-behavior/src/card.ts) | 卡片标题 / 文件行 / 折叠按钮判定、本地变更地址、右键菜单 |
+| [`src/card.ts`](../dsh-changes-behavior/src/card.ts) | 卡片标题 / 文件行 / 折叠按钮判定、本地变更地址 |
 | [`src/dom.ts`](../dsh-changes-behavior/src/dom.ts) | 捕获层的最小 DOM 形状与事件目标提取 |
 | [`src/split-default.ts`](../dsh-changes-behavior/src/split-default.ts) | 审查分栏默认：身份、seed 等待、重试、呈现方式观察 |
 | [`src/wrap-default.ts`](../dsh-changes-behavior/src/wrap-default.ts) | 审查换行默认：身份、一次写入、重试 |
@@ -272,9 +268,9 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | [`src/font-14.ts`](../dsh-changes-behavior/src/font-14.ts) | 14px `<style>` 的安装与卸载 |
 | [`src/tree-width.ts`](../dsh-changes-behavior/src/tree-width.ts) | 文件树宽度记忆：用户调整结束写回、新挂载恢复、重试与存储清洗 |
 | [`src/changes-open.ts`](../dsh-changes-behavior/src/changes-open.ts) | `⌘⌥Y` 固定行、固定输入观察者、终端捕获 |
-| [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`（分栏 / 换行 / 右键共用） |
+| [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`（分栏 / 换行共用） |
 | [`dsh-shortcut-utils`](dsh-shortcut-utils.md) | 快捷键判定与捕获层；共享纯函数包，客户端构建时内联 |
-| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（50 条） |
+| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（47 条） |
 | [`check-css.mjs`](../dsh-changes-behavior/check-css.mjs) | 构建后逐条校验上面的清单 |
 
 快捷键的共享纯函数（固定行绑定匹配、键帽格式化、捕获阶段手势 / 归属上下文）放在 [`dsh-shortcut-utils`](dsh-shortcut-utils.md)，由 `dsh-keyboard-shortcuts` 与 `dsh-changes-behavior` 共用；它是纯函数包，没有运行时状态，客户端构建时分别内联进两个 bundle。

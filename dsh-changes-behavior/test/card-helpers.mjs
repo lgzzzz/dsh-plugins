@@ -266,40 +266,6 @@ export function fakeTabs({ claimable = true } = {}) {
   return tabs
 }
 
-/** 假上下文菜单：记录注册与打开，并暴露最近一次解析出的动作。 */
-export function fakeMenus() {
-  const menus = {
-    registered: [],
-    opened: [],
-    disposed: false,
-    register(contribution) {
-      menus.registered.push(contribution)
-      return () => { menus.disposed = true }
-    },
-    open(target, point) {
-      menus.opened.push({ target, point })
-    },
-  }
-  return menus
-}
-
-/** 假 locale：`bind` 返回按命名空间注册的中文字典。 */
-export function fakeLocale(dictionaries = {}) {
-  const locale = {
-    registered: [],
-    register(namespace, entries) {
-      locale.registered.push({ namespace, entries })
-      dictionaries[namespace] = entries
-      return () => {}
-    },
-    bind(namespace) {
-      const entries = dictionaries[namespace]?.zh ?? {}
-      return (key) => entries[key] ?? key
-    },
-  }
-  return locale
-}
-
 /** 以假 `window.__ModuleLoader__` 载入构建产物，返回注册对象。 */
 export function loadClientArtifact() {
   let registration = null

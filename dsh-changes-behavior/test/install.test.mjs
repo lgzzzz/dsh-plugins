@@ -1,5 +1,5 @@
 /**
- * 总装行为测试：一个插件装上后同时具备卡片点击 / 右键、审查分栏 / 换行默认、悬停闸门、
+ * 总装行为测试：一个插件装上后同时具备卡片点击、审查分栏 / 换行默认、悬停闸门、
  * 14px 样式、文件树宽度记忆与打开呈现策略，并且卸载时全部清理。
  *
  * 运行：`node test/install.test.mjs`（或 pnpm test 跑全部）。
@@ -11,14 +11,10 @@ import { INSTALL_MARKER as WRAP_MARKER } from '../src/wrap-default.ts'
 import { MARKER_ATTRIBUTE as HOVER_MARKER } from '../src/hover-gate.ts'
 import { MARKER_ATTRIBUTE as FONT_MARKER } from '../src/font-14.ts'
 import { INSTALL_MARKER as TREE_MARKER } from '../src/tree-width.ts'
-import { MENU_TARGET } from '../src/card.ts'
 import {
-  attachClickHandler,
   attachSidebarPanel,
   check,
   checkTrue,
-  fakeLocale,
-  fakeMenus,
   fakeSidebar,
   fakeTabs,
   finish,
@@ -33,11 +29,9 @@ function setup({ sessionId = 'session-1', mode = 'push' } = {}) {
   const panel = attachSidebarPanel(doc, { sessionId, mode })
   const sidebar = fakePolicySidebar({ sessionId })
   const tabs = fakeTabs()
-  const menus = fakeMenus()
-  const locale = fakeLocale()
   const warns = []
   const ctx = {
-    get: (name) => ({ sidebarRight: sidebar, sidebarRightTabs: tabs, contextMenus: menus, locale })[name],
+    get: (name) => ({ sidebarRight: sidebar, sidebarRightTabs: tabs })[name],
   }
   const originals = {
     openResource: sidebar.openResource,
@@ -45,7 +39,7 @@ function setup({ sessionId = 'session-1', mode = 'push' } = {}) {
     toggleFullscreen: sidebar.toggleFullscreen,
   }
   const dispose = installChangesBehavior(ctx, { warn: (message) => warns.push(message) }, doc)
-  return { doc, panel, sidebar, tabs, menus, locale, warns, dispose, originals }
+  return { doc, panel, sidebar, tabs, warns, dispose, originals }
 }
 
 console.log('--- I① 总装：一个标记、六条行为全部装上 ---')
@@ -58,7 +52,7 @@ console.log('--- I① 总装：一个标记、六条行为全部装上 ---')
   check('悬停标记', doc.documentElement.getAttribute(HOVER_MARKER), '')
   check('字号标记', doc.documentElement.getAttribute(FONT_MARKER), '')
   check('文件树宽度标记', doc.documentElement.getAttribute(TREE_MARKER), '')
-  check('监听类型', doc.types.sort(), ['click', 'contextmenu', 'keydown', 'keyup', 'mouseenter', 'mouseover', 'pointerenter', 'pointerover', 'pointerup'].sort())
+  check('监听类型', doc.types.sort(), ['click', 'keyup', 'mouseenter', 'mouseover', 'pointerenter', 'pointerover', 'pointerup'].sort())
   checkTrue('注入 14px 样式', String(doc.head.child?.textContent).includes('[data-forge-changes]'))
   check('样式带插件标记', doc.head.child?.dataset?.plugin, 'dsh-changes-behavior')
   checkTrue('打开入口已包层', sidebar.openResource !== undefined)
@@ -85,23 +79,7 @@ console.log('--- I② 指定入口：标题打开本地变更并切全屏；其�
   check('包层没有破坏原方法', originals.openResource !== sidebar.openResource, true)
 }
 
-console.log('--- I③ 右键卡片：宿主菜单回到本轮快照 ---')
-{
-  const { doc, menus } = setup()
-  const { rowButton } = multiCard()
-  let upstream = 0
-  attachClickHandler(rowButton, () => { upstream += 1 })
-  const event = pointerEvent(rowButton, { clientX: 7, clientY: 8 })
-  doc.dispatch('contextmenu', event)
-  check('弹出宿主菜单', menus.opened.length, 1)
-  check('目标种类', menus.opened[0]?.target.kind, MENU_TARGET)
-  check('阻止浏览器菜单', event.prevented, 1)
-  const actions = menus.registered[0].resolve({}, new AbortController().signal)
-  actions[0]?.run()
-  check('执行回到上游 onClick', upstream, 1)
-}
-
-console.log('--- I④ 悬停浮层：卡片内手势被拦下 ---')
+console.log('--- I③ 悬停浮层：卡片内手势被拦下 ---')
 {
   const { doc } = setup()
   const { card } = multiCard()
@@ -110,12 +88,9 @@ console.log('--- I④ 悬停浮层：卡片内手势被拦下 ---')
   check('阻止 React 合成 enter', event.stopped, 1)
 }
 
-console.log('--- I⑤ 卸载：监听、样式、标记、包层全部还原 ---')
+console.log('--- I④ 卸载：监听、样式、标记、包层全部还原 ---')
 {
   const { doc, sidebar, dispose, originals } = setup()
-  const { rowButton } = multiCard()
-  attachClickHandler(rowButton, () => {})
-  doc.dispatch('contextmenu', pointerEvent(rowButton, { clientX: 1, clientY: 2 }))
   dispose()
   check('卸载后无捕获监听', doc.types, [])
   check('卸载后移除总装标记', doc.documentElement.getAttribute(MARKER_ATTRIBUTE), null)
@@ -127,7 +102,7 @@ console.log('--- I⑤ 卸载：监听、样式、标记、包层全部还原 ---
   check('卸载后还原 toggleFullscreen', sidebar.toggleFullscreen, originals.toggleFullscreen)
 }
 
-console.log('--- I⑥ 没有文档：空操作 ---')
+console.log('--- I⑤ 没有文档：空操作 ---')
 {
   const dispose = installChangesBehavior({ get: () => undefined }, {}, undefined)
   checkTrue('返回可调用卸载函数', typeof dispose === 'function')

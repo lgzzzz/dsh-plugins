@@ -18,8 +18,6 @@ import {
   attachSidebarPanel,
   check,
   checkTrue,
-  fakeLocale,
-  fakeMenus,
   fakeTabs,
   finish,
   loadClientArtifact,
@@ -79,11 +77,9 @@ console.log('--- A② 装配后六条行为同时生效 ---')
   attachSidebarPanel(doc, { sessionId: 'session-9', mode: 'push' })
   const sidebar = fakePolicySidebar({ sessionId: 'session-9' })
   const tabs = fakeTabs()
-  const menus = fakeMenus()
-  const locale = fakeLocale()
   const { effects, injects } = assemble({
     doc,
-    services: { sidebarRight: sidebar, sidebarRightTabs: tabs, contextMenus: menus, locale },
+    services: { sidebarRight: sidebar, sidebarRightTabs: tabs },
   })
 
   check('先注入右栏，再为空缺的快捷键让位', injects, [['sidebarRight'], ['shortcuts', 'sidebarRight']])

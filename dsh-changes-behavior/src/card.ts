@@ -1,5 +1,5 @@
 /**
- * 改动文件卡片的两处点击改写：标题 → 本地变更，右键 → 本轮快照 diff。
+ * 改动文件卡片的点击改写：标题 → 本地变更。
  *
  * 上游 `@deepseek-ai/dsh-client-ui-deliverables` 把每个完成轮次的改动渲染成一张卡片
  * （`[data-changed-files]`）：
@@ -15,32 +15,28 @@
  *      `sidebarRight.openResource('dsh-resource://forge-changes/<session>/local')` 打开
  *      「本地变更」标签页，右栏原本是推挤呈现时再 `toggleFullscreen()` 切成全屏，
  *      最后 `stopPropagation()` 阻止上游打开本轮审查页；
- *   2. **左键点文件行**（`li` 里的按钮）→ 不处理，保持上游的「本轮文件 diff」；
- *   3. **右键标题或文件行** → 用宿主 `contextMenus` 打开上下文菜单，贡献一条「查看本轮快照
- *      diff」，执行时调用该按钮读到的 React `onClick`，回到上游原本的审查标签页。
+ *   2. **左键点文件行**（`li` 里的按钮）→ 不处理，保持上游的「本轮文件 diff」。
+ *
+ * 标题点击不区分修饰键：`⌘` / `Ctrl` / `Alt` / `Shift` + 左键与普通左键一样打开本地变更。
+ * 卡片标题与文件行上的右键不接管，保留浏览器原生菜单。
  *
  * 全屏只在「刚打开 / 聚焦的确实是本地变更」且右栏当前是 `push` 时切：已经全屏（含窄窗口
  * 自动全屏）、面板还没画出来、活动页不是那一页、右栏面没有全屏命令，都保持现状。
  *
- * 失败一律收敛为「不动作」：右栏不在、本地变更类型没注册、地址无法认领、拿不到会话、
- * 按钮上没有可读的 `onClick`、`contextMenus` 服务缺席，都把这次手势留给上游 / 浏览器。
- * 只有确认能打开时才 `stopPropagation()`，不会吞掉点击；切全屏失败不影响已经完成的打开。
+ * 失败一律收敛为「不动作」：右栏不在、本地变更类型没注册、地址无法认领、拿不到会话，
+ * 都把这次手势留给上游 / 浏览器。只有确认能打开时才 `stopPropagation()`，不会吞掉点击；
+ * 切全屏失败不影响已经完成的打开。
  *
  * 上游锚点、边界与验证方式见 docs/dsh-changes-behavior.md。
  */
 import type { Context } from '@deepseek-ai/cordis'
 // 空导入：加载上游客户端包对 `@deepseek-ai/cordis` 的模块增强
-// （`ctx.sidebarRight` / `ctx.sidebarRightTabs` / `ctx.contextMenus` / `ctx.locale`）。
-import type {} from '@deepseek-ai/dsh-client-locale/client'
+// （`ctx.sidebarRight` / `ctx.sidebarRightTabs`）。
 import type { SidebarRightTabClaim } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
-import type { MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client'
-import { clickElement, isModified, type DocumentLike, type ElementLike, type EventLike } from './dom.ts'
-import { findClickHandler } from './fiber.ts'
+import { clickElement, type DocumentLike, type ElementLike, type EventLike } from './dom.ts'
 import { presentFullscreen, withFullscreenIntent } from './presentation.ts'
-import { NS, translateOf, zh, en } from './locales.ts'
 
-/** 插件 id：诊断前缀、标记与菜单贡献 id 都用它。 */
+/** 插件 id：诊断前缀与标记都用它。 */
 export const name = 'dsh-changes-behavior'
 
 /** 改动文件卡片根元素；只有这张卡片用它。 */
@@ -61,42 +57,11 @@ export const LOCAL_CHANGES_PREFIX = 'dsh-resource://forge-changes/'
 /** 「本地变更」标签页地址的固定尾段。 */
 export const LOCAL_CHANGES_SOURCE = 'local'
 
-/** 本插件在上下文菜单里拥有的目标种类（只用于它自己弹出的菜单）。 */
-export const MENU_TARGET = 'dsh-changes-behavior/changed-turn'
-
-/** 菜单贡献 id（同一目标种类内唯一）。 */
-export const MENU_CONTRIBUTION_ID = 'dsh-changes-behavior/changed-turn'
-
-/** 菜单动作 id。 */
-export const MENU_ACTION_ID = 'open-snapshot'
-
-/**
- * 本插件在上下文菜单里的目标族。
- *
- * 上游 `ContextMenuTargetMap` 是留给外部插件合并的开放点：这里补上本插件自己的种类，
- * 于是 `ContextMenus.register` / `open` 都能按上游类型校验这个目标（而不是退化成 unknown）。
- */
-declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
-  interface ContextMenuTargetMap {
-    /** 本插件自己的右键目标：`serial` 每次打开递增，让同一位置的重复右键重新打开。 */
-    readonly 'dsh-changes-behavior/changed-turn': {
-      readonly serial: number
-    }
-  }
-}
-
 /** 右栏导航服务：上游 `SidebarRightController`（`ctx.sidebarRight`）。 */
 type Sidebar = Context['sidebarRight']
 
-
 /** 右栏标签类型注册表：上游 `SidebarRightTabRegistry`（`ctx.sidebarRightTabs`）。 */
 type TabRegistry = Context['sidebarRightTabs']
-
-/** 宿主上下文菜单服务：上游 `ContextMenus`（`ctx.contextMenus`）。 */
-type ContextMenus = Context['contextMenus']
-
-/** locale 服务：上游 `LocaleRuntime`（`ctx.locale`）。 */
-type Locale = Context['locale']
 
 /** 运行期可注入项（测试接缝）：上游没有对应类型，测试用它替换告警输出。 */
 export interface Runtime {
@@ -149,43 +114,14 @@ export function headerButton(target: ElementLike | null): ElementLike | null {
 }
 
 /**
- * 右键菜单的落点：卡片的标题或文件行按钮（折叠按钮除外）。
- * @param target - 事件目标元素。
- * @returns 按钮，或 null。
- */
-export function menuButton(target: ElementLike | null): ElementLike | null {
-  if (target === null || typeof target.closest !== 'function') return null
-  const button = target.closest('button')
-  if (button === null) return null
-  if (button.closest?.(CARD_SELECTOR) == null) return null
-  if (button.hasAttribute?.(TOGGLE_ATTRIBUTE) === true) return null
-  return button
-}
-
-/**
- * 菜单弹出的位置：指针事件用指针坐标，键盘手势用按钮底边。
- * @param event - 触发的右键 / 按键事件。
- * @param button - 触发元素。
- * @param keyboard - 是否键盘手势。
- * @returns 视口坐标。
- */
-function menuPoint(event: EventLike, button: ElementLike, keyboard: boolean): { x: number; y: number } {
-  if (!keyboard && event.clientX !== undefined && event.clientY !== undefined) {
-    return { x: event.clientX, y: event.clientY }
-  }
-  const rect = button.getBoundingClientRect?.()
-  return { x: rect?.left ?? 0, y: rect?.bottom ?? 0 }
-}
-
-/**
- * 安装两处点击改写，并在文档根上留一个标记。
+ * 安装标题点击改写，并在文档根上留一个标记。
  *
- * 依赖在事件发生时才读（`ctx.get`），所以 `contextMenus` 比本插件晚挂载也能用；
+ * 依赖在事件发生时才读（`ctx.get`），所以右栏服务比本插件晚挂载也能用；
  * 右栏服务缺席时本插件整体不动作。
  * @param ctx - 浏览器 Context（或其注入子作用域）。
  * @param runtime - 可注入的告警输出。
  * @param doc - 目标文档；没有文档（非浏览器环境）时为空操作。
- * @returns 卸载函数：移除监听、菜单贡献与标记。
+ * @returns 卸载函数：移除监听与标记。
  */
 export function installCardBehavior(
   ctx: Context,
@@ -196,52 +132,6 @@ export function installCardBehavior(
 ): () => void {
   if (doc === undefined) return () => {}
   const warn = runtime.warn ?? defaultWarn
-  const locale = serviceOf<Locale>(ctx, 'locale')
-  let disposeLocale: (() => void) | undefined
-  if (locale !== undefined) {
-    try {
-      // 先注册字典再绑定命名空间：`bind` 可能按注册时刻解析字典。
-      disposeLocale = locale.register(NS, { zh, en })
-    } catch (error) {
-      warn(`locale registration failed: ${messageOf(error)}`)
-    }
-  }
-  const t = translateOf(locale)
-
-  /** 右键时捕获的上游 `onClick`；菜单动作执行时只消费一次。 */
-  let opener: (() => void) | null = null
-  /** 菜单贡献的注销函数；第一次需要菜单时注册。 */
-  let disposeMenu: (() => void) | undefined
-  /** 每次打开菜单换一个序号，让同一位置的重复右键重新打开而不是被当成「再点一次关闭」。 */
-  let serial = 0
-
-  const ensureMenu = (): ContextMenus | undefined => {
-    const menus = serviceOf<ContextMenus>(ctx, 'contextMenus')
-    if (menus === undefined) return undefined
-    if (disposeMenu !== undefined) return menus
-    try {
-      disposeMenu = menus.register({
-        id: MENU_CONTRIBUTION_ID,
-        target: MENU_TARGET,
-        order: 0,
-        resolve: (): readonly MenuAction[] => {
-          const run = opener
-          if (run === null) return []
-          return [{
-            id: MENU_ACTION_ID,
-            label: t('openSnapshot'),
-            run: () => {
-              opener = null
-              run()
-            },
-          }]
-        },
-      })
-    } catch (error) {
-      warn(`context menu registration failed: ${messageOf(error)}`)
-    }
-    return menus
-  }
 
   /**
    * 标题被左键点了：打开「本地变更」，右栏原本是推挤呈现时再切成全屏。
@@ -280,68 +170,16 @@ export function installCardBehavior(
 
   const onClick = (event: EventLike): void => {
     if (event.defaultPrevented === true) return
-    if (isModified(event)) return
     const button = headerButton(clickElement(event))
     if (button === null) return
     if (openLocalChanges()) event.stopPropagation()
   }
 
-  const onContextMenu = (event: EventLike): void => {
-    if (event.defaultPrevented === true) return
-    const button = menuButton(clickElement(event))
-    if (button === null) return
-    const run = findClickHandler(button)
-    if (run === null) return
-    const menus = ensureMenu()
-    if (menus === undefined) return
-    opener = run
-    try {
-      menus.open({ kind: MENU_TARGET, value: { serial: (serial += 1) } }, menuPoint(event, button, false))
-    } catch (error) {
-      opener = null
-      warn(`open context menu failed: ${messageOf(error)}`)
-      return
-    }
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
-  const onKeyDown = (event: EventLike): void => {
-    if (event.defaultPrevented === true) return
-    const keyboard = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey === true)
-    if (!keyboard) return
-    const button = menuButton(clickElement(event))
-    if (button === null) return
-    const run = findClickHandler(button)
-    if (run === null) return
-    const menus = ensureMenu()
-    if (menus === undefined) return
-    opener = run
-    try {
-      menus.open({ kind: MENU_TARGET, value: { serial: (serial += 1) } }, menuPoint(event, button, true))
-    } catch (error) {
-      opener = null
-      warn(`open context menu failed: ${messageOf(error)}`)
-      return
-    }
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
   doc.addEventListener('click', onClick, true)
-  doc.addEventListener('contextmenu', onContextMenu, true)
-  doc.addEventListener('keydown', onKeyDown, true)
   doc.documentElement?.setAttribute(MARKER_ATTRIBUTE, '')
 
   return () => {
     doc.removeEventListener('click', onClick, true)
-    doc.removeEventListener('contextmenu', onContextMenu, true)
-    doc.removeEventListener('keydown', onKeyDown, true)
-    opener = null
-    disposeMenu?.()
-    disposeMenu = undefined
-    disposeLocale?.()
-    disposeLocale = undefined
     doc.documentElement?.removeAttribute(MARKER_ATTRIBUTE)
   }
 }
