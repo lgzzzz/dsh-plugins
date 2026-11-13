@@ -18,6 +18,7 @@ package-lock.json
 dsh-changes-hover-off/lib/
 dsh-changes-review-wrap/lib/
 dsh-changes-review-fullscreen/lib/
+dsh-changes-card-local/lib/
 dsh-desktop-notify/lib/
 dsh-header-action-order/lib/
 dsh-stats-ttft/lib/

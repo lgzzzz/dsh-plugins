@@ -1,0 +1,37 @@
+{
+  "name": "dsh-changes-card-local",
+  "version": "1.0.0",
+  "private": true,
+  "description": "改动文件卡片：点标题打开右栏「本地变更」标签页，文件行保持上游的「本轮文件 diff」行为；右键卡片的标题或文件行，用宿主上下文菜单里的「查看本轮快照 diff」打开该轮原本的审查标签页。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}

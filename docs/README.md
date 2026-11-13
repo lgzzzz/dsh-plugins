@@ -28,6 +28,7 @@
 | `dsh-changes-hover-off` | 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层 | [说明](dsh-changes-hover-off.md) |
 | `dsh-changes-review-wrap` | 让右栏的改动审查（changes-review）标签页默认开启自动换行：新标签页首次挂载时调用换行按钮的 React `onClick` 写入 `wrap=true`，工具栏开关照常可用；切页重挂不重写，关闭重开重新默认开启 | [说明](dsh-changes-review-wrap.md) |
 | `dsh-changes-review-fullscreen` | 点击「改动文件卡片」打开右栏改动审查标签页时默认切成全屏呈现；捕获阶段接住打开审查页的按钮，等 React 打开后对活动 dock 面板调用 `toggleFullscreen()`，已是全屏（含窄窗口自动全屏）时不动 | [说明](dsh-changes-review-fullscreen.md) |
+| `dsh-changes-card-local` | 改动文件卡片：左键点标题打开右栏「本地变更」标签页（文件行左键仍是上游的本轮文件 diff）；右键标题或文件行弹出宿主菜单的「查看本轮快照 diff」，执行时调用卡片按钮的上游 `onClick` 回到本轮审查页 | [说明](dsh-changes-card-local.md) |
 | `dsh-forge-changes-font-14` | 把右栏「本地变更」「变更请求」标签页整棵子树的字号统一为 14px（只改字号，不动字体族、行高与布局） | [说明](dsh-forge-changes-font-14.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
 | `dsh-directory-picker-browse` | 应用内目录浏览选择器 | — |
@@ -50,6 +51,7 @@
 删 token 时显式失败，而不是让补丁在页面上静默失效（选择器落空不报错），或让插件写出格式校验
 器会拒绝的会话事件。每个插件目录都有自己的 `check-css.mjs`，默认读同目录的清单
 （`css-contract.json`；`dsh-changes-hover-off`、`dsh-stats-ttft`、
+`dsh-changes-review-wrap`、`dsh-changes-review-fullscreen`、`dsh-changes-card-local` 是 `contract.json`），可用 `--manifest`
 换清单。`--dsh-root` / `$DSH_ROOT` 可指定 DSH 根。
 
 | 插件 | 清单 | 校验的契约 |
@@ -66,8 +68,9 @@
 | `dsh-changes-review-wrap` | [`contract.json`](../dsh-changes-review-wrap/contract.json) | 审查根 / 正文 / 换行按钮 / 换行态锚点 + review store 的默认 `wrap:false` + `toggledWrap` + 侧栏占位实例 / 标签页 / 会话三个身份属性 |
 | `dsh-changes-review-fullscreen` | [`contract.json`](../dsh-changes-review-fullscreen/contract.json) | 改动文件卡片根 / 折叠按钮的 `aria-expanded` + 右栏 `data-sidebar-right-panel` 的 push / fullscreen 两值 + `changes-review` kind + 右栏 `active()` / `commandTarget()` / `toggleFullscreen()` |
 | `dsh-forge-changes-font-14` | [`css-contract.json`](../dsh-forge-changes-font-14/css-contract.json) | 两个标签页根的 `data-forge-*` 锚点 + 上游没有 `font-size: … !important`（反向） |
+| `dsh-changes-card-local` | [`contract.json`](../dsh-changes-card-local/contract.json) | 改动文件卡片根 / 单文件标记 / 行容器 `<li>` / 行 `aria-describedby` 序号 / 折叠按钮 `aria-expanded` / 标题的 `openReview(0)` + 本地变更地址与标题键 + 右栏 `openResource(address` / `mounted` / `claim(address` + 上下文菜单 `contextMenus` / `open(target` |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 12 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 13 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
