@@ -270,6 +270,15 @@
         "dsh-client-ui-chat/lib"
       ],
       "hint": "过程组滚动体标记消失：封口的隐藏成员规则落空，只显示组头 / 成员仍平铺（退化，不丢内容）"
+    },
+    {
+      "id": "group-live-shimmer",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-shimmer\":",
+      "paths": [
+        "dsh-web-frontend/dist/assets"
+      ],
+      "hint": "未跑完的过程组不再带流式标记（TextShimmer active）：运行中的长回合分不清“已输出完毕”和“正在输出”，最后一组也会被收起来（点组头可展开，不丢内容）"
     }
   ]
 }

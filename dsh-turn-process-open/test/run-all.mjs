@@ -20,6 +20,7 @@ const ORDER = [
   'collapse-reading.test.mjs',
   'collapse-bridge.test.mjs',
   'collapse-interleaved.test.mjs',
+  'collapse-running.test.mjs',
   'artifact-client.test.mjs',
 ]
 

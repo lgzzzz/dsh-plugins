@@ -20,13 +20,14 @@
 
 | 键（macOS / Windows·Linux） | 落在主会话 | 没有可折的展开项 |
 |---|---|---|
-| `⌘⌥.` / `Ctrl+Alt+.` | 折叠所有展开的轮次过程（带锁标记的除外）与过程组标题；把最新一轮封口成组头形态；没有外层展开项时折叠单步详情，并保持阅读位置 | 不动作、不消费 |
+| `⌘⌥.` / `Ctrl+Alt+.` | 折叠所有展开的轮次过程（带锁标记的除外）与过程组标题；把最新一轮封口成组头形态（回合还在跑时只收已跑完的组，正在输出的那一组保留）；没有外层展开项时折叠单步详情，并保持阅读位置 | 不动作、不消费 |
 
 - 只作用于**主会话**：`[data-slot="main.conversation"]` 内的 `[data-conversation-scroll]`。槽位标记缺席时，只在全文档恰好有一个消息滚动口时使用它；多个滚动口且没有槽位时不猜。
 - 外层目标：
   - `[data-turn-process][aria-expanded="true"]`：轮次过程按钮；带 `data-turn-process-locked` 的跳过；
   - `[data-step-process]` 内的 `[data-process-activity][aria-expanded="true"]`：过程组标题。
 - 穿插输入的轮次（回合进行中又收到用户消息）：上游把标题渲染成 `disabled` 且**完全不写 `aria-expanded`**（`hasContent = !interleavedInput && …`），它既不是外层目标、也不会被锁定；这一轮只能靠**封口**收成组头形态——封口不要求锁标记，只要求它是最新一轮且仍是平铺形态（第 5 节）。
+- **运行中的回合**：上游只在本轮结束后才渲染 `[data-turn-process]` 标题，运行中该轮的过程组全是平铺的。按键照样可用：把**已经输出完毕**的过程组收成组头，组标题带流式标记（`data-shimmer`）的那一组（正在输出）保持原样（第 5 节）。
 - 单步详情：`[data-disclosure-row]` 与 `[data-expandable]` 中 `aria-expanded="true"` 的元素，并且必须落在 `[data-step-process]` 或 `[data-chat-flow-kind="tool-call" | "assistant-step" | "turn-process"]` 容器里。系统提示词、上下文注入、提问卡片等非工作步骤的折叠行不收。
 - 被上游标记为不可操作的外层（运行中 / 没有内容时的 `disabled`，或 `aria-disabled="true"`）跳过，不占外层名额。
 - 只处理已经渲染到 DOM 的项：不在 DOM 里的轮次保持原来的开合状态；滚动回来时不会自动收起。
@@ -115,6 +116,7 @@ try {
 | `[data-chat-turn]` 改名 | 封口认不出最新轮次（标题自身轮次值缺失时靠它兜底）；折叠本身仍生效 |
 | 轮次标题的 `data-turn-process` 不再是轮次号 | 封口退回最近的 `[data-chat-turn]`；两处都落空时不封口 |
 | 轮次带穿插输入（上游 `hasContent=false`） | 标题 `disabled` 且没有 `aria-expanded`：不参与点击折叠、锁定器不接管，只走封口 |
+| 流式标记 `data-shimmer` 改名 / 消失 | 运行中分不清哪一组还在输出：最后一组也会被收起来（点组头可展开，不丢内容）；回合结束后不受影响 |
 | 轮次过程标题滚出阅读线、展开步骤仍在读 | 阅读行按文档顺序继续向前找，不要求标题行仍在视口里 |
 | `[data-composer-seat]` 消失 | 视口下边界退回滚动口底；被 composer 盖住的行可能被误判在视口内 |
 | `[data-chat-following-tail]` 消失 | 在会话底部折叠时也会做阅读线补偿，可能把视图从底部拉开 |
@@ -142,22 +144,23 @@ try {
 
 ### 5.1 目标
 
-按 `⌘⌥.` 后，最新一轮立即呈现成分组形态：轮次过程标题仍展开，其下出现折叠着的过程组标题，成员行不可见；与“下一条消息发送过来之后”的 DOM 状态和几何一致。
+按 `⌘⌥.` 后，最新一轮立即呈现成分组形态：轮次过程标题仍展开，其下出现折叠着的过程组标题，成员行不可见；与“下一条消息发送过来之后”的 DOM 状态和几何一致。回合还在跑时没有轮次标题，效果是把已跑完的组换成组头、正在输出的那一组继续平铺。
 
-目标轮次从 DOM 上取：**渲染顺序上最后一个 `[data-turn-process]` 标题**，它的属性值就是轮次号（上游 `data-turn-process={node.data.turn}`）。这里**不要求锁标记**：
+目标轮次从 DOM 上取：**渲染顺序上最后一个平铺组上的 `data-chat-turn`**（平铺组只出现在最新一个 exchange；回合结束后它的标题也已渲染）。这里**既不要求轮次过程标题，也不要求锁标记**：
 
-- 锁定器接管得了的轮次（带锁、`aria-expanded="true"`）——和以前一样封口；
-- 穿插输入的轮次——上游 `hasContent=false`，标题 `disabled` 且没有 `aria-expanded`，锁定器与点击路径都跳过它，封口是唯一能把它收起来的路径；
-- 上游已经把整轮折起（`aria-expanded="false"`）——跳过，继续向前找：正文不在屏上，封口没有意义。
+- 回合已结束（有 `[data-turn-process]` 标题）——该轮全部平铺组封口；锁定器接管得了的（带锁、`aria-expanded="true"`）与穿插输入的（`disabled` 且没有 `aria-expanded`）都一样；
+- 回合还在跑（**没有标题**）——只封**已经输出完毕**的组；组标题带流式标记 `data-shimmer`（上游 `TextShimmer active={!closed}`）的那一组就是正在输出的，保留可见；
+- 上游已经把整轮折起（`aria-expanded="false"`）——跳过：正文不在屏上，封口没有意义。
 
 ### 5.2 动作与顺序
 
 `src/collapse-seal.ts`：
 
-1. 从后往前找第一个“上游仍呈现为展开”的 `[data-turn-process]` 标题：跳过 `aria-expanded="false"`，轮次值读标题自己的 `data-turn-process`，读不到才退回最近的 `[data-chat-turn]`；找不到时整段空转。
-2. 取该轮次下仍平铺（`data-group-expanded-mode`）、尚未封口（`data-dsh-collapse-sealed`）、且组头容器里确有 `[data-process-activity]` 的 `[data-step-process]` 组根。
-3. 组根写 `data-dsh-collapse-sealed`；移除组头容器的 `hidden`。
-4. 一条受限 CSS 隐藏组体；组头 `aria-expanded=true` 时放回组体。
+1. 收集所有仍平铺（`data-group-expanded-mode`）、尚未封口（`data-dsh-collapse-sealed`）、且组头容器里确有 `[data-process-activity]` 的 `[data-step-process]` 组根；轮次取最后一个平铺组上的 `data-chat-turn`，只保留同一轮的组。
+2. 该轮有 `[data-turn-process]` 标题且 `aria-expanded="false"` → 整段空转（上游已折起）。
+3. 没有标题（回合还在跑）且最后一组带 `data-shimmer` → 最后一组剔除（正在输出，保留平铺）。
+4. 组根写 `data-dsh-collapse-sealed`；移除组头容器的 `hidden`。
+5. 一条受限 CSS 隐藏组体；组头 `aria-expanded=true` 时放回组体。
 
 顺序固定为：采集阅读位置 → 封口 → 点击折叠目标 → 微任务补偿滚动。封口本身会明显改变高度，必须参与补偿；只折点击会让阅读位置漂移。
 
@@ -177,9 +180,10 @@ try {
 
 ### 5.5 边界
 
-- 锁定器未起作用（没有锁标记）：仍然封口——封口只按标题上的轮次值定位最新一轮，不读锁标记。
+- 锁定器未起作用（没有锁标记）：仍然封口——封口只按平铺组上的轮次值定位最新一轮，不读锁标记。
 - 穿插输入的轮次：`disabled` 且没有 `aria-expanded` 时照常封口（这是它唯一能收起的路径）；`aria-expanded="false"`（上游已把整轮折起）时不封口。
-- 运行中的轮次：没有轮次过程标题（上游 `TurnProcessNodeView` 只在 `turn.status === 'closed'` 时渲染），不封口。
+- 运行中的回合：没有轮次过程标题（上游 `TurnProcessNodeView` 只在 `turn.status === 'closed'` 时渲染），按平铺组上的 `data-chat-turn` 定位；只收已跑完的组，最后一组带流式标记时不动。回合结束后（标题出现）整轮封口，不再看流式标记。
+- 完全展开模式（verbose）：所有轮次的过程组都平铺；按键只把最新一轮收成组头，轮次标题 `disabled` 不参与点击折叠。
 - 没有过程组 / 组头不可用：没有可封口组根。
 - 右栏会话：只在主会话滚动口内封口。
 - 封口后再按一次：没有可折项、没有可封口组，不消费。
@@ -197,7 +201,8 @@ node test/collapse-reading.test.mjs   # 阅读线、锚点、向前对齐、夹�
 node test/collapse-bridge.test.mjs    # 固定行、消费边界、焦点保持、终端捕获、阅读补偿、卸载
 node test/collapse-seal.test.mjs      # 封口目标（含无锁 / 穿插输入 / 上游已折）、组头显示、幂等、清理与样式单例
 node test/collapse-interleaved.test.mjs  # 穿插输入轮次的端到端回归：封口、消费、组头可开合
+node test/collapse-running.test.mjs      # 运行中长回合：只收已跑完的组、正在输出的组保留、跟尾不抛错
 node check-css.mjs                    # DOM 锚点契约
 ```
 
-手测：打开一个有多轮历史的会话，把视图滚到一段展开的过程中间，确认阅读线落在过程内部后按 `⌘⌥.` / `Ctrl+Alt+.`。若折叠后阅读线下方仍有可见行，该行应停在原来的屏幕位置；若整屏都被折叠内容占满，向前第一个不会被折叠的行应落在阅读线下 3px。再验证三种边界：在会话底部跟随尾部时折叠，视图留在底部；焦点放在 composer 或终端里，焦点不移动；模态弹窗打开或长按组合时不折叠、不消费。
+手测：打开一个有多轮历史的会话，把视图滚到一段展开的过程中间，确认阅读线落在过程内部后按 `⌘⌥.` / `Ctrl+Alt+.`。长回合跑到一半时按同一键：已跑完的组立即变组头、正在输出的组仍平铺；等它跑完再按一次收干净。若折叠后阅读线下方仍有可见行，该行应停在原来的屏幕位置；若整屏都被折叠内容占满，向前第一个不会被折叠的行应落在阅读线下 3px。再验证三种边界：在会话底部跟随尾部时折叠，视图留在底部；焦点放在 composer 或终端里，焦点不移动；模态弹窗打开或长按组合时不折叠、不消费。

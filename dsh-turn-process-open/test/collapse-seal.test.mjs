@@ -8,6 +8,7 @@ import {
   clearSeals,
   FLAT_ATTRIBUTE,
   installCollapseSeal,
+  LIVE_ATTRIBUTE,
   LOCK_ATTRIBUTE,
   SEAL_ATTRIBUTE,
   SEAL_CSS,
@@ -18,8 +19,12 @@ import {
 } from '../src/collapse-seal.ts'
 import { check, checkTrue, FakeElement, finish } from './collapse-helpers.mjs'
 
-/** 一个过程组：组头容器 + 组体；`activity=false` 时没有组标题按钮。 */
-function group({ turn = '1', flat = true, sealed = false, hidden = true, activity = true, expanded = 'false' } = {}) {
+/**
+ * 一个过程组：组头容器 + 组体；`activity=false` 时没有组标题按钮。
+ * `live=true` 复刻“这一组还在输出”：上游 `TextShimmer active={!closed}` 会在组标题里留
+ * `data-shimmer`，跑完之后标记消失。
+ */
+function group({ turn = '1', flat = true, sealed = false, hidden = true, activity = true, expanded = 'false', live = false } = {}) {
   const root = new FakeElement('div', {
     'data-step-process': '',
     'data-chat-turn': turn,
@@ -27,6 +32,7 @@ function group({ turn = '1', flat = true, sealed = false, hidden = true, activit
     ...(sealed ? { [SEAL_ATTRIBUTE]: '' } : {}),
   })
   const header = root.append(new FakeElement('div', hidden ? { hidden: '' } : {}))
+  if (live) header.append(new FakeElement('span', { [LIVE_ATTRIBUTE]: '' }))
   if (activity) header.append(new FakeElement('button', { 'data-process-activity': 'commands', 'aria-expanded': expanded }))
   const body = root.append(new FakeElement('div', { 'data-step-process-body': '' }))
   body.append(new FakeElement('div', { 'data-chat-flow-key': `${turn}:body` }))
@@ -66,13 +72,14 @@ console.log('--- S① 目标：最新一轮的平铺组（别的轮次 / 非平�
   const root = scroll()
   turnHeader(root, { turn: '1' })
   turnHeader(root, { turn: '2' })
-  const oldGroup = group({ turn: '1' })
+  // 更早轮次的平铺组在真实页面上不会存在（上一轮早已分组），这里只验证兜底：按最新一轮过滤。
+  const oldFlat = group({ turn: '1' })
+  const oldGrouped = group({ turn: '1', flat: false })
   const latest = group({ turn: '2' })
   const grouped = group({ turn: '2', flat: false })
   const sealed = group({ turn: '2', sealed: true })
   const noActivity = group({ turn: '2', activity: false })
-  const otherTurn = group({ turn: '3' })
-  for (const item of [oldGroup, latest, grouped, sealed, noActivity, otherTurn]) root.append(item.root)
+  for (const item of [oldFlat, oldGrouped, latest, grouped, sealed, noActivity]) root.append(item.root)
   const groups = sealableGroups(root)
   checkTrue('只封最新一轮的平铺组', groups.length === 1 && groups[0] === latest.root)
 }
@@ -173,7 +180,48 @@ console.log('--- S⑦ CSS 契约：三段规则都要求平铺 + 封口 ---')
   checkTrue('支持 :has 时启用', supportsSeal())
 }
 
-console.log('--- S⑧ 样式：只插一条、共用、卸载移除并清封口 ---')
+console.log('--- S⑧ 运行中的轮次（还没有过程标题）：只收已跑完的组 ---')
+{
+  // 长回合运行中：没有 [data-turn-process] 标题，三组平铺，最后一组仍在输出。
+  const running = scroll()
+  const done1 = group({ turn: '1' })
+  const done2 = group({ turn: '1' })
+  const live = group({ turn: '1', live: true })
+  for (const item of [done1, done2, live]) running.append(item.root)
+  const targets = sealableGroups(running)
+  check('已跑完的两组进入目标', [targets[0] === done1.root, targets[1] === done2.root], [true, true])
+  check('正在输出的一组保留', targets.length, 2)
+
+  // 最后一组也跑完了（回合还在跑、答案文字在组外流式输出）：整轮都可收。
+  const settled = scroll()
+  const first = group({ turn: '1' })
+  const second = group({ turn: '1' })
+  for (const item of [first, second]) settled.append(item.root)
+  check('没有流式标记时全部可收', sealableGroups(settled).length, 2)
+
+  // 只有一组且还在输出：没有可收的组。
+  const onlyLive = scroll()
+  onlyLive.append(group({ turn: '1', live: true }).root)
+  check('唯一的组在输出时不收', sealableGroups(onlyLive).length, 0)
+
+  // 回合结束后（有标题）：即使残留流式标记也按整轮全部收，避免永远收不起来。
+  const closed = scroll()
+  turnHeader(closed, { turn: '1' })
+  const closedFirst = group({ turn: '1' })
+  const closedLast = group({ turn: '1', live: true })
+  closed.append(closedFirst.root)
+  closed.append(closedLast.root)
+  check('有标题时不看流式标记', sealableGroups(closed).length, 2)
+
+  // 完全展开模式 / 已中止的轮次：标题 disabled 但仍是“已结束”，整轮封口。
+  const disabledTurn = scroll()
+  const disabledHeader = turnHeader(disabledTurn, { turn: '1' })
+  disabledHeader.disabled = true
+  disabledTurn.append(group({ turn: '1' }).root)
+  check('disabled 标题仍按整轮封口', sealableGroups(disabledTurn).length, 1)
+}
+
+console.log('--- S⑨ 样式：只插一条、共用、卸载移除并清封口 ---')
 {
   const makeDocument = () => {
     const doc = {
