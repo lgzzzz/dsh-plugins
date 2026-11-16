@@ -26,6 +26,7 @@
 - 外层目标：
   - `[data-turn-process][aria-expanded="true"]`：轮次过程按钮；带 `data-turn-process-locked` 的跳过；
   - `[data-step-process]` 内的 `[data-process-activity][aria-expanded="true"]`：过程组标题。
+- 穿插输入的轮次（回合进行中又收到用户消息）：上游把标题渲染成 `disabled` 且**完全不写 `aria-expanded`**（`hasContent = !interleavedInput && …`），它既不是外层目标、也不会被锁定；这一轮只能靠**封口**收成组头形态——封口不要求锁标记，只要求它是最新一轮且仍是平铺形态（第 5 节）。
 - 单步详情：`[data-disclosure-row]` 与 `[data-expandable]` 中 `aria-expanded="true"` 的元素，并且必须落在 `[data-step-process]` 或 `[data-chat-flow-kind="tool-call" | "assistant-step" | "turn-process"]` 容器里。系统提示词、上下文注入、提问卡片等非工作步骤的折叠行不收。
 - 被上游标记为不可操作的外层（运行中 / 没有内容时的 `disabled`，或 `aria-disabled="true"`）跳过，不占外层名额。
 - 只处理已经渲染到 DOM 的项：不在 DOM 里的轮次保持原来的开合状态；滚动回来时不会自动收起。
@@ -111,7 +112,9 @@ try {
 | `[data-chat-flow-kind]` 改名 | “完全展开”模式下分不清工作步骤与系统提示词，单步详情折叠不接管 |
 | 主会话槽位 / 滚动口标记消失 | 找不到作用域；只有全文档恰好一个滚动口时才回退 |
 | `[data-chat-flow-key]` 改名 | 阅读位置补偿找不到行锚点，退化为 no-op；折叠本身仍生效 |
-| `[data-chat-turn]` 改名 | 封口认不出最新锁轮次；折叠本身仍生效 |
+| `[data-chat-turn]` 改名 | 封口认不出最新轮次（标题自身轮次值缺失时靠它兜底）；折叠本身仍生效 |
+| 轮次标题的 `data-turn-process` 不再是轮次号 | 封口退回最近的 `[data-chat-turn]`；两处都落空时不封口 |
+| 轮次带穿插输入（上游 `hasContent=false`） | 标题 `disabled` 且没有 `aria-expanded`：不参与点击折叠、锁定器不接管，只走封口 |
 | 轮次过程标题滚出阅读线、展开步骤仍在读 | 阅读行按文档顺序继续向前找，不要求标题行仍在视口里 |
 | `[data-composer-seat]` 消失 | 视口下边界退回滚动口底；被 composer 盖住的行可能被误判在视口内 |
 | `[data-chat-following-tail]` 消失 | 在会话底部折叠时也会做阅读线补偿，可能把视图从底部拉开 |
@@ -139,13 +142,19 @@ try {
 
 ### 5.1 目标
 
-按 `⌘⌥.` 后，最新一个**带锁且展开**的轮次立即呈现成分组形态：轮次过程标题仍展开，其下出现折叠着的过程组标题，成员行不可见；与“下一条消息发送过来之后”的 DOM 状态和几何一致。
+按 `⌘⌥.` 后，最新一轮立即呈现成分组形态：轮次过程标题仍展开，其下出现折叠着的过程组标题，成员行不可见；与“下一条消息发送过来之后”的 DOM 状态和几何一致。
+
+目标轮次从 DOM 上取：**渲染顺序上最后一个 `[data-turn-process]` 标题**，它的属性值就是轮次号（上游 `data-turn-process={node.data.turn}`）。这里**不要求锁标记**：
+
+- 锁定器接管得了的轮次（带锁、`aria-expanded="true"`）——和以前一样封口；
+- 穿插输入的轮次——上游 `hasContent=false`，标题 `disabled` 且没有 `aria-expanded`，锁定器与点击路径都跳过它，封口是唯一能把它收起来的路径；
+- 上游已经把整轮折起（`aria-expanded="false"`）——跳过，继续向前找：正文不在屏上，封口没有意义。
 
 ### 5.2 动作与顺序
 
 `src/collapse-seal.ts`：
 
-1. 找最后一个 `[data-turn-process][data-turn-process-locked][aria-expanded="true"]`，取它所在行（`[data-chat-turn]`）的轮次；没有锁标记时整段空转。
+1. 从后往前找第一个“上游仍呈现为展开”的 `[data-turn-process]` 标题：跳过 `aria-expanded="false"`，轮次值读标题自己的 `data-turn-process`，读不到才退回最近的 `[data-chat-turn]`；找不到时整段空转。
 2. 取该轮次下仍平铺（`data-group-expanded-mode`）、尚未封口（`data-dsh-collapse-sealed`）、且组头容器里确有 `[data-process-activity]` 的 `[data-step-process]` 组根。
 3. 组根写 `data-dsh-collapse-sealed`；移除组头容器的 `hidden`。
 4. 一条受限 CSS 隐藏组体；组头 `aria-expanded=true` 时放回组体。
@@ -168,8 +177,9 @@ try {
 
 ### 5.5 边界
 
-- 没有锁标记（锁定器未起作用）：不封口，行为与未装本插件时相同。
-- 运行中的轮次：没有轮次过程标题，不封口。
+- 锁定器未起作用（没有锁标记）：仍然封口——封口只按标题上的轮次值定位最新一轮，不读锁标记。
+- 穿插输入的轮次：`disabled` 且没有 `aria-expanded` 时照常封口（这是它唯一能收起的路径）；`aria-expanded="false"`（上游已把整轮折起）时不封口。
+- 运行中的轮次：没有轮次过程标题（上游 `TurnProcessNodeView` 只在 `turn.status === 'closed'` 时渲染），不封口。
 - 没有过程组 / 组头不可用：没有可封口组根。
 - 右栏会话：只在主会话滚动口内封口。
 - 封口后再按一次：没有可折项、没有可封口组，不消费。
@@ -185,7 +195,8 @@ try {
 node test/collapse-targets.test.mjs   # 准入、两层目标、作用域、去重
 node test/collapse-reading.test.mjs   # 阅读线、锚点、向前对齐、夹紧与跳过边界
 node test/collapse-bridge.test.mjs    # 固定行、消费边界、焦点保持、终端捕获、阅读补偿、卸载
-node test/collapse-seal.test.mjs      # 封口目标、组头显示、幂等、清理与样式单例
+node test/collapse-seal.test.mjs      # 封口目标（含无锁 / 穿插输入 / 上游已折）、组头显示、幂等、清理与样式单例
+node test/collapse-interleaved.test.mjs  # 穿插输入轮次的端到端回归：封口、消费、组头可开合
 node check-css.mjs                    # DOM 锚点契约
 ```
 

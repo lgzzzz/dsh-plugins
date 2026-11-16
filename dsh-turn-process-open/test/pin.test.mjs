@@ -379,4 +379,46 @@ console.log('--- P⑰ 箭头：隐藏规则门控在锁标记上 ---')
   checkFalse('不带锁标记时规则不命中', rules.some((rule) => /^\s*\[data-turn-process\]\s*>/.test(rule.selector)))
 }
 
+console.log('--- P⑱ 自检：穿插输入的轮次明细摊着、却锁不住时告警一次 ---')
+{
+  const { app, scroll } = page()
+  // 穿插输入：上游 hasContent=false，按钮 disabled 且不写 aria-expanded，锁定器跳过。
+  const unfoldable = scroll.append(new FakeElement('button', {
+    'data-turn-process': '1',
+    'data-turn-process-tool-calls': '82',
+  }))
+  unfoldable.disabled = true
+  // 同一轮的平铺组：明细正摊在屏上。
+  const groupRoot = scroll.append(new FakeElement('div', {
+    'data-step-process': '',
+    'data-chat-turn': '1',
+    'data-group-expanded-mode': 'true',
+  }))
+  groupRoot.append(new FakeElement('div', { hidden: '' }))
+    .append(new FakeElement('button', { 'data-process-activity': 'commands', 'aria-expanded': 'false' }))
+  groupRoot.append(new FakeElement('div', { 'data-step-process-body': '' }))
+
+  const doc = new FakeDocument({ root: app })
+  const warnings = captureWarnings(() => {
+    const controller = installPin(doc)
+    controller.sync()
+    controller.sync()
+    controller.dispose()
+  })
+  check('只告警一次', warnings.filter((warning) => warning.includes('不可折')).length, 1)
+  checkFalse('仍然不加锁', unfoldable.hasAttribute(PIN_ATTRIBUTE))
+
+  // 同样的不可折标题、但没有平铺组（纯对话轮次）：不告警。
+  const plain = page()
+  const quietHeader = plain.scroll.append(new FakeElement('button', { 'data-turn-process': '1' }))
+  quietHeader.disabled = true
+  const quietDoc = new FakeDocument({ root: plain.app })
+  const quiet = captureWarnings(() => {
+    const controller = installPin(quietDoc)
+    controller.sync()
+    controller.dispose()
+  })
+  check('没有平铺组时不告警', quiet.length, 0)
+}
+
 finish()

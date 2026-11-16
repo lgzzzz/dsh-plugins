@@ -101,6 +101,7 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 - 锁标记：`data-turn-process-locked`，值是本实例 id（`pin-<n>`）。卸载时只撤自己加过的锁；开发期重复挂载时，另一个实例接管过的标题不会被误撤。
 - 箭头：锁定后标题恒为展开态、又不可点，右侧朝上的箭头只是假控件，样式里隐掉。两条锚点互相兜底：图标今天是标题按钮的直接子 `<svg>`（上游 `children: [label, canCollapse && chevron]`）；同时也按 CSS Module 的 `chevron` 局部类名通配（生成名形如 `l_V-RG_chevron`，构建只换前缀，与侧栏时间戳的 `_time` 同一套写法）。两条都要求锁标记，锁定失败的标题保留箭头（那是它唯一的操作提示）；上游不再渲染图标时规则只是空转。
 - 自检：连续 30 次同步都“本轮看到可折标题、却始终没锁住任何标题”时告警一次，把“上游结构变了、功能静默失效”变成可发现的问题；一旦锁住过就永久关闭自检。
+- 另一条一次性自检：某轮标题不可折（没有 `aria-expanded`）而它的明细正平铺在屏上时告警一次，说明该轮锁不住、`⌘⌥.` 只能封口——穿插输入是最常见的来源。
 - 观察：`document.documentElement` 上 `childList + subtree + attributes`（过滤 `aria-expanded` / `disabled` / 计数属性），回调合并到 16ms 后执行一次同步；观察整棵文档是为了覆盖会话切换后的新滚动口。
 - 卸载：断开观察、移除定时器、移除点击监听、移除样式、只移除本实例加的锁标记。
 
@@ -116,7 +117,8 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 
 本插件的 `src/collapse-seal.ts`：
 
-- 目标：最新一个带 `data-turn-process-locked` 且 `aria-expanded="true"` 的标题所属轮次；只处理该轮次下仍平铺（`data-group-expanded-mode`）、尚未封口、且组头容器里有 `[data-process-activity]` 的组根。
+- 目标：渲染顺序上最后一个 `[data-turn-process]` 标题所指的轮次（标题属性值就是轮次号），**不要求带锁标记**；只处理该轮次下仍平铺（`data-group-expanded-mode`）、尚未封口、且组头容器里有 `[data-process-activity]` 的组根。标题 `aria-expanded="false"`（上游已把整轮折起）时跳过——那时正文不在屏上，封口没有意义。
+- 为什么不再要求锁：穿插输入（回合进行中又收到用户消息）的轮次被上游标成 `hasContent=false`，标题渲染成 `disabled` 且完全不写 `aria-expanded`，锁定器与「点击标题」路径都不接管它；封口是这类轮次唯一能用的折叠手段（见第 6 节）。
 - 动作：组根写 `data-dsh-collapse-sealed`；移除组头容器的 `hidden`（避免下一条消息到达时触发 reveal 动画）；一条受限 CSS 隐藏组体、组头展开时放回组体。
 - 顺序：采集阅读位置 → 封口 → 点击折叠目标 → 微任务补偿滚动。封口本身会改变高度，必须参与补偿。
 - 下一条消息到达：轮次进入分组态，`data-group-expanded-mode` 消失，CSS 选择器不再命中；组头早已可见，`hidden` 属性也已被移除，因此不跑 reveal 动画。封口标记留在组根上，不再有视觉效果。
@@ -137,6 +139,9 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 | `turn-process-tool-calls` | `"data-turn-process-tool-calls":` | 同上 |
 | `turn-process-subagents` | `"data-turn-process-subagents":` | 同上 |
 | `turn-process-prop` | `spec: processSpec, … setOpen` | fiber 读不到 handle，退化为合成点击 |
+| `turn-process-turn-value` | 标题属性值 `data-turn-process={node.data.turn}` | 封口按轮次值定位最新一轮失败，退回最近的 `[data-chat-turn]` 兜底；两处都落空时封口静默失效 |
+| `turn-process-has-content` | `hasContent: !interleavedInput` | 穿插输入轮次的「不可折」语义变了，锁定器 / 折叠键 / 封口的适用条件与文档要一起复核 |
+| `turn-process-aria-expanded-gated` | 标题的 `aria-expanded` 由 `hasContent` 门控 | 穿插输入轮次可能重新带上 `aria-expanded`，回到「可点开合」路径，封口不再是唯一手段 |
 | `turn-process-answer-step` | `answerStep: number` | 记录的代次可能不匹配，锁不生效 |
 | `turn-process-set-open` | `setOpen(open: boolean)` | `setOpen` 降级路径不可用 |
 | `turn-process-store-action` | `setTurnProcessOpen` | 无法绕过 `alwaysOpen`，退化为 `setOpen` / 合成点击 |
@@ -151,7 +156,7 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 | `step-expandable` | `"data-expandable":` | 工具行 / 命令输出在完全展开模式下不会被收起 |
 | `composer-seat` | `data-composer-seat` | 阅读补偿算不出可见带下边界，composer 后面的行可能被误判在视口内 |
 | `chat-flow-row` | `"data-chat-flow-key":` | 阅读线找不到行锚点，补偿退化为 no-op（折叠本身仍生效） |
-| `chat-flow-turn` | `"data-chat-turn":` | 封口认不出最新锁轮次；折叠本身仍生效 |
+| `chat-flow-turn` | `"data-chat-turn":` | 封口认不出最新轮次（标题自身轮次值缺失时靠它兜底）；折叠本身仍生效 |
 | `chat-following-tail` | `data-chat-following-tail` | 在会话底部折叠时也做阅读线补偿，把视图从底部拉开 |
 | `chat-motion` | `data-chat-motion` | 认不出上游帧补偿，可能与其叠加成二次滚动 |
 | `group-expanded-mode` | `"data-group-expanded-mode":` | 封口认不出平铺组，折叠后保持平铺（不丢内容） |
@@ -166,7 +171,8 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 - **最新一轮在“下次有新消息时”下**：按 `⌘⌥.` 后立即封口成历史轮次的组头形态；发下一条消息后形态不变。
 - **折叠后的阅读位置**：仍可见的锚点保持屏幕位置；视口内没有锚点时，向前第一个不会被折叠的行落在阅读线下 3px；跟随尾部或上游折叠动画期间不补偿。
 - **完全展开模式**：没有带 `aria-expanded` 的可折标题，插件空转；过程组本来就平铺。
-- **已停止 / 出错 / 中断的轮次**：上游 `alwaysOpen`，本来就不折；`disabled` 的标题跳过。
+- **已停止 / 出错 / 中断的轮次**：上游 `alwaysOpen`，标题 `disabled` 也点不动，但不一定没有 `aria-expanded`；封口照常生效，`⌘⌥.` 仍能把这一轮收成组头形态。
+- **穿插输入的轮次**（回合进行中又收到用户消息）：上游 `hasContent=false`，标题 `disabled` 且没有 `aria-expanded`，锁定器与点击路径都不接管；`⌘⌥.` 只封口（组体隐藏、组标题出现，可正常开合），控制台有一条一次性告警说明该轮不可折。
 - **右栏会话**：不锁、不封口。
 - **没有过程组的轮次**：无可封口组根；只折单步详情。
 - **`:has()` 不支持**：跳过封口并只告警一次；平铺形态不变。
@@ -187,12 +193,13 @@ const processHidden = controllerInactive || foldable && processMember && !proces
 5. 切换会话再切回：标题重新 seed，过程组保持折叠，滚动位置无漂移。
 6. 卸载插件后硬刷新：自动折叠恢复，平铺形态恢复，固定行与折叠键一起消失。
 7. 控制台没有 `[dsh-turn-process-open]` 告警（尤其 `没能锁定` / `写不进去`）；有告警就先跑 `pnpm check:css`。
+8. 回合进行中补一条消息（穿插输入），等回合结束后按 `⌘⌥.`：最新一轮的平铺明细应收成组头形态、组标题出现且可开合；控制台有且只有一条“第 N 轮…不可折…只能封口”的告警；再按一次不动作。
 
 ## 8. 假设
 
 - 只作用于主会话；右栏会话不锁、不封口。
 - 接受用 React fiber 读取渲染器 props 作为唯一能改上游开合状态的手段（有降级与构建期契约）。
-- 折叠与封口都读本插件自己写入的锁标记；不修改上游设置值，也不改写会话数据。
+- 折叠读本插件自己写入的锁标记；封口只按标题上的轮次值定位最新一轮，不依赖锁标记。不修改上游设置值，也不改写会话数据。
 - 不新增配置项；插件在 profile 里即开启，移除即关闭。
 
 -----

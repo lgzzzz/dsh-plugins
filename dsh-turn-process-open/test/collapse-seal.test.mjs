@@ -33,14 +33,27 @@ function group({ turn = '1', flat = true, sealed = false, hidden = true, activit
   return { root, header, body }
 }
 
-/** 一个带锁 / 不带锁的轮次过程标题行。 */
-function turnHeader(scroll, { turn = '1', locked = true, expanded = true } = {}) {
+/**
+ * 一个轮次过程标题行。
+ *
+ * `unfoldable` 复刻穿插输入的轮次：上游 `hasContent=false`，按钮渲染成 disabled 且
+ * 完全不写 `aria-expanded`（见 ChatNodeSeat `hasContent: !interleavedInput && …`）。
+ */
+function turnHeader(scroll, { turn = '1', locked = true, expanded = true, unfoldable = false } = {}) {
   const row = scroll.append(new FakeElement('div', { 'data-chat-turn': turn, 'data-chat-flow-kind': 'turn-process' }))
-  return row.append(new FakeElement('button', {
+  const button = row.append(new FakeElement('button', {
     'data-turn-process': turn,
-    'aria-expanded': String(expanded),
+    ...(unfoldable ? {} : { 'aria-expanded': String(expanded) }),
     ...(locked ? { [LOCK_ATTRIBUTE]: '' } : {}),
   }))
+  if (unfoldable) button.disabled = true
+  return button
+}
+
+/** 标题自身没有轮次值、只能靠最近的 `[data-chat-turn]` 推断时用的标题行。 */
+function turnHeaderWithoutOwnTurn(scroll, { turn = '1' } = {}) {
+  const row = scroll.append(new FakeElement('div', { 'data-chat-turn': turn, 'data-chat-flow-kind': 'turn-process' }))
+  return row.append(new FakeElement('button', { 'data-turn-process': '', 'aria-expanded': 'true' }))
 }
 
 /** 一个主会话滚动口。 */
@@ -48,7 +61,7 @@ function scroll() {
   return new FakeElement('div', { 'data-conversation-scroll': '' })
 }
 
-console.log('--- S① 目标：最新一个带锁轮次的平铺组 ---')
+console.log('--- S① 目标：最新一轮的平铺组（别的轮次 / 非平铺 / 已封口 / 无组头都不算）---')
 {
   const root = scroll()
   turnHeader(root, { turn: '1' })
@@ -61,23 +74,37 @@ console.log('--- S① 目标：最新一个带锁轮次的平铺组 ---')
   const otherTurn = group({ turn: '3' })
   for (const item of [oldGroup, latest, grouped, sealed, noActivity, otherTurn]) root.append(item.root)
   const groups = sealableGroups(root)
-  checkTrue('只封最新锁轮次的平铺组', groups.length === 1 && groups[0] === latest.root)
+  checkTrue('只封最新一轮的平铺组', groups.length === 1 && groups[0] === latest.root)
 }
 
-console.log('--- S② 没有锁 / 锁标题折叠 / 没有轮次 ---')
+console.log('--- S② 目标不要求锁标记：穿插输入的轮次也能封口 ---')
 {
+  // 穿插输入：标题 disabled、上游不写 aria-expanded（hasContent=false），锁定器不接管。
+  const interleaved = scroll()
+  turnHeader(interleaved, { turn: '1', locked: false, unfoldable: true })
+  const flat = group({ turn: '1' })
+  interleaved.append(flat.root)
+  check('穿插输入的轮次也封口', sealableGroups(interleaved).length, 1)
+
+  // 锁定器这一代没写成功（没有锁标记，但标题仍展开）：同样封口。
   const unlocked = scroll()
   turnHeader(unlocked, { turn: '1', locked: false })
   unlocked.append(group({ turn: '1' }).root)
-  check('无锁不封', sealableGroups(unlocked), [])
+  check('没有锁也封口', sealableGroups(unlocked).length, 1)
 
+  // 上游已经把整轮折起（aria-expanded=false）：正文不在屏上，不再封口。
   const folded = scroll()
   turnHeader(folded, { turn: '1', expanded: false })
   folded.append(group({ turn: '1' }).root)
-  check('锁标题折叠时不封（锁定器会在下一拍重开）', sealableGroups(folded), [])
+  check('上游已折时不封', sealableGroups(folded).length, 0)
 
-  const empty = scroll()
-  check('没有轮次标题', sealableGroups(empty), [])
+  // 标题自己没有轮次值时退回最近的 [data-chat-turn]。
+  const inherited = scroll()
+  turnHeaderWithoutOwnTurn(inherited, { turn: '1' })
+  inherited.append(group({ turn: '1' }).root)
+  check('轮次值退回祖先标记', sealableGroups(inherited).length, 1)
+
+  check('没有轮次标题', sealableGroups(scroll()).length, 0)
 }
 
 console.log('--- S③ 同一轮多个组：全部封口 ---')

@@ -13,7 +13,10 @@
  *
  * 纯展示层，不改 React 状态、store、设置或消息数据：
  *
- * 1. 只对“最新一个带锁标记的轮次”生效（锁由 `pin.ts` 写在标题上）；
+ * 1. 只对“渲染上最后、且上游仍呈现为展开的那一轮”生效（标题 `aria-expanded` 不是 `false`）。
+ *    **不要求锁标记**：穿插输入（回合进行中又收到用户消息）的轮次被上游标成
+ *    `hasContent=false`，标题渲染成 `disabled` 且不带 `aria-expanded`，锁定器与点击路径
+ *    都跳过它，只有封口能把这轮摊开的明细收成组头形态；
  * 2. 组根写 `data-dsh-collapse-sealed`，移除组头容器的 `hidden`（避免下一条消息到达时
  *    `useMotionHidden` 把它当成“从隐藏到显示”跑一次 reveal 动画）；
  * 3. 一条受限 CSS 把组体 `display:none`，组头 `aria-expanded=true` 时再放回组体——
@@ -37,7 +40,7 @@ import type { Context } from '@deepseek-ai/cordis'
 /** 封口标记；写在 `[data-step-process]` 组根上。 */
 export const SEAL_ATTRIBUTE = 'data-dsh-collapse-sealed'
 
-/** 由 `pin.ts` 写在轮次过程标题上的锁标记（保留旧名，便于阅读折叠逻辑）。 */
+/** 由 `pin.ts` 写在轮次过程标题上的锁标记（保留导出，供锁定器与测试复用）。 */
 export const LOCK_ATTRIBUTE = PIN_ATTRIBUTE
 
 /** 平铺模式的组根标记；分组态没有它。 */
@@ -45,6 +48,9 @@ export const FLAT_ATTRIBUTE = 'data-group-expanded-mode'
 
 /** 轮次过程标题（锁标记挂在这里）。 */
 export const TURN_HEADER_SELECTOR = '[data-turn-process]'
+
+/** 标题上的轮次值：上游 `data-turn-process={node.data.turn}` 把轮次号直接写在属性上。 */
+export const TURN_ATTRIBUTE = 'data-turn-process'
 
 /** 过程组根。 */
 export const GROUP_SELECTOR = '[data-step-process]'
@@ -139,17 +145,28 @@ function headerContainer(group: Element): Element | null {
   return first.querySelector(ACTIVITY_SELECTOR) === null ? null : first
 }
 
-/** 最近一个“带锁且展开”的轮次过程标题所属轮次。 */
-function lockedTurn(root: ParentNode): string | null {
+/**
+ * 最新一个“上游仍呈现为展开”的轮次，取最后一个 `[data-turn-process]` 标题上的轮次值。
+ *
+ * 不能要求锁标记：穿插输入的轮次上游把 `hasContent` 置为 false，标题渲染成 `disabled`
+ * 且不带 `aria-expanded`，锁定器与点击路径都跳过它；只有封口能把这轮摊开的明细收成
+ * 组头形态。反过来，`aria-expanded="false"` 表示上游已经把整轮折起（正文不在屏上），
+ * 那时不再封口，免得把下一拍展开后的形态提前改掉。
+ * @param root - 主会话滚动口。
+ * @returns 轮次值，没有可封口的标题时返回 null。
+ */
+function latestTurn(root: ParentNode): string | null {
   if (typeof root.querySelectorAll !== 'function') return null
   const headers = [...root.querySelectorAll(TURN_HEADER_SELECTOR)]
   for (let index = headers.length - 1; index >= 0; index -= 1) {
     const header = headers[index]
-    if (!header.hasAttribute(LOCK_ATTRIBUTE)) continue
-    if (header.getAttribute('aria-expanded') !== 'true') continue
-    if (typeof header.closest !== 'function') continue
-    const row = header.closest('[data-chat-turn]')
-    const turn = row?.getAttribute('data-chat-turn') ?? null
+    if (header.getAttribute('aria-expanded') === 'false') continue
+    const own = header.getAttribute(TURN_ATTRIBUTE)
+    const turn = own !== null && own !== ''
+      ? own
+      : typeof header.closest === 'function'
+        ? header.closest('[data-chat-turn]')?.getAttribute('data-chat-turn') ?? null
+        : null
     if (turn === null || turn === '') continue
     return turn
   }
@@ -157,13 +174,13 @@ function lockedTurn(root: ParentNode): string | null {
 }
 
 /**
- * 本次要封口的组根：最新一个带锁轮次下、仍处于平铺态、尚未封口、且组头可用的组。
+ * 本次要封口的组根：最新一个仍展开的轮次下、处于平铺态、尚未封口、且组头可用的组。
  * @param root - 主会话滚动口。
- * @returns 组根列表（没有锁 / 没有平铺组时为空）。
+ * @returns 组根列表（没有平铺组时为空）。
  */
 export function sealableGroups(root: ParentNode): Element[] {
   if (!supportsSeal()) return []
-  const turn = lockedTurn(root)
+  const turn = latestTurn(root)
   if (turn === null) return []
   const groups: Element[] = []
   for (const group of root.querySelectorAll(GROUP_SELECTOR)) {

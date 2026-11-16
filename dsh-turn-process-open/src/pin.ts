@@ -20,7 +20,9 @@
  * 失败路径全部收敛为“不锁”：fiber 找不到、写入口不可用或抛错、标题折叠之后重试耗尽，
  * 都会移除标记、保留可交互，并按需退到合成点击。任何一步失败都只影响该标题。
  * 如果连续多轮同步都见过可折标题、却始终锁不住任何标题，会告警一次（自检），
- * 避免上游结构变化后功能静默消失。
+ * 避免上游结构变化后功能静默消失。上游把某轮标成不可折（穿插输入 / 无过程内容：
+ * 标题 `disabled` 且没有 `aria-expanded`）而该轮明细又摊在屏上时，也告警一次并说明
+ * 只能靠封口（`collapse-seal.ts`）收成组头形态。
  *
  * 锁标记的值是本实例 id（`pin-<n>`）：卸载时只撤自己加的锁，开发期重复挂载也不会
  * 把另一个实例的锁一起清掉。状态里的 records 是 WeakMap，标题元素卸载后不拖住 DOM。
@@ -365,6 +367,37 @@ export function syncRoot(root: Element, state: PinState): SeedCounts {
 }
 
 /**
+ * 自检：这一轮上游把轮次过程标成不可折（标题没有 `aria-expanded`），但它的明细正平铺在
+ * 屏上时告警一次。
+ *
+ * 典型来源是穿插输入：回合进行中又收到用户消息，上游 `hasContent` 为 false，标题渲染成
+ * `disabled` 且不写 `aria-expanded`；锁定器与 `⌘⌥.` 的点击路径都会跳过它，只有封口
+ * （`collapse-seal.ts`）还能把这轮收成组头形态。回合没有过程内容时也会走这条渲染分支，
+ * 所以要求同一轮确实存在平铺组才告警，避免每次纯对话都刷一条。
+ * @param root - 主会话滚动口。
+ * @param state - 运行期缓存（告警去重）。
+ */
+function diagnoseUnfoldable(root: Element, state: PinState): void {
+  if (typeof root.querySelectorAll !== 'function') return
+  const flatTurns = new Set<string>()
+  for (const group of root.querySelectorAll('[data-step-process][data-group-expanded-mode]')) {
+    const turn = group.getAttribute('data-chat-turn')
+    if (turn !== null && turn !== '') flatTurns.add(turn)
+  }
+  if (flatTurns.size === 0) return
+  for (const header of root.querySelectorAll(HEADER_SELECTOR)) {
+    if (header.hasAttribute('aria-expanded')) continue
+    const turn = header.getAttribute('data-turn-process') ?? ''
+    if (!flatTurns.has(turn)) continue
+    warnOnce(
+      state,
+      `unfoldable|${sessionIdOf(header)}|${turn}`,
+      `第 ${turn} 轮的中间步骤正平铺在屏上，但上游把它标成不可折（穿插输入或无过程内容：hasContent=false，标题 disabled 且没有 aria-expanded）：本插件锁不住该轮，⌘⌥. 只能把它封口成组头形态`,
+    )
+  }
+}
+
+/**
  * 自检：本轮看到了可折标题、却始终没锁住任何标题时，fiber 读取或 store 写入多半已经失效。
  * 只在连续多轮同步后告警一次，避免把“首帧还没渲染完”当成故障。
  * @param state - 运行期缓存。
@@ -468,7 +501,10 @@ export function installPin(doc: PinDocument | undefined = globalThis.document as
   const sync = (): void => {
     if (disposed) return
     state.foldableThisSync = false
-    for (const root of conversationRoots(doc as unknown as Document)) syncRoot(root, state)
+    for (const root of conversationRoots(doc as unknown as Document)) {
+      syncRoot(root, state)
+      diagnoseUnfoldable(root, state)
+    }
     diagnose(state)
   }
 

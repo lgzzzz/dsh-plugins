@@ -74,6 +74,33 @@
       "hint": "TurnProcessNodeView 的 turnProcess prop 形状变了：fiber 读不到 spec / setOpen，退化为折叠后合成点击（新消息到达时可能先折一下再展开）"
     },
     {
+      "id": "turn-process-turn-value",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"data-turn-process\":\\s*node\\.data\\.turn",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "标题上的轮次值不再是轮次号（data-turn-process）：封口按这个值认“最新一轮”，值变了只能退回最近的 [data-chat-turn] 兜底，兜底也落空时封口静默失效"
+    },
+    {
+      "id": "turn-process-has-content",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "hasContent:!interleavedInput",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "上游 hasContent 不再因穿插输入而为 false：穿插输入轮次的标题语义变了，锁定器 / 折叠键 / 封口的适用条件与文档要一起复核"
+    },
+    {
+      "id": "turn-process-aria-expanded-gated",
+      "plugin": "dsh-turn-process-open",
+      "pattern": "\"aria-expanded\":turnProcess\\.hasContent\\?open:",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "标题的 aria-expanded 不再由 hasContent 门控：穿插输入的轮次可能重新带上 aria-expanded，它们会回到“可点开合”路径，封口不再是唯一手段（行为变化，需要重新验证）"
+    },
+    {
       "id": "turn-process-answer-step",
       "plugin": "dsh-turn-process-open",
       "pattern": "answerStep: number",

@@ -19,6 +19,7 @@ const ORDER = [
   'collapse-seal.test.mjs',
   'collapse-reading.test.mjs',
   'collapse-bridge.test.mjs',
+  'collapse-interleaved.test.mjs',
   'artifact-client.test.mjs',
 ]
 
