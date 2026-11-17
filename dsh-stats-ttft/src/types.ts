@@ -7,8 +7,8 @@
  *   - Chat 窗口快照 `ChatSnapshot`、Chat 选择器座位 `UseChat`、聊天节点
  *     `ConversationNode`（@deepseek-ai/dsh-client-ui-chat/client）；
  *   - projection 读取座位 `UseProjection`（@deepseek-ai/dsh-api-session-controller/client）；
- *   - 会话统计投影 `SessionStatsProjection`（@deepseek-ai/dsh-session-stats/client，
- *     `sessionStats` 键的权威声明也随该包的类型一起加载）。
+ *   - 本插件自己的 `recentStepStats` 投影键与逐步类型（`./recent-shared.ts`，
+ *     键声明随该模块的 `declare module` 一起加载）。
  *
  * 仍留在本地的只有一条读取面：`ShadowSlots`——`conversation.composer.dock` 的槽键由
  * ui-conversation 声明，可直接用上游 `entries` / `inject` / `subscribe`；只有
@@ -19,8 +19,8 @@ import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 // 空类型导入(不引入任何名字):加载 ui-conversation 对 `SlotMap` 的槽键声明。
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-// 空类型导入:加载 session-stats 对上游 `SessionProjectionMap` 的 `sessionStats` 键声明。
-import type {} from '@deepseek-ai/dsh-session-stats/client'
+// 空类型导入(不引入任何名字):把 `recentStepStats` 键并入 `SessionProjectionMap`。
+import type {} from './recent-shared.ts'
 
 /**
  * 动态键的槽注册表视图。
@@ -44,13 +44,13 @@ export type ShadowSlots = Omit<SlotRegistry, 'register'> & {
 /** 账本条目（上游命名导出的转出）。 */
 export type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 
-/** 会话统计投影（上游命名导出的转出；`ttftMs` / `ttftSteps` 是其中的 TTFT 字段）。 */
-export type { SessionStatsProjection } from '@deepseek-ai/dsh-session-stats/client'
+/** 最近步次统计的共享类型；导入本模块同时加载 `recentStepStats` 的键声明。 */
+export type { RecentStatsTotals, RecentStepStats } from './recent-shared.ts'
 
 /** 会话作用域 slot 的标准 projection 读取座位（上游命名导出的转出）。 */
 export type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 
-/** 聊天字典的 translate 座位（本插件只用到 counts 与两个时长单位）。 */
+/** 聊天字典的 translate 座位（本插件只用到 counts、速度段与两个时长单位）。 */
 export type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 
 /** Chat 窗口快照与 Chat 选择器座位（上游命名导出的转出）。 */

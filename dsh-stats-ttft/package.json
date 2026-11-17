@@ -2,7 +2,7 @@
   "name": "dsh-stats-ttft",
   "version": "1.0.0",
   "private": true,
-  "description": "在输入框下方的「性能」统计按钮上直接显示会话平均首 token 时长：按 id 遮蔽 conversation.composer.dock 槽里的 activity 条目，包装上游 ActivityPill 并只改写 stats.counts 的译文，使按钮读数从「N 轮 N 步 · X tok/s」变成「N 轮 N 步 · 2.3秒 · X tok/s」。",
+  "description": "在输入框下方的「性能」统计按钮上显示最近 7 步的平均首 token 时长（TTFT）与输出速度（TPS），点开的气泡正文仍按全会话统计：宿主注册 recentStepStats 会话投影，逐步折叠 TTFT/解码累计；浏览器半部按 id 遮蔽 conversation.composer.dock 的 activity 条目，改写 stats.counts 与 message.tokensPerSecond 的译文，再把气泡里的标题值与速度行还原成全会话读数；投影缺席时用已加载窗口的最后 7 个 assistant 节点兜底。",
   "type": "module",
   "exports": {
     ".": {
@@ -29,6 +29,10 @@
     "check": "node --check lib/client.js && node --check index.ts",
     "test": "node test/run-all.mjs"
   },
+  "dependencies": {
+    "@deepseek-ai/dsh-llm": "^0.2.2-rc.3",
+    "zod": "^4.6.6"
+  },
   "devDependencies": {
     "@deepseek-ai/cordis": "~4.1.0",
     "@deepseek-ai/dsh-api-session-controller": "^0.2.2-rc.3",
@@ -36,7 +40,8 @@
     "@deepseek-ai/dsh-client-ui-conversation": "^0.2.2-rc.3",
     "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-rc.3",
     "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-rc.3",
-    "@deepseek-ai/dsh-session-stats": "^0.2.2-rc.3",
+    "@deepseek-ai/dsh-session": "^0.2.2-rc.3",
+    "@deepseek-ai/dsh-session-projection": "^0.2.2-rc.3",
     "@types/react": "^18.3.31",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

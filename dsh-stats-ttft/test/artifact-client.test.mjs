@@ -1,8 +1,8 @@
 /**
  * 产物装配：`lib/client.js` 以正确的模块 id / 插件名注册；装配后按账本遮蔽
- * `conversation.composer.dock#activity`，包装层把按钮第一段追加成「N 轮 N 步 · 2.3秒」，
- * 不出现「首 token」标签、不碰输出速度与其它译文；无样本时不追加，投影缺席时走窗口
- * 折叠兜底；源项消失时撤回遮蔽，卸载时摘掉订阅与注册。
+ * `conversation.composer.dock#activity`，包装层把按钮第一段追加成「N 轮 N 步 · 2.3秒」、
+ * 把速度段换成最近 7 步 TPS，不出现「首 token」标签、不碰其它译文；无样本时不改写，
+ * 投影缺席时走窗口折叠兜底；源项消失时撤回遮蔽，卸载时摘掉订阅与注册。
  *
  * 运行：`node test/artifact-client.test.mjs`（或 pnpm test 跑全部）。
  */
@@ -85,18 +85,14 @@ checkFalse('源组件被包装', reg.component === StubActivity)
 const Wrapped = reg.component
 const render = (props) => renderToStaticMarkup(React.createElement(Wrapped, props))
 
+/** 最近 7 步投影：3 个 TTFT 样本合计 6900ms、解码 1000ms 输出 45 token。 */
+const recentSteps = [
+  { turn: 1, step: 1, ttftMs: 6900, ttftSteps: 3, decodeMs: 1000, decodeTokens: 45 },
+]
+
 const detailedProps = {
   t: fakeT,
-  useProjection: () => ({
-    turns: 12,
-    steps: 34,
-    llmMs: 0,
-    toolMs: 0,
-    ttftMs: 6900,
-    ttftSteps: 3,
-    decodeMs: 1000,
-    decodeTokens: 45,
-  }),
+  useProjection: () => recentSteps,
   useChat: (selector) => selector({ legacy: { nodes: [] } }),
 }
 
@@ -105,15 +101,24 @@ console.log('--- C 按钮读数 ---')
   const html = render(detailedProps)
   checkIncludes('第一段追加纯时长', html, '12 轮 34 步 · 2.3秒')
   checkFalse('不出现「首 token」标签', html.includes('首 token'))
-  checkIncludes('输出速度原样', html, '45.0 tok/s')
+  checkIncludes('速度段换成最近 7 步 TPS', html, '45 tok/s')
+  checkFalse('不再显示上游全会话速度', html.includes('45.0 tok/s'))
   checkIncludes('其它译文原样', html, '会话统计')
 }
 
 console.log('--- D 无样本与兜底 ---')
 {
-  const html = render({ ...detailedProps, useProjection: () => ({ ttftMs: 0, ttftSteps: 0 }) })
+  const html = render({ ...detailedProps, useProjection: () => [] })
   checkIncludes('无样本时保持原读数', html, '12 轮 34 步|')
   checkFalse('无样本时不含时长', html.includes('2.3秒'))
+  checkIncludes('无样本时速度原样', html, '45.0 tok/s')
+
+  const tpsOnly = render({
+    ...detailedProps,
+    useProjection: () => [{ turn: 1, step: 1, ttftMs: 0, ttftSteps: 0, decodeMs: 1000, decodeTokens: 45 }],
+  })
+  checkIncludes('只有 TPS 样本时不追加时长', tpsOnly, '12 轮 34 步|')
+  checkIncludes('只有 TPS 样本时替换速度', tpsOnly, '45 tok/s')
 
   const fallback = render({
     ...detailedProps,
@@ -121,16 +126,53 @@ console.log('--- D 无样本与兜底 ---')
     useChat: (selector) => selector({
       legacy: {
         nodes: [
-          { kind: 'assistant', timing: { stepStartTime: 1000, firstTokenTime: 3300 } },
-          { kind: 'assistant', timing: { stepStartTime: 2000, firstTokenTime: 4300 } },
+          {
+            kind: 'assistant',
+            turn: 1,
+            step: 1,
+            timing: { stepStartTime: 1000, firstTokenTime: 3300, completedTime: 4300 },
+            usage: { outputTokens: 45 },
+          },
+          {
+            kind: 'assistant',
+            turn: 2,
+            step: 1,
+            timing: { stepStartTime: 2000, firstTokenTime: 4300, completedTime: 5300 },
+            usage: { outputTokens: 45 },
+          },
         ],
       },
     }),
   })
   checkIncludes('投影缺席时窗口折叠', fallback, '12 轮 34 步 · 2.3秒')
+  checkIncludes('投影缺席时窗口 TPS', fallback, '45 tok/s')
 }
 
-console.log('--- E 撤回与卸载 ---')
+console.log('--- E 读取两个投影键 ---')
+{
+  const keys = []
+  const sessionStats = {
+    turns: 12,
+    steps: 34,
+    llmMs: 1000,
+    toolMs: 0,
+    ttftMs: 2300,
+    ttftSteps: 1,
+    decodeMs: 1000,
+    decodeTokens: 45,
+  }
+  const html = render({
+    ...detailedProps,
+    useProjection: (key) => {
+      keys.push(key)
+      return key === 'sessionStats' ? sessionStats : recentSteps
+    },
+  })
+  check('按名字读最近 7 步与全会话投影', keys, ['recentStepStats', 'sessionStats'])
+  checkIncludes('按钮读数不变', html, '45 tok/s')
+}
+
+console.log('--- F 撤回与卸载 ---')
 {
   slots.setEntries(STATS_SLOT, [])
   check('源项消失后撤回遮蔽', slots.entries(STATS_SLOT).length, 0)

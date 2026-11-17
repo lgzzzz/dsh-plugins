@@ -3,15 +3,18 @@
 // 验证 dsh-stats-ttft 依赖的上游事实是否仍存在于 DSH 客户端构建产物中。
 // 无需运行时、无需浏览器。
 //
-// 本插件按 id 遮蔽 conversation.composer.dock 槽里的 activity 条目，包装上游统计按钮并
-// 只改写 stats.counts 的译文。会**静默**退化或与上游显示分叉的上游事实有三类：
+// 本插件按 id 遮蔽 conversation.composer.dock 槽里的 activity 条目，包装上游统计按钮，
+// 把最近 7 步的平均 TTFT 追加到第一段、把速度段换成最近 7 步 TPS；点开的气泡正文随后
+// 由文本节点还原回全会话读数。会**静默**退化或与上游显示分叉的上游事实有三类：
 //   1. 接管本身依赖的锚点——槽键、槽出口的渲染、注册 id / order、同 id 遮蔽规则、渲染器
 //      在渲染期读取条目 component；任一条改名或改走别的路径，接管会告警或静默不生效；
-//   2. 读数拼接依赖的键——按钮第一段用的 stats.counts、时长用的 duration.compactSeconds /
-//      duration.compactMinutes、以及上游 formatDuration 的取整规则；键一改，追加的文本
-//      会静默消失或格式分叉；
-//   3. 取值依赖的投影与标准 props——sessionStats 的 ttftMs / ttftSteps、会话作用域进入
-//      组件的 useProjection、ui-chat 提供的 chat 标准 hook；任一条变了，包装层读不到 TTFT。
+//   2. 读数改写依赖的键——按钮第一段用的 stats.counts、速度段用的 message.tokensPerSecond、
+//      时长用的 duration.compactSeconds / duration.compactMinutes、上游 formatDuration
+//      与 formatTokensPerSecond 的取整规则、以及气泡正文的 data-session-stats-details
+//      标记；键或标记一改，改写会静默消失、格式分叉，或气泡漏出最近 7 步读数；
+//   3. 取值依赖的标准 props——会话作用域进入组件的 useProjection（读 recentStepStats
+//      与全会话 sessionStats）、ui-chat 提供的 chat 标准 hook（读窗口节点兜底）；
+//      任一条变了，包装层就失去数据源。
 // 这里在构建后把清单逐条对上游产物 grep 一遍，缺一条就显式失败，提示里写明后果。
 //
 // 用法(本脚本与 contract.json 同目录):
