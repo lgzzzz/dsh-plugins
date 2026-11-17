@@ -198,6 +198,41 @@ const summary = {
   assert.ok(html.includes('aria-hidden="true"'), 'the glyph stays out of the accessibility tree')
 }
 
+// -------------------------------------------------------------- page notes
+
+{
+  const populated = view({ data: summary })
+  assert.ok(populated.includes('class="drs-notes"'), 'the page notes render with records')
+  assert.ok(
+    populated.indexOf('class="drs-notes"') < populated.indexOf('class="drs-kpis"'),
+    'the page notes lead the dashboard content',
+  )
+  assert.ok(populated.includes('watched'), 'the notes state the watched route')
+  assert.ok(populated.includes('auxiliaryExcluded'), 'the notes state the excluded count')
+
+  const loading = view({ data: null })
+  assert.ok(!loading.includes('class="drs-notes"'), 'the notes wait for the first summary')
+
+  const included = view({ data: { ...summary, includeAuxiliary: true }, includeAuxiliary: true })
+  assert.ok(included.includes('auxiliaryIncluded'), 'the notes follow the auxiliary toggle')
+
+  const noEdge = view({ data: { ...summary, coverage: { ...summary.coverage, proxied: 0, edge: 0 } } })
+  assert.ok(!noEdge.includes('edgeNotice'), 'the edge explanation hides without edge records')
+
+  const empty = {
+    ...summary,
+    retained: 0,
+    totals: { ...summary.totals, requests: 0, ok: 0, errors: 0, inFlight: 0, ttft: { count: 0 }, tps: { count: 0 } },
+    coverage: { direct: 0, proxied: 0, unknown: 0, edge: 0 },
+    servers: [],
+    models: [],
+    series: [],
+    recent: [],
+    live: [],
+  }
+  assert.ok(view({ data: empty }).includes('class="drs-notes"'), 'the notes also show in the empty state')
+}
+
 // ---------------------------------------------------------- registration
 
 {
@@ -270,12 +305,20 @@ const summary = {
     onRequestClear: noop,
     onCancelClear: noop,
   }))
-  for (const leaked of ['kpiRequests', 'kpiTtft', 'kpiTps', 'kpiTokens', 'trendMin', 'trendMax', 'includeAux', 'auxiliaryExcluded', 'watched', 'footerCount', 'colPurpose']) {
+  for (const leaked of ['kpiRequests', 'kpiTtft', 'kpiTps', 'kpiTokens', 'trendMin', 'trendMax', 'includeAux', 'auxiliaryExcluded', 'watched', 'privacy', 'edgeNotice', 'colPurpose']) {
     assert.ok(!html.includes(leaked), `translated view does not leak "${leaked}"`)
   }
-  for (const expected of ['请求数', '平均首字延迟', '平均输出速度', '输出 tokens', '已排除 3 条辅助调用', '监控 opencode-go → opencode.ai', '最近 2 条 · 本 profile 保留 12 条', '包含辅助请求', '成功', '经代理', '边缘']) {
+  for (const expected of ['请求数', '平均首字延迟', '平均输出速度', '输出 tokens', '已排除 3 条辅助调用', '监控 opencode-go → opencode.ai', '边缘机房代码来自响应的 cf-ray 头', '记录由本机 Host 进程', '最近 2 条 · 本 profile 保留 12 条', '包含辅助请求', '成功', '经代理', '边缘']) {
     assert.ok(html.includes(expected), `translated view contains "${expected}"`)
   }
+  const notesAt = html.indexOf('监控 opencode-go → opencode.ai')
+  const privacyAt = html.indexOf('记录由本机 Host 进程')
+  const kpisAt = html.indexOf('class="drs-kpis"')
+  assert.ok(notesAt !== -1 && privacyAt !== -1 && kpisAt !== -1, 'the view renders the page notes and the KPI grid')
+  assert.ok(
+    notesAt < kpisAt && privacyAt < kpisAt,
+    'the page notes render at the start, before the KPI grid',
+  )
 }
 
 console.log('dsh-request-stats: client render tests passed')

@@ -441,7 +441,16 @@ window.__ModuleLoader__.load({
       }
       .drs-empty-title { color: var(--dsw-alias-label-primary); font-size: 15px; font-weight: 500; }
       .drs-empty-hint { max-width: 46ch; font-size: 13px; line-height: 20px; }
-      .drs-foot { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; padding-bottom: 8px; }
+      .drs-notes {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-width: 72ch;
+        overflow-wrap: anywhere;
+        color: var(--dsw-alias-label-secondary);
+        font-size: 12px;
+        line-height: 18px;
+      }
       .drs-share { display: flex; align-items: center; gap: 8px; min-width: 120px; }
       @media (prefers-reduced-motion: no-preference) {
         .drs-live .drs-dot { animation: drs-pulse 1.8s ease-in-out infinite; }
@@ -868,6 +877,29 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'drs-inner' },
+            data === null
+              ? null
+              : h(
+                  'div',
+                  { className: 'drs-notes' },
+                  h(
+                    'div',
+                    null,
+                    t('watched', {
+                      providers: (data.watched?.providers ?? []).join(', ') || '—',
+                      hosts: (data.watched?.hosts ?? []).join(', ') || '—',
+                    }),
+                  ),
+                  (data.auxiliary ?? 0) > 0
+                    ? h(
+                        'div',
+                        null,
+                        t(includeAuxiliary ? 'auxiliaryIncluded' : 'auxiliaryExcluded', { count: data.auxiliary }),
+                      )
+                    : null,
+                  (data.coverage?.edge ?? 0) > 0 ? h('div', null, t('edgeNotice')) : null,
+                  h('div', null, t('privacy')),
+                ),
             error === null
               ? null
               : h(
@@ -1103,27 +1135,6 @@ window.__ModuleLoader__.load({
                           ),
                         ),
                       ),
-                    ),
-                    h(
-                      'div',
-                      { className: 'drs-foot' },
-                      h(
-                        'div',
-                        null,
-                        t('watched', {
-                          providers: (data.watched?.providers ?? []).join(', ') || '—',
-                          hosts: (data.watched?.hosts ?? []).join(', ') || '—',
-                        }),
-                      ),
-                      (data.auxiliary ?? 0) > 0
-                        ? h(
-                            'div',
-                            null,
-                            t(includeAuxiliary ? 'auxiliaryIncluded' : 'auxiliaryExcluded', { count: data.auxiliary }),
-                          )
-                        : null,
-                      (data.coverage?.edge ?? 0) > 0 ? h('div', null, t('edgeNotice')) : null,
-                      h('div', null, t('privacy')),
                     ),
                   ),
           ),
