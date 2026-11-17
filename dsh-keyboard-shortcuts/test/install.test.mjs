@@ -270,6 +270,21 @@ console.log('--- B④ 终端捕获：吞键后调同一个官方命令 ---')
     window.dispatch('keydown', repeat)
     check('终端内长按不调命令', shortcuts.invocations.length, before)
     checkFalse('长按也没被吞掉', repeat.defaultPrevented)
+
+    // AltGr / IME 229:捕获层必须让给终端输入,不能把字符当成 Ctrl+Alt 固定键。
+    const altgr = terminalKeydown('KeyN', {
+      ctrlKey: true,
+      altKey: true,
+      getModifierState: (state) => state === 'AltGraph',
+    })
+    window.dispatch('keydown', altgr)
+    check('终端内 AltGr+N 不调命令', shortcuts.invocations.length, before)
+    checkFalse('AltGr+N 不被吞', altgr.defaultPrevented)
+
+    const ime = terminalKeydown('KeyN', { ctrlKey: true, altKey: true, keyCode: 229 })
+    window.dispatch('keydown', ime)
+    check('终端内 keyCode 229 不调命令', shortcuts.invocations.length, before)
+    checkFalse('keyCode 229 不被吞', ime.defaultPrevented)
   } finally {
     globalThis.window = previousWindow
   }

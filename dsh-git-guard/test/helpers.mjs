@@ -77,11 +77,24 @@ export function createHarness({ onInject } = {}) {
     return policySection.text({ agent: session === undefined ? undefined : { session } })
   }
 
+  /**
+   * 跑一次 pre-execute。默认按 shell 工具构造 `{ name, arguments: { command } }`;
+   * 传 `options.arguments` 可覆盖整个参数对象(例如 `terminal_send` 的 `text`)。
+   * `options.toolName` 默认仍是 `pwsh`,保持既有调用不变。
+   */
   function decide(command, options = {}) {
-    const { toolName = 'pwsh', session } = options
-    const exec = { name: toolName, arguments: { command } }
+    const { toolName = 'pwsh', session, arguments: execArguments } = options
+    const exec = {
+      name: toolName,
+      arguments: execArguments === undefined ? { command } : execArguments,
+    }
     if (session !== undefined) exec.agent = { session }
     return hook(exec, async () => ({ kind: 'allow', passthrough: true }))
+  }
+
+  /** 用任意工具名与参数对象跑一次判定(方便覆盖 `terminal_send` 这类非 command 工具)。 */
+  function decideTool(toolName, toolArguments, options = {}) {
+    return decide(undefined, { ...options, toolName, arguments: toolArguments })
   }
 
   return {
@@ -95,5 +108,6 @@ export function createHarness({ onInject } = {}) {
     state,
     sectionText,
     decide,
+    decideTool,
   }
 }

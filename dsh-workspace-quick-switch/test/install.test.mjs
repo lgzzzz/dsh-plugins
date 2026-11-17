@@ -561,6 +561,8 @@ console.log('--- C⑫ 终端内按 ⌘⌥M / Ctrl+Alt+M:捕获阶段拦下并开
     ['多了 Shift', { shiftKey: true, path }],
     ['长按重复', { repeat: true, path }],
     ['组字中', { isComposing: true, path }],
+    ['AltGr', { getModifierState: (state) => state === 'AltGraph', path }],
+    ['旧 IME 229', { keyCode: 229, path }],
   ]
   for (const [label, overrides] of cases) {
     const wrong = passthroughDom.pressWindowKey({ code: 'KeyM', key: 'm', ctrlKey: true, altKey: true, path: terminalPath().path, ...overrides })

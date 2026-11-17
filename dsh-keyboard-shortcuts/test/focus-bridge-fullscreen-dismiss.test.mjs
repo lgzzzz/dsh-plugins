@@ -219,4 +219,55 @@ console.log('--- Z⑦ 与待答交互的交叠:一次按键只关栏,不作答�
   }
 }
 
+console.log('--- Z⑧ 隐藏会话遗留的全屏面板:不抢 Esc;当前会话可见时才关栏 ---')
+{
+  // 隐藏会话里的面板标记还在 DOM 里。旧实现把它当成当前浮层:抢走 Esc、关掉当前会话的
+  // 右栏(或一个看不见的侧栏);新实现要求至少有一个可见的全屏面板才接管。
+  const hiddenOnlyApp = new FakeElement('div', { 'data-app': '' })
+  const hiddenOnlySession = hiddenOnlyApp.append(new FakeElement('div', { 'data-sidebar-right-session': 's2', hidden: '' }))
+  hiddenOnlySession.append(new FakeElement('div', {
+    'data-sidebar-right-session': 's2',
+    'data-sidebar-right-panel': 'fullscreen',
+    'data-sidebar-right-open': '',
+  }))
+  const hiddenOnlyPage = hiddenOnlyApp.append(new FakeElement('div'))
+  const hiddenOnlyDom = withWindowDom({ root: hiddenOnlyApp, activeElement: hiddenOnlyPage })
+  const hiddenOnlySidebar = fakeSidebar()
+  harness({ sidebar: hiddenOnlySidebar })
+  try {
+    const event = fakeKeyEvent({ path: [hiddenOnlyPage, hiddenOnlyApp], code: 'Escape' })
+    hiddenOnlyDom.window.emit(event)
+    check('只有隐藏面板:不吞', [event.prevented, event.stopped], [0, 0])
+    check('只有隐藏面板:不关栏', hiddenOnlySidebar.calls, [])
+  } finally {
+    hiddenOnlyDom.restore()
+  }
+
+  // 隐藏面板与当前会话的可见全屏面板同时存在:仍然只关一次当前这一个。
+  const mixedApp = new FakeElement('div', { 'data-app': '' })
+  const hiddenSession = mixedApp.append(new FakeElement('div', { 'data-sidebar-right-session': 's2', 'aria-hidden': 'true' }))
+  hiddenSession.append(new FakeElement('div', {
+    'data-sidebar-right-session': 's2',
+    'data-sidebar-right-panel': 'fullscreen',
+    'data-sidebar-right-open': '',
+  }))
+  const visiblePanel = mixedApp.append(new FakeElement('div', {
+    'data-sidebar-right-session': 's1',
+    'data-sidebar-right-panel': 'fullscreen',
+    'data-sidebar-right-open': '',
+  }))
+  const mixedPage = visiblePanel.append(new FakeElement('div'))
+  const mixedDom = withWindowDom({ root: mixedApp, activeElement: mixedPage })
+  const mixedSidebar = fakeSidebar()
+  harness({ sidebar: mixedSidebar })
+  try {
+    const event = fakeKeyEvent({ path: [mixedPage, visiblePanel, mixedApp], code: 'Escape' })
+    mixedDom.window.emit(event)
+    check('隐藏 + 可见:吞掉这一按', [event.prevented, event.stopped], [1, 1])
+    check('隐藏 + 可见:关栏一次', mixedSidebar.calls, [['toggleExpanded']])
+  } finally {
+    mixedDom.restore()
+  }
+}
+
 finish()

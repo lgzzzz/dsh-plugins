@@ -43,19 +43,45 @@ type Sidebar = Context['sidebarRight']
 /** 全屏呈现且已展开的右栏面板根节点：呈现方式与开合状态都落在这一个元素上。 */
 const FULLSCREEN_PANEL_SELECTOR = '[data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]'
 
+/** 隐藏会话的整棵视图：上游把非当前会话设为 `hidden`，浮层也会用 `aria-hidden` 标隐藏。 */
+const HIDDEN_PANEL_SELECTOR = '[hidden], [aria-hidden="true"]'
+
 /** 右栏会话根节点：面板自身与它内部的每个面板都带这个标记。 */
 const SIDEBAR_SESSION_SELECTOR = '[data-sidebar-right-session]'
 
 /**
- * 当前是否有一个全屏呈现且已展开的右栏面板。
+ * 面板是否位于隐藏的会话里。
+ *
+ * 每个会话各自渲染一份右栏面板；非当前会话的整棵视图带 `hidden`（有时是
+ * `aria-hidden="true"`），面板标记仍留在 DOM 里。`closest` 从面板自身开始查，所以面板
+ * 自己带隐藏标记时同样算隐藏。
+ * @param panel - 匹配全屏标记的面板根节点。
+ * @returns 可见时为 true；元素没有 `closest` 时按可见处理（极简测试 document）。
+ */
+function panelVisible(panel: Element): boolean {
+  if (typeof panel.closest !== 'function') return true
+  return panel.closest(HIDDEN_PANEL_SELECTOR) === null
+}
+
+/**
+ * 当前是否有一个**可见的**全屏呈现且已展开的右栏面板。
  *
  * 两个标记读的是同一份布局状态：`data-sidebar-right-open` 只在展开时渲染，
  * `data-sidebar-right-panel="fullscreen"` 覆盖手动全屏与窄窗口下的自动全屏。
- * @returns 有这样一个面板时为 true；没有 document 时返回 false。
+ *
+ * 隐藏会话里的面板标记也会留在 DOM 里，所以不能只读第一个匹配（`querySelector`）：
+ * 那样遗留面板会被当成当前浮层，让审批 / 提问桥白白让位、`Esc` 还可能关错侧栏。
+ * 这里遍历全部匹配，逐个排除自身或祖先带隐藏标记的面板；至少一个可见才算数。
+ * 极简测试 document 没有 `querySelectorAll` 时退回 `querySelector`。
+ * @returns 至少有一个可见面板时为 true；没有 document 或没有可见面板时返回 false。
  */
 export function fullscreenSidebarShown(): boolean {
   if (typeof document === 'undefined') return false
-  return document.querySelector(FULLSCREEN_PANEL_SELECTOR) !== null
+  if (typeof document.querySelectorAll === 'function') {
+    return Array.from(document.querySelectorAll(FULLSCREEN_PANEL_SELECTOR)).some(panelVisible)
+  }
+  const panel = document.querySelector(FULLSCREEN_PANEL_SELECTOR)
+  return panel !== null && panelVisible(panel)
 }
 
 /**

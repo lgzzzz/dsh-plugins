@@ -191,4 +191,32 @@ console.log('--- O⑨ 全屏右栏盖住提问卡片:这一按归右栏关栏,�
   }
 }
 
+console.log('--- O⑩ 隐藏会话遗留的全屏面板不挡提问 Esc ---')
+{
+  // 非当前会话的整棵视图带隐藏标记,里面那份全屏右栏面板还在 DOM 里;旧实现把它当成
+  // 当前浮层,提问卡片的 Esc 就静默失效了。
+  for (const [label, attributes] of [['hidden', { hidden: '' }], ['aria-hidden', { 'aria-hidden': 'true' }]]) {
+    const previousDocument = globalThis.document
+    const app = new FakeElement('div', { 'data-app': '' })
+    const hiddenSession = app.append(new FakeElement('div', { 'data-sidebar-right-session': 's2', ...attributes }))
+    hiddenSession.append(new FakeElement('div', {
+      'data-sidebar-right-session': 's2',
+      'data-sidebar-right-panel': 'fullscreen',
+      'data-sidebar-right-open': '',
+    }))
+    globalThis.document = fakeDocument({ root: app })
+    const pending = questionPending()
+    try {
+      const { shortcuts } = withPending(pending)
+      const press = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
+      shortcuts.emit(press.input)
+      check(`${label}:卡片照常关闭`, pending.dismissals, 1)
+      check(`${label}:按键被消费`, press.consumed.count, 1)
+    } finally {
+      if (previousDocument === undefined) delete globalThis.document
+      else globalThis.document = previousDocument
+    }
+  }
+}
+
 finish()

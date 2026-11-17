@@ -14,6 +14,7 @@ import {
   catalogOf,
   check,
   checkTrue,
+  deferred,
   fakeConfigForm,
   fakeConfigForms,
   fakeCtx,
@@ -254,6 +255,137 @@ console.log('--- C③c 第二步 Esc 退回模型列表,并回到刚才那一行
   off()
 }
 
+console.log('--- C③d 模型切换 await 期间切会话:旧回包不写进 s2 ---')
+{
+  const gate = deferred()
+  const remote = fakeRemote({ catalog: DEFAULT_CATALOG, selectGate: gate.promise })
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' }, s2: { id: 's2' } },
+    modelSelection: { next: { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' } },
+  })
+  const fixture = setup({ remote, sessions })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.store.select(3)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('请求属于 s1 且还停在等 Host', fixture.remote.selectCalls, [{
+    sessionId: 's1',
+    provider: 'opencode-go',
+    model: 'deepseek-v4.1-flash',
+    reasoningEffort: 'high',
+  }])
+  check('等待期间标记 pending', fixture.data.getSnapshot().pending, true)
+
+  sessions.list.setCurrent('s2')
+  await tick()
+  check('切到 s2 后当前选择是 s2 自己的投影', fixture.data.getSnapshot().current, {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    reasoningEffort: 'high',
+  })
+  check('切到 s2 后旧切换不再阻塞新会话', fixture.data.getSnapshot().pending, false)
+
+  gate.resolve({ ok: true, value: { selected: { provider: 'opencode-go', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' } } })
+  await tick()
+  check('s1 的回包没有改写 s2 的当前选择', fixture.data.getSnapshot().current, {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    reasoningEffort: 'high',
+  })
+  check('s1 的回包只清掉 pending', fixture.data.getSnapshot().pending, false)
+  check('旧回包没有留下错误', fixture.data.getSnapshot().error, null)
+  check('旧回包没有关掉当前浮层', fixture.store.getSnapshot().open, true)
+  off()
+}
+
+console.log('--- C③e 模型切换失败 / 抛错且会话已切走:旧错误不写进 s2 ---')
+{
+  const gate = deferred()
+  const remote = fakeRemote({
+    catalog: DEFAULT_CATALOG,
+    selectResult: { ok: false, error: { code: 'session/writer-held', message: '另一个 DSH 正在使用这个会话' } },
+    selectGate: gate.promise,
+  })
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' }, s2: { id: 's2' } },
+    modelSelection: { next: { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' } },
+  })
+  const fixture = setup({ remote, sessions })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.store.select(3)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  sessions.list.setCurrent('s2')
+  await tick()
+  gate.resolve()
+  await tick()
+  check('Host 的旧失败原因没有落进 s2', fixture.data.getSnapshot().error, null)
+  check('失败回包也清掉 pending', fixture.data.getSnapshot().pending, false)
+  check('s2 的当前选择不被旧失败影响', fixture.data.getSnapshot().current, {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    reasoningEffort: 'high',
+  })
+  check('失败回包没有关掉当前浮层', fixture.store.getSnapshot().open, true)
+  off()
+}
+{
+  const gate = deferred()
+  const remote = fakeRemote({ catalog: DEFAULT_CATALOG, selectGate: gate.promise })
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' }, s2: { id: 's2' } },
+    modelSelection: { next: { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' } },
+  })
+  const fixture = setup({ remote, sessions })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.store.select(3)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  sessions.list.setCurrent('s2')
+  await tick()
+  gate.reject(new Error('连接断开'))
+  await tick()
+  check('旧异常没有落进 s2', fixture.data.getSnapshot().error, null)
+  check('异常回包也清掉 pending', fixture.data.getSnapshot().pending, false)
+  check('异常回包没有关掉当前浮层', fixture.store.getSnapshot().open, true)
+  off()
+}
+
+console.log('--- C③f 模型切换 await 期间关闭并重开浮层:旧确认不关新浮层 ---')
+{
+  const gate = deferred()
+  const remote = fakeRemote({ catalog: DEFAULT_CATALOG, selectGate: gate.promise })
+  const fixture = setup({ remote })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.store.select(3)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('旧确认还停在等 Host', fixture.data.getSnapshot().pending, true)
+
+  fixture.store.close()
+  await tick()
+  await fixture.open()
+  check('重开的浮层是开着的', fixture.store.getSnapshot().open, true)
+
+  gate.resolve({ ok: true, value: { selected: { provider: 'opencode-go', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' } } })
+  await tick()
+  check('旧确认没有关掉用户重开的浮层', fixture.store.getSnapshot().open, true)
+  check('切换本身仍然生效', fixture.data.getSnapshot().current, {
+    provider: 'opencode-go',
+    model: 'deepseek-v4.1-flash',
+    reasoningEffort: 'high',
+  })
+  check('成功后 pending 清掉', fixture.data.getSnapshot().pending, false)
+  off()
+}
+
 console.log('--- C⑤ 没有打开的会话:浮层照常打开,确认时给出提示 ---')
 {
   const sessions = fakeSessions({})
@@ -330,6 +462,20 @@ console.log('--- C⑧ 全局捕获:Ctrl+Alt+U 在终端与页面里都被吞并�
   fixture.store.close()
   const otherKey = fixture.dom.pressWindowKey({ code: 'KeyP', key: 'p', ctrlKey: true, altKey: true, path: [{ closest: () => null }] })
   check('别的组合不拦截', [otherKey.defaultPrevented, otherKey.stopped], [false, false])
+
+  const altgr = fixture.dom.pressWindowKey({
+    code: 'KeyU',
+    key: 'u',
+    ctrlKey: true,
+    altKey: true,
+    getModifierState: (state) => state === 'AltGraph',
+    path: [{ closest: () => null }],
+  })
+  check('AltGr+U 不打开浮层', fixture.store.getSnapshot().open, false)
+  check('AltGr+U 不吞事件', [altgr.defaultPrevented, altgr.stopped], [false, false])
+  const ime = fixture.dom.pressWindowKey({ code: 'KeyU', key: 'u', ctrlKey: true, altKey: true, keyCode: 229, path: [{ closest: () => null }] })
+  check('keyCode 229 不打开浮层', fixture.store.getSnapshot().open, false)
+  check('keyCode 229 不吞事件', [ime.defaultPrevented, ime.stopped], [false, false])
 
   fixture.ctx.dispose()
   check('卸载后撤掉全局捕获监听', fixture.dom.windowListenerCount(), 0)
@@ -458,6 +604,84 @@ console.log('--- C⑩b3 换会话后不沿用上一条会话的写入状态 ---'
   await tick()
   check('换到 s2 后团队回到关闭', fixture.store.getSnapshot().entries[1].subtitle, '已关闭')
   check('换会话后数据快照也回到关闭', fixture.data.getSnapshot().team, { enabled: false })
+  off()
+}
+
+console.log('--- C⑩b4 快捷操作 await 期间切会话:回包不写进 s2、不挡住下一次操作 ---')
+{
+  const gate = deferred()
+  const remote = fakeRemote({ catalog: DEFAULT_CATALOG, teamGate: gate.promise })
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' }, s2: { id: 's2' } },
+    projections: { agentTeam: { enabled: false } },
+  })
+  const fixture = setup({ remote, sessions })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.store.select(1)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('团队写入属于 s1 且还停在等 Host', fixture.remote.teamCalls, [{ sessionId: 's1', enabled: true }])
+  check('等待期间标记 actionPending', fixture.data.getSnapshot().actionPending, 'team')
+
+  sessions.list.setCurrent('s2')
+  await tick()
+  check('切到 s2 后团队状态是 s2 自己的投影', fixture.data.getSnapshot().team, { enabled: false })
+  check('切会话后旧操作的 pending 不阻塞新会话', fixture.data.getSnapshot().actionPending, null)
+
+  gate.resolve()
+  await tick()
+  check('s1 的回包没有覆盖 s2 的团队状态', fixture.data.getSnapshot().team, { enabled: false })
+  check(
+    's2 的团队行副标题仍报关闭',
+    fixture.store.getSnapshot().entries.find((row) => row.key === 'action:team')?.subtitle,
+    '已关闭',
+  )
+  check('旧回包没有留下错误', fixture.data.getSnapshot().error, null)
+
+  // 下一次 Enter 必须作用在 s2 上（旧实现会从被 s1 覆盖后的状态出发发出 enabled:false）。
+  const teamRow = fixture.store.getSnapshot().entries.findIndex((row) => row.key === 'action:team')
+  fixture.store.select(teamRow)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('下一次操作使用 s2', fixture.remote.teamCalls[1], { sessionId: 's2', enabled: true })
+  off()
+}
+
+console.log('--- C⑩b5 工作树请求 await 期间切会话:回包不写进 s2 ---')
+{
+  const gate = deferred()
+  const remote = fakeRemote({ catalog: DEFAULT_CATALOG, worktreeGate: gate.promise })
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' }, s2: { id: 's2' } },
+  })
+  const fixture = setup({ remote, sessions })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.store.select(0)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('工作树请求属于 s1 且还停在等 Host', fixture.remote.worktreeCalls, [{ sessionId: 's1', from: null }])
+  check('等待期间标记 actionPending', fixture.data.getSnapshot().actionPending, 'worktree')
+
+  sessions.list.setCurrent('s2')
+  await tick()
+  check('切到 s2 后工作树回到 s2 的读数', fixture.data.getSnapshot().worktree, null)
+  check('切会话后旧操作的 pending 不阻塞新会话', fixture.data.getSnapshot().actionPending, null)
+
+  gate.resolve()
+  await tick()
+  check('s1 的回包没有覆盖 s2 的工作树状态', fixture.data.getSnapshot().worktree, null)
+  const worktreeRow = fixture.store.getSnapshot().entries.findIndex((row) => row.key === 'action:worktree')
+  check('s2 的工作树行仍报关闭', fixture.store.getSnapshot().entries[worktreeRow]?.subtitle, '已关闭')
+  check('旧回包没有留下错误', fixture.data.getSnapshot().error, null)
+
+  fixture.store.select(worktreeRow)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('下一次操作使用 s2', fixture.remote.worktreeCalls[1], { sessionId: 's2', from: null })
   off()
 }
 

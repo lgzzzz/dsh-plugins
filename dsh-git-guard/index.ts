@@ -3,7 +3,7 @@
  *
  * 两条通路各管一半:
  *   - `systemPrompt` 区段(`git-guard:push-policy`,与 TEAM_POLICY 同序)要求模型在 commit /
- *     push、checkout 与破坏性历史改写之前取得用户许可;
+ *     push、checkout / switch、clean 等删除操作与破坏性历史改写之前取得用户许可;
  *   - `tools/pre-execute` 钩子解析命令里的 git 子命令,命中即返回 `kind: 'ask'`。
  *
  * 命令判定是保守的启发式解析:只认能静态解析出 git 子命令的形态。解析不出(自定义包装器、
@@ -26,15 +26,35 @@ import type {} from '@deepseek-ai/dsh-agent'
 type SessionRef = NonNullable<Parameters<SandboxPolicyService['resolve']>[0]>['session']
 
 /**
- * shell 工具的参数形状。上游把 `ToolExecution.arguments` 暴露为 `unknown`，没有公开的
- * shell 参数类型，所以这里只做一次结构收窄：只读插件需要的 `command` 字段。
+ * shell 类工具的参数形状。上游把 `ToolExecution.arguments` 暴露为 `unknown`，没有公开的
+ * 参数类型，所以这里只做一次结构收窄：shell 工具读 `command`,`terminal_send` 读 `text`。
  */
 interface ShellArguments {
   readonly command?: unknown
+  readonly text?: unknown
+}
+
+/** 把文本送进终端执行的工具:命令文本在 `text`,且无论 `submit` 真假都可能带换行执行。 */
+const SHELL_TEXT_TOOL = 'terminal_send'
+
+/**
+ * 取出一条工具调用要检查的命令文本:`arguments.command` 优先(所有 shell 工具);
+ * 仅 `terminal_send` 回退到 `arguments.text`,其它工具的 `text` 不参与判定。
+ */
+function commandFrom(exec: {
+  readonly name: string
+  readonly arguments?: unknown
+}): string | undefined {
+  const args = exec.arguments as ShellArguments | undefined
+  if (typeof args?.command === 'string') return args.command
+  if (exec.name === SHELL_TEXT_TOOL && typeof args?.text === 'string') return args.text
+  return undefined
 }
 
 const GUARD_POLICY_TEXT =
-  '`git commit`、`git push` 与 `git checkout` 均须获得用户许可后才能执行; ' +
+  '`git commit`、`git push`、`git checkout` 与 `git switch` 均须获得用户许可后才能执行; ' +
+  '`git clean`、`git pull --rebase`、`git branch -D/-f`、`git tag -d/-f` 与 `git worktree remove` ' +
+  '这类会删除文件、移除工作树或改写分支/标签引用的操作也须先获得用户许可; ' +
   '破坏性历史改写、引用改写、远程改写与工作区覆盖操作(如 `git rebase`、`git merge`、`git cherry-pick`、' +
   '`git revert`、`git reset --hard`、`git checkout --force`、`git push --force`、`git commit-tree`、' +
   '`git update-ref`、`git stash`、以及 `git restore` 覆盖工作区的形态)同样须先获得用户许可, ' +
@@ -124,7 +144,22 @@ function splitSegments(command: string): string[] {
   return segments
 }
 
-/** 按 shell 词法切 token:引号只做分组、不进 token;反斜杠转义保留被转义的那个字符。 */
+/** 引号外有转义语义的字符:空白、两种引号、反斜杠、`$` 与反引号。 */
+const UNQUOTED_ESCAPABLE = /[\s"'\\$`]/
+
+/** 双引号内有转义语义的字符:`$`、反引号、`"`、`\`(换行另行按行续接处理)。 */
+const DOUBLE_QUOTE_ESCAPABLE = /[$`"\\]/
+
+/**
+ * 按 shell 词法切 token。
+ *
+ * - 引号只做分组、不进 token;开引号即视为有 token,因此空引号也留下空 token;
+ * - 引号外只去掉有转义语义的反斜杠;Windows 路径里的 `\` 原样保留;
+ * - 双引号内只对 `$`、反引号、`"`、`\` 与换行保留转义语义,其它 `\` 按字面保留;
+ * - 单引号内反斜杠是字面量;
+ * - 引号外的反斜杠 + 换行做行续接(LF 跳过两个字符,CRLF 跳过三个);
+ * - `$'...'` / `$"..."` 跳过 `$`,按对应引号处理。
+ */
 function tokenize(command: string): string[] {
   const tokens: string[] = []
   let current = ''
@@ -132,38 +167,103 @@ function tokenize(command: string): string[] {
   let quote: '"' | "'" | null = null
   const n = command.length
   let i = 0
+
+  const pushToken = (): void => {
+    if (!hasCurrent) return
+    tokens.push(current)
+    current = ''
+    hasCurrent = false
+  }
+
+  /** 反斜杠后是 LF / CRLF 时返回要跳过的字符数,否则返回 0。 */
+  const lineContinuationLength = (): number => {
+    if (command[i + 1] === '\n') return 2
+    if (command[i + 1] === '\r' && command[i + 2] === '\n') return 3
+    return 0
+  }
+
   while (i < n) {
     const ch = command[i]!
     if (quote !== null) {
-      if (ch === '\\' && quote === '"' && i + 1 < n) {
-        current += command[i + 1]!
+      if (ch === '\\') {
+        if (quote === "'") {
+          // 单引号内反斜杠保持字面。
+          current += ch
+          hasCurrent = true
+          i += 1
+          continue
+        }
+        const next = command[i + 1]
+        if (next === undefined) {
+          current += ch
+          hasCurrent = true
+          i += 1
+          continue
+        }
+        const continuation = lineContinuationLength()
+        if (continuation > 0) {
+          i += continuation
+          continue
+        }
+        if (DOUBLE_QUOTE_ESCAPABLE.test(next)) {
+          current += next
+          hasCurrent = true
+          i += 2
+          continue
+        }
+        // 不具转义语义(如双引号里的 Windows 路径):保留反斜杠与下一个字符。
+        current += ch + next
         hasCurrent = true
         i += 2
         continue
       }
+      if (ch === quote) {
+        // 结束引号只做分组,不进 token。
+        quote = null
+        i += 1
+        continue
+      }
       current += ch
       hasCurrent = true
-      if (ch === quote) quote = null
       i += 1
       continue
     }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      i += 1
-      continue
-    }
-    if (ch === '\\' && i + 1 < n) {
-      current += command[i + 1]!
+    const dollarQuote = ch === '$' ? command[i + 1] : undefined
+    if (dollarQuote === '"' || dollarQuote === "'") {
+      // `$'...'` / `$"..."`:跳过 `$`,按对应引号分组。
+      quote = dollarQuote
       hasCurrent = true
       i += 2
       continue
     }
-    if (/\s/.test(ch)) {
-      if (hasCurrent) {
-        tokens.push(current)
-        current = ''
-        hasCurrent = false
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      // 开引号即视为有 token,空引号也要保留。
+      hasCurrent = true
+      i += 1
+      continue
+    }
+    if (ch === '\\' && i + 1 < n) {
+      const continuation = lineContinuationLength()
+      if (continuation > 0) {
+        i += continuation
+        continue
       }
+      const next = command[i + 1]!
+      if (UNQUOTED_ESCAPABLE.test(next)) {
+        current += next
+        hasCurrent = true
+        i += 2
+        continue
+      }
+      // 不具转义语义(如 Windows 路径分隔符):保留 `\`,继续处理下一个字符。
+      current += ch
+      hasCurrent = true
+      i += 1
+      continue
+    }
+    if (/\s/.test(ch)) {
+      pushToken()
       i += 1
       continue
     }
@@ -171,7 +271,7 @@ function tokenize(command: string): string[] {
     hasCurrent = true
     i += 1
   }
-  if (hasCurrent) tokens.push(current)
+  pushToken()
   return tokens
 }
 
@@ -333,6 +433,83 @@ function overwritesWorktreeOnCheckout(args: string[]): boolean {
   return separator >= 0 && separator < args.length - 1
 }
 
+/**
+ * 参数里是否有任一旗标:长选项按整 token 精确匹配,短选项按字符匹配(兼容 `-fC` 这类簇)。
+ * 只用于「命中即 ask」的判定,簇里出现同名取值字样最多多问一次,不会漏拦。
+ */
+function hasFlag(args: readonly string[], longFlags: readonly string[], shortFlags: string): boolean {
+  return args.some(arg => {
+    if (arg.startsWith('--')) return longFlags.includes(arg)
+    if (!arg.startsWith('-') || arg === '-') return false
+    for (const ch of arg.slice(1)) {
+      if (shortFlags.includes(ch)) return true
+    }
+    return false
+  })
+}
+
+/** `git switch` 会丢弃工作区改动或重置分支的旗标。 */
+function resetsWorktreeOnSwitch(args: readonly string[]): boolean {
+  return hasFlag(args, ['--force', '--discard-changes'], 'fC')
+}
+
+/**
+ * `git clean` 的 dry-run 形态:`--dry-run`,或短选项簇里的 `n`。
+ * `-e <pattern>` / `--exclude <pattern>` 的取值要整段跳过(包括 `-e<pattern>`),否则 pattern 里的 `n`
+ * (或取值恰好是 `-n`)会被误判成 dry-run,让真正会删文件的 clean 放行。
+ */
+function cleansWithoutDeleting(args: readonly string[]): boolean {
+  let skipNext = false
+  for (const arg of args) {
+    if (skipNext) {
+      skipNext = false
+      continue
+    }
+    if (arg === '--') break
+    if (arg === '--dry-run') return true
+    if (arg === '--exclude') {
+      skipNext = true
+      continue
+    }
+    if (!arg.startsWith('-') || arg.startsWith('--') || arg === '-') continue
+    const cluster = arg.slice(1)
+    for (let index = 0; index < cluster.length; index += 1) {
+      const ch = cluster[index]!
+      if (ch === 'n') return true
+      if (ch === 'e') {
+        // `-e<pattern>`:余下字符是取值;单独的 `-e`:取值在下一个参数。
+        if (index === cluster.length - 1) skipNext = true
+        break
+      }
+    }
+  }
+  return false
+}
+
+/** `git pull` 的 rebase 形态:`--rebase`、`--rebase=*`,或短选项簇里的 `r`。 */
+function pullsWithRebase(args: readonly string[]): boolean {
+  return args.some(arg => {
+    if (arg === '--rebase' || arg.startsWith('--rebase=')) return true
+    if (!arg.startsWith('-') || arg.startsWith('--') || arg === '-') return false
+    return arg.slice(1).includes('r')
+  })
+}
+
+/** `git branch` 的删除 / 强制 / 强制移动旗标。 */
+function deletesOrForcesBranch(args: readonly string[]): boolean {
+  return hasFlag(args, ['--delete', '--force'], 'dDfM')
+}
+
+/** `git tag` 的删除 / 强制旗标。 */
+function deletesOrForcesTag(args: readonly string[]): boolean {
+  return hasFlag(args, ['--delete', '--force'], 'df')
+}
+
+/** `git worktree remove` 的强制删除旗标。 */
+function forcesWorktreeRemove(args: readonly string[]): boolean {
+  return hasFlag(args, ['--force'], 'f')
+}
+
 /** 只读的 stash 动作:`list` / `show` 只查不改,`--help` 只打印用法。 */
 const STASH_READ_ONLY = new Set(['list', 'show', 'help'])
 
@@ -417,6 +594,68 @@ function decideGit(subcommand: string, args: string[]): AskDecision | undefined 
     return {
       kind: 'ask',
       reason: `git checkout 会切换分支或按路径还原文件, ${ASK_SUFFIX}`,
+      destructive: false,
+    }
+  }
+  if (subcommand === 'switch') {
+    if (resetsWorktreeOnSwitch(args)) {
+      return {
+        kind: 'ask',
+        reason: `git switch --force / --discard-changes / -C 会丢弃工作区改动或重置分支, ${ASK_SUFFIX}`,
+        destructive: true,
+      }
+    }
+    return {
+      kind: 'ask',
+      reason: `git switch 会切换分支或重置工作区, ${ASK_SUFFIX}`,
+      destructive: false,
+    }
+  }
+  if (subcommand === 'clean') {
+    // dry-run 只列出将被删除的文件,不删任何东西,放行。
+    if (cleansWithoutDeleting(args)) return undefined
+    return {
+      kind: 'ask',
+      reason: `git clean 会删除未跟踪文件与目录, ${ASK_SUFFIX}`,
+      destructive: true,
+    }
+  }
+  if (subcommand === 'pull') {
+    // 普通 pull 可能产生 merge 提交,本次只拦 rebase 形态;rebase 形态会改写本地提交历史。
+    if (!pullsWithRebase(args)) return undefined
+    return {
+      kind: 'ask',
+      reason: `git pull --rebase 会 rebase 并改写本地提交历史, ${ASK_SUFFIX}`,
+      destructive: true,
+    }
+  }
+  if (subcommand === 'branch') {
+    if (!deletesOrForcesBranch(args)) return undefined
+    return {
+      kind: 'ask',
+      reason: `git branch -d/-D/-f/-M 会删除、强制移动或改写分支引用, ${ASK_SUFFIX}`,
+      destructive: true,
+    }
+  }
+  if (subcommand === 'tag') {
+    if (!deletesOrForcesTag(args)) return undefined
+    return {
+      kind: 'ask',
+      reason: `git tag -d/--delete 或 -f/--force 会删除或覆盖标签引用, ${ASK_SUFFIX}`,
+      destructive: true,
+    }
+  }
+  if (subcommand === 'worktree' && args[0] === 'remove') {
+    if (forcesWorktreeRemove(args)) {
+      return {
+        kind: 'ask',
+        reason: `git worktree remove --force 会强制删除工作树目录, ${ASK_SUFFIX}`,
+        destructive: true,
+      }
+    }
+    return {
+      kind: 'ask',
+      reason: `git worktree remove 会移除工作树目录, ${ASK_SUFFIX}`,
       destructive: false,
     }
   }
@@ -538,8 +777,7 @@ export function apply(ctx: Context): void {
 
   // 解析不出 git 子命令、或会话处于完全访问模式时原样放行(见文件头)。
   ctx.on('tools/pre-execute', async (exec, next) => {
-    const args = exec.arguments as ShellArguments | undefined
-    const command = typeof args?.command === 'string' ? args.command : undefined
+    const command = commandFrom(exec)
     if (command === undefined || command.trim().length === 0) return await next()
     const decision = decide(command)
     if (decision === undefined) return await next()

@@ -44,6 +44,35 @@ for (const command of [
   assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知推送需用户许可')
 }
 
+// tokenize 的引号 / 反斜杠 / `$'...'` 语义:这些写法仍须解析出 git 子命令,不能借词法绕开判定。
+for (const command of [
+  'git "push" --force',
+  '"git" push',
+  'git "push"',
+  "'git' push",
+  "git 'commit' -m x",
+  "git $'push'",
+  'git $"push"',
+  'C:\\Git\\bin\\git.exe push --force',
+  '& "C:\\Program Files\\Git\\cmd\\git.exe" push --force',
+  '"C:\\Program Files\\Git\\bin\\git.exe" push',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(引号/路径): ${command}`)
+  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知需用户许可')
+}
+
+// 反斜杠 + 换行做行续接:续接出来的 --force 仍按强推告警(LF 与 CRLF 都覆盖)。
+for (const command of [
+  'git push \\\n--force',
+  'git push "--for\\\nce"',
+  'git push "--for\\\r\nce"',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(行续接): ${command}`)
+  assert.match(decision?.reason ?? '', /--force/, '行续接后的强推仍给出破坏性文案')
+}
+
 for (const command of [
   'git checkout main',
   'git checkout -b feature/x',
@@ -120,6 +149,120 @@ for (const command of [
   assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知需用户许可')
 }
 
+// switch:与 checkout 对齐,所有形态都 ask;带强切/重置分支旗标时文案更具体。
+for (const command of [
+  'git switch main',
+  'git switch -c feature/x',
+  'git switch --detach HEAD',
+  'git switch -',
+  'git switch --force main',
+  'git switch -f main',
+  'git switch --discard-changes feature',
+  'git switch -C main',
+  'git switch -fC main',
+  'bash -c "git switch -f main"',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(switch): ${command}`)
+  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知需用户许可')
+}
+for (const command of [
+  'git switch --force main',
+  'git switch -f main',
+  'git switch --discard-changes feature',
+  'git switch -C main',
+  'git switch -fC main',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(switch 破坏性): ${command}`)
+  assert.match(decision?.reason ?? '', /丢弃工作区|重置分支/, 'switch 强切文案说明会丢弃工作区改动或重置分支')
+}
+
+// clean:默认删除未跟踪文件,一律 ask;只有 dry-run 放行。
+for (const command of [
+  'git clean',
+  'git clean -f',
+  'git clean -fd',
+  'git clean -xdf',
+  'git clean --force -d',
+  'git clean -enode_modules',
+  'git clean -en',
+  'git clean -e -n',
+  'git clean --exclude node_modules',
+  'git -C /repo clean -fd',
+  'bash -c "git clean -fd"',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(clean): ${command}`)
+  assert.match(decision?.reason ?? '', /删除未跟踪|许可/, 'clean 文案说明会删除未跟踪文件')
+}
+
+// pull:仅 rebase 形态 ask;普通 pull 不拦也不放行(原样交给 next)。
+for (const command of [
+  'git pull --rebase',
+  'git pull --rebase=interactive origin main',
+  'git pull -r',
+  'git pull -r origin main',
+  'git pull -ur origin main',
+  'bash -c "git pull --rebase"',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(pull --rebase): ${command}`)
+  assert.match(decision?.reason ?? '', /rebase/, 'pull 文案说明会 rebase')
+  assert.match(decision?.reason ?? '', /历史/, 'pull 文案说明会改写本地提交历史')
+}
+
+// branch / tag:删除、强制移动与覆盖引用一律 ask。
+for (const command of [
+  'git branch -d old',
+  'git branch -D old',
+  'git branch --delete old',
+  'git branch -f feature main',
+  'git branch --force feature main',
+  'git branch -M main',
+  'git branch -Df feature',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(branch): ${command}`)
+  assert.match(decision?.reason ?? '', /删除|改写|许可/, 'branch 文案说明会删除或改写分支引用')
+}
+for (const command of [
+  'git tag -d v1',
+  'git tag --delete v1',
+  'git tag -f v1',
+  'git tag --force v1',
+  'git tag -df v1',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(tag): ${command}`)
+  assert.match(decision?.reason ?? '', /标签/, 'tag 文案说明会删除或覆盖标签引用')
+}
+
+// worktree remove:移除工作树目录 ask;带 --force 时文案更具体。
+for (const command of [
+  'git worktree remove ../wt',
+  'git worktree remove --force ../wt',
+  'git worktree remove -f ../wt',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(worktree remove): ${command}`)
+  assert.match(decision?.reason ?? '', /工作树/, 'worktree remove 文案说明会移除工作树')
+}
+
+// 新增子命令的 destructive 标记要在混合命令里胜出,让用户先看到更危险的文案。
+for (const [command, pattern] of [
+  ['git push && git pull --rebase', /rebase/],
+  ['git checkout main && git switch -f main', /丢弃工作区|重置分支/],
+  ['git commit -m x && git clean -fd', /删除未跟踪/],
+  ['git commit -m x && git branch -D old', /删除|改写/],
+  ['git commit -m x && git tag -d v1', /标签/],
+  ['git push && git worktree remove -f ../wt', /强制删除/],
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(混合高危子命令): ${command}`)
+  assert.match(decision?.reason ?? '', pattern, `混合命令优先提示破坏性操作: ${command}`)
+}
+
 for (const command of [
   'git commit -m x',
   'git push',
@@ -181,6 +324,27 @@ for (const command of [
   'git stash list',
   'git stash show -p',
   'git stash --help',
+  'git pull',
+  'git pull origin main',
+  'git pull --ff-only',
+  'git clean -n',
+  'git clean --dry-run',
+  'git clean -nd',
+  'git clean -ndx',
+  'git clean -fn',
+  'git clean -e node_modules -n',
+  'git branch',
+  'git branch -a',
+  'git branch -vv',
+  'git branch new-branch',
+  'git branch -m old new',
+  'git tag',
+  'git tag v1',
+  'git tag -a v1 -m msg',
+  'git tag -l "v*"',
+  'git worktree list',
+  'git worktree add ../wt',
+  'git worktree prune',
   'git restore --staged src/index.ts',
   'git restore --staged .',
   'git restore -S .',

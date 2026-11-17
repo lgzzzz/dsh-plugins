@@ -231,7 +231,18 @@ function makeFollowStream(frames) {
 }
 
 /** 造一个假的远程服务：模型目录 + 模型选择 + forge 工作树 + 团队协作。 */
-export function fakeRemote({ catalog, selectResult, worktreeResult, cancelResult, teamResult, followFrames } = {}) {
+export function fakeRemote({
+  catalog,
+  selectResult,
+  selectGate,
+  worktreeResult,
+  worktreeGate,
+  cancelResult,
+  cancelGate,
+  teamResult,
+  teamGate,
+  followFrames,
+} = {}) {
   const catalogCalls = []
   const selectCalls = []
   const worktreeCalls = []
@@ -257,6 +268,8 @@ export function fakeRemote({ catalog, selectResult, worktreeResult, cancelResult
       },
       async selectModel(request) {
         selectCalls.push(request)
+        // `selectGate` 用来把回包扣在「等 Host」的窗口里，以便在 await 期间切会话 / 重开浮层。
+        if (selectGate !== undefined) await selectGate
         if (selectResult !== undefined) return selectResult
         const { sessionId, ...selected } = request
         return { ok: true, value: { selected } }
@@ -265,10 +278,12 @@ export function fakeRemote({ catalog, selectResult, worktreeResult, cancelResult
     forgePanel: {
       async requestWorktree(sessionId, from) {
         worktreeCalls.push({ sessionId, from })
+        if (worktreeGate !== undefined) await worktreeGate
         return worktreeResult ?? { ok: true, value: undefined }
       },
       async cancelWorktree(sessionId) {
         cancelCalls.push({ sessionId })
+        if (cancelGate !== undefined) await cancelGate
         return cancelResult ?? { ok: true, value: undefined }
       },
       follow(sessionId) {
@@ -281,6 +296,7 @@ export function fakeRemote({ catalog, selectResult, worktreeResult, cancelResult
     agentTeams: {
       async setEnabled(sessionId, enabled) {
         teamCalls.push({ sessionId, enabled })
+        if (teamGate !== undefined) await teamGate
         return teamResult ?? { ok: true, value: undefined }
       },
     },
@@ -292,6 +308,23 @@ export function fakeRemote({ catalog, selectResult, worktreeResult, cancelResult
     followCalls,
     followStreams,
   }
+}
+
+/**
+ * 造一个可以从外部 resolve / reject 的 Promise。
+ *
+ * 给 `fakeRemote` 的 `*Gate` 选项用：`await` 一直停在这里，直到测试在「中途」做完切会话 /
+ * 重开浮层之后再放行，从而稳定复现「旧回包晚到」的竞态。
+ * @returns `{ promise, resolve, reject }`。
+ */
+export function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 /** 造一个假的快捷键目录：固定行登记 + 观察者，可按固定通道派发输入。 */
@@ -609,6 +642,7 @@ export function installDom() {
       key: '',
       repeat: false,
       isComposing: false,
+      keyCode: 0,
       ctrlKey: false,
       altKey: false,
       shiftKey: false,
@@ -618,6 +652,9 @@ export function installDom() {
       path: [],
       composedPath() {
         return event.path
+      },
+      getModifierState(state) {
+        return state === 'AltGraph' ? event.altGraph === true : false
       },
       preventDefault() {
         event.defaultPrevented = true

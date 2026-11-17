@@ -22,7 +22,7 @@
  * 官方服务没有公开的「按 id 调命令」API；`registry` 是服务实例上的内部字段。插件
  * 对它做结构检查，缺席时告警并不安装固定行，而不是退回自己执行动作。
  */
-import { captureContext } from './capture.ts'
+import { captureContext, isComposingEvent } from './capture.ts'
 import { name, warn } from './runtime.ts'
 import {
   TARGETS,
@@ -287,7 +287,7 @@ export function installMacosDeadKeyCapture(
   }
   const onKeydown = (event: KeyboardEvent): void => {
     if (event.type !== 'keydown' || event.key !== 'Dead') return
-    if (event.isComposing === true || event.defaultPrevented === true) return
+    if (isComposingEvent(event) || event.defaultPrevented === true) return
     const element = composedElement(event)
     if (element !== null && element.closest('.xterm') !== null) return
     const target = targetForGesture(platform, gestureFromEvent(event))
@@ -317,7 +317,7 @@ export function installTerminalCapture(
   }
   const onKeydown = (event: KeyboardEvent): void => {
     if (event.type !== 'keydown') return
-    if (event.isComposing === true || event.repeat === true || event.defaultPrevented === true) return
+    if (isComposingEvent(event) || event.repeat === true || event.defaultPrevented === true) return
     const element = composedElement(event)
     if (element === null || element.closest('.xterm') === null) return
     const target = targetForGesture(platform, gestureFromEvent(event))
@@ -363,7 +363,7 @@ function gestureFromEvent(event: KeyboardEvent): ShortcutGesture {
     shift: event.shiftKey === true,
     meta: event.metaKey === true,
     repeat: event.repeat === true,
-    composing: event.isComposing === true,
+    composing: isComposingEvent(event),
     defaultPrevented: event.defaultPrevented === true,
   }
 }

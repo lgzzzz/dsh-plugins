@@ -63,11 +63,34 @@ export function terminalTarget(element: Element | null): element is Element {
   return element.closest('.xterm') !== null
 }
 
+/** 捕获阶段需要读的组合输入事实；最小形状便于测试传普通对象。 */
+export interface ComposingEvent {
+  readonly isComposing?: boolean
+  readonly keyCode?: number
+  getModifierState?(key: string): boolean
+}
+
+/**
+ * 这次按键是否处于组合输入中。
+ *
+ * 与上游键盘适配器的 `composition.guards(event) || getModifierState('AltGraph')` 对齐：
+ * 除了 `isComposing`，旧浏览器的 `keyCode === 229` 和 Windows/Linux 的 AltGr 也要让位。
+ * 捕获层跑在适配器之前，拿不到它维护的 `deadKey` 状态，但这三项足以覆盖最常见的
+ * 「终端里 AltGr+字母被当成 Ctrl+Alt+字母」路径。
+ * @param event - 原生 keydown 或测试替身。
+ * @returns 处于组合输入 / AltGr 形态时为 true。
+ */
+export function isComposingEvent(event: ComposingEvent): boolean {
+  if (event.isComposing === true) return true
+  if (event.keyCode === 229) return true
+  return typeof event.getModifierState === 'function' && event.getModifierState('AltGraph') === true
+}
+
 /**
  * 构建捕获阶段 keydown 的手势事实，形状与共用判定读取的一致。
  *
- * 组合输入取自事件自身的 `isComposing`；捕获阶段尚无处理器运行，因此
- * `defaultPrevented` 恒为 false。
+ * 组合输入按 {@link isComposingEvent} 判定（含 AltGraph）；捕获阶段尚无处理器运行，
+ * 因此 `defaultPrevented` 恒为 false。
  */
 export function captureGesture(event: KeyboardEvent): ShortcutGesture {
   return {
@@ -78,7 +101,7 @@ export function captureGesture(event: KeyboardEvent): ShortcutGesture {
     shift: event.shiftKey,
     meta: event.metaKey,
     repeat: event.repeat,
-    composing: event.isComposing,
+    composing: isComposingEvent(event),
     defaultPrevented: false,
   }
 }

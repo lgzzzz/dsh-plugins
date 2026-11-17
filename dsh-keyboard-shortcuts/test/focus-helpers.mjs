@@ -458,6 +458,8 @@ export function fakeKeyEvent({
   metaKey = false,
   repeat = false,
   isComposing = false,
+  keyCode = 0,
+  altGraph = false,
 } = {}) {
   const event = {
     type,
@@ -469,6 +471,8 @@ export function fakeKeyEvent({
     metaKey,
     repeat,
     isComposing,
+    keyCode,
+    getModifierState: (state) => state === 'AltGraph' ? altGraph : false,
     prevented: 0,
     stopped: 0,
     composedPath: () => path,

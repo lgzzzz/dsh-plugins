@@ -871,7 +871,7 @@ export function apply(ctx: Context): void {
       if (platform !== 'macos' || typeof window === 'undefined') return () => {}
       const onKeydown = (event: KeyboardEvent): void => {
         if (event.type !== 'keydown' || event.key !== 'Dead') return
-        if (event.isComposing === true || event.defaultPrevented === true) return
+        if (isComposingEvent(event) || event.defaultPrevented === true) return
         const element = composedElement(event)
         if (element !== null && element.closest('.xterm') !== null) return
         const target = ownedPalette(shortcuts, platform, keyGesture(event))
@@ -1075,6 +1075,13 @@ export function sessionSwitchOwns(
   return ownedPalette(shortcuts, platform, gesture) === 'session'
 }
 
+/** 与上游键盘适配器一致：isComposing、旧 keyCode 229、AltGraph 都算组合输入。 */
+function isComposingEvent(event: KeyboardEvent): boolean {
+  if (event.isComposing === true) return true
+  if (event.keyCode === 229) return true
+  return typeof event.getModifierState === 'function' && event.getModifierState('AltGraph') === true
+}
+
 /** 从一次原生 keydown 里取出本插件要读的手势事实(捕获阶段 `defaultPrevented` 恒为 false)。 */
 function keyGesture(event: KeyboardEvent): ShortcutGesture {
   return {
@@ -1084,7 +1091,7 @@ function keyGesture(event: KeyboardEvent): ShortcutGesture {
     shift: event.shiftKey,
     meta: event.metaKey,
     repeat: event.repeat,
-    composing: event.isComposing,
+    composing: isComposingEvent(event),
     defaultPrevented: false,
   }
 }

@@ -41,6 +41,20 @@ export function terminalTarget(element: Element | null): element is Element {
   return element.closest('.xterm') !== null
 }
 
+/** 捕获阶段需要读的组合输入事实；最小形状便于测试传普通对象。 */
+interface ComposingEvent {
+  readonly isComposing?: boolean
+  readonly keyCode?: number
+  getModifierState?(key: string): boolean
+}
+
+/** 与上游键盘适配器一致：isComposing、旧 keyCode 229、AltGraph 都算组合输入。 */
+function isComposingEvent(event: ComposingEvent): boolean {
+  if (event.isComposing === true) return true
+  if (event.keyCode === 229) return true
+  return typeof event.getModifierState === 'function' && event.getModifierState('AltGraph') === true
+}
+
 /** 构建捕获阶段 keydown 的手势事实，形状与固定输入通道读取的一致。 */
 export function captureGesture(event: KeyboardEvent): ShortcutGesture {
   return {
@@ -51,7 +65,7 @@ export function captureGesture(event: KeyboardEvent): ShortcutGesture {
     shift: event.shiftKey,
     meta: event.metaKey,
     repeat: event.repeat,
-    composing: event.isComposing,
+    composing: isComposingEvent(event),
     defaultPrevented: false,
   }
 }

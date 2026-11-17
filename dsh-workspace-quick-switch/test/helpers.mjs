@@ -539,6 +539,7 @@ export function installDom() {
       key: '',
       repeat: false,
       isComposing: false,
+      keyCode: 0,
       ctrlKey: false,
       altKey: false,
       shiftKey: false,
@@ -548,6 +549,9 @@ export function installDom() {
       path: [],
       composedPath() {
         return event.path
+      },
+      getModifierState(state) {
+        return state === 'AltGraph' ? event.altGraph === true : false
       },
       preventDefault() {
         event.defaultPrevented = true

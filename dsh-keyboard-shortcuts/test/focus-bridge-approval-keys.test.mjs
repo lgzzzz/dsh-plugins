@@ -443,4 +443,47 @@ console.log('--- I⑬ 全屏右栏盖住审批:这一按归右栏关栏,审批�
   }
 }
 
+console.log('--- I⑭ 隐藏会话遗留的全屏面板不挡审批:Enter / Esc 仍可作答 ---')
+{
+  // 非当前会话的整棵视图带 hidden / aria-hidden="true",里面那份全屏右栏的标记仍在 DOM 里。
+  // 旧实现把第一个匹配当成当前浮层,审批的两条路径都会静默让位,按键成了无主按键。
+  for (const [label, attributes] of [['hidden', { hidden: '' }], ['aria-hidden', { 'aria-hidden': 'true' }]]) {
+    const app = new FakeElement('div', { 'data-app': '' })
+    const hiddenSession = app.append(new FakeElement('div', { 'data-sidebar-right-session': 's2', ...attributes }))
+    hiddenSession.append(new FakeElement('div', {
+      'data-sidebar-right-session': 's2',
+      'data-sidebar-right-panel': 'fullscreen',
+      'data-sidebar-right-open': '',
+    }))
+    const card = staleCard(app)
+    const dom = withApprovalDom({ app, activeElement: card })
+    const pending = approvalPending()
+    try {
+      const { shortcuts, sidebar } = withPending(pending)
+
+      // 捕获路径:焦点停在过程卡片上,Enter 应照常允许一次,而不是被隐藏面板挡掉。
+      const enter = fakeKeyEvent({ path: [card, app], code: 'Enter' })
+      dom.window.emit(enter)
+      check(`${label}:捕获路 Enter 仍作答`, pending.answers, ['allowed-once'])
+      check(`${label}:捕获路 Enter 被吞`, [enter.prevented, enter.stopped], [1, 1])
+      check(`${label}:不关看不见的侧栏`, sidebar.calls, [])
+
+      // 固定通道路径同样让位给审批,而不是让位给隐藏面板。
+      const fixed = keydown(gesture('Enter'), shortcutContext({ target: domBody }))
+      shortcuts.emit(fixed.input)
+      check(`${label}:观察者路 Enter 仍作答`, pending.answers, ['allowed-once', 'allowed-once'])
+      check(`${label}:观察者路消费按键`, fixed.consumed.count, 1)
+
+      // Esc 也应照常拒绝,并且不落到隐藏会话的关栏动作上。
+      const escape = fakeKeyEvent({ path: [card, app], code: 'Escape' })
+      dom.window.emit(escape)
+      check(`${label}:捕获路 Esc 仍作答`, pending.answers, ['allowed-once', 'allowed-once', 'rejected'])
+      check(`${label}:捕获路 Esc 被吞`, [escape.prevented, escape.stopped], [1, 1])
+      check(`${label}:Esc 不关栏`, sidebar.calls, [])
+    } finally {
+      dom.restore()
+    }
+  }
+}
+
 finish()

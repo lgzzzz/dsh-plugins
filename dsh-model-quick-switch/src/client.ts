@@ -294,6 +294,13 @@ export function ownedModelSwitch(
   return rows === undefined || rows.some((row) => row.id === MODEL_SWITCH_ID)
 }
 
+/** 与上游键盘适配器一致：isComposing、旧 keyCode 229、AltGraph 都算组合输入。 */
+function isComposingEvent(event: KeyboardEvent): boolean {
+  if (event.isComposing === true) return true
+  if (event.keyCode === 229) return true
+  return typeof event.getModifierState === 'function' && event.getModifierState('AltGraph') === true
+}
+
 /** 从一次原生 keydown 里取出本插件要读的手势事实（捕获阶段 `defaultPrevented` 恒为 false）。 */
 function keyGesture(event: KeyboardEvent): ModelSwitchGesture {
   return {
@@ -303,7 +310,7 @@ function keyGesture(event: KeyboardEvent): ModelSwitchGesture {
     shift: event.shiftKey,
     meta: event.metaKey,
     repeat: event.repeat,
-    composing: event.isComposing,
+    composing: isComposingEvent(event),
     defaultPrevented: false,
   }
 }
@@ -438,6 +445,16 @@ export function apply(ctx: Context): void {
     let stageChoice: ModelChoice | null = null
     let stageEfforts: readonly EffortChoice[] = []
     let stageModelIndex = 0
+    /**
+     * 浮层代次：每次打开、关闭、或从思考等级退回模型列表都 +1。
+     *
+     * 一次确认请求可能跨过「用户关掉浮层又重开」：回来时只看 `open` 分不清这是不是同一次
+     * 打开，就会把用户刚重开的那张浮层关掉。代次只在「打开 / 关闭 / 退回」时变，
+     * 同一会话里的正常成功不会失效。
+     */
+    let paletteEpoch = 0
+    /** 模型切换请求的代次：只有最后一次请求有权清 pending / 写结果。 */
+    let selectEpoch = 0
 
     /** 把设置里保存的列表读进数据快照。 */
     const refreshChoices = (): void => {
@@ -471,6 +488,12 @@ export function apply(ctx: Context): void {
     const reconcileWorktree = (observed: WorktreeFacts | null): WorktreeFacts | null => {
       const override = worktreeOverride
       if (override === null) return observed
+      // 第二道防线：覆盖只对写入它的那条会话有效。第一道在 runQuickAction 收尾时
+      // （会话已切走的响应整条丢弃）；这里再挡一次「覆盖晚到、当前会话已经换了」。
+      if (override.sessionId !== data.getSnapshot().sessionId) {
+        worktreeOverride = null
+        return observed
+      }
       const current = observed ?? EMPTY_WORKTREE_FACTS
       if (sameWorktreeFacts(current, override.target)) {
         worktreeOverride = null
@@ -489,6 +512,11 @@ export function apply(ctx: Context): void {
     const reconcileTeam = (observed: TeamFacts | null): TeamFacts | null => {
       const override = teamOverride
       if (override === null) return observed
+      // 同 reconcileWorktree：会话已经换了就丢弃上一条会话的覆盖读数。
+      if (override.sessionId !== data.getSnapshot().sessionId) {
+        teamOverride = null
+        return observed
+      }
       const current = observed ?? EMPTY_TEAM_FACTS
       if (sameTeamFacts(current, override.target)) {
         teamOverride = null
@@ -567,19 +595,21 @@ export function apply(ctx: Context): void {
       const snapshot: SessionListState | undefined = sessions?.list.getSnapshot()
       if (snapshot === undefined) {
         clearActionOverrides()
-        data.set({ sessionId: null, current: null, worktree: null, team: null })
+        data.set({ sessionId: null, current: null, worktree: null, team: null, actionPending: null, pending: false })
         syncForgeFollow(null)
         return null
       }
       const id = snapshot.ids.find((candidate) => (snapshot.byId[candidate]?.retainedBy?.mainView ?? 0) > 0)
       if (id === undefined) {
         clearActionOverrides()
-        data.set({ sessionId: null, current: null, worktree: null, team: null })
+        data.set({ sessionId: null, current: null, worktree: null, team: null, actionPending: null, pending: false })
         syncForgeFollow(null)
         return null
       }
-      // 换会话时旧会话的乐观覆盖必须丢掉；同一会话重读时保留，直到投影追上或出现新值。
-      if (previousId !== id) clearActionOverrides()
+      // 换会话时旧会话的乐观覆盖与进行中的快捷操作都必须丢掉；同一会话重读时保留，直到
+      // 投影追上或出现新值。进行中的模型切换由 selectChoice 自己按会话收尾（见那里的守卫）。
+      const changed = previousId !== id
+      if (changed) clearActionOverrides()
       const summary: SessionSummary | undefined = snapshot.byId[id]
       const values = summary?.projectionValues
       const projection: ModelSelectionProjection | undefined = values?.modelSelection
@@ -588,6 +618,7 @@ export function apply(ctx: Context): void {
         sessionId: id,
         current: projection?.next ?? projection?.lastUsed ?? null,
         team: reconcileTeam(teamFacts(values?.agentTeam)),
+        ...(changed ? { actionPending: null, pending: false } : {}),
       })
       syncForgeFollow(id)
       return id
@@ -660,6 +691,9 @@ export function apply(ctx: Context): void {
 
     /**
      * 给当前会话切换模型。
+     *
+     * 请求跨过一次用户切会话时，回包只属于旧会话：清掉 `pending` 就走，不写 `current`、
+     * 不把 Host 的旧错误留在新会话上，也不让调用方关掉浮层。
      * @param choice - 选中行对应的模型。
      * @returns 是否成功（失败原因写进 `error`，浮层保持打开）。
      */
@@ -675,21 +709,60 @@ export function apply(ctx: Context): void {
         data.set({ error: '模型选择服务不可用（remote.session 尚未就绪）。' })
         return false
       }
+      const requestEpoch = selectEpoch + 1
+      selectEpoch = requestEpoch
+      /** 只有最后一次请求可以清 pending / 写结果；换会话后新请求不能被旧回包清掉。 */
+      const settle = (patch: Parameters<typeof data.set>[0]): void => {
+        if (selectEpoch === requestEpoch) data.set(patch)
+      }
       data.set({ pending: true, error: null })
+      /** 这次回包是否还落在发起请求的会话上。 */
+      const stillCurrent = (): boolean => data.getSnapshot().sessionId === sessionId
       try {
         const request = { sessionId, ...selectionOfChoice(choice) }
         const response = await selectModel.call(sessionRemote, request)
+        if (!stillCurrent()) {
+          settle({ pending: false })
+          return false
+        }
         if (!response.ok) {
-          data.set({ pending: false, error: `切换失败：${describeRemoteFailure(response.error)}` })
+          settle({ pending: false, error: `切换失败：${describeRemoteFailure(response.error)}` })
           return false
         }
         const selected = response.value?.selected ?? selectionOfChoice(choice)
-        data.set({ pending: false, error: null, current: selected })
+        settle({ pending: false, error: null, current: selected })
         return true
       } catch (error) {
-        data.set({ pending: false, error: `切换失败：${messageOf(error)}` })
+        if (!stillCurrent()) {
+          settle({ pending: false })
+          return false
+        }
+        settle({ pending: false, error: `切换失败：${messageOf(error)}` })
         return false
       }
+    }
+
+    /**
+     * 这次异步快捷操作的响应是否仍属于发起它的会话与这一次操作。
+     *
+     * 用户可能在等 Host 回包时切走会话（这一次动作也可能已被服务撤下 / 别的写入取代）：
+     * 那时结果只属于旧会话，写进当前会话就会把别人的状态盖掉。
+     * @param sessionId - 发起请求时记下的会话。
+     * @param action - 发起请求时的快捷操作。
+     * @returns 仍可写回时为 true。
+     */
+    const actionResponseIsCurrent = (sessionId: SessionId, action: QuickAction): boolean => {
+      const current = data.getSnapshot()
+      return current.sessionId === sessionId && current.actionPending === action
+    }
+
+    /**
+     * 丢弃属于旧会话 / 已被取代的快捷操作响应：不动 `team` / `worktree` / `error`，
+     * 也不动 `actionPending`（换会话时它已由 refreshSession 清掉；如果新会话已经发起
+     * 同一个 action，旧回包更不能把它清掉），只重投影一次行。
+     */
+    const dropStaleActionResponse = (): void => {
+      syncRows()
     }
 
     /**
@@ -730,6 +803,12 @@ export function apply(ctx: Context): void {
           const result = pending
             ? await cancel.call(remote, sessionId)
             : await request.call(remote, sessionId, null)
+          // 回包先对会话：等 Host 的这段时间里用户可能已经切走（refreshSession 会把
+          // actionPending 清掉）；不属于当前会话的结果整条丢弃，不写状态、不设覆盖。
+          if (!actionResponseIsCurrent(sessionId, action)) {
+            dropStaleActionResponse()
+            return
+          }
           if (!result.ok) {
             data.set({
               actionPending: null,
@@ -745,6 +824,10 @@ export function apply(ctx: Context): void {
             data.set({ actionPending: null, worktree: target })
           }
         } catch (error) {
+          if (!actionResponseIsCurrent(sessionId, action)) {
+            dropStaleActionResponse()
+            return
+          }
           data.set({
             actionPending: null,
             error: `${pending ? '取消工作树' : '新建工作树'}失败：${messageOf(error)}`,
@@ -765,6 +848,11 @@ export function apply(ctx: Context): void {
       syncRows()
       try {
         const result = await setEnabled.call(remote, sessionId, next)
+        // 同工作树：会话已经切走就不把团队状态 / 错误写进新会话。
+        if (!actionResponseIsCurrent(sessionId, action)) {
+          dropStaleActionResponse()
+          return
+        }
         if (!result.ok) {
           data.set({ actionPending: null, error: `保存团队协作设置失败：${describeRemoteFailure(result.error)}` })
         } else {
@@ -773,6 +861,10 @@ export function apply(ctx: Context): void {
           data.set({ actionPending: null, team: target })
         }
       } catch (error) {
+        if (!actionResponseIsCurrent(sessionId, action)) {
+          dropStaleActionResponse()
+          return
+        }
         data.set({ actionPending: null, error: `保存团队协作设置失败：${messageOf(error)}` })
       }
       syncRows()
@@ -789,6 +881,7 @@ export function apply(ctx: Context): void {
 
     /** 关掉浮层并退回第一步（成功切换或外部关闭都走这里）。 */
     const closePalette = (): void => {
+      paletteEpoch += 1
       palette.close()
       stage = 'models'
       stageChoice = null
@@ -823,12 +916,19 @@ export function apply(ctx: Context): void {
       }
       const choice = data.getSnapshot().choices.find((candidate) => choiceKey(candidate) === row.key)
       if (choice === undefined) return
+      // 在 await 前记下这次确认属于哪一代浮层 / 哪条会话：等待期间用户关掉或重开浮层时，
+      // 成功返回也不能把用户刚打开的那张关掉（同一会话里的正常成功不受影响）。
+      const epoch = paletteEpoch
+      const sessionId = data.getSnapshot().sessionId
       // 目录还在路上时先等一下：不知道这个模型有没有思考等级，就不能贸然跳过第二步。
       const status = data.getSnapshot().catalogStatus
       if (status === 'idle' || status === 'loading') await loadCatalog()
+      // 等目录期间用户可能已经切会话或关掉/重开浮层：这次确认只属于发起时的会话与那一代浮层。
+      if (epoch !== paletteEpoch || data.getSnapshot().sessionId !== sessionId) return
       const efforts = effortChoices(choice, findCatalogModel(data.getSnapshot().catalog, choice))
       if (efforts.length <= 1) {
-        if (await selectChoice(choice)) closePalette()
+        const selected = await selectChoice(choice)
+        if (selected && epoch === paletteEpoch && data.getSnapshot().sessionId === sessionId) closePalette()
         return
       }
       enterEfforts(choice, efforts, index)
@@ -841,12 +941,18 @@ export function apply(ctx: Context): void {
       const index = clampIndex(snapshot.activeIndex, snapshot.entries.length)
       const effort = index < 0 ? undefined : stageEfforts[index]
       if (effort === undefined) return
-      if (await selectChoice(selectionOfEffort(stageChoice, effort))) closePalette()
+      // 同 confirmModel：成功只关掉发起这次确认的那一代浮层。
+      const epoch = paletteEpoch
+      const sessionId = data.getSnapshot().sessionId
+      const selected = await selectChoice(selectionOfEffort(stageChoice, effort))
+      if (selected && epoch === paletteEpoch && data.getSnapshot().sessionId === sessionId) closePalette()
     }
 
     /** 第二步按 Esc：退回模型列表，并回到刚才确认的那一行。 */
     const backToModels = (): void => {
       if (stage !== 'efforts') return
+      // 退回也是一代新的浮层：第二步在途的确认回来时不能再关掉这张列表。
+      paletteEpoch += 1
       stage = 'models'
       stageChoice = null
       stageEfforts = []
@@ -859,6 +965,8 @@ export function apply(ctx: Context): void {
 
     /** 打开浮层：总是从模型列表开始，对齐到「当前」那一行，并顺手刷新会话与目录。 */
     const openPalette = (): void => {
+      // 重开就是新一代：上一次打开时在途的确认成功返回后不能关掉这一张。
+      paletteEpoch += 1
       stage = 'models'
       stageChoice = null
       stageEfforts = []

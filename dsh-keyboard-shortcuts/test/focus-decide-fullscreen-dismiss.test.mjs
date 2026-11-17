@@ -1,6 +1,7 @@
 /**
  * 全屏关栏判定:准入逐项否决、右栏文本控件保留 Esc、DOM 面板标记读数(全屏 / 停靠 /
- * 折叠 / 没有 document),以及接管判定要同时满足的准入、展开态与面板标记。
+ * 折叠 / 隐藏会话 / 没有 document / 没有 querySelectorAll),以及接管判定要同时满足的
+ * 准入、展开态与可见面板标记。
  */
 import { check, checkTrue, FakeElement, fakeDocument, fakeSidebar, finish, gesture, shortcutContext } from './focus-helpers.mjs'
 import { fullscreenDismissEligible, fullscreenDismissOwned, fullscreenSidebarShown, sidebarOwnsTarget } from '../src/fullscreen-dismiss.ts'
@@ -31,6 +32,44 @@ function panel({ mode = 'fullscreen', open = true, sessionId = 's1' } = {}) {
 /** 右栏根节点里的一段普通内容(不是文本控件)。 */
 function contentOf(root) {
   return root.append(new FakeElement('div'))
+}
+
+/** 一个会话的全屏右栏面板根节点(挂在给定容器下)。 */
+function fullscreenPanel(parent, sessionId) {
+  return parent.append(new FakeElement('div', {
+    'data-sidebar-right-session': sessionId,
+    'data-sidebar-right-panel': 'fullscreen',
+    'data-sidebar-right-open': '',
+  }))
+}
+
+/**
+ * 一段假 DOM:非当前会话的整棵视图带隐藏标记,里面仍留着那份全屏右栏面板。
+ * @param attributes - 会话外层的隐藏标记(`hidden` 或 `aria-hidden="true"`)。
+ */
+function hiddenColumn(attributes) {
+  const app = new FakeElement('div', { 'data-app': '' })
+  const session = app.append(new FakeElement('div', { 'data-sidebar-right-session': 's2', ...attributes }))
+  fullscreenPanel(session, 's2')
+  return app
+}
+
+/** 同一份 document 里既有隐藏会话的面板、也有当前会话的面板;`hiddenFirst` 控制先后。 */
+function mixedColumn({ hiddenFirst = true } = {}) {
+  const app = new FakeElement('div', { 'data-app': '' })
+  const addHidden = () => {
+    const session = app.append(new FakeElement('div', { 'data-sidebar-right-session': 's2', hidden: '' }))
+    fullscreenPanel(session, 's2')
+  }
+  const addVisible = () => fullscreenPanel(app, 's1')
+  if (hiddenFirst) {
+    addHidden()
+    addVisible()
+  } else {
+    addVisible()
+    addHidden()
+  }
+  return app
 }
 
 console.log('--- Y① 准入:裸 Esc 通过,其余逐项否决 ---')
@@ -105,6 +144,45 @@ console.log('--- Y④ 接管:准入、服务面展开态、面板标记三者同
   withDocument(panel({ mode: 'push' }).app, () => {
     check('停靠呈现:不接管', fullscreenDismissOwned(fakeSidebar(), gesture('Escape'), shortcutContext()), false)
   })
+}
+
+console.log('--- Y⑤ 隐藏会话遗留的全屏面板不算可见 ---')
+{
+  // 非当前会话的整棵视图带 hidden / aria-hidden="true",里面那份全屏面板的标记仍在 DOM 里。
+  // 旧实现只读第一个匹配(querySelector),会把这个遗留面板当成当前可见的浮层。
+  withDocument(hiddenColumn({ hidden: '' }), () => {
+    check('只有 hidden 会话里的全屏面板:不算可见', fullscreenSidebarShown(), false)
+  })
+  withDocument(hiddenColumn({ 'aria-hidden': 'true' }), () => {
+    check('只有 aria-hidden 会话里的全屏面板:不算可见', fullscreenSidebarShown(), false)
+  })
+
+  // 隐藏面板与当前会话的可见全屏面板同时存在:至少一个可见就算可见;隐藏面板排在前面时,
+  // 旧实现只读第一个匹配会误判为"隐藏",新实现要遍历全部匹配。
+  withDocument(mixedColumn({ hiddenFirst: true }), () => {
+    checkTrue('隐藏面板之后有当前会话的全屏面板:可见', fullscreenSidebarShown())
+  })
+  withDocument(mixedColumn({ hiddenFirst: false }), () => {
+    checkTrue('当前会话的全屏面板之后另有隐藏面板:仍可见', fullscreenSidebarShown())
+  })
+}
+
+console.log('--- Y⑥ 极简 document:没有 querySelectorAll / closest 也不抛 ---')
+{
+  const previous = globalThis.document
+  try {
+    globalThis.document = { querySelector: () => ({}) }
+    checkTrue('没有 querySelectorAll 时退回 querySelector;元素没有 closest 按可见', fullscreenSidebarShown())
+
+    globalThis.document = { querySelector: () => null }
+    check('退回 querySelector 且没有面板:不算可见', fullscreenSidebarShown(), false)
+
+    globalThis.document = { querySelectorAll: () => [{}, {}] }
+    checkTrue('没有 closest 的多个匹配按可见', fullscreenSidebarShown())
+  } finally {
+    if (previous === undefined) delete globalThis.document
+    else globalThis.document = previous
+  }
 }
 
 finish()
