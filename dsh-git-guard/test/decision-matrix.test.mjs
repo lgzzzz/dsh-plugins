@@ -1,5 +1,5 @@
 /**
- * 判定矩阵:commit / push / checkout / 破坏性操作都要求用户许可,混合与多语句命令优先
+ * 判定矩阵:commit / push / checkout / 破坏性操作 / 底层改写与暂存栈操作都要求用户许可,混合与多语句命令优先
  * 提示破坏性操作,不产生 deny,其余命令放行。
  *
  * 运行:`node test/decision-matrix.test.mjs`(或 pnpm test 跑全部)。
@@ -89,6 +89,37 @@ for (const command of [
   assert.match(decision?.reason ?? '', /批准或拒绝/, 'ask reason 交给用户裁决')
 }
 
+// 底层改写与暂存栈操作:commit-tree / update-ref / stash / restore 都可能绕过 commit 与
+// checkout 的常规路径改写历史或覆盖工作区,一律要求用户许可;唯一例外是只动索引、不碰
+// 工作区的 `git restore --staged`(见下面的放行用例)。
+for (const command of [
+  'git commit-tree HEAD^{tree} -m reworded',
+  'git -C /repo commit-tree 4b825dc -m x',
+  'git update-ref refs/heads/main abc123',
+  'git update-ref -d refs/heads/tmp',
+  'git update-ref --stdin',
+  'git restore src/index.ts',
+  'git restore --worktree src/index.ts',
+  'git restore -W .',
+  'git restore --source=HEAD~1 --worktree file.txt',
+  'git stash',
+  'git stash push -u -m wip',
+  'git stash -q',
+  'git stash save wip',
+  'git stash pop',
+  'git stash apply',
+  'git stash drop',
+  'git stash clear',
+  'git stash branch wip',
+  'git -C /repo stash',
+  'bash -c "git stash pop"',
+  'git commit -m x && git update-ref -d refs/heads/tmp',
+]) {
+  const decision = await decide(command)
+  assert.equal(decision?.kind, 'ask', `ask(底层改写/暂存栈): ${command}`)
+  assert.match(decision?.reason ?? '', /许可/, 'ask reason 告知需用户许可')
+}
+
 for (const command of [
   'git commit -m x',
   'git push',
@@ -100,6 +131,10 @@ for (const command of [
   'git revert abc123',
   'git filter-branch -- --all',
   'git checkout main',
+  'git commit-tree HEAD^{tree} -m x',
+  'git update-ref refs/heads/main abc123',
+  'git stash',
+  'git restore --staged .',
 ]) {
   const decision = await decide(command)
   assert.notEqual(decision?.kind, 'deny', `不再产生 deny: ${command}`)
@@ -127,12 +162,31 @@ for (const command of [
   assert.equal(decision?.kind, 'ask', '普通操作与强切 checkout 混合仍是 ask')
   assert.match(decision?.reason ?? '', /覆盖工作区/, '强切 checkout 的文案优先于普通操作')
 }
+{
+  const decision = await decide('git commit -m x && git stash drop')
+  assert.equal(decision?.kind, 'ask', '提交与丢弃暂存栈混合仍是 ask')
+  assert.match(decision?.reason ?? '', /stash drop/, '丢弃暂存栈的破坏性文案优先于普通提交')
+}
+{
+  const decision = await decide('git restore --staged . && git stash drop')
+  assert.equal(decision?.kind, 'ask', '放行的暂存区操作与丢弃暂存栈混合仍是 ask')
+  assert.match(decision?.reason ?? '', /stash drop/, '优先级落在破坏性的 stash drop 上')
+}
 
 for (const command of [
   'git status',
   'git log && echo done',
   'git add .',
   'git reset HEAD~1',
+  'git stash list',
+  'git stash show -p',
+  'git stash --help',
+  'git restore --staged src/index.ts',
+  'git restore --staged .',
+  'git restore -S .',
+  'git restore --source=HEAD~1 --staged file.txt',
+  'sudo git restore --staged .',
+  'git add . && git restore --staged .',
   'ls -la',
   'Get-ChildItem',
   'echo git commit',

@@ -25,6 +25,10 @@ for (const command of [
   'git cherry-pick abc123',
   'git reset --hard HEAD~1',
   'git filter-branch -- --all',
+  'git commit-tree HEAD^{tree} -m x',
+  'git update-ref -d refs/heads/tmp',
+  'git stash pop',
+  'git restore --staged .',
 ]) {
   const decision = await decide(command, { session: fullAccessSession })
   assert.equal(decision?.kind, 'allow', `完全权限放行: ${command}`)

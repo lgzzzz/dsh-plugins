@@ -35,8 +35,9 @@ interface ShellArguments {
 
 const GUARD_POLICY_TEXT =
   '`git commit`、`git push` 与 `git checkout` 均须获得用户许可后才能执行; ' +
-  '破坏性历史改写、远程改写与工作区覆盖操作(如 `git rebase`、`git merge`、`git cherry-pick`、' +
-  '`git revert`、`git reset --hard`、`git checkout --force`、`git push --force`)同样须先获得用户许可, ' +
+  '破坏性历史改写、引用改写、远程改写与工作区覆盖操作(如 `git rebase`、`git merge`、`git cherry-pick`、' +
+  '`git revert`、`git reset --hard`、`git checkout --force`、`git push --force`、`git commit-tree`、' +
+  '`git update-ref`、`git stash`、以及 `git restore` 覆盖工作区的形态)同样须先获得用户许可, ' +
   '未获明确许可不得执行; 这些操作会以授权请求的形式征求你的用户同意, 不得自行绕过. ' +
   '若用户拒绝了某次代码提交、推送或检出, 请停止, 不得再次尝试; ' +
   '也不要以命令替换、别名、脚本包装等任何间接形式绕过. ' +
@@ -332,6 +333,36 @@ function overwritesWorktreeOnCheckout(args: string[]): boolean {
   return separator >= 0 && separator < args.length - 1
 }
 
+/** 只读的 stash 动作:`list` / `show` 只查不改,`--help` 只打印用法。 */
+const STASH_READ_ONLY = new Set(['list', 'show', 'help'])
+
+/** `git stash` 的动作名:第一个非选项 token(`git stash -q` 视为 `push`);`-h` / `--help` 归入 `help`。 */
+function stashAction(args: string[]): string | undefined {
+  for (const arg of args) {
+    if (arg === '-h' || arg === '--help') return 'help'
+    if (!arg.startsWith('-')) return arg
+  }
+  return undefined
+}
+
+/**
+ * restore 是否会覆盖工作区:`--worktree` / `-W` 显式指定,或没给 `--staged` / `-S`
+ * (默认索引与工作区都恢复)。只带 `--staged` 时只动索引、不碰工作区文件,因此不介入。
+ */
+function restoresWorktree(args: string[]): boolean {
+  let worktree = false
+  let staged = false
+  for (const arg of args) {
+    if (arg === '--worktree') worktree = true
+    else if (arg === '--staged') staged = true
+    else if (/^-[^-]/.test(arg)) {
+      if (arg.includes('W')) worktree = true
+      if (arg.includes('S')) staged = true
+    }
+  }
+  return worktree || !staged
+}
+
 const ASK_SUFFIX = '需要你的许可。请审核后批准或拒绝.'
 
 const ASK_SUBCOMMANDS: Record<string, string> = {
@@ -398,6 +429,44 @@ function decideGit(subcommand: string, args: string[]): AskDecision | undefined 
       }
     }
     return undefined
+  }
+  if (subcommand === 'commit-tree') {
+    return {
+      kind: 'ask',
+      reason: `git commit-tree 会绕开索引与工作区直接构造提交对象, 常被用来重写历史, ${ASK_SUFFIX}`,
+      destructive: true,
+    }
+  }
+  if (subcommand === 'update-ref') {
+    const deleting = args.some(arg => arg === '-d' || arg === '--delete')
+    return {
+      kind: 'ask',
+      reason: deleting
+        ? `git update-ref -d 会删除引用, 让提交脱离分支或标签, ${ASK_SUFFIX}`
+        : `git update-ref 会改写分支或标签的指向, ${ASK_SUFFIX}`,
+      destructive: true,
+    }
+  }
+  if (subcommand === 'restore') {
+    // 只动暂存区的 `--staged` 形态不覆盖工作区,放行;其余一律按覆盖工作区处理。
+    if (!restoresWorktree(args)) return undefined
+    return {
+      kind: 'ask',
+      reason: `git restore 会用索引或指定来源覆盖工作区文件, ${ASK_SUFFIX}`,
+      destructive: true,
+    }
+  }
+  if (subcommand === 'stash') {
+    const action = stashAction(args)
+    if (action !== undefined && STASH_READ_ONLY.has(action)) return undefined
+    const destroying = action === 'drop' || action === 'clear'
+    return {
+      kind: 'ask',
+      reason: destroying
+        ? `git stash ${action} 会丢弃暂存栈里的改动, ${ASK_SUFFIX}`
+        : `git stash ${action ?? 'push'} 会把工作区改动移出或取回暂存栈, ${ASK_SUFFIX}`,
+      destructive: destroying,
+    }
   }
   const askReason = ASK_SUBCOMMANDS[subcommand]
   if (askReason !== undefined) return { kind: 'ask', reason: askReason, destructive: true }

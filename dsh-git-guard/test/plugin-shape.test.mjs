@@ -35,6 +35,10 @@ for (const [label, text] of [
   assert.match(text, /git checkout/, `${label}：区段提及 git checkout`)
   assert.match(text, /用户许可/, `${label}：区段声明需要用户许可`)
   assert.match(text, /git push --force|rebase/, `${label}：区段提及破坏性操作同样须获许可`)
+  assert.match(text, /git stash/, `${label}：区段提及 git stash`)
+  assert.match(text, /git restore/, `${label}：区段提及 git restore`)
+  assert.match(text, /git commit-tree/, `${label}：区段提及 git commit-tree`)
+  assert.match(text, /git update-ref/, `${label}：区段提及 git update-ref`)
 }
 assert.equal(sectionText(fullAccessSession), '', '完全权限会话：区段文本为空，不向模型提出授权要求')
 
