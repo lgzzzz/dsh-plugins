@@ -1,0 +1,7 @@
+# dsh-request-stats 的 bundle 挂载行：随 dsh.profile.bundles 自动挂载。
+# 宿主半部按 <name>/package.json 解析，注册 llm/stream 采集、undici 诊断与
+# /api/dsh-request-stats/* 只读路由；客户端半部由 dsh.client.platform=web +
+# immediately 注册进浏览器 roster，向左侧栏提交入口并渲染看板。
+- insert:
+    - id: dsh-request-stats
+      name: dsh-request-stats

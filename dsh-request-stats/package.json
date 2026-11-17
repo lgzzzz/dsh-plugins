@@ -1,0 +1,44 @@
+{
+  "name": "dsh-request-stats",
+  "version": "0.1.0",
+  "private": true,
+  "description": "请求看板：为 opencode-go 等固定模型路由记录每一次请求的服务器 IP / Cloudflare 边缘机房、首字延迟与输出速度，并在左侧栏打开数据看板。",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "server",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "check": "node check.mjs",
+    "test": "node test/run.mjs && node test/client-render.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

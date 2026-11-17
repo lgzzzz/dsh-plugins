@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "请求看板",
+    "description": "为 opencode-go 等固定模型路由记录每一次模型请求的服务器身份、首字延迟和输出速度，并在左侧栏新增「请求看板」入口打开数据看板。直连时按实际观测到的对端 IP 分组；经代理时记录 Cloudflare 边缘机房代码（cf-ray）并明确标注，不伪造服务器 IP。数据保存在当前 profile 的 dsh-request-stats/records.json，只含提供方、模型、服务器、耗时与 token 数，不含提示词、请求头或凭据。可在 JSON 配置里用 providers / hosts / maxRecords / retentionDays 调整监控范围与保留量。"
+  }
+}
