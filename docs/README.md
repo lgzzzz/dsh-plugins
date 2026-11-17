@@ -19,7 +19,7 @@
 | `dsh-workspace-quick-switch` | 两张浮层：`⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows）按左侧栏顺序列出工作区、`Enter` 在该工作区新建会话；`⌘⌥I` / `Ctrl+Alt+I` 按左侧栏「单列表 + 最近更新 + 隐藏已归档」的顺序列出会话、`Enter` 打开该会话。都是一屏 10 个、窗口连续滑动（滚轮滚一格 1–10 → 2–11、`←/→` 滑一整屏、`↑/↓` 移选中行，两端停住）；鼠标点一行即确认（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
 | `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动、任务完成，或大模型请求重试耗尽的工作区自动浮到最前 | [说明](dsh-workspace-activity-sort.md) |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
-| `dsh-stats-ttft` | 在输入框下方的性能统计按钮上显示最近 7 步的平均首 token 时长与输出速度（只显示 `2.3秒` / `45 tok/s` 这样的裸读数），点开的气泡正文仍按全会话统计：宿主注册 `recentStepStats` 投影逐步折叠 TTFT/解码，客户端按 id 遮蔽 `activity` 条目并改写第一段与速度段的译文，再把气泡里的标题值与速度行还原成全会话读数；投影缺席时用已加载窗口兜底 | [说明](dsh-stats-ttft.md) |
+| `dsh-stats-ttft` | 在输入框下方的性能统计按钮上显示最近 5 步的平均首 token 时长与输出速度（只显示 `2.3秒` / `45 tok/s` 这样的裸读数），点开的气泡正文仍按全会话统计：宿主注册 `recentStepStats` 投影逐步折叠 TTFT/解码，客户端按 id 遮蔽 `activity` 条目并改写第一段与速度段的译文，再把气泡里的标题值与速度行还原成全会话读数；投影缺席时用已加载窗口兜底 | [说明](dsh-stats-ttft.md) |
 | `dsh-agent-team-hero-toggle` | 空白新会话行的「新建工作树」右侧加「团队协作」开关：读 `agentTeam` 投影、写 `remote.agentTeams.setEnabled`，模型菜单旧入口保留（A2）；首轮后随 hero 行消失 | [说明](dsh-agent-team-hero-toggle.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
 | `dsh-changes-behavior` | 改动视图统一行为：改动卡片标题与 `⌘⌥Y` 打开 changes 页面时默认全屏，其余任何打开右栏的入口（文件行、过程链接、上下文菜单、其它插件）默认非全屏；审查标签页按呈现方式默认分栏并默认换行；关掉卡片 500ms 悬停浮层；「本地变更」「变更请求」字号统一 14px、文件树宽度拖动后记住并在新挂载时恢复；`⌘⌥Y` 也由本插件注册；宿主启动时给上游产物打一行补丁，让单文件改动卡片也按「已编辑 1 个文件 + 文件行」的汇总形制渲染 | [说明](dsh-changes-behavior.md) |

@@ -1,5 +1,5 @@
 {
-  "description": "dsh-stats-ttft 依赖的 DSH 客户端事实：统计按钮所在的槽与注册 id/order、slots 的同 id 遮蔽规则、渲染器在渲染期读取条目 component；按钮第一段与速度段所用的字典键、时长与 TPS 的上游取整规则、点开气泡正文的 data-session-stats-details 标记；以及 useProjection（recentStepStats 与全会话 sessionStats）/ useChat 两个标准 props。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：任一条改名或改走别的路径，包装层要么静默拿不到数据、要么改写文本消失或格式分叉、要么气泡漏出最近 7 步读数，这里把那种退化提前变成一次显式失败，并在 hint 里写明会退化成什么。",
+  "description": "dsh-stats-ttft 依赖的 DSH 客户端事实：统计按钮所在的槽与注册 id/order、slots 的同 id 遮蔽规则、渲染器在渲染期读取条目 component；按钮第一段与速度段所用的字典键、时长与 TPS 的上游取整规则、点开气泡正文的 data-session-stats-details 标记；以及 useProjection（recentStepStats 与全会话 sessionStats）/ useChat 两个标准 props。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：任一条改名或改走别的路径，包装层要么静默拿不到数据、要么改写文本消失或格式分叉、要么气泡漏出最近 5 步读数，这里把那种退化提前变成一次显式失败，并在 hint 里写明会退化成什么。",
   "checks": [
     {
       "id": "dock-slot",
@@ -107,7 +107,7 @@
       "paths": [
         "dsh-client-ui-chat/lib"
       ],
-      "hint": "按钮不再用 t(\"message.tokensPerSecond\", { tps }) 拼速度段：最近 7 步 TPS 换不进去"
+      "hint": "按钮不再用 t(\"message.tokensPerSecond\", { tps }) 拼速度段：最近 5 步 TPS 换不进去"
     },
     {
       "id": "tps-round",
@@ -116,7 +116,7 @@
       "paths": [
         "dsh-client-ui-chat/lib"
       ],
-      "hint": "上游 formatTokensPerSecond 的取整规则变了：本插件的最近 7 步 TPS 文本会与上游格式分叉"
+      "hint": "上游 formatTokensPerSecond 的取整规则变了：本插件的最近 5 步 TPS 文本会与上游格式分叉"
     },
     {
       "id": "dialog-marker",
@@ -125,7 +125,7 @@
       "paths": [
         "dsh-client-ui-chat/lib"
       ],
-      "hint": "会话统计气泡正文的标记消失：气泡标题值与速度行改不回全会话口径，最近 7 步读数会漏进气泡（按钮不受影响）"
+      "hint": "会话统计气泡正文的标记消失：气泡标题值与速度行改不回全会话口径，最近 5 步读数会漏进气泡（按钮不受影响）"
     },
     {
       "id": "shadow-rule",

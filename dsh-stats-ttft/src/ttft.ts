@@ -2,9 +2,9 @@
  * 最近步次统计的取值、窗口折叠与显示改写：纯函数，不碰 React 与 DOM。
  *
  * 取值规则：
- *   - `recentStepStats` 投影存在时**只**读投影（最近 7 个已结束 step 的逐步累计）；
+ *   - `recentStepStats` 投影存在时**只**读投影（最近 5 个已结束 step 的逐步累计）；
  *     投影为空或无样本就返回 null，不回退到窗口，避免两套窗口口径混用；
- *   - 投影缺席时，用已加载窗口的最后 7 个 assistant 节点（有消息的步）兜底；
+ *   - 投影缺席时，用已加载窗口的最后 5 个 assistant 节点（有消息的步）兜底；
  *   - 没有样本不显示 `0秒`，也不改写 TPS。
  *
  * 全会话读数（{@link readSessionTotals}）只给气泡正文还原用：优先读上游
@@ -75,7 +75,7 @@ export interface RecentReading {
 }
 
 /**
- * 解析最近 7 步的读数：投影优先，缺席时才折叠窗口。
+ * 解析最近 5 步的读数：投影优先，缺席时才折叠窗口。
  * @param projection - `useProjection("recentStepStats")` 的值。
  * @param nodes - 投影缺席时的窗口节点。
  * @returns 平均 TTFT 与 TPS。
@@ -162,7 +162,7 @@ export interface DialogTexts {
   countsFrom: string | null
   /** 标题值应显示的全会话计数（`计数`）。 */
   countsTo: string | null
-  /** 速度行当前文本（最近 7 步 TPS）；速度行没被改写时为 null。 */
+  /** 速度行当前文本（最近 5 步 TPS）；速度行没被改写时为 null。 */
   speedFrom: string | null
   /** 速度行应显示的全会话 TPS。 */
   speedTo: string | null
@@ -176,7 +176,7 @@ export interface DialogTexts {
  *
  * @param t - 上游聊天字典座位。
  * @param counts - 全会话轮/步计数（标题值的基数）。
- * @param readings - 最近 7 步的时长文本、TPS 数值与全会话 TPS 数值。
+ * @param readings - 最近 5 步的时长文本、TPS 数值与全会话 TPS 数值。
  * @returns 两对 from/to；对应文本没被改写时该对为 null。
  */
 export function dialogReadings(
@@ -222,14 +222,14 @@ export function formatDuration(ms: number, t: Translate): string {
 export interface RecentDisplayReadings {
   /** 平均 TTFT 的裸时长（如 `2.3秒`），或 null。 */
   segment: string | null
-  /** 最近 7 步的 TPS 文本（如 `45` / `4.5`），或 null。 */
+  /** 最近 5 步的 TPS 文本（如 `45` / `4.5`），或 null。 */
   tps: string | null
 }
 
 /**
  * 改写统计按钮收到的 `t`：
  *   - `stats.counts` 的结果后追加 ` · 时长`；
- *   - `message.tokensPerSecond` 改用最近 7 步的 TPS 文本；
+ *   - `message.tokensPerSecond` 改用最近 5 步的 TPS 文本；
  *   - 其它 key 原样转发。
  *
  * 这个 `t` 只交给被遮蔽的 `ActivityPill`；按钮第一段、tooltip、`aria-label`、气泡标题值

@@ -1,6 +1,6 @@
 /**
  * 宿主投影单元 `recentStepStats`：把持久日志折成最近 {@link RECENT_STEPS} 个**已结束**
- * step 的 TTFT / 解码累计，供浏览器半部算「最近 7 步平均 TTFT 与 TPS」。
+ * step 的 TTFT / 解码累计，供浏览器半部算「最近 5 步平均 TTFT 与 TPS」。
  *
  * 窗口在 `step/end` 才落一条记录：进行中的步不计入，结束后才进窗口；失败/取消的步
  * 落零值记录占位、不贡献样本。

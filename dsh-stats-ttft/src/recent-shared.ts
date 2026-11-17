@@ -3,7 +3,7 @@
  * TTFT/TPS 口径。这里不引入 zod、cordis 或任何宿主侧运行时依赖，客户端 bundle
  * 可以安全内联。
  *
- * 窗口口径是「最近结束的 7 个 step」：由 `step/end` 计数，进行中的步不计入；
+ * 窗口口径是「最近结束的 5 个 step」：由 `step/end` 计数，进行中的步不计入；
  * 每步只累计有首 token / 有 usage 的样本。TTFT 是窗口内 `ttftMs / ttftSteps` 的
  * 样本平均，TPS 是窗口内解码 token 与解码时间的加权合并。
  *
@@ -12,7 +12,7 @@
 import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 
 /** 投影保留、客户端统计的最近 step 数。 */
-export const RECENT_STEPS = 7
+export const RECENT_STEPS = 5
 
 /** 一个 step 的 TTFT 与解码累计。 */
 export interface RecentStepStats {
@@ -71,7 +71,7 @@ export function averageTTFT(totals: RecentStatsTotals): number | null {
 
 /**
  * 解码累计的输出速度。
- * @param totals - 任意带解码累计的窗口（最近 7 步或全会话）。
+ * @param totals - 任意带解码累计的窗口（最近 5 步或全会话）。
  * @returns token/秒；没有解码时间或数值不合法时返回 null。
  */
 export function tokensPerSecond(totals: DecodeTotals): number | null {

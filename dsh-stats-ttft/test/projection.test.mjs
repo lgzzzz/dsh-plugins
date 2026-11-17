@@ -1,5 +1,5 @@
 /**
- * 宿主投影 `recentStepStats`：逐步 TTFT/解码折叠、重试与失败步口径、最近 7 步环形窗口、
+ * 宿主投影 `recentStepStats`：逐步 TTFT/解码折叠、重试与失败步口径、最近 5 步环形窗口、
  * 视图引用稳定性、schema/summary 声明，以及宿主半部确实把单元注册到
  * `sessionProjections`。
  *
@@ -154,7 +154,7 @@ console.log('--- D 失败步 / 取消步 / 重复消息 ---')
   check('turn/end 丢弃未结束的步', viewOf(openAtTurnEnd), [])
 }
 
-console.log('--- E 最近 7 步环形窗口 ---')
+console.log('--- E 最近 5 步环形窗口 ---')
 {
   const events = []
   for (let step = 1; step <= 9; step += 1) {
@@ -167,12 +167,12 @@ console.log('--- E 最近 7 步环形窗口 ---')
   }
   const state = applyAll(events)
   check('窗口长度', viewOf(state).length, RECENT_STEPS)
-  check('窗口保留最新的步', viewOf(state).map(item => item.step), [3, 4, 5, 6, 7, 8, 9])
-  check('窗口内 TTFT 求和', viewOf(state).reduce((sum, item) => sum + item.ttftMs, 0), 7 * 500)
-  check('窗口内 token 求和', viewOf(state).reduce((sum, item) => sum + item.decodeTokens, 0), 7 * 2)
+  check('窗口保留最新的步', viewOf(state).map(item => item.step), [5, 6, 7, 8, 9])
+  check('窗口内 TTFT 求和', viewOf(state).reduce((sum, item) => sum + item.ttftMs, 0), 5 * 500)
+  check('窗口内 token 求和', viewOf(state).reduce((sum, item) => sum + item.decodeTokens, 0), 5 * 2)
 
   const withEmptyStep = applyAll([...events, stepStart(1, 10, 10_000), stepEnd(1, 10, 10_100)])
-  check('空步占位并挤掉最旧样本', viewOf(withEmptyStep).map(item => item.step), [4, 5, 6, 7, 8, 9, 10])
+  check('空步占位并挤掉最旧样本', viewOf(withEmptyStep).map(item => item.step), [6, 7, 8, 9, 10])
   check('空步零值', viewOf(withEmptyStep).at(-1), {
     turn: 1,
     step: 10,

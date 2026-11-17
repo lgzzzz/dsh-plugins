@@ -1,7 +1,7 @@
 /**
  * 产物装配：`lib/client.js` 以正确的模块 id / 插件名注册；装配后按账本遮蔽
  * `conversation.composer.dock#activity`，包装层把按钮第一段追加成「N 轮 N 步 · 2.3秒」、
- * 把速度段换成最近 7 步 TPS，不出现「首 token」标签、不碰其它译文；无样本时不改写，
+ * 把速度段换成最近 5 步 TPS，不出现「首 token」标签、不碰其它译文；无样本时不改写，
  * 投影缺席时走窗口折叠兜底；源项消失时撤回遮蔽，卸载时摘掉订阅与注册。
  *
  * 运行：`node test/artifact-client.test.mjs`（或 pnpm test 跑全部）。
@@ -85,7 +85,7 @@ checkFalse('源组件被包装', reg.component === StubActivity)
 const Wrapped = reg.component
 const render = (props) => renderToStaticMarkup(React.createElement(Wrapped, props))
 
-/** 最近 7 步投影：3 个 TTFT 样本合计 6900ms、解码 1000ms 输出 45 token。 */
+/** 最近 5 步投影的合成样本：TTFT 合计 6900ms（3 步）、解码 1000ms 输出 45 token。 */
 const recentSteps = [
   { turn: 1, step: 1, ttftMs: 6900, ttftSteps: 3, decodeMs: 1000, decodeTokens: 45 },
 ]
@@ -101,7 +101,7 @@ console.log('--- C 按钮读数 ---')
   const html = render(detailedProps)
   checkIncludes('第一段追加纯时长', html, '12 轮 34 步 · 2.3秒')
   checkFalse('不出现「首 token」标签', html.includes('首 token'))
-  checkIncludes('速度段换成最近 7 步 TPS', html, '45 tok/s')
+  checkIncludes('速度段换成最近 5 步 TPS', html, '45 tok/s')
   checkFalse('不再显示上游全会话速度', html.includes('45.0 tok/s'))
   checkIncludes('其它译文原样', html, '会话统计')
 }
@@ -168,7 +168,7 @@ console.log('--- E 读取两个投影键 ---')
       return key === 'sessionStats' ? sessionStats : recentSteps
     },
   })
-  check('按名字读最近 7 步与全会话投影', keys, ['recentStepStats', 'sessionStats'])
+  check('按名字读最近 5 步与全会话投影', keys, ['recentStepStats', 'sessionStats'])
   checkIncludes('按钮读数不变', html, '45 tok/s')
 }
 

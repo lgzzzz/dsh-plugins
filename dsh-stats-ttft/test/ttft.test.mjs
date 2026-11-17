@@ -1,5 +1,5 @@
 /**
- * 最近步次统计的纯函数：窗口折叠（最后 7 个 assistant 节点）、投影取值、平均 TTFT / TPS、
+ * 最近步次统计的纯函数：窗口折叠（最后 5 个 assistant 节点）、投影取值、平均 TTFT / TPS、
  * 格式化、`withRecentReadings` 只改写 counts 与 tokensPerSecond，以及气泡还原用的
  * 全会话累计（`sessionStats` 优先）与两对文本。
  *
@@ -41,17 +41,17 @@ const assistantNode = (step, { stepStart = 0, firstToken = 2300, completed = 430
   ...(outputTokens === null ? {} : { usage: { outputTokens } }),
 })
 
-console.log('--- A 窗口折叠：只取最后 7 步 ---')
+console.log('--- A 窗口折叠：只取最后 5 步 ---')
 {
   const nine = Array.from({ length: 9 }, (_, index) => assistantNode(index + 1))
   const totals = foldRecentSteps(nine)
-  check('窗口大小', RECENT_STEPS, 7)
-  check('样本步数 = 7（前两步被裁掉）', totals.ttftSteps, 7)
-  check('TTFT 求和', totals.ttftMs, 7 * 2300)
-  check('解码时间求和', totals.decodeMs, 7 * 2000)
-  check('输出 token 求和', totals.decodeTokens, 7 * 45)
+  check('窗口大小', RECENT_STEPS, 5)
+  check('样本步数 = 5（前四步被裁掉）', totals.ttftSteps, 5)
+  check('TTFT 求和', totals.ttftMs, 5 * 2300)
+  check('解码时间求和', totals.decodeMs, 5 * 2000)
+  check('输出 token 求和', totals.decodeTokens, 5 * 45)
   check('平均 TTFT', averageTTFT(totals), 2300)
-  check('TPS', tokensPerSecond(totals), 315 / 14)
+  check('TPS', tokensPerSecond(totals), 225 / 10)
 
   check('空窗口', foldRecentSteps([]), { ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0 })
   check('无节点', foldRecentSteps(undefined), { ttftMs: 0, ttftSteps: 0, decodeMs: 0, decodeTokens: 0 })
@@ -117,7 +117,7 @@ console.log('--- D 只改写 counts 与 tokensPerSecond ---')
   const counts = wrapped('stats.counts', { turns: 12, steps: 34 })
   check('第一段追加纯时长', counts, '12 轮 34 步 · 2.3秒')
   checkFalse('不出现「首 token」标签', counts.includes('首 token'))
-  check('速度段换成最近 7 步 TPS', wrapped('message.tokensPerSecond', { tps: '45.0' }), '45 tok/s')
+  check('速度段换成最近 5 步 TPS', wrapped('message.tokensPerSecond', { tps: '45.0' }), '45 tok/s')
   check('其它键原样', wrapped('stats.dialog.ttft'), '首 token 平均（TTFT）')
   check('参数原样转交', calls[0][1], { turns: 12, steps: 34 })
 

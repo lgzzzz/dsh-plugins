@@ -1,5 +1,5 @@
 /**
- * 浏览器半部：把「最近 7 步」的平均首 token 时长（TTFT）与输出速度（TPS）并进输入框
+ * 浏览器半部：把「最近 5 步」的平均首 token 时长（TTFT）与输出速度（TPS）并进输入框
  * 下方的「性能」统计按钮；点开的气泡正文保持全会话口径。
  *
  * 上游 `@deepseek-ai/dsh-client-ui-chat` 的 `ActivityPill` 把按钮读数拼成
@@ -7,12 +7,12 @@
  * 字符串也用在点开的气泡里（标题值与速度行）。两者在组件内部无法分开，所以本插件分两步：
  *
  *   1. 在 `conversation.composer.dock` 槽里按 id 遮蔽 `activity` 条目，包装源组件并只替换
- *      它的 `t`：第一段后追加最近 7 步的平均 TTFT，速度段换成最近 7 步的 TPS，得到
+ *      它的 `t`：第一段后追加最近 5 步的平均 TTFT，速度段换成最近 5 步的 TPS，得到
  *      「12 轮 34 步 · 2.3秒 · 45 tok/s」；
  *   2. 气泡挂到 `document.body` 后，由 `src/dialog.ts` 把气泡里的标题值与速度行改回
  *      全会话读数（气泡正文的 TTFT 行本来由上游按全会话计算）。
  *
- * 数据优先读宿主投影 `recentStepStats`；投影缺席时用已加载窗口的最后 7 个 assistant 节点
+ * 数据优先读宿主投影 `recentStepStats`；投影缺席时用已加载窗口的最后 5 个 assistant 节点
  * 兜底。气泡还原用的全会话读数优先读上游 `sessionStats` 投影，缺席时折叠窗口。
  * 上游锚点、已知边界与验证方式见 docs/dsh-stats-ttft.md。
  */
@@ -81,7 +81,7 @@ const useIsomorphicLayoutEffect = typeof document === 'undefined' ? React.useEff
  * 装上气泡正文还原：包装层每次拿到新的文本对就同步一次；React 重写气泡里的文本节点后，
  * 下一次同步会把它们改回全会话读数。
  *
- * @param texts - 当前按钮上生效的最近 7 步读数与对应的全会话文本。
+ * @param texts - 当前按钮上生效的最近 5 步读数与对应的全会话文本。
  */
 function useDialogPatch(texts: DialogTexts): void {
   const controller = React.useRef<DialogPatchController | null>(null)
@@ -104,11 +104,11 @@ function useDialogPatch(texts: DialogTexts): void {
 }
 
 /**
- * 把源组件包进「按钮读数带最近 7 步 TTFT / TPS、气泡正文仍按全会话」的包装层。
+ * 把源组件包进「按钮读数带最近 5 步 TTFT / TPS、气泡正文仍按全会话」的包装层。
  *
  * 包装层不读业务面之外的东西，把 props 原样透传给源组件；只覆盖 `t`，并在气泡挂载后
  * 还原标题值与速度行。按钮读数优先读 `recentStepStats` projection，投影缺席时用
- * `useChat` 的窗口节点取最后 7 个 assistant 节点兜底；没有样本时对应项不改写，
+ * `useChat` 的窗口节点取最后 5 个 assistant 节点兜底；没有样本时对应项不改写，
  * 按钮读数与上游一致。
  *
  * @param Inner - 上游那个统计按钮组件（`ActivityPill`）。
