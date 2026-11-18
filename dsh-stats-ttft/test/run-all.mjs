@@ -14,8 +14,6 @@ const here = dirname(fileURLToPath(import.meta.url))
 // 主题顺序：纯逻辑 → 状态机 → 产物装配；其余文件按名字补在后面。
 const ORDER = [
   'ttft.test.mjs',
-  'projection.test.mjs',
-  'dialog.test.mjs',
   'shadow.test.mjs',
   'artifact-client.test.mjs',
 ]

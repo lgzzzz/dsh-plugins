@@ -1,38 +1,21 @@
 /**
- * 浏览器半部：把「最近 5 步」的平均首 token 时长（TTFT）与输出速度（TPS）并进输入框
- * 下方的「性能」统计按钮；点开的气泡正文保持全会话口径。
+ * 浏览器半部：把会话平均首 token 时长（TTFT）直接并进输入框下方的「性能」统计按钮。
  *
  * 上游 `@deepseek-ai/dsh-client-ui-chat` 的 `ActivityPill` 把按钮读数拼成
- * `t("stats.counts") · t("message.tokensPerSecond")`，并且同一份 `counts` / `speed`
- * 字符串也用在点开的气泡里（标题值与速度行）。两者在组件内部无法分开，所以本插件分两步：
+ * `t("stats.counts") · t("message.tokensPerSecond")`；TTFT 只在点开「会话统计」气泡后
+ * 才有一行。本插件在 `conversation.composer.dock` 槽里按 id 遮蔽 `activity` 条目，
+ * 包装源组件并只替换它的 `t`：没有标签，只在第一段后面追加纯时长，
+ * 得到「12 轮 34 步 · 2.3秒 · 45.0 tok/s」。不新增标签、不改气泡、不拦截点击。
  *
- *   1. 在 `conversation.composer.dock` 槽里按 id 遮蔽 `activity` 条目，包装源组件并只替换
- *      它的 `t`：第一段后追加最近 5 步的平均 TTFT，速度段换成最近 5 步的 TPS，得到
- *      「12 轮 34 步 · 2.3秒 · 45 tok/s」；
- *   2. 气泡挂到 `document.body` 后，由 `src/dialog.ts` 把气泡里的标题值与速度行改回
- *      全会话读数（气泡正文的 TTFT 行本来由上游按全会话计算）。
- *
- * 数据优先读宿主投影 `recentStepStats`；投影缺席时用已加载窗口的最后 5 个 assistant 节点
- * 兜底。气泡还原用的全会话读数优先读上游 `sessionStats` 投影，缺席时折叠窗口。
  * 上游锚点、已知边界与验证方式见 docs/dsh-stats-ttft.md。
  */
 import * as React from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import { STATS_ID, STATS_SLOT, createShadowState, reconcileShadow, withdrawShadow } from './shadow.ts'
-import { tokensPerSecond } from './recent-shared.ts'
-import {
-  dialogReadings,
-  formatDuration,
-  formatTokensPerSecond,
-  readRecentStats,
-  readSessionTotals,
-  withRecentReadings,
-  type DialogTexts,
-} from './ttft.ts'
-import { installDialogPatch, type DialogPatchController, type PatchDocument } from './dialog.ts'
+import { averageTTFT, formatDuration, withDuration } from './ttft.ts'
 import type {
   ChatNodes,
-  RecentStepStats,
+  SessionStatsProjection,
   ShadowSlots,
   Translate,
   UseChat,
@@ -68,99 +51,41 @@ function useNoChat(): unknown {
   return undefined
 }
 
-/** 既不追加时长也不换速度时的气泡还原空表。 */
-const NO_DIALOG_TEXTS: DialogTexts = { countsFrom: null, countsTo: null, speedFrom: null, speedTo: null }
-
 /**
- * 布局副作用：浏览器里用 `useLayoutEffect`，气泡插入后、浏览器绘制前就完成还原；
- * 没有 `document` 的环境（SSR 测试）退化为 `useEffect`，避免 SSR 警告。
- */
-const useIsomorphicLayoutEffect = typeof document === 'undefined' ? React.useEffect : React.useLayoutEffect
-
-/**
- * 装上气泡正文还原：包装层每次拿到新的文本对就同步一次；React 重写气泡里的文本节点后，
- * 下一次同步会把它们改回全会话读数。
+ * 把源组件包进「按钮读数带 TTFT 时长」的包装层。
  *
- * @param texts - 当前按钮上生效的最近 5 步读数与对应的全会话文本。
- */
-function useDialogPatch(texts: DialogTexts): void {
-  const controller = React.useRef<DialogPatchController | null>(null)
-  const latest = React.useRef<DialogTexts>(texts)
-
-  useIsomorphicLayoutEffect(() => {
-    latest.current = texts
-    controller.current?.sync()
-  }, [texts])
-
-  useIsomorphicLayoutEffect(() => {
-    if (typeof document === 'undefined') return undefined
-    const installed = installDialogPatch(document as unknown as PatchDocument, () => latest.current)
-    controller.current = installed
-    return () => {
-      installed.dispose()
-      controller.current = null
-    }
-  }, [])
-}
-
-/**
- * 把源组件包进「按钮读数带最近 5 步 TTFT / TPS、气泡正文仍按全会话」的包装层。
- *
- * 包装层不读业务面之外的东西，把 props 原样透传给源组件；只覆盖 `t`，并在气泡挂载后
- * 还原标题值与速度行。按钮读数优先读 `recentStepStats` projection，投影缺席时用
- * `useChat` 的窗口节点取最后 5 个 assistant 节点兜底；没有样本时对应项不改写，
- * 按钮读数与上游一致。
+ * 包装层不读业务面之外的东西，把 props 原样透传给源组件；只覆盖 `t`。TTFT 优先读
+ * `sessionStats` projection，投影缺席时用 `useChat` 的窗口节点折叠兜底；没有样本时
+ * `t` 原样透传，按钮读数与上游完全一致。
  *
  * @param Inner - 上游那个统计按钮组件（`ActivityPill`）。
  * @returns 包装组件；把它交给 `slots.register()` 即可。
  */
-export function withRecentStats(Inner: unknown): unknown {
-  function ActivityWithRecentStats(props: Record<string, unknown>): React.ReactElement {
+export function withTTFTDuration(Inner: unknown): unknown {
+  function ActivityWithTTFTDuration(props: Record<string, unknown>): React.ReactElement {
     const t = props.t as Translate | undefined
     const useProjection = (
       typeof props.useProjection === 'function' ? props.useProjection : useNoProjection
     ) as UseProjection
     const useChat = (typeof props.useChat === 'function' ? props.useChat : useNoChat) as UseChat
 
-    // 包装层只按字符串键读会话投影：`recentStepStats` 是本插件注册的键，`sessionStats`
-    // 是上游 ui-chat 依赖的全会话键（类型声明随 ui-chat 的 d.ts 加载，这里按值读取）。
-    const readProjection = useProjection as unknown as (key: string) => unknown
-    const projection = readProjection('recentStepStats') as RecentStepStats[] | undefined
-    const sessionProjection = readProjection('sessionStats')
+    const projection: SessionStatsProjection | undefined = useProjection('sessionStats')
     const nodes: ChatNodes | undefined = useChat((snapshot) => snapshot?.legacy?.nodes)
-
-    const reading = readRecentStats(projection, nodes)
-    const sessionTotals = readSessionTotals(sessionProjection, nodes)
-    const sessionTps = tokensPerSecond(sessionTotals)
-
-    const segment = reading.averageTTFT === null || typeof t !== 'function'
+    const average = averageTTFT(projection, nodes)
+    const segment = average === null || typeof t !== 'function'
       ? null
-      : formatDuration(reading.averageTTFT, t) || null
-    const tps = reading.tokensPerSecond === null || typeof t !== 'function'
-      ? null
-      : formatTokensPerSecond(reading.tokensPerSecond)
+      : formatDuration(average, t) || null
     const merged = React.useMemo(
-      () => (typeof t === 'function' ? withRecentReadings(t, { segment, tps }) : t),
-      [t, segment, tps],
+      () => (typeof t === 'function' ? withDuration(t, segment) : t),
+      [t, segment],
     )
-    const texts = React.useMemo(
-      () => (typeof t === 'function'
-        ? dialogReadings(
-          t,
-          { turns: sessionTotals.turns, steps: sessionTotals.steps },
-          { segment, recentTps: reading.tokensPerSecond, sessionTps },
-        )
-        : NO_DIALOG_TEXTS),
-      [t, sessionTotals.turns, sessionTotals.steps, segment, reading.tokensPerSecond, sessionTps],
-    )
-    useDialogPatch(texts)
 
     return React.createElement(
       Inner as React.ComponentType<Record<string, unknown>>,
       { ...props, t: merged },
     )
   }
-  return ActivityWithRecentStats
+  return ActivityWithTTFTDuration
 }
 
 /** 读取 `slots` 服务；服务缺席或形状不符时返回 undefined。 */
@@ -209,7 +134,7 @@ export function apply(ctx: Context): void {
     if (disposed) return
     let outcome
     try {
-      outcome = reconcileShadow(slots, state, withRecentStats)
+      outcome = reconcileShadow(slots, state, withTTFTDuration)
     } catch (error) {
       warn('遮蔽 activity 失败:', error)
       return
