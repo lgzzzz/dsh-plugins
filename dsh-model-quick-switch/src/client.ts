@@ -889,7 +889,7 @@ export function apply(ctx: Context): void {
       if (data.getSnapshot().stage !== 'models') data.set({ stage: 'models', stageModel: null })
     }
 
-    /** 进入第二步：候选换成这个模型的思考等级，并选中当前强度。 */
+    /** 进入第二步：候选换成这个模型的思考等级，并选中目录里最大的一档。 */
     const enterEfforts = (choice: ModelChoice, efforts: readonly EffortChoice[], modelIndex: number): void => {
       stage = 'efforts'
       stageChoice = choice
@@ -900,7 +900,7 @@ export function apply(ctx: Context): void {
       palette.sync(effortRows(choice, efforts, current))
       palette.open(() => {
         void confirmEffort()
-      }, initialEffortIndex(choice, efforts, current))
+      }, initialEffortIndex(efforts))
     }
 
     /** 确认模型行：这个模型公布了思考等级就进入第二步，否则直接切换。 */

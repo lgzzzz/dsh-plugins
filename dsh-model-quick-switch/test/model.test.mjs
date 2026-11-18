@@ -150,7 +150,7 @@ console.log('--- M⑤ 一行候选:标题、副标题、目录外与当前 ---')
   check('目录默认强度同样算当前', defaultRow[0].current, true)
 }
 
-console.log('--- M⑥ 思考等级:默认行、目录强度、当前标记与初始选中 ---')
+console.log('--- M⑥ 思考等级:默认行、目录强度、当前标记与初始选中(最大档) ---')
 {
   const catalog = flattenCatalog(orderCatalogGroups(GROUPS))
   const chat = findCatalogModel(catalog, { provider: 'deepseek', model: 'deepseek-chat' })
@@ -170,10 +170,33 @@ console.log('--- M⑥ 思考等级:默认行、目录强度、当前标记与初
   check('当前强度打标', rows.map((row) => row.current === true), [false, false, true])
   check('别的模型的当前选择不算', effortRows({ provider: 'deepseek', model: 'deepseek-chat' }, efforts, { provider: 'deepseek', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' })[2].current, undefined)
 
-  check('初始选中会话当前强度', initialEffortIndex({ provider: 'deepseek', model: 'deepseek-chat' }, efforts, { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' }), 2)
-  check('设置里固定的强度优先', initialEffortIndex({ provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'low' }, efforts, { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' }), 1)
-  check('没有强度线索时选默认', initialEffortIndex({ provider: 'deepseek', model: 'deepseek-chat' }, efforts, null), 0)
-  check('目录里已没有该强度时退回默认', initialEffortIndex({ provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'max' }, efforts, null), 0)
+  check('初始选中目录里最大的一档', initialEffortIndex(efforts), 2)
+
+  // 目录顺序就是强度顺序：DeepSeek 的 off / low / high / max，最大是最后一档。
+  const deepRow = {
+    provider: 'deepseek',
+    providerName: 'DeepSeek',
+    model: 'deepseek-reasoner',
+    modelName: 'DeepSeek Reasoner',
+    efforts: [
+      { id: 'off', name: 'Off' },
+      { id: 'low', name: 'Low' },
+      { id: 'high', name: 'High' },
+      { id: 'max', name: 'Max' },
+    ],
+    defaultEffort: 'high',
+  }
+  const deepEfforts = effortChoices({ provider: 'deepseek', model: 'deepseek-reasoner' }, deepRow)
+  check('四档时选中最后一档 Max', deepEfforts[initialEffortIndex(deepEfforts)].reasoningEffort, 'max')
+  const currentLow = effortRows(
+    { provider: 'deepseek', model: 'deepseek-chat' },
+    efforts,
+    { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'low' },
+  )
+  check('「当前」角标仍标在会话当前强度上', currentLow.map((row) => row.current === true), [false, true, false])
+  check('高亮与「当前」解耦,仍选最大一档', currentLow[initialEffortIndex(efforts)].key, choiceKey({ provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' }))
+  check('只剩默认行时选中它', initialEffortIndex([{ title: '默认', subtitle: '跟随模型目录的默认强度' }]), 0)
+  check('没有候选时为 0', initialEffortIndex([]), 0)
 
   check('默认行写回不带强度', selectionOfEffort({ provider: 'deepseek', model: 'deepseek-chat' }, efforts[0]), { provider: 'deepseek', model: 'deepseek-chat' })
   check('强度行写回带强度', selectionOfEffort({ provider: 'deepseek', model: 'deepseek-chat' }, efforts[2]), { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'high' })

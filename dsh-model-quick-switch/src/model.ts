@@ -377,27 +377,20 @@ export function effortRows(
 }
 
 /**
- * 进入思考等级浮层时应该选中哪一行。
+ * 进入思考等级浮层时应该选中哪一行：目录里强度最大的一档。
  *
- * 优先用设置里那一行固定的强度，其次是会话当前使用的强度；都没有（或目录里已经不存在）时
- * 选「默认」。这样用户直接按 Enter 就等于沿用当前状态，不会莫名其妙改掉强度。
- * @param choice - 选中的模型。
+ * 目录的 `efforts` 按强度从低到高排列（上游适配器公布的就是这个顺序，例如 DeepSeek 的
+ * `off / low / high / max`），所以最后一个带 `reasoningEffort` 的候选就是最大强度。
+ * 设置行固定的强度与会话当前强度都不参与选中；会话当前强度只由 {@link effortRows} 标成
+ * 「当前」角标。
  * @param efforts - 思考等级候选。
- * @param current - 会话当前的选择。
- * @returns 候选下标；没有候选时为 0。
+ * @returns 候选下标；没有强度（只剩「默认」）或没有候选时为 0。
  */
-export function initialEffortIndex(
-  choice: ModelSelectionLike,
-  efforts: readonly EffortChoice[],
-  current: ModelSelectionLike | null,
-): number {
-  const preferred = choice.reasoningEffort
-    ?? (current !== null && current.provider === choice.provider && current.model === choice.model
-      ? current.reasoningEffort
-      : undefined)
-  if (preferred === undefined) return 0
-  const index = efforts.findIndex((effort) => effort.reasoningEffort === preferred)
-  return index < 0 ? 0 : index
+export function initialEffortIndex(efforts: readonly EffortChoice[]): number {
+  for (let index = efforts.length - 1; index > 0; index -= 1) {
+    if (efforts[index]?.reasoningEffort !== undefined) return index
+  }
+  return 0
 }
 
 /** 一条思考等级选择折成写回 Host 的形状（默认行不带 reasoningEffort）。 */

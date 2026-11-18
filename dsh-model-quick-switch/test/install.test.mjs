@@ -220,7 +220,7 @@ console.log('--- C③b 两步:先选模型,再选思考等级 ---')
   check('浮层标题换成思考等级', fixture.html().includes('选择思考等级'), true)
   check('标题下带模型名', fixture.html().includes('模型：DeepSeek Chat · DeepSeek'), true)
   check('底栏提示 Esc 返回', fixture.html().includes('Esc 返回'), true)
-  check('默认选中会话当前强度 High', fixture.store.getSnapshot().activeIndex, 2)
+  check('默认选中目录里最大的一档 High', fixture.store.getSnapshot().activeIndex, 2)
   check('当前强度带角标', rowsOf(fixture.html()).map((row) => row.current), [false, false, true])
 
   fixture.dom.pressKey('Enter')
@@ -232,6 +232,47 @@ console.log('--- C③b 两步:先选模型,再选思考等级 ---')
     reasoningEffort: 'high',
   }])
   check('成功后关闭并回到第一步', [fixture.store.getSnapshot().open, fixture.data.getSnapshot().stage], [false, 'models'])
+  off()
+}
+
+console.log('--- C③e 思考等级默认高亮最大一档,与会话当前强度无关 ---')
+{
+  const catalog = catalogOf([
+    {
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      name: 'DeepSeek Chat',
+      efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }],
+      defaultEffort: 'high',
+    },
+  ])
+  const sessions = fakeSessions({
+    current: 's1',
+    byId: { s1: { id: 's1' } },
+    modelSelection: { next: { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: 'low' } },
+  })
+  const fixture = setup({
+    catalog,
+    sessions,
+    choices: [{ provider: 'deepseek', model: 'deepseek-chat' }],
+  })
+  await fixture.open()
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('进入思考等级步骤', fixture.data.getSnapshot().stage, 'efforts')
+  check('候选是默认 + 三档强度', fixture.store.getSnapshot().entries.map((row) => row.title), ['默认', 'Low', 'High', 'Max'])
+  check('默认高亮最大一档 Max', fixture.store.getSnapshot().activeIndex, 3)
+  check('HTML 上高亮的是 Max', rowsOf(fixture.html()).map((row) => row.selected), ['false', 'false', 'false', 'true'])
+  check('「当前」仍标在会话当前强度 Low 上', rowsOf(fixture.html()).map((row) => row.current), [false, true, false, false])
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('直接确认写入最大强度', fixture.remote.selectCalls, [{
+    sessionId: 's1',
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    reasoningEffort: 'max',
+  }])
   off()
 }
 
