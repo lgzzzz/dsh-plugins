@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Request stats",
-    "description": "Records the server identity, first-token latency, and output speed of every model request sent to a fixed route such as opencode-go, and opens a dashboard from a new Request stats entry in the left sidebar; the sidebar entry or ⌘⌥H (Ctrl+Alt+H on Windows/Linux) toggles between the dashboard and the conversation. Direct connections are grouped by the peer IP actually observed; proxied requests record Cloudflare's cf-ray edge code and say so instead of inventing a server IP. Rows stay in the current profile's dsh-request-stats/records.json and hold only provider, model, server, timings, and token counts — no prompts, headers, or credentials. Use the JSON config fields providers, hosts, maxRecords, and retentionDays to change what is watched and how much is kept."
-  }
-}

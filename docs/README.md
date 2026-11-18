@@ -29,7 +29,6 @@
 | `dsh-desktop-notify` | 桌面通知 | — |
 | `dsh-directory-picker-browse` | 应用内目录浏览选择器 | — |
 | `dsh-git-guard` | git 操作保护 | — |
-| `dsh-request-stats` | 请求看板：为 opencode-go 等固定模型路由记录每次请求的服务器身份（直连 IP / 经代理时的 Cloudflare 边缘机房）、首字延迟与输出速度，左侧栏入口或 `⌘⌥H` / `Ctrl+Alt+H` 切换数据看板 | [说明](dsh-request-stats.md) |
 
 > `dsh-jobs-optimize` 已退役并从仓库移除：0.2.2-rc.2 起上游后台任务控件原生实现悬停 150ms 展开、离开 120ms 折叠与点击钉住，插件不再必要。
 
