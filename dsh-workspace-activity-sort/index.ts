@@ -7,6 +7,8 @@
  *
  * 触发与动作：
  *   - `api-session/activity`：该会话所属工作区上浮到最前；
+ *   - `approval/request` / `user-questions/request`：会话开始等用户（工具审批、提问、计划确认），
+ *     它所属工作区上浮到最前；两条都是 waterfall 事件，插件只观察、原样调用 `next()` 交还请求；
  *   - `session/created`：登记非 subagent 且此刻还没有工作区归属的新会话；
  *   - `domain/changed`（workspace 域、工作区表）：让登记的新会话认领工作区，认领到就上浮一次；
  *   - `session/event` 的 `turn/end`：任务完成（`completed` 且跑过 step），或模型请求重试
@@ -22,8 +24,11 @@ import type { WorkspaceId, WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 // 空类型导入：加载这些包对 cordis Events 的类型增强（session/created、session/event、
 // api-session/activity、domain/changed），让下面的 ctx.on 回调参数有类型；不引入运行时导入。
 import type {} from '@deepseek-ai/dsh-api-session-controller'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-storage-domain'
+// 空类型导入：两条等待用户的事件（工具审批、提问 / 计划确认）的 waterfall 类型增强。
+import type {} from '@deepseek-ai/dsh-user-approval/types'
+import type {} from '@deepseek-ai/dsh-user-questions/types'
 import {
   PENDING_TTL_MS,
   frontMove,
@@ -53,7 +58,7 @@ function mount(registry: WorkspaceRegistry, ctx: Context): void {
   let active = true
   /** 已登记、还没认领工作区的新会话：会话 id → 登记时刻。 */
   const pending = new Map<string, number>()
-  /** 刚有活动、还没解析归属的会话，按事件到达顺序。 */
+  /** 刚请求关注（用户消息、回合终点、等待用户的授权 / 提问 / 计划确认）的会话，按事件到达顺序。 */
   const activeSessions: string[] = []
   /** 当前 step 最近一次模型请求重试：会话 id → 记录（`step/start` 时清空，重试按 step 计数）。 */
   const retries = new Map<string, RequestRetry>()
@@ -176,11 +181,36 @@ function mount(registry: WorkspaceRegistry, ctx: Context): void {
     }
   }
 
+  /**
+   * 会话开始等用户（工具审批、提问、计划确认）：把它记进上浮队列。
+   * subagent 子会话在侧边栏里没有自己的行，不参与；不属于任何工作区的会话会在收敛时被丢掉。
+   */
+  const noteUserWait = (session: Session | undefined): void => {
+    if (session === undefined || session.header.origin === 'subagent') return
+    activeSessions.push(String(session.id))
+    schedule()
+  }
+
   // 用户消息提交：把该会话所属工作区提到最前。
   ctx.on('api-session/activity', (sessionId) => {
     activeSessions.push(String(sessionId))
     schedule()
   })
+
+  // 工具审批：`approval/request` 是 waterfall，观察者必须调用 `next()` 把请求原样交还给应答链
+  // （不调用就等于吞掉这次审批）。prepend 让它排在应答者之前——上游客户端的应答者命中后不会
+  // 再调用 `next()`，排在它后面的观察者会被短路掉；只观察、不改结果。
+  ctx.on('approval/request', (request, next) => {
+    noteUserWait(request.agent?.session)
+    return next()
+  }, { prepend: true })
+
+  // 提问与计划确认：`ask_user_question` 与 `exit_plan_mode` 都经 `user-questions/request`
+  // 这条 waterfall 找应答者，观察方式同上；`agent` 缺席（非 agent 作用域的提问）时没有会话可上浮。
+  ctx.on('user-questions/request', (request, next) => {
+    noteUserWait(request.agent?.session)
+    return next()
+  }, { prepend: true })
 
   // 新会话：此刻注册表还没把它记到工作区账下（attach 写在创建之后），先登记。
   // 已经在账下的（resume / 重新打开旧会话）不是新建，不参与上浮。

@@ -2,6 +2,10 @@
  * 测试共用的夹具：假 Workspace 注册表、假 ctx（事件总线 + effect + logger），以及等待插件
  * 异步收敛的 `settle()`。
  *
+ * 假 ctx 同时复刻两种派发语义：`emit` 式的普通事件，以及 `waterfall`（监听器逐个包住
+ * `next`，链尾 `fallback` 扮演应答者）——审批与提问两条请求都是 waterfall，观察者必须原样
+ * 调用 `next()` 才不吞请求。
+ *
  * 假注册表复刻注册表的四条行为：DOM insertBefore 语义、锚点/来源缺失即抛错、顺序没变就不
  * 写盘，以及两种持久写入各自的 `domain/changed` 形状——重排写全局顺序单例（`table` 为 `''`），
  * attach / 改名等实体变更写工作区表（`table` 为 `workspaces`）。
@@ -123,6 +127,25 @@ export function createHarness({ entities = [], insertFails = false } = {}) {
   const emit = (event, ...args) => {
     for (const listener of listeners.get(event) ?? []) listener(...args)
   }
+  /**
+   * 按 cordis waterfall 语义派发：监听器逐个包住 `next`，链尾的 `fallback` 扮演应答者；
+   * 某个监听器不调用 `next()` 就等于吞掉请求（与上游一致）。
+   */
+  const waterfall = (event, request, fallback = async () => 'unavailable') => {
+    const callbacks = [...(listeners.get(event) ?? [])]
+    const dispatch = () => {
+      const callback = callbacks.shift()
+      if (callback === undefined) return fallback()
+      let called = false
+      const next = () => {
+        if (called) throw new Error('next() called multiple times')
+        called = true
+        return dispatch()
+      }
+      return callback(request, next)
+    }
+    return dispatch()
+  }
   const registry = new FakeRegistry(entities, (change) => emit('domain/changed', change))
   registry.failInserts = insertFails
   const ctx = {
@@ -138,9 +161,10 @@ export function createHarness({ entities = [], insertFails = false } = {}) {
       if (typeof dispose === 'function') disposers.push(dispose)
       return dispose
     },
-    on: (event, listener) => {
+    on: (event, listener, options) => {
       const bucket = listeners.get(event) ?? []
-      bucket.push(listener)
+      if (options === true || options?.prepend === true) bucket.unshift(listener)
+      else bucket.push(listener)
       listeners.set(event, bucket)
       return () => {}
     },
@@ -159,6 +183,16 @@ export function createHarness({ entities = [], insertFails = false } = {}) {
     /** 会话被创建 / 被重新打开（resume 也走这一条）。 */
     created: (session) => emit('session/created', session),
     disposed: (session) => emit('session/disposed', session),
+    /** 任意 waterfall 事件；`fallback` 是链尾应答者（默认给出上游的兜底应答 `unavailable`）。 */
+    waterfall,
+    /** 一次工具审批请求（`approval/request`）。 */
+    approval: (session, fallback) => waterfall('approval/request', { agent: { session } }, fallback),
+    /** 一次提问 / 计划确认请求（`user-questions/request`）。 */
+    question: (session, { fallback, questions } = {}) => waterfall(
+      'user-questions/request',
+      questions === undefined ? { agent: { session } } : { agent: { session }, questions },
+      fallback,
+    ),
     apply: (plugin) => plugin.apply(ctx),
     dispose: () => {
       for (const dispose of disposers) dispose()

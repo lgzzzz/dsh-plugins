@@ -1,9 +1,10 @@
 /**
  * 真实 cordis 集成测试：用 `new Context()` 起宿主上下文，把注册表 provide 成真服务，
- * 以对象插件方式按加载器挂载，走真实事件总线。验证两件事：`inject: ['workspaceRegistry']`
- * 的等待语义（服务缺席时不运行，出现即运行），以及四类事件（`api-session/activity`、
+ * 以对象插件方式按加载器挂载，走真实事件总线。验证三件事：`inject: ['workspaceRegistry']`
+ * 的等待语义（服务缺席时不运行，出现即运行），四类事件（`api-session/activity`、
  * `session/event` 的 `turn/end`、`session/created` + `domain/changed`、`session/disposed`）
- * 确实驱动上浮。
+ * 确实驱动上浮，以及两条 waterfall（`approval/request`、`user-questions/request`）上的
+ * 观察者原样交还请求、不被上游应答者短路。
  *
  * 运行：`node test/cordis-integration.test.mjs`。
  */
@@ -138,6 +139,62 @@ assert.equal(plugin.Config, undefined, '没有配置 schema：插件不接受配
   assert.deepEqual(registry.order, ['b', 'a'], '真实事件总线下：模型请求重试耗尽同样上浮')
 
   await fiber.dispose()
+  await root.fiber.dispose()
+}
+
+// 真实事件总线上的等待用户请求（waterfall）
+
+{
+  const root = new Context()
+  const registry = new FakeRegistry(
+    [ws('a', ['s-a']), ws('b', ['s-b']), ws('c', ['s-c'])],
+    (change) => root.emit('domain/changed', change),
+  )
+  root.provide('workspaceRegistry', registry)
+  const fiber = root.plugin(plugin)
+  await settle()
+
+  const answered = []
+  const offAnswerer = root.on('approval/request', (request) => {
+    answered.push(request.agent.session.id)
+    return 'allowed-once'
+  })
+  const outcome = await root.waterfall(
+    'approval/request',
+    { agent: { session: sessionFixture('s-b') } },
+    async () => 'unavailable',
+  )
+  await settle()
+  assert.equal(outcome, 'allowed-once', '真实 waterfall：观察者原样交还请求，下游应答者仍决定结果')
+  assert.deepEqual(answered, ['s-b'], '真实 waterfall：下游应答者收到请求')
+  assert.deepEqual(registry.order, ['b', 'a', 'c'], '真实 waterfall：审批请求让所属工作区上浮')
+
+  await registry.drag('b', undefined) // 用户把 b 拖到末尾
+  await settle()
+  assert.deepEqual(registry.order, ['a', 'c', 'b'])
+
+  const answer = { answers: [{ id: 'q', selected: ['ok'] }] }
+  const asked = await root.waterfall(
+    'user-questions/request',
+    { agent: { session: sessionFixture('s-c') } },
+    async () => answer,
+  )
+  await settle()
+  assert.deepEqual(asked, answer, '真实 waterfall：提问同样交还给下游应答')
+  assert.deepEqual(registry.order, ['c', 'a', 'b'], '真实 waterfall：提问让所属工作区上浮')
+
+  const inserts = [...registry.inserts]
+  await fiber.dispose()
+  offAnswerer()
+  const after = await root.waterfall(
+    'approval/request',
+    { agent: { session: sessionFixture('s-b') } },
+    async () => 'unavailable',
+  )
+  await settle()
+  assert.equal(after, 'unavailable', '卸载后请求直接落到兜底')
+  assert.deepEqual(registry.inserts, inserts, '卸载后审批请求不再写注册表')
+  assert.deepEqual(registry.order, ['c', 'a', 'b'])
   await root.fiber.dispose()
 }
 

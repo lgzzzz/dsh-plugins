@@ -1,7 +1,7 @@
 /**
- * 宿主挂载测试（假 ctx）：验证插件形状、会话活动上浮、新会话落位后上浮、
- * 回合终态（任务完成 / 模型请求重试耗尽）上浮、拖拽与改名不被覆盖、
- * 注册表拒绝时的降级，以及卸载后停手。
+ * 宿主挂载测试（假 ctx）：验证插件形状、会话活动上浮、等待用户的请求（工具审批、提问、
+ * 计划确认）上浮且不吞掉 waterfall 请求、新会话落位后上浮、回合终态（任务完成 / 模型请求
+ * 重试耗尽）上浮、拖拽与改名不被覆盖、注册表拒绝时的降级，以及卸载后停手。
  *
  * 运行：`node test/plugin-apply.test.mjs`。
  */
@@ -96,6 +96,118 @@ assert.equal(plugin.Config, undefined, '没有配置项：策略只有「会话�
   assert.equal(harness.logs.info.length, 1, 'info 只报一次')
   assert.ok(harness.logs.debug.length >= 1, '之后的真实上浮降为 debug')
   harness.dispose()
+}
+
+// 等待用户的请求（工具审批 / 提问 / 计划确认）让工作区上浮
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  const answered = []
+  // 下游应答者：注册得比插件晚，观察者调用 next() 之后才轮到它
+  harness.ctx.on('approval/request', (request) => {
+    answered.push(request.agent.session.id)
+    return 'allowed-once'
+  })
+  const outcome = await harness.approval(sessionFixture('s-b'))
+  await settle()
+  assert.equal(outcome, 'allowed-once', '观察者原样把请求交给应答者，不吞掉审批')
+  assert.deepEqual(answered, ['s-b'], '下游应答者照常收到请求')
+  assert.deepEqual(harness.registry.order, ['b', 'a'], '审批请求让所属工作区上浮')
+  assert.deepEqual(harness.registry.inserts, ['b→a前'], '一次请求只写一次注册表')
+  assert.deepEqual(harness.logs.warn, [], '没有告警')
+  harness.dispose()
+}
+
+// 观察者排在应答者前面：先注册的应答者不能把它短路掉
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  // 先注册的应答者（模拟早于插件挂载的上游应答链）命中后不再调用 next()
+  harness.ctx.on('approval/request', () => 'rejected')
+  harness.apply(plugin)
+  await settle()
+  const outcome = await harness.approval(sessionFixture('s-b'))
+  await settle()
+  assert.equal(outcome, 'rejected', '早注册的应答者仍然命中并决定结果')
+  assert.deepEqual(harness.registry.order, ['b', 'a'], 'prepend 让观察者不会被早注册的应答者短路')
+  harness.dispose()
+}
+
+// 没有应答者时仍落到链尾兜底
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  const outcome = await harness.approval(sessionFixture('s-b'))
+  await settle()
+  assert.equal(outcome, 'unavailable', '没有应答者时按上游兜底 fail closed')
+  assert.deepEqual(harness.registry.order, ['b', 'a'], '兜底请求同样让所属工作区上浮')
+  harness.dispose()
+}
+
+// 提问与计划确认走同一条 waterfall
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b']), ws('c', ['s-c'])] })
+  harness.apply(plugin)
+  await settle()
+  const answer = { answers: [{ id: 'q', selected: ['ok'] }] }
+  const asked = await harness.question(sessionFixture('s-b'), { fallback: async () => answer })
+  await settle()
+  assert.deepEqual(asked, answer, '提问照常交给下游应答者')
+  assert.deepEqual(harness.registry.order, ['b', 'a', 'c'], '提问让所属工作区上浮')
+
+  const planQuestions = [{
+    id: 'plan-review',
+    question: 'Approve the plan?',
+    intent: { kind: 'plan-review', approve: 'Approve' },
+  }]
+  const reviewed = await harness.question(sessionFixture('s-c'), {
+    questions: planQuestions,
+    fallback: async () => answer,
+  })
+  await settle()
+  assert.deepEqual(reviewed, answer, '计划确认照常交给下游应答者')
+  assert.deepEqual(harness.registry.order, ['c', 'b', 'a'], '计划确认同样让所属工作区上浮')
+  assert.deepEqual(harness.logs.warn, [], '没有告警')
+  harness.dispose()
+}
+
+// 已在最前 / subagent / Ungrouped / 没有 agent 的请求都不写盘
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  await harness.approval(sessionFixture('s-a'))
+  await harness.question(sessionFixture('s-child', { origin: 'subagent' }), {
+    fallback: async () => ({ answers: [] }),
+  })
+  await harness.question(sessionFixture('s-ungrouped'), { fallback: async () => ({ answers: [] }) })
+  const outcome = await harness.waterfall('user-questions/request', {}, async () => 'late')
+  await settle()
+  assert.equal(outcome, 'late', '没有 agent 的提问照常放行')
+  assert.deepEqual(harness.registry.inserts, [], '已在最前、subagent、Ungrouped、无 agent 都不上浮')
+  assert.deepEqual(harness.registry.order, ['a', 'b'])
+  assert.deepEqual(harness.logs.warn, [], '没有告警')
+  harness.dispose()
+}
+
+// 卸载后审批请求不再上浮
+
+{
+  const harness = createHarness({ entities: [ws('a', ['s-a']), ws('b', ['s-b'])] })
+  harness.apply(plugin)
+  await settle()
+  harness.dispose()
+  const outcome = await harness.approval(sessionFixture('s-b'))
+  await settle()
+  assert.equal(outcome, 'unavailable', '卸载后请求照常落到兜底')
+  assert.deepEqual(harness.registry.inserts, [], '卸载后审批请求不再触发上浮')
+  assert.deepEqual(harness.registry.order, ['a', 'b'])
 }
 
 // 新会话落位才上浮
