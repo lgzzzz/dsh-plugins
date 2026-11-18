@@ -1,6 +1,6 @@
 # dsh-request-stats
 
-请求看板：为 opencode-go（以及任何 JSON 配置里指定的固定模型路由）记录每一次模型请求的服务器身份、首字延迟与输出速度，并在左侧栏新增「请求看板」入口。
+请求看板：为 opencode-go（以及任何 JSON 配置里指定的固定模型路由）记录每一次模型请求的服务器身份、首字延迟与输出速度，并在左侧栏新增「请求看板」入口；也可用 `⌘⌥H` / `Ctrl+Alt+H` 在看板与对话之间切换。
 
 ## 它解决的问题
 
@@ -10,12 +10,24 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| `index.js` | 插件入口：解析行配置（`providers` / `hosts` / `maxRecords` / `retentionDays`）、创建账本与采集器、挂 `llm/stream` 与 `/api/dsh-request-stats/*` |
-| `server/collect.js` | `llm/stream` waterfall 包裹下游流：记录首个内容块与 `usage`；用 `AsyncLocalStorage` + undici 诊断通道（`undici:request:create`、`undici:client:connected`、`undici:request:headers`）把对端 socket 地址、经代理解析、`cf-ray` 机房绑到同一次调用 |
-| `server/records.js` | profile 级 JSON 账本：启动同步读取、防抖原子写入、按 `maxRecords` / `retentionDays` 截断；`profileContext.dir` 优先于环境变量（Host 进程没有 `DSH_PROFILE_DIR`） |
-| `server/summary.js` | 纯聚合：时间窗过滤、均值/nearest-rank P50/P90、按 IP 或边缘机房分组、趋势序列与明细 |
-| `server/routes.js` | 只读桥：`GET /api/dsh-request-stats/state`、`POST /api/dsh-request-stats/clear`；仅同源且本机回环、Host 头也是回环才放行 |
-| `client.js` | 浏览器半部：`sidebar.panellist` 提交左侧栏入口，`main` 同 id 渲染看板；4 秒轮询、范围切换、二次确认清空、趋势与明细表 |
+| `src/index.ts` → `lib/index.js` | 插件入口：解析行配置（`providers` / `hosts` / `maxRecords` / `retentionDays`）、创建账本与采集器、挂 `llm/stream` 与 `/api/dsh-request-stats/*` |
+| `src/server/collect.ts` | `llm/stream` waterfall 包裹下游流：记录首个内容块与 `usage`；用 `AsyncLocalStorage` + undici 诊断通道（`undici:request:create`、`undici:client:connected`、`undici:request:headers`）把对端 socket 地址、经代理解析、`cf-ray` 机房绑到同一次调用 |
+| `src/server/records.ts` | profile 级 JSON 账本：启动同步读取、防抖原子写入、按 `maxRecords` / `retentionDays` 截断；`profileContext.dir` 优先于环境变量（Host 进程没有 `DSH_PROFILE_DIR`） |
+| `src/server/summary.ts` | 纯聚合：时间窗过滤、均值/nearest-rank P50/P90、按 IP 或边缘机房分组、趋势序列与明细 |
+| `src/server/routes.ts` | 只读桥：`GET /api/dsh-request-stats/state`、`POST /api/dsh-request-stats/clear`；仅同源且本机回环、Host 头也是回环才放行 |
+| `src/shared/types.ts` | 两半共享的数据形状：账本记录、汇总、时间窗与录制配置；浏览器半部只做 type-only import |
+| `src/client/` → `lib/client.js` | 浏览器半部：`sidebar.panellist` 提交左侧栏入口，`main` 同 id 渲染看板；注册 `primary+alt+H` 固定快捷键并在看板/对话之间切换；4 秒轮询、范围切换、二次确认清空、趋势与明细表 |
+
+两半都是 TypeScript，由 tsdown 编译到 `lib/`（不进版本库）：宿主半部打成 `lib/index.js`，浏览器半部打成 `window.__ModuleLoader__` CJS 工厂 `lib/client.js`。`package.json` 的 `exports` 指向这两个产物，所以挂载前需要先 `pnpm build`。
+
+## 快捷键
+
+`primary+alt+H` 在 macOS 上是 `⌘⌥H`，在 Windows/Linux 上是 `Ctrl+Alt+H`。它是一条只读固定行（`dsh-request-stats.open-board`），不出现在可改绑命令里：
+
+- 当前不在看板时，选中 `requestStats` 主面板；已经在看板时，`layout.selectPanel(null)` 回到对话。
+- 页面和输入框走快捷键服务的固定输入通道；焦点在终端 `.xterm` 内时走 window 捕获阶段监听，避免按键被 shell 当成输入。
+- 长按、输入法组合、已被别处消费的输入和打开的模态层都不触发。
+- macOS 的 `⌘⌥H` 同时是系统「隐藏其他应用」的菜单快捷键。macOS **Web** 上固定行额外保留 `⌃⌥H`（Control+Option+H）作为备用；浏览器吞掉 `⌘⌥H` 时按备用键仍能切换。macOS Desktop 不注册备用键。
 
 ## 「服务器 IP」怎么来
 
@@ -37,7 +49,10 @@
 
 ```sh
 cd dsh-request-stats
-node check.mjs        # 清单 / 导出 / 语法 / 主题 token
-node test/run.mjs     # 采集、账本、聚合的离线测试
-node test/client-render.mjs  # 浏览器半部以真实 React 离线渲染
+pnpm build      # tsdown：宿主半部与浏览器半部都编译到 lib/
+pnpm typecheck  # tsc --noEmit（两半共用一份 tsconfig）
+pnpm check      # 清单 / 导出 / 产物语法 / 客户端注册形状
+pnpm test       # 采集、账本、聚合 + 浏览器半部离线渲染 lib/client.js
 ```
+
+`test/run.mjs` 直接加载 `src/` 下的 `.ts`（Node Type Stripping）；`test/client-render.mjs` 读构建产物 `lib/client.js`。

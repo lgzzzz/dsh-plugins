@@ -2,19 +2,19 @@
   "name": "dsh-request-stats",
   "version": "0.1.0",
   "private": true,
-  "description": "请求看板：为 opencode-go 等固定模型路由记录每一次请求的服务器 IP / Cloudflare 边缘机房、首字延迟与输出速度，并在左侧栏打开数据看板。",
+  "description": "请求看板：为 opencode-go 等固定模型路由记录每一次请求的服务器 IP / Cloudflare 边缘机房、首字延迟与输出速度，并在左侧栏和 ⌘⌥H（Windows/Linux 为 Ctrl+Alt+H）切换数据看板。",
   "type": "module",
   "exports": {
-    ".": "./index.js",
-    "./client": "./client.js",
+    ".": "./lib/index.js",
+    "./client": {
+      "default": "./lib/client.js"
+    },
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.js",
-    "client.js",
-    "server",
+    "lib",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
@@ -35,10 +35,22 @@
     }
   },
   "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
     "check": "node check.mjs",
     "test": "node test/run.mjs && node test/client-render.mjs"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-llm": "^0.2.2-rc.4",
+    "@types/node": "^24.19.2",
+    "@types/react": "^18.3.31",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
   }
 }

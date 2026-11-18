@@ -21,8 +21,14 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
-import { promises as dns } from 'node:dns'
 import { channel } from 'node:diagnostics_channel'
+import { promises as dns } from 'node:dns'
+import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+import type {
+  FailureInfo,
+  LiveCall,
+  RequestRecord,
+} from '../shared/types.ts'
 
 /** Chunk types that carry generated content and therefore end the wait for a first token. */
 const CONTENT_CHUNKS = new Set(['text-delta', 'reasoning-delta', 'tool-call-delta'])
@@ -33,24 +39,45 @@ const DNS_TTL_MS = 60_000
 /** How long the last observed peer for one host is reused for pooled sockets. */
 const PEER_TTL_MS = 30 * 60_000
 
+/** The slice of the environment this module reads; `process.env` satisfies it. */
+export type Environment = Readonly<Record<string, string | undefined>>
+
 /** Milliseconds with at most one decimal, rounding sub-100 values finer. */
-function ms(value) {
+function ms(value: number): number | undefined {
   if (!Number.isFinite(value) || value < 0) return undefined
   return value < 100 ? Math.round(value * 10) / 10 : Math.round(value)
 }
 
 /** Tokens per second to one decimal. */
-function rate(tokens, windowMs) {
-  if (!Number.isFinite(tokens) || !Number.isFinite(windowMs) || windowMs <= 0) return undefined
+function rate(tokens: number, windowMs: number | undefined): number | undefined {
+  if (!Number.isFinite(tokens) || windowMs === undefined || !Number.isFinite(windowMs) || windowMs <= 0) return undefined
   return Math.round((tokens / (windowMs / 1000)) * 10) / 10
 }
 
-function text(value, max) {
+/** Bounded non-empty text, or `undefined`. */
+function text(value: unknown, max: number): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value.slice(0, max) : undefined
 }
 
+/** One property of a possibly-absent object, mirroring `value?.key`. */
+function field(value: unknown, key: string): unknown {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[key] : undefined
+}
+
+/** One string property of a possibly-absent object. */
+function readText(value: unknown, key: string): string | undefined {
+  const found = field(value, key)
+  return typeof found === 'string' ? found : undefined
+}
+
+/** One number property of a possibly-absent object. */
+function readNumber(value: unknown, key: string): number | undefined {
+  const found = field(value, key)
+  return typeof found === 'number' ? found : undefined
+}
+
 /** Normalize one configured host entry (case, leading dot, optional port). */
-function normalizeHost(value) {
+function normalizeHost(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim().toLowerCase()
   if (trimmed.length === 0) return undefined
@@ -60,14 +87,14 @@ function normalizeHost(value) {
 }
 
 /** Whether a host equals one of the configured targets or is a subdomain of one. */
-function matchesHost(host, targets) {
+function matchesHost(host: unknown, targets: readonly string[]): boolean {
   if (typeof host !== 'string' || host.length === 0) return false
   const value = host.toLowerCase()
   return targets.some(target => value === target || value.endsWith(`.${target}`))
 }
 
 /** Hostname of a request origin without throwing on malformed input. */
-function hostOfOrigin(origin) {
+function hostOfOrigin(origin: unknown): string | undefined {
   if (typeof origin !== 'string') return undefined
   try {
     return new URL(origin).hostname.toLowerCase()
@@ -77,18 +104,19 @@ function hostOfOrigin(origin) {
 }
 
 /** Decode one raw header cell: undici publishes Buffers, other callers strings. */
-function headerText(value) {
+function headerText(value: unknown): string | undefined {
   if (typeof value === 'string') return value
   if (value instanceof Uint8Array) return Buffer.from(value.buffer, value.byteOffset, value.byteLength).toString('utf8')
   return undefined
 }
 
 /** Read one response header from a Headers instance, a plain object, or undici's raw pairs. */
-function headerValue(headers, name) {
+function headerValue(headers: unknown, name: string): string | undefined {
   if (headers === null || headers === undefined) return undefined
   try {
-    if (typeof headers.get === 'function') {
-      const found = headers.get(name)
+    const getter = field(headers, 'get')
+    if (typeof getter === 'function') {
+      const found: unknown = (getter as (this: unknown, header: string) => unknown).call(headers, name)
       return typeof found === 'string' ? found : undefined
     }
     if (Array.isArray(headers)) {
@@ -119,15 +147,23 @@ function headerValue(headers, name) {
 }
 
 /** Loopback or link-local spellings that can only be a local proxy. */
-function isLocalAddress(address) {
+function isLocalAddress(address: unknown): boolean {
   if (typeof address !== 'string') return false
   const clean = address.startsWith('::ffff:') ? address.slice(7) : address
   return clean === '::1' || clean === '::ffff:127.0.0.1' || clean.startsWith('127.') || clean.startsWith('fe80:')
 }
 
+/** One configured proxy endpoint. */
+interface ProxyTarget {
+  /** Lower-cased proxy hostname. */
+  host: string
+  /** Proxy port. */
+  port: number
+}
+
 /** Configured proxy endpoints, for recognizing the socket peer as a proxy. */
-function parseProxyTargets(env) {
-  const targets = []
+function parseProxyTargets(env: Environment | undefined): ProxyTarget[] {
+  const targets: ProxyTarget[] = []
   for (const name of ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']) {
     const raw = env?.[name]
     if (typeof raw !== 'string' || raw.trim().length === 0) continue
@@ -142,6 +178,81 @@ function parseProxyTargets(env) {
   return targets
 }
 
+/** The slice of one `llm/stream` request this collector reads. */
+export interface StreamOptionsLike {
+  /** Registered provider route selecting the adapter instance. */
+  provider?: unknown
+  /** Model id. */
+  model?: unknown
+  /** Auxiliary request purpose, when the call is auxiliary. */
+  purpose?: unknown
+  /** Session identity stamped by the loop. */
+  sessionId?: unknown
+}
+
+/** The ledger capability the collector needs. */
+export interface CollectorStore {
+  /** Append one finished record. */
+  add(record: RequestRecord): void
+}
+
+/** Options for {@link createCollector}. */
+export interface CollectorOptions {
+  /** The ledger to append to. */
+  store: CollectorStore
+  /** Provider routes to record; an empty list records every provider. */
+  providers?: readonly string[]
+  /** Endpoint hosts to watch. */
+  hosts?: readonly string[]
+  /** Environment used to recognize a configured proxy. */
+  env?: Environment
+  /** Wall clock for record timestamps. */
+  now?: () => number
+  /** Monotonic clock for the timings. */
+  monotonic?: () => number
+}
+
+/** One in-flight model call, from the first pull to the last chunk. */
+interface CallState {
+  /** The record being filled in. */
+  record: RequestRecord
+  /** `monotonic()` at request start. */
+  startedMono: number
+  /** `monotonic()` of the first content chunk. */
+  firstMono: number | undefined
+  /** `monotonic()` of the latest chunk of any kind. */
+  lastChunkMono: number | undefined
+  /** `monotonic()` of the finish chunk. */
+  finishMono: number | undefined
+  /** Streamed characters, used only when the provider reports no usage. */
+  chars: number
+  /** Provider token accounting, when one arrived. */
+  usage: unknown
+  /** Terminal finish reason, when one arrived. */
+  finish: unknown
+  /** Transport failure observed by a diagnostics listener. */
+  transportFailure: FailureInfo | undefined
+  /** Whether the record was already handed to the ledger. */
+  settled: boolean
+}
+
+/** The collector handle: activation, in-flight view, and disposal. */
+export interface Collector {
+  /** Subscribe to the diagnostics channels; returns the disposer. */
+  start(): () => void
+  /**
+   * The `llm/stream` waterfall listener.
+   * @param options - the request being dispatched.
+   * @param next - the downstream stream factory.
+   * @returns The downstream iterable, measured when the call is eligible.
+   */
+  handleStream(options: StreamOptionsLike | undefined, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
+  /** Model calls currently streaming, for the panel's live counter. */
+  inFlight(): LiveCall[]
+  /** Unsubscribe from every diagnostics channel. */
+  dispose(): void
+}
+
 /**
  * Install the transport and timing capture.
  * @param options - the ledger to append to, the routes to watch, and clocks.
@@ -154,34 +265,40 @@ export function createCollector({
   env = process.env,
   now = Date.now,
   monotonic = () => performance.now(),
-} = {}) {
-  const als = new AsyncLocalStorage()
-  const inflightBysRequest = new WeakMap()
-  const active = new Map()
-  const targets = hosts.map(normalizeHost).filter(target => target !== undefined)
+}: CollectorOptions): Collector {
+  const als = new AsyncLocalStorage<CallState>()
+  const inflightBysRequest = new WeakMap<object, CallState>()
+  const active = new Map<string, CallState>()
+  const targets = hosts.map(normalizeHost).filter((target): target is string => target !== undefined)
   const providerSet = new Set(providers.map(value => String(value).toLowerCase()))
   const proxies = parseProxyTargets(env)
-  const dnsCache = new Map()
-  const peerByHost = new Map()
-  const subscriptions = []
+  const dnsCache = new Map<string, { at: number; addresses: string[]; pending?: boolean }>()
+  const peerByHost = new Map<string, {
+    connection: RequestRecord['connection']
+    ip: string | undefined
+    port: number | undefined
+    proxy: string | undefined
+    at: number
+  }>()
+  const subscriptions: Array<() => void> = []
   let armed = false
 
-  const watchesHost = host => matchesHost(host, targets)
-  const recordsProvider = provider => providerSet.size === 0 || providerSet.has(String(provider ?? '').toLowerCase())
+  const watchesHost = (host: unknown): boolean => matchesHost(host, targets)
+  const recordsProvider = (provider: unknown): boolean => providerSet.size === 0 || providerSet.has(String(provider ?? '').toLowerCase())
 
   /** Whether the socket peer belongs to a configured proxy. */
-  function viaProxy(address, port) {
+  function viaProxy(address: string, port: number | undefined): boolean {
     if (!isLocalAddress(address)) return false
     if (proxies.length === 0) return true
     return proxies.some(proxy => proxy.host === address && (port === undefined || proxy.port === port))
   }
 
   /** Refresh the DNS answers for one endpoint host in the background. */
-  function warmDns(host) {
+  function warmDns(host: string): void {
     const cached = dnsCache.get(host)
-    if (cached !== undefined && (cached.pending || now() - cached.at < DNS_TTL_MS)) return
+    if (cached !== undefined && (cached.pending === true || now() - cached.at < DNS_TTL_MS)) return
     const pending = dns.lookup(host, { all: true })
-      .then(list => {
+      .then((list) => {
         dnsCache.set(host, { at: now(), addresses: list.map(entry => entry.address).slice(0, 8) })
       })
       .catch(() => {
@@ -191,9 +308,9 @@ export function createCollector({
     void pending
   }
 
-  function subscribe(name, listener) {
+  function subscribe(name: string, listener: (message: unknown) => void): void {
     const diagnostics = channel(name)
-    const guarded = message => {
+    const guarded = (message: unknown): void => {
       try {
         listener(message)
       } catch {
@@ -210,14 +327,14 @@ export function createCollector({
     })
   }
 
-  function onRequestCreate(message) {
+  function onRequestCreate(message: unknown): void {
     const call = als.getStore()
     if (call === undefined || call.settled) return
-    const request = message?.request
-    const origin = typeof request?.origin === 'string' ? request.origin : undefined
+    const request = field(message, 'request')
+    const origin = readText(request, 'origin')
     const host = hostOfOrigin(origin)
     if (host === undefined || !watchesHost(host)) return
-    call.record.endpoint = { host, path: text(request.path, 200) }
+    call.record.endpoint = { host, path: text(field(request, 'path'), 200) }
     warmDns(host)
     // Remember the request object so later channel messages can find this call
     // even when their callback runs outside the stream's async scope.
@@ -236,18 +353,18 @@ export function createCollector({
     }
   }
 
-  function onClientConnected(message) {
+  function onClientConnected(message: unknown): void {
     const call = als.getStore()
-    const params = message?.connectParams
-    const hostname = typeof params?.hostname === 'string' ? params.hostname.toLowerCase() : undefined
+    const params = field(message, 'connectParams')
+    const hostname = readText(params, 'hostname')?.toLowerCase()
     if (hostname === undefined || !watchesHost(hostname)) return
-    const socket = message?.socket
-    const address = typeof socket?.remoteAddress === 'string' ? socket.remoteAddress : undefined
+    const socket = field(message, 'socket')
+    const address = readText(socket, 'remoteAddress')
     if (address === undefined) return
-    const port = typeof socket?.remotePort === 'number' ? socket.remotePort : undefined
+    const port = readNumber(socket, 'remotePort')
     const proxied = viaProxy(address, port)
     const peer = {
-      connection: proxied ? 'proxied' : 'direct',
+      connection: proxied ? 'proxied' as const : 'direct' as const,
       ip: proxied ? undefined : address,
       port,
       proxy: proxied ? `${address}${port === undefined ? '' : `:${port}`}` : undefined,
@@ -262,12 +379,12 @@ export function createCollector({
     call.record.proxy = peer.proxy
   }
 
-  function onRequestHeaders(message) {
-    const request = message?.request
+  function onRequestHeaders(message: unknown): void {
+    const request = field(message, 'request')
     const call = (request !== null && typeof request === 'object' ? inflightBysRequest.get(request) : undefined)
       ?? als.getStore()
     if (call === undefined || call.settled) return
-    const headers = message?.response?.headers
+    const headers = field(field(message, 'response'), 'headers')
     const ray = headerValue(headers, 'cf-ray')
     const server = headerValue(headers, 'server')
     if (ray !== undefined) call.record.ray = ray
@@ -276,30 +393,30 @@ export function createCollector({
     if (colo !== undefined && /^[a-z]{3}$/i.test(colo)) call.record.colo = colo.toUpperCase()
   }
 
-  function onRequestError(message) {
-    const request = message?.request
+  function onRequestError(message: unknown): void {
+    const request = field(message, 'request')
     const call = (request !== null && typeof request === 'object' ? inflightBysRequest.get(request) : undefined)
       ?? als.getStore()
     if (call === undefined || call.settled) return
-    const error = message?.error
-    const code = text(error?.code, 64)
-    const textMessage = text(error?.message ?? String(error ?? ''), 300)
+    const error = field(message, 'error')
+    const code = text(field(error, 'code'), 64)
+    const textMessage = text(field(error, 'message') ?? String(error ?? ''), 300)
     call.transportFailure = { code, message: textMessage }
   }
 
   /** Build the record skeleton for one call. */
-  function openCall(options) {
-    const record = {
+  function openCall(options: StreamOptionsLike | undefined): CallState {
+    const record: RequestRecord = {
       id: randomUUID(),
       at: now(),
-      provider: text(options.provider, 80),
-      model: text(options.model, 120),
-      purpose: text(options.purpose, 80),
-      sessionId: options.sessionId === undefined ? undefined : text(String(options.sessionId), 120),
+      provider: text(options?.provider, 80),
+      model: text(options?.model, 120),
+      purpose: text(options?.purpose, 80),
+      sessionId: options?.sessionId === undefined ? undefined : text(String(options.sessionId), 120),
       status: 'ok',
       connection: 'unknown',
     }
-    const call = {
+    const call: CallState = {
       record,
       startedMono: monotonic(),
       firstMono: undefined,
@@ -315,7 +432,7 @@ export function createCollector({
     return call
   }
 
-  function observe(call, chunk) {
+  function observe(call: CallState, chunk: StreamChunk): void {
     if (chunk === null || typeof chunk !== 'object') return
     const at = monotonic()
     call.lastChunkMono = at
@@ -324,8 +441,11 @@ export function createCollector({
       case 'reasoning-delta':
       case 'tool-call-delta': {
         if (CONTENT_CHUNKS.has(chunk.type) && call.firstMono === undefined) call.firstMono = at
-        if (typeof chunk.text === 'string') call.chars += chunk.text.length
-        else if (typeof chunk.argumentsDelta === 'string') call.chars += chunk.argumentsDelta.length
+        // Read defensively: an adapter may publish a chunk shape this release
+        // does not know yet, and a measurement must never fail the stream.
+        const delta = chunk as { text?: unknown; argumentsDelta?: unknown }
+        if (typeof delta.text === 'string') call.chars += delta.text.length
+        else if (typeof delta.argumentsDelta === 'string') call.chars += delta.argumentsDelta.length
         break
       }
       case 'usage': {
@@ -342,7 +462,7 @@ export function createCollector({
     }
   }
 
-  function settle(call, thrown, stoppedEarly) {
+  function settle(call: CallState, thrown: unknown, stoppedEarly: boolean): void {
     if (call.settled) return
     call.settled = true
     active.delete(call.record.id)
@@ -353,11 +473,11 @@ export function createCollector({
       record.ttftMs = ms(call.firstMono - call.startedMono)
       record.decodeMs = ms(endMono - call.firstMono)
     }
-    const usage = call.usage
+    const usage = typeof call.usage === 'object' && call.usage !== null ? call.usage as Record<string, unknown> : undefined
     if (usage !== undefined) {
-      if (Number.isFinite(usage.outputTokens)) record.outputTokens = usage.outputTokens
-      if (Number.isFinite(usage.inputTokens)) record.inputTokens = usage.inputTokens
-      if (Number.isFinite(usage.cacheReadTokens)) record.cacheReadTokens = usage.cacheReadTokens
+      if (Number.isFinite(usage.outputTokens)) record.outputTokens = usage.outputTokens as number
+      if (Number.isFinite(usage.inputTokens)) record.inputTokens = usage.inputTokens as number
+      if (Number.isFinite(usage.cacheReadTokens)) record.cacheReadTokens = usage.cacheReadTokens as number
     }
     if (record.outputTokens !== undefined) {
       record.tps = rate(record.outputTokens, record.decodeMs)
@@ -373,26 +493,21 @@ export function createCollector({
     if (thrown !== undefined) {
       // An adapter that throws mid-stream failed the call; a caller abort is
       // the only thrown outcome that is not an error.
-      const abortLike = thrown?.name === 'AbortError' || thrown?.code === 'ABORTED'
-      record.status = abortLike ? 'aborted' : 'error'
-      record.failure = call.transportFailure ?? {
-        code: text(thrown?.code ?? thrown?.name, 64),
-        message: text(thrown?.message ?? String(thrown), 300),
-      }
+      const facts = errorFacts(thrown)
+      record.status = facts.abortLike ? 'aborted' : 'error'
+      record.failure = call.transportFailure ?? { code: facts.code, message: facts.message }
     } else if (call.finish !== undefined && typeof call.finish === 'object') {
-      const kind = call.finish.kind
+      const finish = call.finish as Record<string, unknown>
+      const kind = finish.kind
       record.finishKind = text(kind, 40)
-      if (kind === 'error') {
-        record.status = 'error'
+      if (kind === 'error' || kind === 'aborted') {
+        const failure = typeof finish.failure === 'object' && finish.failure !== null
+          ? finish.failure as Record<string, unknown>
+          : undefined
+        record.status = kind
         record.failure = {
-          code: text(call.finish.failure?.code, 64),
-          message: text(call.finish.failure?.message, 300),
-        }
-      } else if (kind === 'aborted') {
-        record.status = 'aborted'
-        record.failure = {
-          code: text(call.finish.failure?.code, 64),
-          message: text(call.finish.failure?.message, 300),
+          code: text(failure?.code, 64),
+          message: text(failure?.message, 300),
         }
       }
     } else if (stoppedEarly) {
@@ -409,12 +524,23 @@ export function createCollector({
     }
   }
 
+  /** Classify one thrown value without trusting its shape. */
+  function errorFacts(error: unknown): { abortLike: boolean; code?: string; message?: string } {
+    const name = field(error, 'name')
+    const code = field(error, 'code')
+    return {
+      abortLike: name === 'AbortError' || code === 'ABORTED',
+      code: text(code ?? name, 64),
+      message: text(field(error, 'message') ?? String(error), 300),
+    }
+  }
+
   /** Wrap one adapter stream: forward every chunk, measure around it. */
-  function track(call, source) {
-    return (async function* measured() {
+  function track(call: CallState, source: AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk> {
+    return (async function* measured(): AsyncGenerator<StreamChunk> {
       const iterator = source[Symbol.asyncIterator]()
       let completed = false
-      let thrown
+      let thrown: unknown
       try {
         while (true) {
           const step = await als.run(call, () => iterator.next())
@@ -457,8 +583,8 @@ export function createCollector({
      */
     handleStream(options, next) {
       if (!recordsProvider(options?.provider)) return next()
-      let call
-      let source
+      let call: CallState | undefined
+      let source: AsyncIterable<StreamChunk>
       try {
         call = openCall(options)
         source = next()

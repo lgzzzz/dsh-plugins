@@ -1,18 +1,20 @@
 /**
  * Offline render test for the browser half of `dsh-request-stats`.
  *
- * The module is loaded exactly as the Web shell loads it — through
- * `window.__ModuleLoader__.load` — with React supplied by the same factory
- * `require`. The presentational page is then rendered with a fixture summary,
+ * The built artifact (`lib/client.js`) is loaded exactly as the Web shell loads
+ * it — through `window.__ModuleLoader__.load`, with React supplied by the same
+ * factory `require`. The presentational page is then rendered with a fixture summary,
  * so a crash in the table, trend, or empty-state branches fails here instead of
  * blanking the slot in the browser. No Host, network, or DOM is involved.
  */
 
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 let boot
+const keydownListeners = []
 
 globalThis.window = {
   __ModuleLoader__: {
@@ -20,11 +22,23 @@ globalThis.window = {
       boot = config
     },
   },
+  addEventListener(type, listener, capture) {
+    keydownListeners.push({ type, listener, capture })
+  },
+  removeEventListener() {},
 }
 
-await import('../client.js')
+// 浏览器半部的产物是 CJS 工厂(`window.__ModuleLoader__.load({ id, factory })`),
+// 在 `"type": "module"` 的包里不能当 ESM 直接 import:按文本取出后求值,
+// 与 Web 外壳执行它的方式一致。
+const artifact = new URL('../lib/client.js', import.meta.url)
+if (!existsSync(artifact)) {
+  console.error('missing lib/client.js: run `pnpm build` in dsh-request-stats first')
+  process.exit(1)
+}
+;(0, eval)(readFileSync(artifact, 'utf8'))
 
-assert.ok(boot !== undefined, 'client.js registers through window.__ModuleLoader__.load')
+assert.ok(boot !== undefined, 'lib/client.js registers through window.__ModuleLoader__.load')
 assert.equal(boot.id, 'dsh-request-stats', 'factory id equals the package name')
 
 const api = boot.factory(name => {
@@ -237,9 +251,17 @@ const summary = {
 
 {
   const registered = []
+  const fixedRows = []
+  const fixedListeners = []
+  const selectedPanels = []
+  let activePanel = null
+  let consumed = false
   const ctx = {
     effect(callback) {
       return callback()
+    },
+    inject(names, callback) {
+      return callback(ctx)
     },
     locale: {
       register() {
@@ -263,6 +285,39 @@ const summary = {
         return () => {}
       },
     },
+    shortcuts: {
+      platform: 'windows',
+      runtime: 'web',
+      fixedCatalog: {
+        getSnapshot: () => fixedRows,
+      },
+      registerFixed(command) {
+        fixedRows.push({
+          id: command.id,
+          label: command.label(),
+          keys: command.keys,
+          bindings: command.bindings.map(binding => ({
+            ...binding,
+            modifiers: binding.modifiers.map(modifier => (modifier === 'primary' ? 'control' : modifier)),
+          })),
+          group: command.group,
+        })
+        return () => {}
+      },
+      observeFixedInput(listener) {
+        fixedListeners.push(listener)
+        return () => {}
+      },
+    },
+    layout: {
+      panelInfo: {
+        getSnapshot: () => ({ activePanelId: activePanel }),
+      },
+      selectPanel(id) {
+        activePanel = id
+        selectedPanels.push(id)
+      },
+    },
   }
   api.apply(ctx)
   const panel = registered.find(entry => entry.options?.name === 'sidebar.panellist')
@@ -276,6 +331,87 @@ const summary = {
   assert.ok(main !== undefined, 'the main panel is registered under the same id')
   assert.equal(main.options.key, 'requestStats')
   assert.equal(typeof main.component, 'function', 'the main panel has a React component')
+
+  const row = fixedRows.find(entry => entry.id === 'dsh-request-stats.open-board')
+  assert.ok(row !== undefined, 'the dashboard shortcut is reserved as a fixed row')
+  assert.equal(row.label, 'shortcutOpen', 'the fixed row uses the locale label')
+  assert.deepEqual(row.keys, ['Ctrl', 'Alt', 'H'], 'the Windows keycap is Ctrl+Alt+H')
+  assert.deepEqual(row.bindings, [{ code: 'KeyH', modifiers: ['control', 'alt'] }])
+  assert.equal(row.group, 'application', 'the shortcut belongs to the application group')
+  assert.deepEqual(api.__test.shortcutKeys('macos'), ['⌘', '⌥', 'H'], 'macOS shows Command+Option+H')
+
+  const gesture = {
+    code: 'KeyH', secondCode: undefined, control: true, alt: true, shift: false, meta: false,
+    repeat: false, composing: false, defaultPrevented: false,
+  }
+  const macShortcuts = { platform: 'macos', runtime: 'web', fixedCatalog: { getSnapshot: () => [row] } }
+  const macDesktop = { ...macShortcuts, runtime: 'desktop' }
+  const macGesture = { ...gesture, control: false, meta: true }
+  const macFallback = { ...gesture, control: true, meta: false }
+  assert.equal(
+    api.__test.ownsShortcut(macShortcuts, macGesture, { modal: null }),
+    true,
+    'macOS requires Command+Option+H',
+  )
+  assert.equal(
+    api.__test.ownsShortcut(macShortcuts, macFallback, { modal: null }),
+    true,
+    'macOS Web accepts Control+Option+H as the browser fallback',
+  )
+  assert.equal(
+    api.__test.ownsShortcut(macDesktop, macFallback, { modal: null }),
+    false,
+    'the fallback is not reserved outside macOS Web',
+  )
+  assert.deepEqual(
+    api.__test.shortcutBindings(macShortcuts),
+    [{ code: 'KeyH', modifiers: ['primary', 'alt'] }, api.__test.SHORTCUT_WEB_MAC_FALLBACK],
+    'the macOS Web fixed row reserves both combinations',
+  )
+  assert.deepEqual(
+    api.__test.shortcutBindings(macDesktop),
+    [{ code: 'KeyH', modifiers: ['primary', 'alt'] }],
+    'macOS Desktop reserves only Command+Option+H',
+  )
+  const input = overrides => ({
+    type: 'keydown',
+    gesture: { ...gesture, ...overrides.gesture },
+    context: { region: 'page', modal: null, target: null, ...overrides.context },
+    consume() { consumed = true },
+  })
+  assert.equal(fixedListeners.length, 1, 'one fixed-input observer is installed')
+  fixedListeners[0](input({}))
+  assert.deepEqual(selectedPanels, ['requestStats'], 'Ctrl+Alt+H opens the dashboard')
+  assert.equal(consumed, true, 'the dashboard shortcut consumes the key')
+
+  consumed = false
+  fixedListeners[0](input({}))
+  assert.deepEqual(selectedPanels, ['requestStats', null], 'Ctrl+Alt+H again returns to the conversation')
+  assert.equal(consumed, true, 'the toggle consumes both directions')
+
+  consumed = false
+  selectedPanels.length = 0
+  fixedListeners[0](input({ gesture: { control: false } }))
+  fixedListeners[0](input({ gesture: { repeat: true } }))
+  fixedListeners[0](input({ gesture: { composing: true } }))
+  fixedListeners[0](input({ context: { modal: 'other' } }))
+  assert.deepEqual(selectedPanels, [], 'unowned, repeated, composing, and modal input is left alone')
+  assert.equal(consumed, false, 'unowned input is not consumed')
+
+  const capture = keydownListeners.find(entry => entry.type === 'keydown' && entry.capture === true)
+  assert.ok(capture !== undefined, 'a capture listener covers focus inside xterm')
+  let prevented = false
+  let stopped = false
+  capture.listener({
+    type: 'keydown', code: 'KeyH', ctrlKey: true, altKey: true, shiftKey: false, metaKey: false,
+    isComposing: false, keyCode: 72, repeat: false, defaultPrevented: false,
+    getModifierState: () => false,
+    preventDefault() { prevented = true },
+    stopPropagation() { stopped = true },
+  })
+  assert.deepEqual(selectedPanels, ['requestStats'], 'the capture path opens the dashboard too')
+  assert.equal(prevented, true, 'the capture path prevents the browser default')
+  assert.equal(stopped, true, 'the capture path keeps the key away from xterm')
 }
 
 // ------------------------------------------------- real dictionary coverage

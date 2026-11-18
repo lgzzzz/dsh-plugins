@@ -4,6 +4,9 @@
  * Everything runs in this process against a temporary profile directory: the
  * ledger is exercised through its real files, and undici diagnostics are
  * published by hand so no network, Host, or provider credential is involved.
+ *
+ * 导入的是 `src/` 下的 TypeScript 源文件(Node 22+ Type Stripping 直接加载),
+ * 所以测的是宿主半部的真实实现,而不是构建产物。
  */
 
 import assert from 'node:assert/strict'
@@ -11,9 +14,9 @@ import { channel } from 'node:diagnostics_channel'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createCollector } from '../server/collect.js'
-import { createRecordStore } from '../server/records.js'
-import { buildSummary } from '../server/summary.js'
+import { createCollector } from '../src/server/collect.ts'
+import { createRecordStore } from '../src/server/records.ts'
+import { buildSummary } from '../src/server/summary.ts'
 
 const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-request-stats-'))
 const HOSTS = ['stats.test']

@@ -16,26 +16,34 @@
  * @module dsh-request-stats
  */
 
-import { createCollector } from './server/collect.js'
-import { createRecordStore } from './server/records.js'
-import { registerRoutes } from './server/routes.js'
-import { buildSummary } from './server/summary.js'
+import type { Context } from '@deepseek-ai/cordis'
+import { createCollector } from './server/collect.ts'
+import { createRecordStore } from './server/records.ts'
+import { registerRoutes, type WebServerLike } from './server/routes.ts'
+import { buildSummary } from './server/summary.ts'
+import type { RecordingOptions } from './shared/types.ts'
 
 /** Loader entry identity for this bundle. */
 export const name = 'dsh-request-stats'
 
 /** Defaults for the optional `config` object; the row may override any field. */
-const DEFAULTS = {
+const DEFAULTS: RecordingOptions = {
   providers: ['opencode-go'],
   hosts: ['opencode.ai'],
   maxRecords: 2000,
   retentionDays: 30,
 }
 
+/** The live profile service this plugin reads its state directory from. */
+interface ProfileContextLike {
+  /** Absolute directory of the active profile. */
+  readonly dir?: string
+}
+
 /** Strings from an optional config list, ignoring blanks and duplicates. */
-function stringList(value, fallback) {
+function stringList(value: unknown, fallback: readonly string[]): string[] {
   if (!Array.isArray(value)) return [...fallback]
-  const seen = new Set()
+  const seen = new Set<string>()
   for (const item of value) {
     if (typeof item !== 'string') continue
     const trimmed = item.trim()
@@ -45,7 +53,7 @@ function stringList(value, fallback) {
 }
 
 /** Clamp one optional whole-number config field. */
-function integer(value, fallback, min, max) {
+function integer(value: unknown, fallback: number, min: number, max: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return Math.min(max, Math.max(min, Math.round(value)))
 }
@@ -55,8 +63,10 @@ function integer(value, fallback, min, max) {
  * @param config - raw loader config for this row.
  * @returns Effective recording options.
  */
-export function normalizeOptions(config) {
-  const input = config !== null && typeof config === 'object' && !Array.isArray(config) ? config : {}
+export function normalizeOptions(config?: unknown): RecordingOptions {
+  const input = config !== null && typeof config === 'object' && !Array.isArray(config)
+    ? config as Record<string, unknown>
+    : {}
   return {
     providers: stringList(input.providers, DEFAULTS.providers),
     hosts: stringList(input.hosts, DEFAULTS.hosts),
@@ -71,12 +81,20 @@ export function normalizeOptions(config) {
  * @param config - optional row config (`providers`, `hosts`, `maxRecords`,
  *   `retentionDays`). An absent field keeps its default.
  */
-export function apply(ctx, config) {
+export function apply(ctx: Context, config?: unknown): void {
   const options = normalizeOptions(config)
   // The Host process has no DSH_PROFILE_DIR; the live profile context does.
-  const profileDir = ctx.get('profileContext')?.dir
-  const store = createRecordStore({ ...options, profileDir })
-  const collector = createCollector({ store, ...options })
+  const profileDir = (ctx.get('profileContext') as ProfileContextLike | undefined)?.dir
+  const store = createRecordStore({
+    maxRecords: options.maxRecords,
+    retentionDays: options.retentionDays,
+    profileDir,
+  })
+  const collector = createCollector({
+    store,
+    providers: options.providers,
+    hosts: options.hosts,
+  })
 
   ctx.effect(() => {
     const disposeChannels = collector.start()
@@ -85,7 +103,7 @@ export function apply(ctx, config) {
     const disposeStream = ctx.on('llm/stream', (request, next) => collector.handleStream(request, next))
     return () => {
       disposeStream?.()
-      disposeChannels?.()
+      disposeChannels()
       collector.dispose()
     }
   }, 'dsh-request-stats: request capture')
@@ -96,7 +114,9 @@ export function apply(ctx, config) {
 
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
-      const disposers = registerRoutes(webCtx, {
+      const webServer = webCtx.get('webServer') as WebServerLike | undefined
+      if (webServer === undefined) return () => {}
+      const disposers = registerRoutes(webServer, {
         store,
         collector,
         summarize: (records, override) => buildSummary(records, {
@@ -114,7 +134,7 @@ export function apply(ctx, config) {
     }, 'dsh-request-stats: dashboard routes')
   })
 
-  ctx.logger?.info?.(
+  ctx.logger.info(
     `dsh-request-stats: recording ${options.providers.join(', ')} requests to ${options.hosts.join(', ')}; ledger ${store.path}`,
   )
 }
