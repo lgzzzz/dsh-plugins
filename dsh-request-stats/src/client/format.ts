@@ -46,6 +46,29 @@ export function formatStamp(at?: number): string {
   return `${month}-${day} ${formatClock(at)}`
 }
 
+/**
+ * Compact clock label for one tick of a chart time axis.
+ *
+ * Precision follows the distance between ticks, not the total span, so a
+ * three-day chart labelled every eighteen hours keeps its dates.
+ * @param at - instant to label, in epoch milliseconds.
+ * @param span - plotted time span, in milliseconds.
+ * @returns A label narrow enough to sit under the axis.
+ */
+export function formatAxisTime(at: number, span: number): string {
+  if (!Number.isFinite(at)) return '—'
+  const date = new Date(at)
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  const month = pad(date.getMonth() + 1)
+  const day = pad(date.getDate())
+  const clock = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const interval = Math.max(1, (Number.isFinite(span) ? span : 0) / 4)
+  if (interval >= 24 * 60 * 60 * 1000) return `${month}-${day}`
+  if (interval >= 60 * 60 * 1000) return span >= 24 * 60 * 60 * 1000 ? `${month}-${day} ${clock}` : clock
+  if (interval >= 60 * 1000) return clock
+  return `${clock}:${pad(date.getSeconds())}`
+}
+
 /** Percent value from a 0..1 ratio; a tiny non-zero share stays visible. */
 export function formatShare(value?: number): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—'

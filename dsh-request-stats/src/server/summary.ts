@@ -32,7 +32,7 @@ export const WINDOWS: Readonly<Record<WindowKey, number | undefined>> = Object.f
 /** Default window when a request names none. */
 export const DEFAULT_WINDOW: WindowKey = 'all'
 
-/** How many records feed the sparkline. */
+/** How many records feed the trend charts. */
 const SERIES_LIMIT = 120
 
 /** How many records the recent table receives. */

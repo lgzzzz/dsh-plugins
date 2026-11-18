@@ -237,7 +237,7 @@ export interface KpiProps {
 /** Chart series key of one trend. */
 export type TrendKind = 'ttft' | 'tps'
 
-/** One labelled sparkline over the most recent measured requests. */
+/** One labelled time-series chart over the most recent measured requests. */
 export interface TrendProps {
   /** Locale lookup. */
   t: Translate

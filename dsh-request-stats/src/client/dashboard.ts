@@ -10,7 +10,7 @@
  */
 
 import * as React from 'react'
-import { formatClock, formatMs, formatPercent, formatRate, formatShare, formatStamp, formatTokens, intl } from './format.ts'
+import { formatAxisTime, formatClock, formatMs, formatPercent, formatRate, formatShare, formatStamp, formatTokens, intl } from './format.ts'
 import { AlertIcon, PanelIcon, RefreshIcon } from './icons.ts'
 import { CSS } from './styles.ts'
 import type { Translate } from './i18n.ts'
@@ -25,7 +25,7 @@ import type {
   TrendKind,
   TrendProps,
 } from './types.ts'
-import type { Summary, WindowKey } from '../shared/types.ts'
+import type { SeriesPoint, Summary, WindowKey } from '../shared/types.ts'
 
 const { useCallback, useEffect, useMemo, useRef, useState } = React
 const h = React.createElement
@@ -50,63 +50,347 @@ export function Kpi({ label, value, hint }: KpiProps): React.ReactElement {
   )
 }
 
-/** One labelled sparkline over the most recent measured requests. */
+/** One labelled chart over the most recent measured requests. */
 export function Trend({ t, values, kind }: TrendProps): React.ReactElement {
   const gradientId = React.useId().replace(/:/g, '')
-  const points = useMemo(() => {
-    const seen: number[] = []
-    for (const entry of values) {
-      const value = entry[valueKey(kind)]
-      if (typeof value === 'number' && Number.isFinite(value)) seen.push(value)
-    }
-    return seen
-  }, [values, kind])
-  const tone = kind === 'ttft' ? 'var(--dsw-alias-brand-primary)' : 'var(--dsw-alias-state-success-primary)'
-  const label = kind === 'ttft' ? t('trendTtft') : t('trendTps')
-  const latest = points.length === 0 ? undefined : points[points.length - 1]
-  const rendered = points.length < 2
-    ? h('div', { className: 'drs-muted', style: { fontSize: '12px', padding: '26px 0 34px' } }, t('trendEmpty'))
-    : (() => {
-        const width = 560
-        const height = 84
-        const pad = 6
-        const min = Math.min(...points)
-        const max = Math.max(...points)
-        const span = max - min === 0 ? 1 : max - min
-        const step = (width - pad * 2) / (points.length - 1)
-        const coords = points.map((value, index) => {
-          const x = pad + index * step
-          const y = pad + (height - pad * 2) * (1 - (value - min) / span)
-          return [Math.round(x * 100) / 100, Math.round(y * 100) / 100]
-        })
-        const line = coords.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x} ${y}`).join(' ')
-        const area = `${line} L${coords[coords.length - 1][0]} ${height - pad} L${coords[0][0]} ${height - pad} Z`
-        return h(
-          'svg',
-          { viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': label },
-          h('defs', null, h('linearGradient', { id: gradientId, x1: '0', y1: '0', x2: '0', y2: '1' },
-            h('stop', { offset: '0', stopColor: tone, stopOpacity: '0.28' }),
-            h('stop', { offset: '1', stopColor: tone, stopOpacity: '0' }),
-          )),
-          h('path', { d: area, fill: `url(#${gradientId})` }),
-          h('path', { d: line, fill: 'none', stroke: tone, strokeWidth: 1.6, strokeLinejoin: 'round', strokeLinecap: 'round', vectorEffect: 'non-scaling-stroke' }),
-          h('circle', { cx: coords[coords.length - 1][0], cy: coords[coords.length - 1][1], r: 2.2, fill: tone }),
-        )
-      })()
+  const title = t(kind === 'ttft' ? 'trendTtft' : 'trendTps')
+  const accent = kind === 'ttft' ? 'var(--dsw-alias-brand-primary)' : 'var(--dsw-alias-state-success-primary)'
+  const chart = useMemo(() => {
+    const samples = trendSamples(values, kind)
+    return samples.length < 2 ? null : chartOf(samples, kind, t)
+  }, [values, kind, t])
+
   return h(
     'div',
-    { className: 'drs-trend' },
-    h('div', { className: 'drs-trend-head' },
-      h('span', null, label),
-      h('span', { className: 'drs-trend-value' },
-        points.length === 0 ? '—' : kind === 'ttft' ? formatMs(latest) : formatRate(latest)),
+    { className: 'drs-trend', style: { '--drs-accent': accent } as React.CSSProperties },
+    h(
+      'div',
+      { className: 'drs-trend-head' },
+      h(
+        'div',
+        { className: 'drs-trend-name' },
+        h('span', { className: 'drs-strong' }, title),
+        chart === null ? null : h('span', { className: 'drs-trend-samples' }, t('trendSamples', { count: chart.placed.length })),
+      ),
+      chart === null
+        ? null
+        : h(
+            'div',
+            { className: 'drs-trend-legend' },
+            [
+              { tone: 'min', text: t('trendMin', { value: bound(kind, chart.min) }) },
+              { tone: 'avg', text: t('trendAvg', { value: bound(kind, chart.avg) }) },
+              { tone: 'max', text: t('trendMax', { value: bound(kind, chart.max) }) },
+              { tone: 'latest', text: t('trendLatest', { value: bound(kind, chart.latest) }) },
+            ].map(item => h(
+              'span',
+              { key: item.tone, className: 'drs-legend', 'data-tone': item.tone },
+              h('i', { className: 'drs-swatch', 'aria-hidden': 'true' }),
+              item.text,
+            )),
+          ),
     ),
-    rendered,
-    h('div', { className: 'drs-trend-head' },
-      h('span', null, points.length === 0 ? '—' : t('trendMin', { value: bound(kind, Math.min(...points)) })),
-      h('span', null, points.length === 0 ? '—' : t('trendMax', { value: bound(kind, Math.max(...points)) })),
-    ),
+    chart === null
+      ? h('div', { className: 'drs-trend-empty drs-muted' }, t('trendEmpty'))
+      : h(
+          'div',
+          { className: 'drs-chart' },
+          h(
+            'div',
+            { className: 'drs-chart-yaxis', 'aria-hidden': 'true' },
+            chart.yTicks.map(tick => h('span', { key: `y${tick.value}`, style: { top: `${tick.percent}%` } }, tick.label)),
+          ),
+          h(
+            'div',
+            { className: 'drs-chart-plot', role: 'img', 'aria-label': chart.aria },
+            h(
+              'svg',
+              { viewBox: `0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`, preserveAspectRatio: 'none', 'aria-hidden': 'true' },
+              h('defs', null, h('linearGradient', { id: gradientId, x1: '0', y1: '0', x2: '0', y2: '1' },
+                h('stop', { offset: '0', stopColor: accent, stopOpacity: '0.28' }),
+                h('stop', { offset: '1', stopColor: accent, stopOpacity: '0' }),
+              )),
+              chart.yTicks
+                .filter(tick => tick.percent > 0.5)
+                .map(tick => h('line', {
+                  key: `grid-y${tick.value}`,
+                  className: 'drs-chart-grid',
+                  x1: 0,
+                  x2: PLOT_WIDTH,
+                  y1: tick.percent,
+                  y2: tick.percent,
+                  vectorEffect: 'non-scaling-stroke',
+                })),
+              chart.xTicks
+                .filter(tick => tick.percent > 0 && tick.percent < 100)
+                .map(tick => h('line', {
+                  key: `grid-x${tick.percent}`,
+                  className: 'drs-chart-grid',
+                  x1: tick.percent * (PLOT_WIDTH / 100),
+                  x2: tick.percent * (PLOT_WIDTH / 100),
+                  y1: 0,
+                  y2: PLOT_HEIGHT,
+                  vectorEffect: 'non-scaling-stroke',
+                })),
+              h('line', { className: 'drs-chart-ref', 'data-tone': 'max', x1: 0, x2: PLOT_WIDTH, y1: chart.maxY, y2: chart.maxY, vectorEffect: 'non-scaling-stroke' }),
+              h('line', { className: 'drs-chart-ref', 'data-tone': 'min', x1: 0, x2: PLOT_WIDTH, y1: chart.minY, y2: chart.minY, vectorEffect: 'non-scaling-stroke' }),
+              h('line', { className: 'drs-chart-ref', 'data-tone': 'avg', x1: 0, x2: PLOT_WIDTH, y1: chart.avgY, y2: chart.avgY, vectorEffect: 'non-scaling-stroke' }),
+              h('path', { d: chart.area, fill: `url(#${gradientId})` }),
+              h('path', {
+                d: chart.line,
+                fill: 'none',
+                stroke: accent,
+                strokeWidth: 1.6,
+                strokeLinejoin: 'round',
+                strokeLinecap: 'round',
+                vectorEffect: 'non-scaling-stroke',
+              }),
+            ),
+            chart.marks.map(mark => h('span', {
+              key: mark.key,
+              className: 'drs-chart-mark',
+              'data-tone': mark.tone,
+              style: { left: `${mark.x}%`, top: `${mark.y}%` },
+              title: mark.title,
+            })),
+          ),
+          h(
+            'div',
+            { className: 'drs-chart-xaxis', 'aria-hidden': 'true' },
+            chart.xTicks.map((tick, index) => h(
+              'span',
+              {
+                key: `x${tick.percent}`,
+                className: index === 1 || index === 3 ? 'drs-tick-mid' : undefined,
+                'data-align': index === 0 ? 'start' : index === chart.xTicks.length - 1 ? 'end' : 'middle',
+                style: { left: `${tick.percent}%` },
+              },
+              tick.label,
+            )),
+          ),
+        ),
   )
+}
+
+/** Internal width of the plot viewBox; the box is stretched to the card. */
+const PLOT_WIDTH = 1000
+/** Internal height of the plot viewBox; vertical coordinates are percentages. */
+const PLOT_HEIGHT = 100
+/** Fractions of the plot width that carry a time tick. */
+const TIME_TICKS: readonly number[] = [0, 0.25, 0.5, 0.75, 1]
+
+/** One measured sample of a trend. */
+interface TrendSample {
+  /** Record time, epoch milliseconds. */
+  at: number
+  /** Measured value in the series' own unit. */
+  value: number
+}
+
+/** A rounded value axis: bounds and labelled ticks. */
+interface ValueAxis {
+  /** Value at the bottom of the plot. */
+  low: number
+  /** Value at the top of the plot. */
+  high: number
+  /** Distance between two ticks, which also picks label precision. */
+  step: number
+  /** Tick values from {@link ValueAxis.low} to {@link ValueAxis.high}. */
+  ticks: number[]
+}
+
+/** One sample placed in the plot's percentage coordinate space. */
+interface PlacedSample extends TrendSample {
+  /** Horizontal position, 0–100 % of the plot width. */
+  x: number
+  /** Vertical position, 0–100 % of the plot height; 0 is the top. */
+  y: number
+}
+
+/** A value that marks an extreme, or the last point, of the plot. */
+interface ChartMark {
+  /** Stable React key, equal to the tone. */
+  key: string
+  /** Visual role of the marker. */
+  tone: 'min' | 'max' | 'latest'
+  /** Horizontal position in percent. */
+  x: number
+  /** Vertical position in percent. */
+  y: number
+  /** Hover text naming the value and its instant. */
+  title: string
+}
+
+/** Everything one trend chart needs to render. */
+interface TrendChart {
+  /** Value-axis ticks with their vertical positions. */
+  yTicks: { value: number; percent: number; label: string }[]
+  /** Time-axis ticks with their horizontal positions. */
+  xTicks: { percent: number; label: string }[]
+  /** Line and area paths in the stretched viewBox. */
+  line: string
+  area: string
+  /** Vertical positions of the three reference lines. */
+  maxY: number
+  minY: number
+  avgY: number
+  /** Plotted bounds and the mean, summarized by the legend. */
+  max: number
+  min: number
+  avg: number
+  /** Value of the newest sample. */
+  latest: number
+  /** Placed samples, in time order. */
+  placed: PlacedSample[]
+  /** Extreme and latest markers. */
+  marks: ChartMark[]
+  /** Accessible description of the plot. */
+  aria: string
+}
+
+/** Samples of one trend with a finite measurement, oldest first. */
+function trendSamples(values: readonly SeriesPoint[], kind: TrendKind): TrendSample[] {
+  const samples: TrendSample[] = []
+  for (const entry of values) {
+    const value = entry[valueKey(kind)]
+    if (typeof value === 'number' && Number.isFinite(value) && typeof entry.at === 'number' && Number.isFinite(entry.at)) {
+      samples.push({ at: entry.at, value })
+    }
+  }
+  return samples.sort((left, right) => left.at - right.at)
+}
+
+/** Fraction of the data span kept free above and below the line. */
+const AXIS_BREATHING_ROOM = 0.12
+
+/**
+ * A 1/2/5-decade value axis that contains the data and labels readable ticks.
+ *
+ * The step is chosen from the *unpadded* span so the axis does not gain a whole
+ * extra division from the breathing room, then the padded bounds are rounded
+ * outward by that step. The padding keeps the line off the top and bottom
+ * edges, and it lets a constant series render in the middle of the plot
+ * instead of on its floor.
+ * @param min - smallest plotted value.
+ * @param max - largest plotted value.
+ * @param target - approximate number of intervals.
+ * @returns Bounds that cover the data, plus their tick values.
+ */
+function niceAxis(min: number, max: number, target = 4): ValueAxis {
+  const span = max - min
+  const base = Math.abs(max) > 0 ? Math.abs(max) : 1
+  // A constant series has no span to grow, so give it one from its magnitude.
+  const pad = (span > 0 ? span : base) * AXIS_BREATHING_ROOM
+  const raw = (span > 0 ? span : base) / Math.max(1, target)
+  if (!Number.isFinite(raw) || raw <= 0) return { low: 0, high: 1, step: 1, ticks: [0, 1] }
+  const magnitude = 10 ** Math.floor(Math.log10(raw))
+  const ratio = raw / magnitude
+  const step = (ratio <= 1 ? 1 : ratio <= 2 ? 2 : ratio <= 5 ? 5 : 10) * magnitude
+  const high = Math.ceil((max + pad) / step) * step
+  let low = Math.floor((min - pad) / step) * step
+  // Latency and speed never go negative: keep the floor at zero instead of
+  // labelling a negative value that cannot happen.
+  if (min >= 0 && low < 0) low = 0
+  const ticks: number[] = []
+  for (let index = 0; low + index * step <= high + step * 1e-6; index += 1) {
+    ticks.push(Math.round((low + index * step) / step) * step)
+  }
+  return { low, high: high > low ? high : low + step, step, ticks }
+}
+
+/** Place samples against the time span and the value axis. */
+function placeSamples(samples: readonly TrendSample[], axis: ValueAxis): PlacedSample[] {
+  const first = samples[0]?.at ?? 0
+  const last = samples[samples.length - 1]?.at ?? first
+  const span = last - first
+  const valueSpan = axis.high - axis.low
+  return samples.map((sample, index) => ({
+    ...sample,
+    x: span > 0
+      ? ((sample.at - first) / span) * 100
+      : (index / Math.max(1, samples.length - 1)) * 100,
+    y: valueSpan > 0 ? ((axis.high - sample.value) / valueSpan) * 100 : 50,
+  }))
+}
+
+/** Tick label without the unit suffix, which the chart title carries. */
+function formatTick(value: number, step: number): string {
+  if (!Number.isFinite(value)) return '—'
+  if (step >= 1) return intl.format(Math.round(value))
+  const digits = Math.min(2, Math.max(1, Math.ceil(-Math.log10(step))))
+  return value.toFixed(digits)
+}
+
+/** Round one viewBox coordinate to two decimals. */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+/**
+ * Build the geometry and labels of one trend chart.
+ * @param samples - measured samples, at least two, oldest first.
+ * @param kind - which measurement the samples carry.
+ * @param t - locale lookup.
+ * @returns Axis ticks, paths, reference positions, markers, and the aria label.
+ */
+function chartOf(samples: readonly TrendSample[], kind: TrendKind, t: Translate): TrendChart {
+  const values = samples.map(sample => sample.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const avg = values.reduce((total, value) => total + value, 0) / values.length
+  const axis = niceAxis(min, max)
+  const placed = placeSamples(samples, axis)
+  const first = samples[0].at
+  const span = samples[samples.length - 1].at - first
+
+  const yPercent = (value: number): number => ((axis.high - value) / (axis.high - axis.low)) * 100
+  const xCoord = (percent: number): number => round2(percent * (PLOT_WIDTH / 100))
+  const line = placed
+    .map((sample, index) => `${index === 0 ? 'M' : 'L'}${xCoord(sample.x)} ${round2(sample.y)}`)
+    .join(' ')
+  const lastSample = placed[placed.length - 1]
+  const area = `${line} L${xCoord(lastSample.x)} ${PLOT_HEIGHT} L${xCoord(placed[0].x)} ${PLOT_HEIGHT} Z`
+
+  const title = t(kind === 'ttft' ? 'trendTtft' : 'trendTps')
+  const lastIndex = placed.length - 1
+  const maxIndex = placed.findIndex(sample => sample.value === max)
+  const minIndex = placed.findIndex(sample => sample.value === min)
+  const mark = (tone: ChartMark['tone'], sample: PlacedSample, label: string): ChartMark => ({
+    key: tone,
+    tone,
+    x: sample.x,
+    y: sample.y,
+    title: `${label} · ${formatStamp(sample.at)}`,
+  })
+  const marks: ChartMark[] = []
+  if (maxIndex >= 0 && maxIndex !== lastIndex) marks.push(mark('max', placed[maxIndex], t('trendMax', { value: bound(kind, max) })))
+  if (minIndex >= 0 && minIndex !== lastIndex && minIndex !== maxIndex) marks.push(mark('min', placed[minIndex], t('trendMin', { value: bound(kind, min) })))
+  marks.push(mark('latest', lastSample, t('trendLatest', { value: bound(kind, lastSample.value) })))
+
+  return {
+    yTicks: axis.ticks.map(value => ({ value, percent: yPercent(value), label: formatTick(value, axis.step) })),
+    xTicks: TIME_TICKS.map(fraction => ({
+      percent: fraction * 100,
+      label: formatAxisTime(first + span * fraction, span),
+    })),
+    line,
+    area,
+    maxY: yPercent(max),
+    minY: yPercent(min),
+    avgY: yPercent(avg),
+    max,
+    min,
+    avg,
+    latest: lastSample.value,
+    placed,
+    marks,
+    aria: t('trendAria', {
+      title,
+      min: bound(kind, min),
+      avg: bound(kind, avg),
+      max: bound(kind, max),
+    }),
+  }
 }
 
 /** Chart series key for one trend kind. */
@@ -593,9 +877,7 @@ export function DashboardView(props: DashboardViewProps): React.ReactElement {
                     'div',
                     { className: 'drs-card-head' },
                     h('h2', { className: 'drs-card-title' }, t('trend')),
-                    (data.series ?? []).length < 2
-                      ? h('span', { className: 'drs-card-hint' }, t('trendEmpty'))
-                      : null,
+                    h('span', { className: 'drs-card-hint' }, t('trendHint')),
                   ),
                   h(
                     'div',

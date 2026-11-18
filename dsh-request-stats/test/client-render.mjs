@@ -49,12 +49,28 @@ const api = boot.factory(name => {
 assert.ok(Array.isArray(api.inject), 'the plugin declares an inject list')
 assert.equal(typeof api.apply, 'function', 'the plugin exports apply')
 const { DashboardView, PanelIcon, zh } = api.__test ?? {}
+
+/** Substitute `{name}` placeholders the way the locale service does. */
+function lookup(dictionary) {
+  return (key, params) => {
+    const template = dictionary[key] ?? key
+    return params === undefined
+      ? template
+      : template.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match))
+  }
+}
+
 assert.equal(typeof DashboardView, 'function', 'the test seam exposes the view')
 assert.equal(typeof PanelIcon, 'function', 'the test seam exposes the icon')
 assert.equal(typeof zh, 'object', 'the test seam exposes the dictionaries')
 
 const t = key => key
 const noop = () => {}
+
+/** Occurrences of one literal substring, for structural assertions. */
+function count(haystack, needle) {
+  return haystack.split(needle).length - 1
+}
 
 function view(overrides = {}) {
   return renderToStaticMarkup(React.createElement(DashboardView, {
@@ -149,10 +165,53 @@ const summary = {
   for (const expected of ['104.18.10.66', 'SIN', 'LAX', 'tok/s', '700 ms', 'drs-page', '<table', 'drs-title']) {
     assert.ok(html.includes(expected), `rendered page contains "${expected}"`)
   }
-  assert.ok(html.includes('drs-trend svg') || html.includes('<svg'), 'the trend renders an SVG')
+  assert.ok(html.includes('<svg'), 'the trend renders an SVG')
   assert.ok(html.includes('drs-live'), 'the in-flight counter renders')
   assert.ok(html.includes('proxied'), 'proxied rows are labelled')
   assert.ok(!html.includes('undefined') && !html.includes('NaN'), 'no undefined/NaN leaks into the markup')
+}
+
+// ------------------------------------------------------------------ charts
+//
+// Both trends stack one per row, each with a left value axis and a time axis,
+// and each summarizes its own min / average / max / latest sample.
+
+{
+  const html = view({ data: summary, t: lookup(zh) })
+  assert.equal(count(html, 'class="drs-chart-yaxis"'), 2, 'each chart labels its value axis on the left')
+  assert.equal(count(html, 'class="drs-chart-xaxis"'), 2, 'each chart has a time axis')
+  assert.equal(count(html, 'class="drs-chart-ref"'), 6, 'each chart draws its min/avg/max reference lines')
+  for (const tone of ['min', 'avg', 'max', 'latest']) {
+    assert.ok(html.includes(`data-tone="${tone}"`), `the chart marks its ${tone} sample`)
+  }
+  // The fixture climbs 700 → 975 ms and 140 → 151 tok/s. Every plotted value
+  // must sit strictly inside the labelled axis, and the legend must report the
+  // real bounds; a chart that clamped or silently dropped points cannot pass.
+  const latency = summary.series.map(point => point.ttftMs)
+  const speed = summary.series.map(point => point.tps)
+  const axes = [...html.matchAll(/class="drs-chart-yaxis" aria-hidden="true">([\s\S]*?)<\/div>/g)]
+    .map(match => [...match[1].matchAll(/>([\d,.]+)</g)].map(tick => Number(tick[1].replace(/,/g, ''))))
+  assert.equal(axes.length, 2, 'both charts label a value axis')
+  for (const [index, values] of [latency, speed].entries()) {
+    const ticks = axes[index]
+    assert.ok(ticks.length >= 3, `the value axis of chart ${index} has several ticks`)
+    assert.ok(ticks[0] < Math.min(...values), `chart ${index} starts below its minimum`)
+    assert.ok(ticks[ticks.length - 1] > Math.max(...values), `chart ${index} ends above its maximum`)
+    assert.deepEqual(ticks, [...ticks].sort((left, right) => left - right), `chart ${index} ticks ascend`)
+  }
+  assert.ok(html.includes('最低 700 ms') && html.includes('最高 975 ms'), 'the legend names the real latency bounds')
+  assert.ok(html.includes(`最低 ${Math.min(...speed).toFixed(1)} tok/s`), 'the legend names the real speed minimum')
+  assert.ok(html.includes(`最高 ${Math.max(...speed).toFixed(1)} tok/s`), 'the legend names the real speed maximum')
+  assert.equal(count(html, 'class="drs-legend"'), 8, 'each chart legends four summary values')
+  assert.ok(html.includes('平均 838 ms'), 'the legend reports the real mean')
+
+  // Time axis: five ticks spanning the fixture's 55 s, each a clock label.
+  const xAxis = html.slice(html.indexOf('class="drs-chart-xaxis"'))
+  const clocks = [...xAxis.slice(0, 900).matchAll(/>(?:\d\d-\d\d )?(\d\d:\d\d(?::\d\d)?)</g)].map(match => match[1])
+  assert.ok(clocks.length >= 5, 'the time axis is labelled')
+  assert.equal(new Set(clocks).size, 5, 'the time axis labels five distinct instants')
+  assert.ok(clocks.every(label => /^\d\d:\d\d(:\d\d)?$/.test(label)), 'the time axis uses clock labels')
+  assert.ok(clocks[0] !== clocks[4], 'the axis spans the plotted interval')
 }
 
 // --------------------------------------------------------------- empty state

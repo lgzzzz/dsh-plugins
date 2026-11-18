@@ -38,7 +38,7 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check": "node check.mjs",
-    "test": "node test/run.mjs && node test/client-render.mjs"
+    "test": "node test/run.mjs && node test/client-render.mjs && node test/chart.mjs"
   },
   "engines": {
     "node": ">=22"
