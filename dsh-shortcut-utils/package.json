@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-client-shortcuts": "^0.2.2-rc.4",
+    "@deepseek-ai/dsh-client-shortcuts": "^0.2.2-rc.5",
     "typescript": "^5.9.3"
   }
 }
