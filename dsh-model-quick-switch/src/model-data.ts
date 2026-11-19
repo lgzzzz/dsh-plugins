@@ -37,8 +37,10 @@ export interface ModelDataState {
   readonly failures: readonly CatalogFailure[]
   /** 目录里未配置模型时的默认选择。 */
   readonly defaultSelection: ModelSelectionLike | null
-  /** 目录加载状态。 */
+  /** 目录加载状态；后台刷新期间保持 `ready`。 */
   readonly catalogStatus: CatalogStatus
+  /** 目录已经在手上、只是后台又拉了一次（此时 `catalogStatus` 仍是 `ready`）。 */
+  readonly catalogRefreshing: boolean
   /** 目录加载失败的原因。 */
   readonly catalogError: string | null
   /** 主视图会话当前的选择（来自 `modelSelection` 投影；可能为 null）。 */
@@ -85,6 +87,7 @@ export const INITIAL_MODEL_DATA: ModelDataState = {
   failures: [],
   defaultSelection: null,
   catalogStatus: 'idle',
+  catalogRefreshing: false,
   catalogError: null,
   current: null,
   sessionId: null,

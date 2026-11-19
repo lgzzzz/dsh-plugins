@@ -149,6 +149,15 @@ export const PALETTE_OPTION_ATTR = 'data-model-quick-switch-option'
 /** 设置页根节点的 DOM 标记。 */
 export const SETTINGS_ROOT_ATTR = 'data-model-quick-switch-settings'
 
+/**
+ * 目录已经在手上时，两次自动刷新之间的最小间隔。
+ *
+ * 一次 `remote.session.modelCatalog()` 在 Host 上要重建整份目录（每个提供方一次模型列表、
+ * 每个模型一次 `resolveModelInfo`，其中含网络请求），所以打开浮层这种高频动作不能每次都发；
+ * 设置页的「刷新模型目录」用 `force` 跳过去抖。
+ */
+const CATALOG_FRESH_MS = 60_000
+
 /** 模型浮层的文案。 */
 export const MODEL_VIEW: PaletteView = {
   id: name,
@@ -440,6 +449,8 @@ export function apply(ctx: Context): void {
       readonly target: TeamFacts
     } | null = null
     let catalogInFlight: Promise<void> | undefined
+    /** 最近一次目录加载成功的时刻；`0` 表示还没成功过。 */
+    let catalogLoadedAt = 0
     // 浮层的两步：先选模型，确认后再把候选换成这个模型的思考等级。
     let stage: PaletteStage = 'models'
     let stageChoice: ModelChoice | null = null
@@ -654,24 +665,51 @@ export function apply(ctx: Context): void {
       }
     }
 
-    /** 拉一次 Host 模型目录；并发调用共用同一次请求。 */
-    const loadCatalog = (): Promise<void> => {
+    /** 手里是否已经有一份可用的目录（`ready` 但一组提供方都没有也算：那是「加载过、确实为空」）。 */
+    const hasCatalog = (): boolean => {
+      const state = data.getSnapshot()
+      return state.catalogStatus === 'ready' || state.groups.length > 0 || state.catalog.length > 0
+    }
+
+    /**
+     * 拉一次 Host 模型目录；并发调用共用同一次请求。
+     *
+     * 已经有目录时只做**后台刷新**：`catalogStatus` 留在 `ready`，等着它的路径（确认模型、行
+     * 投影）继续用上一次的读数，刷新结果到了再原地换。只有一份目录都没有时才进入 `loading`
+     * 并让调用方等 —— 那时没有旧读数可用，等是唯一的选择。
+     *
+     * 后台刷新失败保留上一次目录，只把原因写进 `catalogError`：一次网络抖动不该让「目录外」
+     * 角标消失、也不该让浮层把可用模型显示成不可用。
+     * @param options - `force` 为 true 时忽略 {@link CATALOG_FRESH_MS}（设置页的手动刷新）。
+     * @returns 这一次请求的完成；被去抖跳过或服务缺席时立刻完成。
+     */
+    const loadCatalog = (options: { readonly force?: boolean } = {}): Promise<void> => {
       if (catalogInFlight !== undefined) return catalogInFlight
+      const background = hasCatalog()
       const modelCatalog = sessionRemote?.modelCatalog
       if (sessionRemote === undefined || typeof modelCatalog !== 'function') {
+        // 已经有目录时链路断开的说法由 `remote.session` 的释放回调负责，这里不改写可用目录。
+        if (background) return Promise.resolve()
         data.set({ catalogStatus: 'error', catalogError: '模型目录服务不可用（remote.session 尚未就绪）。' })
         return Promise.resolve()
       }
-      data.set({ catalogStatus: 'loading', catalogError: null })
+      if (background && options.force !== true && Date.now() - catalogLoadedAt < CATALOG_FRESH_MS) {
+        return Promise.resolve()
+      }
+      data.set(background ? { catalogRefreshing: true } : { catalogStatus: 'loading', catalogError: null })
       const operation = (async (): Promise<void> => {
         try {
           const response: RemoteResult<ModelCatalog> = await modelCatalog.call(sessionRemote)
           if (!response.ok) {
-            data.set({ catalogStatus: 'error', catalogError: describeRemoteFailure(response.error) })
+            const message = describeRemoteFailure(response.error)
+            data.set(background
+              ? { catalogError: message }
+              : { catalogStatus: 'error', catalogError: message })
             return
           }
           // 成功值就是上游 `ModelCatalog`：分组、失败与默认选择都按它自己的字段读。
           const catalog = response.value
+          catalogLoadedAt = Date.now()
           data.set({
             catalogStatus: 'ready',
             catalogError: null,
@@ -680,10 +718,15 @@ export function apply(ctx: Context): void {
             defaultSelection: catalog.default ?? null,
           })
         } catch (error) {
-          data.set({ catalogStatus: 'error', catalogError: messageOf(error) })
+          const message = messageOf(error)
+          data.set(background
+            ? { catalogError: message }
+            : { catalogStatus: 'error', catalogError: message })
         }
       })().finally(() => {
         if (catalogInFlight === operation) catalogInFlight = undefined
+        // 后台刷新的收尾只清标记；成功路径已经写过一次，这里按需补一次。
+        if (background && data.getSnapshot().catalogRefreshing) data.set({ catalogRefreshing: false })
       })
       catalogInFlight = operation
       return operation
@@ -920,9 +963,13 @@ export function apply(ctx: Context): void {
       // 成功返回也不能把用户刚打开的那张关掉（同一会话里的正常成功不受影响）。
       const epoch = paletteEpoch
       const sessionId = data.getSnapshot().sessionId
-      // 目录还在路上时先等一下：不知道这个模型有没有思考等级，就不能贸然跳过第二步。
-      const status = data.getSnapshot().catalogStatus
-      if (status === 'idle' || status === 'loading') await loadCatalog()
+      // 一份目录都没有时才等：不知道这个模型有没有思考等级，就不能贸然跳过第二步。
+      // 已经有目录（哪怕正在后台刷新）就直接用上一次的读数 —— 刷新不该把 Enter 卡住。
+      const state = data.getSnapshot()
+      if (state.catalog.length === 0 && state.groups.length === 0
+        && (state.catalogStatus === 'idle' || state.catalogStatus === 'loading')) {
+        await loadCatalog()
+      }
       // 等目录期间用户可能已经切会话或关掉/重开浮层：这次确认只属于发起时的会话与那一代浮层。
       if (epoch !== paletteEpoch || data.getSnapshot().sessionId !== sessionId) return
       const efforts = effortChoices(choice, findCatalogModel(data.getSnapshot().catalog, choice))
@@ -983,6 +1030,7 @@ export function apply(ctx: Context): void {
       if (sessionId === null) {
         data.set({ error: '当前没有打开的会话：先在左侧栏打开或新建一个会话，再切换模型。' })
       }
+      // 有目录时这是一次后台刷新（不回落到 loading、去抖），确认模型不必等它回来。
       void loadCatalog()
     }
 
@@ -1019,7 +1067,8 @@ export function apply(ctx: Context): void {
     }
 
     const actions: SettingsActions = {
-      loadCatalog,
+      // 设置页的刷新是用户手动发起的：跳过打开浮层用的新鲜度窗口，真正向 Host 要一次。
+      loadCatalog: () => loadCatalog({ force: true }),
       async add(choice) {
         const current = data.getSnapshot().choices
         const next = addChoice(current, choice)
@@ -1167,10 +1216,15 @@ export function apply(ctx: Context): void {
         if (sessionRemote !== session) return
         sessionRemote = undefined
         // 链路被撤下时别把旧目录当成可用：下一次打开浮层会重新走失败提示。
-        data.set({ catalogStatus: 'error', catalogError: '模型目录服务不可用（remote.session 已断开）。' })
+        data.set({
+          catalogStatus: 'error',
+          catalogRefreshing: false,
+          catalogError: '模型目录服务不可用（remote.session 已断开）。',
+        })
       }, `${name}: remote session release`)
-      // 设置页/浮层可能先因为链路未就绪落到 error：链路一到就补拉一次。
-      if (data.getSnapshot().catalogStatus !== 'ready') void loadCatalog()
+      // 设置页/浮层可能先因为链路未就绪落到 error：链路一到就补拉一次。新链路可能换了一份
+      // 目录（Host 换代），所以这一拉跳过去抖，不拿旧窗口里的读数当数。
+      if (data.getSnapshot().catalogStatus !== 'ready') void loadCatalog({ force: true })
     })
 
     // 工作树快捷操作走 forge 面板；链路晚到或没装 forge 时整行隐藏（没有 Git 检查就无从判断）。
@@ -1246,6 +1300,10 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
   const enterHint = activeEntry !== undefined && actionOfKey(activeEntry.key) !== null
     ? 'Enter 执行'
     : view.enterHint
+  // 一份目录都没有时，确认模型要等 Host 返回目录（见 confirmModel 里的等待）：把这段等待写出来。
+  // 后台刷新（目录已在手上）不阻塞任何操作，不出提示，免得每次打开浮层都闪一下。
+  const waitingCatalog = dataState.catalog.length === 0 && dataState.groups.length === 0
+    && (dataState.catalogStatus === 'idle' || dataState.catalogStatus === 'loading')
 
   React.useEffect(() => {
     if (!open) return
@@ -1322,12 +1380,15 @@ export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
           ),
       // 状态区始终占一行高：切换工作树 / 团队协作时浮层不增不减，面板不会因这一行出现
       // 或消失而在视口里上下跳一下（浮层是居中的，高度一变整块就平移）。快捷操作不显示
-      // 中间态：开关成功与否只用行上的角标与副标题体现，状态区只留给模型切换与错误。
+      // 中间态：开关成功与否只用行上的角标与副标题体现，状态区只留给模型切换、目录等待与错误。
       React.createElement(
         'div',
         { key: 'status', className: 'dsh-model-quick-switch-status' },
         dataState.pending
           ? React.createElement('span', { key: 'pending', className: 'dsh-model-quick-switch-pending' }, '正在切换模型…')
+          : null,
+        !dataState.pending && waitingCatalog
+          ? React.createElement('span', { key: 'catalog', className: 'dsh-model-quick-switch-pending' }, '正在读取模型目录…')
           : null,
         dataState.error === null
           ? null
@@ -1505,12 +1566,12 @@ export function ModelSettingsSection(props: SettingsProps): React.ReactElement {
             key: 'refresh',
             type: 'button',
             className: 'dsh-model-quick-switch-settings-button',
-            disabled: busy || state.catalogStatus === 'loading',
+            disabled: busy || state.catalogStatus === 'loading' || state.catalogRefreshing,
             onClick: () => {
               void actions.loadCatalog()
             },
           },
-          state.catalogStatus === 'loading' ? '正在加载目录…' : '刷新模型目录',
+          state.catalogStatus === 'loading' || state.catalogRefreshing ? '正在加载目录…' : '刷新模型目录',
         ),
         state.catalogError === null
           ? null

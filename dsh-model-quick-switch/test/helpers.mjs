@@ -233,6 +233,8 @@ function makeFollowStream(frames) {
 /** 造一个假的远程服务：模型目录 + 模型选择 + forge 工作树 + 团队协作。 */
 export function fakeRemote({
   catalog,
+  catalogResults,
+  catalogGates,
   selectResult,
   selectGate,
   worktreeResult,
@@ -262,8 +264,14 @@ export function fakeRemote({
   }
   return {
     session: {
+      // `catalogGates[n]` 把第 n 次目录请求扣在「等 Host」的窗口里；`catalogResults[n]` 给第 n 次
+      // 请求单独的响应（最后一个重复用），用来稳定复现「后台刷新在途 / 刷新失败」。
       async modelCatalog() {
+        const index = catalogCalls.length
         catalogCalls.push(undefined)
+        const gate = catalogGates?.[index]
+        if (gate !== undefined) await gate
+        if (catalogResults !== undefined) return catalogResults[Math.min(index, catalogResults.length - 1)]
         return catalog ?? defaultCatalog
       },
       async selectModel(request) {

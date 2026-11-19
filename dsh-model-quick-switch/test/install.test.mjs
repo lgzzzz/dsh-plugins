@@ -276,6 +276,89 @@ console.log('--- C③e 思考等级默认高亮最大一档,与会话当前强�
   off()
 }
 
+console.log('--- C③f 目录后台刷新在途:确认模型不等它回来 ---')
+{
+  const gate = deferred()
+  const remote = fakeRemote({ catalog: DEFAULT_CATALOG, catalogGates: [undefined, gate.promise] })
+  const fixture = setup({ remote })
+  await fixture.open()
+  check('打开后目录就绪', fixture.data.getSnapshot().catalogStatus, 'ready')
+  // 设置页的「刷新模型目录」是强制刷新：第 2 次请求扣在 gate 上，模拟一次慢刷新。
+  await tick()
+  const refresh = fixture.sectionProps.actions.loadCatalog()
+  await tick()
+  check('刷新不再把状态打回 loading', fixture.data.getSnapshot().catalogStatus, 'ready')
+  check('刷新中', fixture.data.getSnapshot().catalogRefreshing, true)
+  check('确实又发了一次目录请求', fixture.remote.catalogCalls.length, 2)
+  check('浮层不显示等待目录', fixture.html().includes('正在读取模型目录…'), false)
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('确认不等刷新就进入思考等级', fixture.data.getSnapshot().stage, 'efforts')
+  check('还没有发出切换请求', fixture.remote.selectCalls, [])
+  gate.resolve()
+  await refresh
+  check('刷新回来后仍是 ready', fixture.data.getSnapshot().catalogStatus, 'ready')
+  check('刷新结束后不再标刷新中', fixture.data.getSnapshot().catalogRefreshing, false)
+  off()
+}
+
+console.log('--- C③g 一份目录都没有时:确认等目录,浮层写明在等 ---')
+{
+  const gate = deferred()
+  const remote = fakeRemote({ catalog: DEFAULT_CATALOG, catalogGates: [gate.promise] })
+  const fixture = setup({ remote })
+  await fixture.open()
+  check('等目录时状态是 loading', fixture.data.getSnapshot().catalogStatus, 'loading')
+  check('浮层写明正在读取目录', fixture.html().includes('正在读取模型目录…'), true)
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.dom.pressKey('Enter')
+  await tick()
+  check('目录没回来时停在模型步骤', fixture.data.getSnapshot().stage, 'models')
+  check('没有发出切换请求', fixture.remote.selectCalls, [])
+  gate.resolve()
+  await tick(16)
+  check('目录到了才进入思考等级', fixture.data.getSnapshot().stage, 'efforts')
+  check('候选换成默认 + 目录强度', fixture.store.getSnapshot().entries.map((row) => row.title), ['默认', 'Low', 'High'])
+  check('等待提示消失', fixture.html().includes('正在读取模型目录…'), false)
+  check('此时目录就绪', fixture.data.getSnapshot().catalogStatus, 'ready')
+  off()
+}
+
+console.log('--- C③h 连续打开浮层:新鲜窗口内不重复重建目录 ---')
+{
+  const fixture = setup()
+  await fixture.open()
+  check('第一次打开拉目录', fixture.remote.catalogCalls.length, 1)
+  const off = installPaletteKeys(fixture.store, fixture.dom.document)
+  fixture.dom.pressKey('Escape')
+  await tick()
+  await fixture.open()
+  check('窗口内重开不再重拉', fixture.remote.catalogCalls.length, 1)
+  off()
+}
+
+console.log('--- C③i 后台刷新失败:保留上一次目录 ---')
+{
+  const remote = fakeRemote({
+    catalogResults: [
+      DEFAULT_CATALOG,
+      { ok: false, error: { code: 'session/catalog', message: '目录暂时不可用' } },
+    ],
+  })
+  const fixture = setup({ remote })
+  await fixture.open()
+  check('先有一份目录', fixture.data.getSnapshot().catalogStatus, 'ready')
+  await tick()
+  await fixture.sectionProps.actions.loadCatalog()
+  await tick()
+  check('失败不把状态降成 error', fixture.data.getSnapshot().catalogStatus, 'ready')
+  check('失败原因留在 catalogError', fixture.data.getSnapshot().catalogError, 'session/catalog: 目录暂时不可用')
+  check('目录分组还在', fixture.data.getSnapshot().groups.map((group) => group.id), ['deepseek', 'opencode-go'])
+  check('浮层仍用目录名', fixture.html().includes('DeepSeek Chat'), true)
+  check('设置页把失败写出来', fixture.settingsHtml().includes('目录暂时不可用'), true)
+}
+
 console.log('--- C③c 第二步 Esc 退回模型列表,并回到刚才那一行 ---')
 {
   const fixture = setup()
