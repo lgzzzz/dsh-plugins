@@ -1,0 +1,113 @@
+{
+  "description": "dsh-subagent-parent-nav 依赖的 DSH 前端稳定契约：会话面板的分区槽与标准 props 里的会话列表选择器、`uiWorkspace.openSession` 主视图导航，以及这一栏样式消费的 `--dsw-*` 设计令牌（含悬停 / 按下底色）。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：槽位不再声明 / 渲染时整栏静默消失；`useSessions` 缺席时拿不到会话列表、整节渲染为空；导航方法改名时点击不再跳转；令牌被改名时状态点、悬停底色与焦点环静默失效。",
+  "checks": [
+    {
+      "id": "session-panel-section-slot",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "conversation.session.panel.section",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "会话面板不再声明或渲染 conversation.session.panel.section 槽：注册进去也不显示，「主智能体」一栏整栏静默消失"
+    },
+    {
+      "id": "use-sessions-standard-prop",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "useSessions",
+      "paths": [
+        "dsh-client-ui-session/lib"
+      ],
+      "hint": "标准 props 不再提供 useSessions：拿不到会话列表 byId，上级链算不出来，整节渲染为空"
+    },
+    {
+      "id": "open-session-navigation",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "openSession",
+      "paths": [
+        "dsh-client-ui-workspace/lib"
+      ],
+      "hint": "uiWorkspace.openSession 改名：点击上级行后主视图不跳转（若方法整体消失，插件不会激活，整栏也不显示）"
+    },
+    {
+      "id": "radius-sm-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-radius-sm",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-radius-sm 变量消失，行圆角退回直角，与面板里「子智能体」一行不再一致"
+    },
+    {
+      "id": "interactive-hover-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-alias-interactive-bg-hover",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-alias-interactive-bg-hover 变量消失，悬停底色失效，行没有可点反馈"
+    },
+    {
+      "id": "interactive-active-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-alias-interactive-bg-active",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-alias-interactive-bg-active 变量消失，按下态底色失效，与面板共用行的按下反馈不再一致"
+    },
+    {
+      "id": "label-primary-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-alias-label-primary",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-alias-label-primary 变量消失，行标题失去正文色"
+    },
+    {
+      "id": "label-tertiary-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-alias-label-tertiary",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-alias-label-tertiary 变量消失，角色标签与箭头的次级色失效"
+    },
+    {
+      "id": "state-idle-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-alias-state-idle-primary",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-alias-state-idle-primary 变量消失，空闲状态点变透明，看不出会话状态"
+    },
+    {
+      "id": "state-business-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-alias-state-business-primary",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-alias-state-business-primary 变量消失，运行中的状态点与焦点环备用色失效"
+    },
+    {
+      "id": "focus-ring-width-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-focus-ring-width",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-focus-ring-width 变量消失，键盘焦点环整条失效"
+    },
+    {
+      "id": "focus-ring-color-var",
+      "plugin": "dsh-subagent-parent-nav",
+      "token": "--dsw-focus-ring-color",
+      "paths": [
+        "dsh-client-ui-theme/lib"
+      ],
+      "hint": "--dsw-focus-ring-color 变量消失，焦点环退回备用色（仍可见但可能与主题不一致）"
+    }
+  ]
+}

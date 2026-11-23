@@ -21,6 +21,7 @@
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |
 | `dsh-agent-team-hero-toggle` | 空白新会话行的「新建工作树」右侧加「团队协作」开关：读 `agentTeam` 投影、写 `remote.agentTeams.setEnabled`，模型菜单旧入口保留（A2）；首轮后随 hero 行消失 | [说明](dsh-agent-team-hero-toggle.md) |
+| `dsh-subagent-parent-nav` | 子智能体会话的会话面板里加「主智能体」一栏：按从上到下的上级链列出主智能体与各级上级（标题、运行状态），点一行把主视图切到该会话；三条依据认父会话，根会话整节隐藏 | [说明](dsh-subagent-parent-nav.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
 | `dsh-changes-behavior` | 改动视图统一行为：改动卡片标题与 `⌘⌥Y` 打开 changes 页面时默认全屏，其余任何打开右栏的入口（文件行、过程链接、上下文菜单、其它插件）默认非全屏；审查标签页按呈现方式默认分栏并默认换行；关掉卡片 500ms 悬停浮层；「本地变更」「变更请求」字号统一 14px、文件列表宽度固定为上游默认值（隐藏拖动把手，宽度不再可调）；`⌘⌥Y` 也由本插件注册；宿主启动时给上游产物打一行补丁，让单文件改动卡片也按「已编辑 1 个文件 + 文件行」的汇总形制渲染 | [说明](dsh-changes-behavior.md) |
 | `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
@@ -59,6 +60,7 @@
 | `dsh-changes-behavior` | [`contract.json`](../dsh-changes-behavior/contract.json) | 改动卡片锚点（含启动期补丁的 `singleFile` 初始化锚点）+ 本地变更地址 + 右栏四个打开入口 / `mounted` / `claim` / `data-sidebar-right-panel` / `commandTarget` / `isTargetCurrent` / `toggleFullscreen` / 窄窗口断点 + 审查根 / 分栏 / 换行 / review store seed + 快捷键固定行服务 + 悬停延迟 + 两个 forge 字号锚点与反向 `!important` + 文件树分隔条的 `role` / `aria-controls`（固定文件列表宽度用，共 45 条） |
 | `dsh-stats-ttft` | [`contract.json`](../dsh-stats-ttft/contract.json) | `conversation.composer.dock` 槽与 `activity` 注册 / order + 同 id 遮蔽规则 + 渲染期读取条目 component + `stats.counts` 键与调用 + 两个时长单位与上游取整规则 + `sessionStats` 的 TTFT 字段 + `useProjection` / `useChat` 标准 props |
 | `dsh-agent-team-hero-toggle` | [`css-contract.json`](../dsh-agent-team-hero-toggle/css-contract.json) | `conversation.hero.options` 槽 + forge 工作树注册 id + `agentTeam` 投影 + `agentTeams/setEnabled` 端点 + 11 个 `--dsw-*` 令牌 |
+| `dsh-subagent-parent-nav` | [`css-contract.json`](../dsh-subagent-parent-nav/css-contract.json) | `conversation.session.panel.section` 槽 + 标准 props 的 `useSessions` + `uiWorkspace.openSession` + 9 个 `--dsw-*` 令牌 |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-model-quick-switch` | [`css-contract.json`](../dsh-model-quick-switch/css-contract.json) | `shell.overlay` / `settings.section` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |

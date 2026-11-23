@@ -1,0 +1,52 @@
+{
+  "name": "dsh-subagent-parent-nav",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
+  "description": "在子智能体会话的会话面板里加「主智能体」一栏：按从上到下的上级链列出主智能体与各级上级（标题、运行状态），点一行把主视图切到该会话；根会话不显示。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-locale": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-session-panel": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-workspace": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-subagent": "^0.2.3-alpha.2",
+    "@types/react": "^18.3.31",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}
