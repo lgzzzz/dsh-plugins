@@ -11,6 +11,27 @@
  * 锚点与令牌清单、以及构建后校验见 docs/dsh-css-architecture/04-css-patches-relationship.md。
  */
 export const CSS = `
+/* 左右栏宽度固定为上游默认值(左栏 280px;右栏首次打开时视口的 45%,下限 300px),且不能拖动改宽。
+   两栏的「改宽」只有一个入口:AppFrame 的两条拖动柄 —— 8px 宽、无可见样式(上游注释明说
+   "No handle draws a visible pill")的绝对定位条,只带 data-side="sidebar" / data-side="rightbar",
+   宽度偏好经它们的 pointer 手势写进 layout store(左栏 setSidebar、右栏 setRightbar)。
+   把这两种取值的柄 display:none 掉,写入路径随之消失,两栏只剩上游自己算的默认值;
+   toggleSidebar 只会写 0 或 280,不是拖动改宽,仍然可用。
+   data-side 在别处还有取值:tooltip / popover 的 left|right|top|bottom,以及对话宽度柄
+   ConversationWidthControls 的 left|right(见其 widthHandle[data-side='left'] 规则),都不叫
+   sidebar / rightbar,不会撞车。柄只在可拖的状态下挂载(左栏收起 / 抽屉 / 折叠屏居中时没有左柄,
+   右栏折叠 / 全屏时没有右柄),规则在这些状态下无事可做。
+   呈现类的状态不受影响:收起后的 56px 图标轨道、窄屏抽屉、折叠屏居中侧栏、右栏的折叠与全屏
+   都由 AppFrame 的渲染条件与 data-* 开关决定,不经过拖动柄;右栏仍按上游的让位规则收缩。
+   上游 .…_handle 没有声明 display,本选择器特异性与它相同((0,1,0)),!important 只为不被
+   模块样式重新挂载时的顺序翻盘。
+   柄上不再有 data-side 或侧别取值改名时,规则整条落空、两栏恢复可拖动,由 css-contract.json 的
+   layout-drag-handle / layout-handle-side-values 两条契约在构建后报失效。 */
+[data-side="sidebar"],
+[data-side="rightbar"] {
+  display: none !important;
+}
+
 /* 右栏 tab 固定 100px 宽 */
 [data-dockkit-tab][role="tab"] {
   box-sizing: border-box;
