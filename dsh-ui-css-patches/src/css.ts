@@ -302,18 +302,23 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   --dsh-content-font-size-secondary: var(--dsh-content-font-size, 14px);
 }
 
-/* 主对话正文列宽固定为 max(640px, 滚动口宽 − 380px),并隐藏正文列左右两条宽度拖动把手。
-   380 = 40(面板与正文净空) + 8(面板距 Chat 末端边距) + 300(面板最小宽) + 32(起始安全区),
-   恰好是会话面板停靠所需的最小尾部余量:正文宽取 V − 380 时,--dsh-chat-end-reserve-max
-   正好 348px,停靠探针的 reserve-room 步进在边界上回报 1px,面板默认(pinned = true)直接以
-   docked 出现;关闭面板后宽度不变、余量仍在,再次打开也直接停靠,不会出现先开浮层再自动关闭
-   的闪烁。V 是滚动口 clientWidth,计数包含末端预留的 padding,让位不会反过来改变 V。
+/* 主对话正文列宽固定为 max(640px, 滚动口宽 − 400px),并隐藏正文列左右两条宽度拖动把手。
+   400 = 348(会话面板停靠所需的末端预留:40 面板与正文净空 + 8 面板距 Chat 末端边距 +
+   300 面板最小宽) + 52(起始空白);52 里 32(16 + 16)是上游让位后保留的最小起始安全区,
+   其余 20px 是起始侧余量。面板的请求仍是 348px,所以面板钉住时末端只让出 348px:正文列
+   右边缘停在 V − 348px,宽窗口时起始空白为 52px(32px 最小安全区 + 20px 余量),多出的
+   20px 全部落在列左侧。正文宽取 V − 400 时 --dsh-chat-end-inset 为 296px、
+   --dsh-chat-end-reserve-max 为 368px,停靠探针仍在边界之上回报 1px,面板默认
+   (pinned = true)直接以 docked 出现;关闭面板后宽度不变、余量仍在,再次打开也直接停靠,
+   不会出现先开浮层再自动关闭的闪烁。V 是滚动口 clientWidth,计数包含末端预留的 padding,
+   让位不会反过来改变 V。
    宽度由上游 ConversationWidthControls 用内联样式持续重写,且 --dsh-chat-content-width-resolved
    同时是末端预留公式的输入,所以两个宽度变量都必须 !important;作用域限定 main.conversation,
-   嵌入的侧边对话(.embeddedBody)保持自己的宽度与把手。V < 1020px 时 max() 取 640px
-   (与上游 CONTENT_MIN 一致),尾部余量不足 380,面板回到上游的 hidden(开关已被文件末尾
-   那条规则隐藏,不再有手动开浮层的入口),窗口重新变宽、尾部余量回到 380 后自动恢复
-   docked;宽度不随面板状态变化,不会振荡。
+   嵌入的侧边对话(.embeddedBody)保持自己的宽度与把手。V ≤ 1040px 时 max() 取 640px
+   (与上游 CONTENT_MIN 一致);V ∈ [1020px, 1040px] 时列宽停在下限,尾部余量 V − 640px
+   仍不少于 380px(reserve-max ≥ 348px),面板照旧停靠;V < 1020px 时 reserve-max < 348px,
+   面板回到上游的 hidden(开关已被文件末尾那条规则隐藏,不再有手动开浮层的入口),窗口重新
+   变宽、尾部余量回到至少 380px 后自动恢复 docked;宽度不随面板状态变化,不会振荡。
    上游 40 / 8 / 300、reserve-room 的边界步进、探针 >= 1px 判定、两个宽度变量或默认 pinned
    改名/改值时,规则会静默退化;由 css-contract.json 的 main-slot / content-attr /
    width-handle-attr / viewport-width-var / viewport-width-published / resolved-width-declared /
@@ -323,7 +328,7 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
 [data-slot="main.conversation"] [data-conversation-content] {
   --dsh-chat-content-width-resolved: max(
     640px,
-    calc(var(--dsh-conversation-viewport-width, 1020px) - 380px)
+    calc(var(--dsh-conversation-viewport-width, 1040px) - 400px)
   ) !important;
   --dsh-chat-content-width: var(--dsh-chat-content-width-resolved) !important;
 }
