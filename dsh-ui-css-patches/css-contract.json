@@ -42,6 +42,7 @@
     {"id":"commandview-summary-token","pattern":"_summary\\{[^}]*?font-size:var\\(--dsh-content-font-size-secondary","paths":["dsh-client-ui-chat/lib"],"hint":"GenericCommandCard 摘要不再用 --dsh-content-font-size-secondary 取字号：槽位上的令牌覆盖只能对标题生效，摘要是用户实际看到的那句提示"},
     {"id":"commandview-title-token","pattern":"font-size:var\\(--dsh-content-font-size-secondary,\\s*13px\\);line-height:calc\\(24px \\+ var\\(--dsh-content-font-delta,\\s*0px\\)\\);color:inherit","paths":["dsh-web-frontend/dist/assets"],"hint":"DisclosureRow 标题不再用 --dsh-content-font-size-secondary 取字号（或行高/颜色声明顺序变了）：槽位上的令牌覆盖只剩摘要生效，命令名仍是 13px"},
     {"id":"layout-drag-handle","pattern":"\"data-side\":\\s*[\\w$]+\\.side","paths":["dsh-client-ui-layout/lib"],"hint":"AppFrame 的拖动柄不再输出 data-side 属性（或改挂到别的元素上）：[data-side=\"sidebar\"] / [data-side=\"rightbar\"] 整条落空，左右栏恢复可拖动改宽"},
-    {"id":"layout-handle-side-values","pattern":"side:\\s*[`'\"]sidebar[`'\"][\\s\\S]{0,800}?side:\\s*[`'\"]rightbar[`'\"]","paths":["dsh-client-ui-layout/lib"],"hint":"拖动柄的 side 取值改名（sidebar / rightbar）：隐藏两条柄的规则同时落空，左右栏恢复可拖动改宽"}
+    {"id":"layout-handle-side-values","pattern":"side:\\s*[`'\"]sidebar[`'\"][\\s\\S]{0,800}?side:\\s*[`'\"]rightbar[`'\"]","paths":["dsh-client-ui-layout/lib"],"hint":"拖动柄的 side 取值改名（sidebar / rightbar）：隐藏两条柄的规则同时落空，左右栏恢复可拖动改宽"},
+    {"id":"files-navigator-resize-attr","pattern":"\"data-files-navigator-resize\":\\s*true","paths":["dsh-client-ui-sidebar-files/lib"],"hint":"右栏文件列表（workspace navigator）的分隔条不再输出 data-files-navigator-resize：隐藏分隔条的规则整条落空，文件列表恢复可拖动改宽"}
   ]
 }

@@ -32,6 +32,22 @@ export const CSS = `
   display: none !important;
 }
 
+/* 右栏文件列表(workspace navigator)宽度不可调整:隐藏左缘那条既是拖动入口也是键盘入口的分隔条。
+   文件列表的宽度偏好只有一个写入者 —— 分隔条自己的手势调 actions.resized:指针拖动、方向键 ±20px、
+   Home(最窄)/ End(最宽)都挂在这条 8px 宽、绝对定位的分隔条上(类 css.separator,left:-4px,
+   cursor:col-resize,带 role="separator" 与 data-files-navigator-resize)。它只在「预览旁」的
+   push / overlay 两种布局渲染;铺满(fill)、files 页(wholePage)与 <768px 的全屏视口本来就没有它。
+   隐藏它以后指针与键盘两个入口一起失效,文件列表停在上游 260px 的默认宽度;窄行仍按上游
+   navigatorGeometry 的钳制收缩(并排 ≥560px 时至多行宽 − 336px,悬浮 400–560px 时至多行宽 − 120px)。
+   本规则只拿掉调节入口,不碰内联的 --files-navigator-width,响应式钳制照旧。
+   上游 .…_separator 没有声明 display,本选择器与它特异性相同((0,1,0)),!important 只为不被
+   模块样式重新挂载时的顺序翻盘(本插件 <style> 与模块样式谁先生效不归本插件掌握)。
+   分隔条改挂到别处、或属性改名时规则整条落空、文件列表恢复可拖动,由 css-contract.json 的
+   files-navigator-resize-attr 契约在构建后报失效。 */
+[data-files-navigator-resize] {
+  display: none !important;
+}
+
 /* 右栏 tab 固定 100px 宽 */
 [data-dockkit-tab][role="tab"] {
   box-sizing: border-box;
