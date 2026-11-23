@@ -324,7 +324,7 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
    width-handle-attr / viewport-width-var / viewport-width-published / resolved-width-declared /
    content-width-alias / content-min / panel-clear / panel-edge / panel-min-width /
    composer-side-clearance / reserve-rule / reserve-max-formula / reserve-room-step /
-   probe-measure / presentation-docked / pinned-default 18 条契约在构建后报失效。 */
+   probe-measure / presentation-docked / panel-docked-attr / pinned-default 19 条契约在构建后报失效。 */
 [data-slot="main.conversation"] [data-conversation-content] {
   --dsh-chat-content-width-resolved: max(
     640px,
@@ -353,5 +353,16 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
    契约在构建后报失效。 */
 [data-session-panel-toggle] {
   display: none !important;
+}
+
+/* 停靠面板固定 300px。上游 .panel 的宽度是
+   clamp(300px, 尾部空档 − 40px − 8px, 360px):尾部空档更宽时会长到 360px。本插件的
+   348px 预留让停靠时的尾部空档恰为 348px,clamp 本来就落在 300px;这条规则把停靠态钉成
+   300px,避免上游 clamp / 尾部空档变化时面板悄悄变宽,40px 净空、8px 边距与 348px 预留的
+   对应关系保持原样。只选 docked:浮层仍是上游的 min(280px, 100% − 16px)。
+   data-session-panel="docked" 由上游 presentationOf 产出;属性或取值改名时规则落空、面板
+   恢复上游 clamp 宽度,由 css-contract.json 的 panel-docked-attr 契约在构建后报失效。 */
+[data-session-panel='docked'] {
+  width: 300px !important;
 }
 `

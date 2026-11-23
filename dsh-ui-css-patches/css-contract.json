@@ -61,6 +61,7 @@
     {"id":"reserve-room-step","pattern":"\\*\\s*10000000\\s*\\+\\s*1px","paths":["dsh-client-ui-session-panel/src"],"hint":"reserve-room 的边界步进（× 10^7 + 1px）改变：V − 正文宽 = 380px 的上游停靠边界不再回报 1px，reserve-room 这条兜底失效；本插件在 400px 处只留 20px 余量"},
     {"id":"probe-measure","pattern":"contentRect\\.width\\s*>=\\s*1","paths":["dsh-client-ui-session-panel/src"],"hint":"上游不再用「探针宽度 >= 1px」判定停靠空间：边界上 1px 的探针可能不再被认成有空间，面板默认退回浮层"},
     {"id":"presentation-docked","pattern":"visibility\\.pinned\\s*\\?\\s*'docked'\\s*:\\s*'hidden'","paths":["dsh-client-ui-session-panel/src"],"hint":"presentationOf 的「fits && pinned -> docked」分支变更：有空间且默认钉住时不再停靠，V − 400 保证默认打开的前提消失"},
+    {"id":"panel-docked-attr","pattern":"\"data-session-panel\":\\s*[A-Za-z_$][\\w$]*\\.presentation","paths":["dsh-client-ui-session-panel/lib"],"hint":"面板根不再输出 data-session-panel={presentation}：[data-session-panel='docked'] 的固定 300px 整条落空，停靠面板恢复上游 clamp 宽度（最多 360px）"},
     {"id":"pinned-default","pattern":"pinned\\s*=\\s*createSnapshotStore<unknown>\\(\\s*true","paths":["dsh-client-ui-session-panel/src"],"hint":"面板的默认 pinned 偏好不再是 true：正文即便留足 400px，会话面板也不会在首次打开时自动停靠"},
     {"id":"session-panel-toggle-attr","pattern":"data-session-panel-toggle=\"\"","paths":["dsh-client-ui-session-panel/src"],"hint":"会话标题栏的面板开关不再输出 data-session-panel-toggle：隐藏规则整条落空，开关重新出现、面板又能被关掉；本插件启动期兜底也找不到可点的开关"},
     {"id":"session-panel-toggle-expanded","pattern":"aria-expanded=\\{open\\}","paths":["dsh-client-ui-session-panel/src"],"hint":"面板开关不再用 aria-expanded={open} 暴露开合状态：启动期兜底分不清「关着」与「已展开（浮层）」，可能反复点击把面板关掉"},
