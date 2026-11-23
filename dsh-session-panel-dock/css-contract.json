@@ -1,0 +1,158 @@
+{
+  "description": "dsh-session-panel-dock 依赖的上游契约:会话面板的停靠探针与其 reserve 标记、呈现判定、348px 停靠阈值、主对话的自然宽度公式、正文宽度变量与末端预留公式。check-css.mjs 逐条验证这些事实仍存在于 DSH 安装产物中;上游改名或改常量时显式失败,而不是让面板静默退回浮层或压住正文。",
+  "checks": [
+    {
+      "id": "probe-attr",
+      "token": "data-session-panel-probe",
+      "paths": [
+        "dsh-client-ui-session-panel/src"
+      ],
+      "hint": "停靠探针的 data-session-panel-probe 标记消失:恒开探针的规则整条落空,fits 回到上游的空间判定,空间不足时面板重新变成浮层"
+    },
+    {
+      "id": "reserve-attr",
+      "token": "data-session-panel-reserve",
+      "paths": [
+        "dsh-client-ui-session-panel/src"
+      ],
+      "hint": "探针上的 data-session-panel-reserve 标记消失:正文收窄规则不再命中,主体不会为面板让位,停靠面板会压住正文右缘"
+    },
+    {
+      "id": "probe-measure",
+      "pattern": "contentRect\\.width\\s*>=\\s*1",
+      "paths": [
+        "dsh-client-ui-session-panel/src"
+      ],
+      "hint": "上游不再用「探针宽度 >= 1px」判定停靠空间:钉成 1px 的探针可能不再被认成有空间,面板退回浮层"
+    },
+    {
+      "id": "presentation-docked",
+      "pattern": "visibility\\.pinned\\s*\\?\\s*'docked'\\s*:\\s*'hidden'",
+      "paths": [
+        "dsh-client-ui-session-panel/src"
+      ],
+      "hint": "presentationOf 的「fits && pinned -> docked」分支变更:恒开探针不再等于恒停靠,需要重新核对呈现逻辑"
+    },
+    {
+      "id": "panel-clear",
+      "pattern": "--panel-clear:\\s*40px",
+      "paths": [
+        "dsh-client-ui-session-panel/src"
+      ],
+      "hint": "面板与正文的 40px 间距变更:348px 停靠阈值与「列宽 − 400px」的让位量都要重算,面板与正文之间可能不再恰好 40px"
+    },
+    {
+      "id": "panel-edge",
+      "pattern": "--panel-edge:\\s*8px",
+      "paths": [
+        "dsh-client-ui-session-panel/src"
+      ],
+      "hint": "面板距 Chat 末端边缘的 8px 变更:348px 停靠阈值与 400px 让位量都要重算"
+    },
+    {
+      "id": "panel-min-width",
+      "pattern": "--panel-min-width:\\s*300px",
+      "paths": [
+        "dsh-client-ui-session-panel/src"
+      ],
+      "hint": "停靠面板最小宽度 300px 变更:348px 阈值与 400px 让位量都要重算,否则主体可能拒绝让位"
+    },
+    {
+      "id": "reserve-rule",
+      "pattern": "--dsh-chat-end-reserve:\\s*calc\\(var\\(--panel-clear\\)",
+      "paths": [
+        "dsh-client-ui-session-panel/src"
+      ],
+      "hint": "面板不再向 Conversation 主体申请 40 + 8 + 300 的末端预留:正文不会为面板让位,停靠面板会压住正文"
+    },
+    {
+      "id": "content-attr",
+      "token": "data-conversation-content",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "Conversation 根上的 data-conversation-content 标记消失:正文收窄规则整条落空,面板停靠时会压住正文"
+    },
+    {
+      "id": "main-slot",
+      "token": "main.conversation",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "main.conversation 槽位键消失:收窄规则与恒开探针都锚不到主对话,嵌入侧边对话可能被误伤,或整个规则落空"
+    },
+    {
+      "id": "column-width-var",
+      "token": "--dsh-conversation-column-width",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "--dsh-conversation-column-width 变量消失:「列宽 − 400px」拿不到实测列宽,正文宽度停在 fallback 的 640px"
+    },
+    {
+      "id": "column-width-published",
+      "pattern": "setProperty\\(\\s*'--dsh-conversation-column-width'",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "上游不再把实测列宽写进 --dsh-conversation-column-width:正文宽度不再随窗口 / 右侧栏变化,收窄量失效"
+    },
+    {
+      "id": "resolved-width-declared",
+      "pattern": "--dsh-chat-content-width-resolved\\s*:",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "--dsh-chat-content-width-resolved 声明消失:覆盖这个变量不再被上游消费,正文不会收窄"
+    },
+    {
+      "id": "adaptive-width",
+      "pattern": "clamp\\(680px,\\s*calc\\(var\\(--dsh-conversation-column-width\\)\\s*\\*\\s*0\\.64\\),\\s*880px\\)",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "上游自适应正文宽度不再是 clamp(680px, 列宽 × 0.64, 880px):本插件 min() 的自然宽度分支失效,面板显示时正文可能被错误地放大或收窄"
+    },
+    {
+      "id": "user-width-var",
+      "token": "--dsh-chat-user-width",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "--dsh-chat-user-width 变量消失:用户拖拽的宽度偏好不再作为 min() 的自然宽度分支,面板显示时正文会回落到自适应宽度"
+    },
+    {
+      "id": "alias-width",
+      "pattern": "--dsh-chat-content-width:\\s*var\\(--dsh-chat-content-width-resolved\\)",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "--dsh-chat-content-width 不再由 resolved 派生:收窄 resolved 不会传导到正文 / 气泡 / 卡片 / 输入框"
+    },
+    {
+      "id": "alias-width-consumed",
+      "token": "var(--dsh-chat-content-width",
+      "paths": [
+        "dsh-client-ui-conversation/src",
+        "dsh-client-ui-chat/src"
+      ],
+      "hint": "正文宽度变量不再被消费:即使收窄了 resolved,正文仍按旧宽度排布,面板会压住正文"
+    },
+    {
+      "id": "reserve-max",
+      "pattern": "--dsh-chat-end-reserve-max:\\s*calc\\([\\s\\S]{0,240}?var\\(--dsh-composer-side-clearance\\)[\\s\\S]{0,20}?-\\s*16px",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "末端预留最大值公式变更(滚动口宽 − 正文列宽 − 32px):「列宽 − 400px」不再保证 348px 的让位量,面板可能压住正文"
+    },
+    {
+      "id": "embedded-reserve-zero",
+      "pattern": "--dsh-chat-end-reserve-max:\\s*0px",
+      "paths": [
+        "dsh-client-ui-conversation/src"
+      ],
+      "hint": "嵌入的侧边对话不再把末端预留最大值固定为 0px:主对话收窄规则的作用域假设需要复核(当前只收窄 main.conversation,避免误伤嵌入对话)"
+    }
+  ]
+}

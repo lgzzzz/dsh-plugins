@@ -285,6 +285,18 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  dsh-session-panel-dock:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: ~4.2.0-alpha.1
+        version: 4.2.0-alpha.1(@deepseek-ai/cordis-plugin-include@1.2.0-alpha.1)(@deepseek-ai/cordis-plugin-loader@1.2.0-alpha.1)
+      tsdown:
+        specifier: ^0.23.5
+        version: 0.23.5(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   dsh-shortcut-utils:
     devDependencies:
       '@deepseek-ai/dsh-client-shortcuts':
