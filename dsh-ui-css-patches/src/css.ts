@@ -311,8 +311,9 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
    宽度由上游 ConversationWidthControls 用内联样式持续重写,且 --dsh-chat-content-width-resolved
    同时是末端预留公式的输入,所以两个宽度变量都必须 !important;作用域限定 main.conversation,
    嵌入的侧边对话(.embeddedBody)保持自己的宽度与把手。V < 1020px 时 max() 取 640px
-   (与上游 CONTENT_MIN 一致),尾部余量不足 380,面板停不下,回到上游 hidden / 手动浮层;
-   宽度不随面板状态变化,不会振荡。
+   (与上游 CONTENT_MIN 一致),尾部余量不足 380,面板回到上游的 hidden(开关已被文件末尾
+   那条规则隐藏,不再有手动开浮层的入口),窗口重新变宽、尾部余量回到 380 后自动恢复
+   docked;宽度不随面板状态变化,不会振荡。
    上游 40 / 8 / 300、reserve-room 的边界步进、探针 >= 1px 判定、两个宽度变量或默认 pinned
    改名/改值时,规则会静默退化;由 css-contract.json 的 main-slot / content-attr /
    width-handle-attr / viewport-width-var / viewport-width-published / resolved-width-declared /
@@ -331,6 +332,21 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
    上游 .widthHandle 没有声明 display,本选择器特异性更高,!important 只为不被模块样式
    重新挂载时的顺序翻盘。 */
 [data-slot="main.conversation"] [data-width-handle] {
+  display: none !important;
+}
+
+/* 会话面板开关隐藏:会话标题栏最左侧那个按钮(上游注册 id session-panel,渲染成带
+   data-session-panel-toggle 的 Button)。面板是否显示只由同一条偏好
+   (localStorage dsh.sessionPanel.pinned,默认 true)决定,而这是唯一的关闭入口;
+   隐藏它以后面板在页面存活期间不会再被关掉,窗口宽度够时按上游规则 docked,窄到放不下时
+   回到上游的 hidden,重新变宽后自动恢复 docked。
+   只把按钮 display:none:按钮仍在 DOM 里,React 的事件绑定与 aria-* 不变,本插件启动期的
+   兜底(见 src/pin.ts)可以在它上面派发一次 click 把历史上关掉的面板重新打开;标题栏里
+   其它动作照常排布。
+   按钮属性改名或改挂到别处时规则整条落空、开关重新出现、面板又能被关掉,由 css-contract.json
+   的 session-panel-toggle-attr / session-panel-toggle-expanded / session-panel-toggle-disabled
+   契约在构建后报失效。 */
+[data-session-panel-toggle] {
   display: none !important;
 }
 `
