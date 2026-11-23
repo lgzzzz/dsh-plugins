@@ -1,5 +1,5 @@
 {
-  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、单文件卡片初始化（启动期补丁的锚点）、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟，以及 forge 与审查页的字号锚点。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
+  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、单文件卡片初始化（启动期补丁的锚点）、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟、forge 与审查页的字号锚点，以及固定文件列表宽度所依赖的分隔条锚点。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
   "checks": [
     {
       "id": "changed-files-attr",
@@ -386,7 +386,7 @@
       "paths": [
         "dsh-experimental-client-ui-forge/lib"
       ],
-      "hint": "改动视图根元素的 data-forge-changes 属性消失：文件树宽度记忆没有作用范围"
+      "hint": "改动视图根元素的 data-forge-changes 属性消失：隐藏文件树分隔条的样式失去作用范围，宽度又会变回可拖动"
     },
     {
       "id": "tree-separator-role",
@@ -395,7 +395,7 @@
       "paths": [
         "dsh-experimental-client-ui-forge/lib"
       ],
-      "hint": "文件树分隔条不再是 role=separator：本插件找不到可拖动的那条边"
+      "hint": "文件树分隔条不再是 role=separator：本插件的隐藏规则落空，拖动把手重新出现"
     },
     {
       "id": "tree-separator-controls",
@@ -404,25 +404,7 @@
       "paths": [
         "dsh-experimental-client-ui-forge/lib"
       ],
-      "hint": "分隔条的 aria-controls 输出消失：本插件无法把它与右栏其它可拖动元素区分开"
-    },
-    {
-      "id": "tree-width-value",
-      "plugin": "dsh-changes-behavior",
-      "token": "\"aria-valuenow\":shown",
-      "paths": [
-        "dsh-experimental-client-ui-forge/lib"
-      ],
-      "hint": "分隔条的 aria-valuenow 不再渲染当前宽度：用户调整后本插件读不到要记住的值"
-    },
-    {
-      "id": "tree-width-bounds",
-      "plugin": "dsh-changes-behavior",
-      "pattern": "MIN_WIDTH=200;const MAX_WIDTH=600",
-      "paths": [
-        "dsh-experimental-client-ui-forge/lib"
-      ],
-      "hint": "文件树宽度上下限不再是 200 / 600：存储值的清洗范围需要重新核对"
+      "hint": "分隔条的 aria-controls 输出消失：隐藏规则要求 role 与 aria-controls 同时存在，这条分隔条不再被命中，拖动把手重新出现"
     }
   ]
 }

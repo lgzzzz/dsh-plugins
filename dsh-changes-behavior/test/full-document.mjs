@@ -35,8 +35,15 @@ export class FullDocument extends FakeDocument {
     this.defaultView = { innerWidth: 1440, MutationObserver: FakeObserver }
     this.head = {
       child: null,
-      appendChild(node) { this.child = node },
-      removeChild() { this.child = null },
+      children: [],
+      appendChild(node) {
+        this.child = node
+        this.children.push(node)
+      },
+      removeChild(node) {
+        this.children = this.children.filter((child) => child !== node)
+        this.child = this.children.length === 0 ? null : this.children[this.children.length - 1]
+      },
     }
     this.createElement = (tag) => ({
       tag,

@@ -6,8 +6,8 @@
  *   3. **审查分栏默认**（`split-default.ts`）：非全屏单栏、全屏左右对比；
  *   4. **审查换行默认**（`wrap-default.ts`）：新审查标签页默认自动换行；
  *   5. **卡片悬停浮层关闭**（`hover-gate.ts`）与**字号 14px**（`font-14.ts`）；
- *   6. **文件树宽度记忆**（`tree-width.ts`）：拖动 / 键盘调整后把「本地变更」「变更请求」
- *      的文件树宽度写进 localStorage，新挂载的文件树恢复上次的宽度。
+ *   6. **文件树宽度固定**（`tree-fixed.ts`）：「本地变更」「变更请求」左侧文件列表的宽度固定为
+ *      上游默认值，隐藏既是拖动入口也是键盘入口的那条分隔条。
  *
  * 这些行为原先分在五个插件里（文件树宽度是后加的一条），彼此都只依赖上游 DOM 锚点与右栏公开面，没有共享服务或
  * 配置；合并后仍然各自独立安装、独立失败：某一条的锚点失效只影响它自己，不会阻止其余
@@ -22,7 +22,7 @@ import { installFont14 } from './font-14.ts'
 import { installHoverGate } from './hover-gate.ts'
 import { installOpenPolicy } from './presentation.ts'
 import { installReviewSplitDefault } from './split-default.ts'
-import { installTreeWidthMemory } from './tree-width.ts'
+import { installFixedTreeWidth } from './tree-fixed.ts'
 import { installReviewWrapDefault } from './wrap-default.ts'
 import type { DocumentLike } from './dom.ts'
 
@@ -96,7 +96,7 @@ export function installChangesBehavior(
   add('review wrap default', () => installReviewWrapDefault(doc as unknown as Parameters<typeof installReviewWrapDefault>[0], { warn }))
   add('hover gate', () => installHoverGate(doc as unknown as Parameters<typeof installHoverGate>[0]))
   add('font 14', () => installFont14(doc as unknown as Parameters<typeof installFont14>[0]))
-  add('tree width', () => installTreeWidthMemory(doc as unknown as Parameters<typeof installTreeWidthMemory>[0], { warn }))
+  add('tree fixed', () => installFixedTreeWidth(doc as unknown as Parameters<typeof installFixedTreeWidth>[0]))
 
   return () => {
     for (let index = disposers.length - 1; index >= 0; index -= 1) {

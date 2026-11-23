@@ -19,7 +19,7 @@ const ORDER = [
   'presentation.test.mjs',
   'split-default.test.mjs',
   'wrap-default.test.mjs',
-  'tree-width.test.mjs',
+  'tree-fixed.test.mjs',
   'hover-gate.test.mjs',
   'artifact-client.test.mjs',
   'single-card.test.mjs',

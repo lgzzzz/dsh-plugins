@@ -7,7 +7,7 @@
 - 改动审查（`changes-review`）标签页按面板呈现方式默认分栏（非全屏单栏、全屏左右对比），并默认开启自动换行；
 - 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层；
 - 「本地变更」「变更请求」标签页整棵子树字号统一 14px；
-- 记住「本地变更」「变更请求」文件树的宽度：拖动 / 键盘调整后写入 `localStorage`，新挂载的文件树恢复上次的宽度；
+- 固定「本地变更」「变更请求」左侧文件列表的宽度：隐藏那条既是拖动入口也是键盘入口的分隔条，宽度停在上游默认值，不再可调；
 - **单文件改动卡片也按汇总形制渲染**：标题是 `已编辑 1 个文件`，下面列出那一个文件（启动期给上游客户端产物打一行补丁，见下文）。
 
 宿主 + 客户端插件：宿主半部只在启动时做那行补丁，其余行为全在浏览器半部；不注册服务、不占 slot、没有配置项。装上即生效，从 profile 移除即恢复上游默认（补丁在卸载时也会还原）。原先的 `dsh-changes-card-local`、`dsh-changes-review-fullscreen`、`dsh-changes-review-wrap`、`dsh-changes-hover-off`、`dsh-forge-changes-font-14` 已全部并入本包；「变更请求」快捷键也从 `dsh-keyboard-shortcuts` 迁来。
@@ -135,19 +135,21 @@ const singleFile=void 0;/*dsh-changes-single-card*/
 
 -----
 
-## 文件树宽度记忆
+## 文件列表宽度固定
 
-「本地变更」「变更请求」的文件树由上游 forge 包的 `FileTreePane` 渲染：宽度只存在组件内的 `useState(240)` 里。拖动 / 键盘调整后，只要标签页还在挂载就保持；切走再切回、在另一个会话里重新打开，或刷新后恢复，宽度都会回到 240。上游把这当作「宽度属于当前挂载的标签页」，没有持久化入口。
+「本地变更」「变更请求」左侧的文件列表由上游 forge 包的 `FileTreePane` 渲染，宽度只存在组件内的 `useState(240)` 里。改宽也只有一个入口：它渲染的那条 8px 分隔条（`<div role="separator" tabIndex="0" aria-controls=…>`）。指针拖动、方向键与 Home / End 都挂在这条分隔条自己的事件上，`onWidth` 只把结果报给工具栏做列对齐。
 
-本行为补上持久化，但不改上游源码、也不合成指针事件：
+本插件注入一条 `<style>`，把 `[data-forge-changes]` 里带 `aria-controls` 的 `role="separator"` 置为 `display:none !important`。分隔条消失后，指针与键盘两个入口一起失效，文件列表就停在上游自己算出的宽度：
 
-- **写**：用户拖动结束（`pointerup`）或用方向键 / Home / End 调整结束（`keyup`）时，读分隔条上由上游渲染的 `aria-valuenow`（当前 `shown` 宽度），写进 `localStorage` 的 `dsh-changes-behavior:tree-width`；
-- **读**：新的文件树挂载后，从分隔条的 React fiber 找到 `FileTreePane` 宽度 `useState` 的 dispatch，把宽度设回上次的值。这和手动拖动走同一条 state 更新路径，工具栏的 `--forge-tree-width` 会照常更新；
-- **只在用户操作结束时写**：面板变窄把 `shown` 压小、窗口缩放等非用户调整不写回，避免把用户选定的宽度悄悄改成「当前能放下的最大值」；
-- **只碰文件树**：处理范围限定在 `[data-forge-changes]` 里带 `aria-controls` 的 `role="separator"`，右栏其它可拖动元素不处理；
-- **失败收敛为上游默认**：取不到 fiber 时下一帧再试，连续 8 帧失败只告警并放手，文件树保持 240，手动拖动仍照常。存储值按上游 `MIN_WIDTH` / `MAX_WIDTH`（200 / 600）清洗；`localStorage` 不可用时静默降级成「不记忆」。
+- **默认 240px**（`FileTreePane` 的 `useState(240)`）；
+- 面板窄时按可用空间收窄：上限 `min(600, 列表与 diff 所在行宽 − 320)`、下限 200，给 diff 至少留 320px；
+- 标签页内容宽度不足 760px 时这块 pane 本来就不渲染，文件列表变成工具栏里的下拉菜单。
 
-想回到上游默认宽度：在 DevTools 执行 `localStorage.removeItem('dsh-changes-behavior:tree-width')`，再重新打开「本地变更」标签页。
+规则带 `!important`：分隔条的样式声明在 CSS Module 的哈希类名上，模块样式与本插件注入的 `<style>` 谁先生效不由本插件掌握；`[data-forge-changes] [role="separator"][aria-controls]` 的特异性（0,3,0）加 `!important` 足以压过它。
+
+只碰文件树分隔条：作用域限定在 `[data-forge-changes]` 里，右栏其它可拖动元素、改动审查页（`[data-changes-review]`）与其它标签页都不处理。不读写 `localStorage`——旧版本写下的 `dsh-changes-behavior:tree-width` 不再被读取，留着也不会生效，可以手动删掉。
+
+上游若把 `role` / `aria-controls` 改名，隐藏规则会整条落空、拖动把手重新出现；`contract.json` 的 `tree-separator-role` 与 `tree-separator-controls` 两条契约会在 `pnpm check:css` 里报出来。
 
 -----
 
@@ -163,7 +165,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-split')    // �
 document.documentElement.hasAttribute('data-dsh-changes-behavior-wrap')     // 审查换行默认
 document.documentElement.hasAttribute('data-dsh-changes-behavior-hover')    // 悬停闸门
 document.documentElement.hasAttribute('data-dsh-changes-behavior-font-14')  // 14px 样式
-document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') // 文件树宽度记忆
+document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') // 文件列表宽度固定
 ```
 
 然后：
@@ -199,12 +201,12 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
    getComputedStyle(document.querySelector('[data-forge-changes]')).fontSize   // '14px'
    ```
 
-8. 在「本地变更」里拖动文件树右 / 左侧的分隔条，记下宽度；关闭标签页再重新打开（或换一个会话打开「本地变更」）→ 文件树回到刚才的宽度：
+8. 「本地变更」里文件列表旁看不到分隔条（默认在左侧，被工具栏切到右侧或隐藏时同样没有），鼠标划过去也不出现拖动光标，宽度不再可调：
 
    ```js
-   const pane = document.querySelector('[data-forge-changes] [role="separator"][aria-controls]')?.parentElement
-   pane?.getAttribute('data-dsh-tree-width')   // 最近一次恢复 / 记住的宽度
-   localStorage.getItem('dsh-changes-behavior:tree-width')   // 同一个值
+   const separator = document.querySelector('[data-forge-changes] [role="separator"][aria-controls]')
+   separator?.checkVisibility?.()              // false：元素还在，被 display:none 隐藏
+   separator?.parentElement?.getBoundingClientRect().width   // 240（面板窄时更小）
    ```
 
 9. 只改了一个文件的一轮：卡片标题是 `已编辑 1 个文件`，`data-single` 不再出现，下面有一行文件行：
@@ -241,8 +243,8 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | 审查标签页首次挂载 / 呈现方式变化 | 按呈现方式设分栏默认；新页默认换行 |
 | 用户手动切分栏 / 换行 | 同一呈现方式内不再改写 |
 | 卡片内 500ms 悬停 | 浮层被拦掉 |
-| 「本地变更」「变更请求」文件树拖动宽度 | 调整结束即写 `localStorage`；新挂载恢复上次宽度 |
-| 面板变窄导致文件树被压小 | 只影响当前显示，不改写已保存的宽度 |
+| 「本地变更」「变更请求」文件列表拖动 / 键盘调整宽度 | 不生效：分隔条被隐藏，宽度固定在上游默认值（240，面板窄时更小） |
+| 面板变窄导致文件列表被压小 | 仍按上游规则收窄（上限 `min(600, 列表与 diff 所在行宽 − 320)`、下限 200） |
 | 右栏其它可拖动元素、其它标签页、终端、文档预览 | 不处理（字号也只覆盖两个 forge 根） |
 | 非浏览器环境（没有 `document`） | 空操作 |
 | `sidebarRight` 服务缺席 | 卡片 / 打开策略不装，其余行为照常；控制台告警一次 |
@@ -268,12 +270,12 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | [`src/wrap-default.ts`](../dsh-changes-behavior/src/wrap-default.ts) | 审查换行默认：身份、一次写入、重试 |
 | [`src/hover-gate.ts`](../dsh-changes-behavior/src/hover-gate.ts) | 卡片悬停闸门与浮层网兜 |
 | [`src/font-14.ts`](../dsh-changes-behavior/src/font-14.ts) | 14px `<style>` 的安装与卸载 |
-| [`src/tree-width.ts`](../dsh-changes-behavior/src/tree-width.ts) | 文件树宽度记忆：用户调整结束写回、新挂载恢复、重试与存储清洗 |
+| [`src/tree-fixed.ts`](../dsh-changes-behavior/src/tree-fixed.ts) | 文件列表宽度固定：隐藏文件树分隔条的 `<style>` 与安装 / 卸载 |
 | [`src/changes-open.ts`](../dsh-changes-behavior/src/changes-open.ts) | `⌘⌥Y` 固定行、固定输入观察者、终端捕获、按绑定关系选择变更页 |
 | [`src/change-request.ts`](../dsh-changes-behavior/src/change-request.ts) | 变更页地址、面板流第一帧解析（带超时与释放） |
 | [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`（分栏 / 换行共用） |
 | [`dsh-shortcut-utils`](dsh-shortcut-utils.md) | 快捷键判定与捕获层；共享纯函数包，客户端构建时内联 |
-| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（47 条） |
+| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（45 条） |
 | [`check-css.mjs`](../dsh-changes-behavior/check-css.mjs) | 构建后逐条校验上面的清单 |
 
 快捷键的共享纯函数（固定行绑定匹配、键帽格式化、捕获阶段手势 / 归属上下文）放在 [`dsh-shortcut-utils`](dsh-shortcut-utils.md)，由 `dsh-keyboard-shortcuts` 与 `dsh-changes-behavior` 共用；它是纯函数包，没有运行时状态，客户端构建时分别内联进两个 bundle。
@@ -320,7 +322,8 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-changes-behavior
 - 侧栏占位实例 / 标签页 / 会话三个身份属性；
 - 快捷键服务的 `registerFixed(command` / `observeFixedInput(listener` / `fixedCatalog` / `platform`；
 - 悬停浮层的 `openDelayMs: 500` 与 `data-changes-hover-preview`；
-- 两个 forge 根锚点，以及上游没有用 `!important` 钉字号（反向）。
+- 两个 forge 根锚点，以及上游没有用 `!important` 钉字号（反向）；
+- 文件树分隔条的 `role="separator"` 与 `aria-controls`（固定宽度依赖的隐藏锚点）。
 
 上游改名或删 token 时显式失败，而不是让某条行为静默失效。
 

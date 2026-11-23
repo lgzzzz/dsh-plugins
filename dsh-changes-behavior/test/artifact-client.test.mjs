@@ -13,7 +13,7 @@ import { INSTALL_MARKER as SPLIT_MARKER } from '../src/split-default.ts'
 import { INSTALL_MARKER as WRAP_MARKER } from '../src/wrap-default.ts'
 import { MARKER_ATTRIBUTE as HOVER_MARKER } from '../src/hover-gate.ts'
 import { MARKER_ATTRIBUTE as FONT_MARKER } from '../src/font-14.ts'
-import { INSTALL_MARKER as TREE_MARKER, PANE_MARKER, STORAGE_KEY } from '../src/tree-width.ts'
+import { MARKER_ATTRIBUTE as TREE_MARKER } from '../src/tree-fixed.ts'
 import {
   attachSidebarPanel,
   check,
@@ -87,11 +87,14 @@ console.log('--- A② 装配后六条行为同时生效 ---')
   check('effect 标签', effects[0]?.label, EFFECT_LABEL)
   for (const [label, marker] of [
     ['总装', MARKER_ATTRIBUTE], ['卡片', CARD_MARKER], ['分栏', SPLIT_MARKER],
-    ['换行', WRAP_MARKER], ['悬停', HOVER_MARKER], ['字号', FONT_MARKER], ['文件树宽度', TREE_MARKER],
+    ['换行', WRAP_MARKER], ['悬停', HOVER_MARKER], ['字号', FONT_MARKER], ['固定宽度', TREE_MARKER],
   ]) {
     check(`${label}标记`, doc.documentElement.getAttribute(marker), '')
   }
-  checkTrue('注入 14px 样式', String(doc.head.child?.textContent).includes('[data-forge-changes]'))
+  const styles = doc.head.children
+  check('注入两条样式', styles.length, 2)
+  checkTrue('14px 样式', styles.some((style) => String(style.textContent).includes('font-size: 14px !important')))
+  checkTrue('固定宽度样式', styles.some((style) => String(style.textContent).includes('[data-forge-changes] [role="separator"][aria-controls]')))
 
   const { header } = multiCard()
   const event = pointerEvent(header)
@@ -116,8 +119,7 @@ console.log('--- A③ 产物里的稳定行为 token ---')
     'openDelayMs: 500', 'data-changes-hover-preview',
     'data-forge-changes', 'data-forge-panel', 'font-size: 14px !important',
     'dsh-resource://forge-changes/', '__reactFiber$',
-    'aria-valuenow', 'role', 'separator', 'aria-controls',
-    STORAGE_KEY, PANE_MARKER,
+    '[data-forge-changes] [role="separator"][aria-controls]', 'display: none !important',
     MARKER_ATTRIBUTE, CARD_MARKER, SPLIT_MARKER, WRAP_MARKER, HOVER_MARKER, FONT_MARKER, TREE_MARKER,
   ]
   for (const token of tokens) checkTrue(`产物含 ${token}`, text.includes(token))

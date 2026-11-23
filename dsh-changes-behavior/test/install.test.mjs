@@ -1,6 +1,6 @@
 /**
  * 总装行为测试：一个插件装上后同时具备卡片点击、审查分栏 / 换行默认、悬停闸门、
- * 14px 样式、文件树宽度记忆与打开呈现策略，并且卸载时全部清理。
+ * 14px 样式、固定文件列表宽度与打开呈现策略，并且卸载时全部清理。
  *
  * 运行：`node test/install.test.mjs`（或 pnpm test 跑全部）。
  */
@@ -10,7 +10,7 @@ import { INSTALL_MARKER as SPLIT_MARKER } from '../src/split-default.ts'
 import { INSTALL_MARKER as WRAP_MARKER } from '../src/wrap-default.ts'
 import { MARKER_ATTRIBUTE as HOVER_MARKER } from '../src/hover-gate.ts'
 import { MARKER_ATTRIBUTE as FONT_MARKER } from '../src/font-14.ts'
-import { INSTALL_MARKER as TREE_MARKER } from '../src/tree-width.ts'
+import { MARKER_ATTRIBUTE as TREE_MARKER } from '../src/tree-fixed.ts'
 import {
   attachSidebarPanel,
   check,
@@ -51,10 +51,14 @@ console.log('--- I① 总装：一个标记、六条行为全部装上 ---')
   check('换行标记', doc.documentElement.getAttribute(WRAP_MARKER), '')
   check('悬停标记', doc.documentElement.getAttribute(HOVER_MARKER), '')
   check('字号标记', doc.documentElement.getAttribute(FONT_MARKER), '')
-  check('文件树宽度标记', doc.documentElement.getAttribute(TREE_MARKER), '')
-  check('监听类型', doc.types.sort(), ['click', 'keyup', 'mouseenter', 'mouseover', 'pointerenter', 'pointerover', 'pointerup'].sort())
-  checkTrue('注入 14px 样式', String(doc.head.child?.textContent).includes('[data-forge-changes]'))
-  check('样式带插件标记', doc.head.child?.dataset?.plugin, 'dsh-changes-behavior')
+  check('固定宽度标记', doc.documentElement.getAttribute(TREE_MARKER), '')
+  // 固定宽度只注入样式，没有 document 监听；pointerup / keyup 随旧的文件树宽度记忆一起消失。
+  check('监听类型', doc.types.sort(), ['click', 'mouseenter', 'mouseover', 'pointerenter', 'pointerover'].sort())
+  const styles = doc.head.children
+  check('注入两条样式', styles.length, 2)
+  checkTrue('14px 样式', styles.some((style) => String(style.textContent).includes('font-size: 14px !important')))
+  checkTrue('固定宽度样式', styles.some((style) => String(style.textContent).includes('[data-forge-changes] [role="separator"][aria-controls]')))
+  check('样式带插件标记', styles.map((style) => style.dataset?.plugin), ['dsh-changes-behavior', 'dsh-changes-behavior'])
   checkTrue('打开入口已包层', sidebar.openResource !== undefined)
   check('没有告警', warns, [])
 }
@@ -96,7 +100,8 @@ console.log('--- I④ 卸载：监听、样式、标记、包层全部还原 ---
   check('卸载后移除总装标记', doc.documentElement.getAttribute(MARKER_ATTRIBUTE), null)
   check('卸载后移除卡片标记', doc.documentElement.getAttribute(CARD_MARKER), null)
   check('卸载后移除字号标记', doc.documentElement.getAttribute(FONT_MARKER), null)
-  check('卸载后移除文件树宽度标记', doc.documentElement.getAttribute(TREE_MARKER), null)
+  check('卸载后移除固定宽度标记', doc.documentElement.getAttribute(TREE_MARKER), null)
+  check('卸载后两条样式都被移除', doc.head.children.map((style) => style.removed), [true, true])
   check('卸载后还原 openResource', sidebar.openResource, originals.openResource)
   check('卸载后还原 openResourceIn', sidebar.openResourceIn, originals.openResourceIn)
   check('卸载后还原 toggleFullscreen', sidebar.toggleFullscreen, originals.toggleFullscreen)
