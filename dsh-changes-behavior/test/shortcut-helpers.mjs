@@ -26,6 +26,19 @@ export function finish() {
   process.exitCode = failures === 0 ? 0 : 1
 }
 
+/** 同 `captureWarnings`，用于等着异步打开链跑完的场景。 */
+export async function captureWarningsAsync(run) {
+  const warnings = []
+  const original = console.warn
+  console.warn = (...args) => warnings.push(args.map(String).join(' '))
+  try {
+    await run()
+  } finally {
+    console.warn = original
+  }
+  return warnings
+}
+
 /** 收集 console.warn 的文本（期间替换实现，不打印原文）。 */
 export function captureWarnings(run) {
   const warnings = []
@@ -266,16 +279,23 @@ export function fakeShortcuts({ runtime = 'web', platform = 'windows', rows = []
   }
 }
 
-/** 打开变更请求要用的右栏假面。`sessionId: null` 表示没有屏幕会话。 */
+/**
+ * 打开变更页要用的右栏假面。`sessionId: null` 表示没有屏幕会话；
+ * `activeKind` 是打开后活动页的类型（没有活动页时为 null）。
+ */
 export function fakeSidebar({
-  sessionId = 's1', activeKind = 'forge-panel', expanded = true,
+  sessionId = 's1', activeKind = 'forge-changes', expanded = true,
   target = { host: 'dock' }, current = true,
 } = {}) {
   const sidebar = {
     mounted: { getSnapshot: () => (sessionId === null ? undefined : sessionId) },
     kinds: [],
+    addresses: [],
     calls: [],
     targets: [],
+    openResource(address) {
+      sidebar.addresses.push(address)
+    },
     openTab(kind) {
       sidebar.kinds.push(kind)
     },
@@ -292,8 +312,14 @@ export function fakeSidebar({
 }
 
 /** 最小 Cordis 上下文：effect 立即执行并记录清理，inject 在依赖齐全时同步回调。 */
-function fakeCtx({ shortcuts, sidebarRight }) {
+function fakeCtx({ shortcuts, sidebarRight, sidebarRightTabs, forgePanel }) {
   const services = { shortcuts, sidebarRight }
+  if (sidebarRightTabs !== undefined && sidebarRightTabs !== null) services.sidebarRightTabs = sidebarRightTabs
+  if (forgePanel !== undefined && forgePanel !== null) {
+    services.remote = { forgePanel }
+    // 子服务名与 Cordis 一样在注入列表里单独出现。
+    services['remote.forgePanel'] = forgePanel
+  }
   const effects = []
   const reads = []
   const effect = (execute, label) => {
@@ -311,7 +337,10 @@ function fakeCtx({ shortcuts, sidebarRight }) {
     effect,
     inject(deps, callback) {
       if (deps.some((serviceName) => services[serviceName] === undefined)) return undefined
-      const scope = { get: ctx.get, effect, shortcuts, sidebarRight }
+      const scope = {
+        get: ctx.get, effect, shortcuts, sidebarRight,
+        remote: services.remote, sidebarRightTabs: services.sidebarRightTabs,
+      }
       callback(scope)
       return scope
     },
@@ -325,11 +354,64 @@ function fakeCtx({ shortcuts, sidebarRight }) {
   return ctx
 }
 
-/** 装配一次本桥，返回部件。 */
-export function harness({ sessionId = 's1', platform = 'windows', ...sidebarOptions } = {}) {
+/**
+ * 假 forge 面板流：第一帧给出给定的绑定；`waits` 让它一直不产出，`failure` 让迭代抛错。
+ * `defaultForgePanel()` 是默认场景（会话绑了一个变更请求）。
+ */
+export function fakeForgePanel({ urls = ['https://github.com/owner/repo/pull/7'], waits = false, failure } = {}) {
+  const calls = []
+  let disposed = 0
+  const panel = {
+    calls,
+    get disposed() { return disposed },
+    follow(sessionId, signal) {
+      calls.push(sessionId)
+      return {
+        async *[Symbol.asyncIterator]() {
+          if (waits) {
+            await new Promise((resolve) => {
+              if (signal === undefined) return resolve(undefined)
+              if (signal.aborted) return resolve(undefined)
+              signal.addEventListener('abort', () => resolve(undefined), { once: true })
+            })
+            return
+          }
+          if (failure !== undefined) throw failure
+          yield { changeRequests: urls.map((url) => ({ url })) }
+        },
+        dispose() { disposed += 1 },
+      }
+    },
+  }
+  return panel
+}
+
+/** 默认场景里会话绑定的变更请求链接。 */
+export const BOUND_URL = 'https://github.com/owner/repo/pull/7'
+
+/** 假页类型注册表：变更页地址都解析成 `forge-changes` 类型。 */
+export function fakeTabs({ kind = 'forge-changes', failure } = {}) {
+  return {
+    claim(address) {
+      if (failure !== undefined) throw failure
+      return { kind }
+    },
+  }
+}
+
+/** 装配一次本桥，返回部件。`forgePanel: null` 表示 forge 的 Remote 缺席；`tabs: null` 同理。 */
+export function harness({
+  sessionId = 's1', platform = 'windows',
+  forgePanel = fakeForgePanel(), tabs = fakeTabs(), ...sidebarOptions
+} = {}) {
   const shortcuts = fakeShortcuts({ platform })
   const sidebarRight = fakeSidebar({ sessionId, ...sidebarOptions })
-  const ctx = fakeCtx({ shortcuts, sidebarRight })
+  const ctx = fakeCtx({ shortcuts, sidebarRight, sidebarRightTabs: tabs, forgePanel })
   const warnings = captureWarnings(() => { installChangesOpenBridge(ctx) })
-  return { ctx, shortcuts, sidebarRight, warnings }
+  return { ctx, shortcuts, sidebarRight, forgePanel, warnings }
+}
+
+/** 等一次「读面板流 → 打开」的异步链跑完。 */
+export function settle() {
+  return new Promise((resolve) => { setTimeout(resolve, 0) })
 }

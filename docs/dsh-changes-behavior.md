@@ -2,7 +2,7 @@
 
 右栏改动视图的统一行为插件。它把原先五个独立插件合成一个，并为「打开右栏」定一条统一策略：
 
-- **改动卡片标题**打开右栏「本地变更」、**`⌘⌥Y` / `Ctrl+Alt+Y`** 打开「变更请求」时，默认**全屏**；
+- **改动卡片标题**打开右栏「本地变更」、**`⌘⌥Y` / `Ctrl+Alt+Y`** 打开会话绑定的「变更请求」页（没有绑定时打开「本地变更」）时，默认**全屏**；
 - **其余任何打开右栏的入口**——改动卡片的文件行、中间过程里的文件 / 资源链接、上下文菜单、其它插件发起的打开——都默认**非全屏**（推挤呈现）；
 - 改动审查（`changes-review`）标签页按面板呈现方式默认分栏（非全屏单栏、全屏左右对比），并默认开启自动换行；
 - 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层；
@@ -19,7 +19,7 @@
 | 打开方式 | 结果 |
 |---|---|
 | 改改动卡片**标题** | 打开 / 聚焦「本地变更」，并切到全屏 |
-| `⌘⌥Y` / `Ctrl+Alt+Y` | 打开 / 聚焦「变更请求」，并切到全屏 |
+| `⌘⌥Y` / `Ctrl+Alt+Y` | 打开 / 聚焦会话第一张变更请求卡片的变更页（没有绑定时是「本地变更」），并切到全屏 |
 | 改动卡片**文件行** | 打开本轮审查页，**非全屏** |
 | 中间过程 / 正文里的可点击文件、资源链接 | 打开对应右栏页面，**非全屏** |
 | 上下文菜单的「在侧边栏打开」 | **非全屏** |
@@ -184,10 +184,10 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
    ```
 
 3. 在正文 / 中间过程里点一个文件或资源链接 → 右栏打开对应页面，面板是 `'push'`。
-4. 按 `⌘⌥Y` / `Ctrl+Alt+Y` → 固定行已挂载且打开「变更请求」：
+4. 按 `⌘⌥Y` / `Ctrl+Alt+Y` → 固定行已挂载且打开会话第一张变更请求卡片的变更页（`dsh-resource://forge-changes/<session>/change/<url>`）；会话没有绑定变更请求时打开「本地变更」页。
 
    ```js
-   [...document.querySelectorAll('[role="tab"]')].some(tab => tab.textContent.includes('变更请求'))
+   [...document.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)   // 含变更请求编号（如 '#7'）或 '本地变更'
    ```
 
    面板原本是推挤时切成全屏；已经是全屏时保持。
@@ -247,6 +247,8 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | 非浏览器环境（没有 `document`） | 空操作 |
 | `sidebarRight` 服务缺席 | 卡片 / 打开策略不装，其余行为照常；控制台告警一次 |
 | `shortcuts` 服务缺席 | `⌘⌥Y` 不装，其余行为照常 |
+| forge 的 `remote.forgePanel` 缺席 | `⌘⌥Y` 直接打开本地变更页，不读面板流、不等待 |
+| 面板流第一帧 1.5s 内没到 / 读取失败 / 没有绑定 | 按没有绑定处理，打开本地变更页 |
 | 分栏 / 换行按钮或 review store seed 变了 | 该标签页保持上游默认，告警一次；工具栏仍可手动开关 |
 
 -----
@@ -267,7 +269,8 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-width') //
 | [`src/hover-gate.ts`](../dsh-changes-behavior/src/hover-gate.ts) | 卡片悬停闸门与浮层网兜 |
 | [`src/font-14.ts`](../dsh-changes-behavior/src/font-14.ts) | 14px `<style>` 的安装与卸载 |
 | [`src/tree-width.ts`](../dsh-changes-behavior/src/tree-width.ts) | 文件树宽度记忆：用户调整结束写回、新挂载恢复、重试与存储清洗 |
-| [`src/changes-open.ts`](../dsh-changes-behavior/src/changes-open.ts) | `⌘⌥Y` 固定行、固定输入观察者、终端捕获 |
+| [`src/changes-open.ts`](../dsh-changes-behavior/src/changes-open.ts) | `⌘⌥Y` 固定行、固定输入观察者、终端捕获、按绑定关系选择变更页 |
+| [`src/change-request.ts`](../dsh-changes-behavior/src/change-request.ts) | 变更页地址、面板流第一帧解析（带超时与释放） |
 | [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`（分栏 / 换行共用） |
 | [`dsh-shortcut-utils`](dsh-shortcut-utils.md) | 快捷键判定与捕获层；共享纯函数包，客户端构建时内联 |
 | [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（47 条） |

@@ -82,7 +82,7 @@ console.log('--- A② 装配后六条行为同时生效 ---')
     services: { sidebarRight: sidebar, sidebarRightTabs: tabs },
   })
 
-  check('先注入右栏，再为空缺的快捷键让位', injects, [['sidebarRight'], ['shortcuts', 'sidebarRight']])
+  check('先注入右栏，再探 forge 面板流，最后为空缺的快捷键让位', injects, [['sidebarRight'], ['remote', 'remote.forgePanel'], ['shortcuts', 'sidebarRight']])
   check('effect 注册一次', effects.length, 1)
   check('effect 标签', effects[0]?.label, EFFECT_LABEL)
   for (const [label, marker] of [

@@ -100,8 +100,8 @@ console.log('--- P③ 其余入口：安装包层后，全屏打开会先切回�
   check('面板回到推挤', panel.getAttribute(PANEL_ATTRIBUTE), PUSH_MODE)
 
   calls.length = 0
-  sidebar.openTab('forge-panel')
-  check('推挤下打开不再切屏', calls, [['openTab', 'forge-panel']])
+  sidebar.openTab('files')
+  check('推挤下打开不再切屏', calls, [['openTab', 'files']])
 
   panel.setAttribute(PANEL_ATTRIBUTE, FULLSCREEN_MODE)
   calls.length = 0
