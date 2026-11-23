@@ -2,6 +2,9 @@
   "name": "dsh-workspace-quick-switch",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
   "description": "快捷键 ⌘⌥M / Ctrl+Alt+M 弹出工作区浮层(按左侧栏 Workspace 顺序,Enter 在该工作区新建会话),⌘⌥I / Ctrl+Alt+I 弹出会话浮层(按左侧栏「单列表 + 最近更新 + 隐藏已归档」的顺序,Enter 打开该会话);两张浮层都是一屏 10 个、窗口连续滑动(滚轮滚一格就是 1–10 → 2–11、←/→ 滑一整屏、↑/↓ 移选中行,到两端停住),鼠标可点任意一行;焦点在终端(.xterm)里时同样生效(window 捕获阶段拦下,macOS 的 ⌘⌥I 死键另有补偿)。",
   "type": "module",
   "exports": {
@@ -30,15 +33,15 @@
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.1.0",
-    "@deepseek-ai/dsh-api-session-controller": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-api-workspace-controller": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-shortcuts": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-layout": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-session": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-workspace": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-session": "^0.2.2-rc.5",
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-api-workspace-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-shortcuts": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-layout": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-workspace": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session": "^0.2.3-alpha.2",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "react": "^18.3.1",

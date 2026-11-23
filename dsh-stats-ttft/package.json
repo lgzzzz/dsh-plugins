@@ -2,6 +2,9 @@
   "name": "dsh-stats-ttft",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
   "description": "在输入框下方的「性能」统计按钮上直接显示会话平均首 token 时长：按 id 遮蔽 conversation.composer.dock 槽里的 activity 条目，包装上游 ActivityPill 并只改写 stats.counts 的译文，使按钮读数从「N 轮 N 步 · X tok/s」变成「N 轮 N 步 · 2.3秒 · X tok/s」。",
   "type": "module",
   "exports": {
@@ -30,13 +33,13 @@
     "test": "node test/run-all.mjs"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.1.0",
-    "@deepseek-ai/dsh-api-session-controller": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-chat": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-session-stats": "^0.2.2-rc.5",
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-chat": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session-stats": "^0.2.3-alpha.2",
     "@types/react": "^18.3.31",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

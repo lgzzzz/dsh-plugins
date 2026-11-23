@@ -380,12 +380,15 @@ function composedElement(event: KeyboardEvent): Element | null {
  * 终端捕获路径的模态读数。
  *
  * 官方适配器用 `dsh-client-ui-primitives` 的 `modalSelector`；这里只覆盖带
- * `data-shortcut-modal` 的设置 / 快捷键面板与标准 `aria-modal` 对话框。终端通常
- * 不会在模态层下获得焦点，读不到时按无模态处理。
+ * `data-shortcut-modal` 的设置 / 快捷键面板、标准 `aria-modal` 对话框，以及菜单浮层的
+ * 两个标记(`[data-menu-popup]`：组合型菜单只带它、没有 `role="menu"`)。
+ * 终端通常不会在模态层下获得焦点，读不到时按无模态处理。
  */
 function currentModal(): string | null {
   if (typeof document === 'undefined') return null
-  const node = document.querySelector('[data-shortcut-modal], [role="dialog"][aria-modal="true"]')
+  const node = document.querySelector(
+    '[data-shortcut-modal], [role="dialog"][aria-modal="true"], [data-menu-popup], [role="menu"]',
+  )
   if (node === null || typeof node.getAttribute !== 'function') return null
   return node.getAttribute('data-shortcut-modal') ?? 'other'
 }

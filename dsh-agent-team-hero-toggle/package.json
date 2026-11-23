@@ -2,6 +2,9 @@
   "name": "dsh-agent-team-hero-toggle",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
   "description": "在空白新会话行的「新建工作树」右侧提供「团队协作」开关，读写与模型菜单相同的 agentTeam 会话设置；保留上游菜单入口。",
   "type": "module",
   "exports": {
@@ -30,17 +33,17 @@
     "test": "node test/run-all.mjs"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.1.0",
-    "@deepseek-ai/dsh-agent-team": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-api-gateway": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-api-session-controller": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-locale": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-session": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-session": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-typert-protocol": "^0.2.2-rc.5",
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-agent-team": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-api-gateway": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-locale": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-typert-protocol": "^0.2.3-alpha.2",
     "@types/react": "^18.3.31",
     "tsdown": "^0.23.5",
     "typescript": "^5.9.3"

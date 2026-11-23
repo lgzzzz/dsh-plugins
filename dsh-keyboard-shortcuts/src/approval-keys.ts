@@ -26,11 +26,9 @@ import type {
 } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {ISessions} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {ApprovalDecision, PendingApproval} from '@deepseek-ai/dsh-client-ui-approval/client'
-import type {
-  SessionPendingInteraction,
-  SessionStatusSnapshot,
-  UiSession,
-} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {SessionPendingInteraction, UiSessionService} from '@deepseek-ai/dsh-client-ui-session/client'
+// 会话状态表由独立包提供;只在 `UiSessionService`(`ctx.uiSession`)上可见。
+import type {SessionStatusSnapshot} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type {Context} from '@deepseek-ai/cordis'
 
 /** 本插件桥接的两个固定审批动作的注册 id。 */
@@ -127,10 +125,10 @@ const APPROVAL_COMMAND_IDS: ApprovalCommandIds = {
  * 这些动作在所有运行时都是固定行，Web 与 Desktop 都安装。
  */
 export function installApprovalBridge(ctx: Context): void {
-  ctx.inject(['shortcuts', 'sessions', 'uiSession'], (scope) => {
+  ctx.inject(['shortcuts', 'sessions', 'uiSession', 'uiSession.sessionStatus'], (scope) => {
     const shortcuts: Shortcuts = scope.shortcuts
     const sessions: ISessions = scope.sessions
-    const uiSession: UiSession = scope.uiSession
+    const uiSession: UiSessionService = scope.uiSession
     if (typeof shortcuts.observeFixedInput !== 'function') {
       warn('shortcuts service exposes no observeFixedInput; approval bridge not installed')
       return
@@ -151,7 +149,7 @@ export function installApprovalBridge(ctx: Context): void {
 function installApprovalCapture(
   shortcuts: Shortcuts,
   sessions: ISessions,
-  uiSession: UiSession,
+  uiSession: UiSessionService,
 ): () => void {
   if (typeof window === 'undefined') return () => {}
   const onKeydown = (event: KeyboardEvent): void => {
@@ -188,7 +186,7 @@ function installApprovalCapture(
 function handleApprovalInput(
   shortcuts: Shortcuts,
   sessions: ISessions,
-  uiSession: UiSession,
+  uiSession: UiSessionService,
   input: KeydownInput,
 ): void {
   const gesture: ShortcutGesture = input.gesture

@@ -18,8 +18,11 @@ import type {
   ShortcutGesture,
 } from '@deepseek-ai/dsh-client-shortcuts/client'
 
-/** 模态作用域选择器；与 `modalSelector` 发布的字面量相同。 */
-const MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], [role="menu"]'
+/**
+ * 模态作用域选择器；与 `modalSelector` 发布的字面量相同。
+ * 菜单浮层用两个标记:`[role="menu"]` 与 `[data-menu-popup]`(组合型菜单只有后者)。
+ */
+const MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], [data-menu-popup], [role="menu"]'
 
 /** 保留自身按键的输入作用域；与适配器的 `closest()` 列表相同。 */
 const TEXT_SELECTOR = 'input, textarea, select, [contenteditable="true"], [contenteditable=""]'

@@ -143,9 +143,9 @@ console.log('--- I⑤ 失败模式:固定行缺失 / 服务缺失即不装 ---')
   check('审批插件未装载(无固定行)时不代答', unmounted.answers, [])
   check('审批插件未装载时不消费', press.consumed.count, 0)
 
-  // 没有 uiSession 就没有待答事实可读:审批桥与提问桥都不安装。
+  // 没有 uiSession 就没有待答事实可读:审批桥、提问桥与停止桥(停止桥也读待答交互)都不安装。
   const noUi = harness({ withUiSession: false })
-  check('缺 uiSession 时只装不依赖它的桥', noUi.shortcuts.listenerCount(), 6)
+  check('缺 uiSession 时只装不依赖它的桥', noUi.shortcuts.listenerCount(), 5)
   check('缺 uiSession 不告警', noUi.warnings.length, 0)
   const orphan = keydown(gesture('Enter'), shortcutContext({ target: domBody }))
   noUi.shortcuts.emit(orphan.input)

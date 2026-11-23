@@ -112,9 +112,9 @@ console.log('--- O⑤ 归属歧义:主视图不唯一 / 提问属于别的会话
 
 console.log('--- O⑥ 失败模式:服务缺失即不装 ---')
 {
-  // 没有 uiSession 就没有待答事实可读,提问桥与审批桥都不安装。
+  // 没有 uiSession 就没有待答事实可读:提问桥、审批桥与停止桥(停止桥也读待答交互)都不安装。
   const noUi = harness({ withUiSession: false })
-  check('缺 uiSession 不装提问桥', noUi.shortcuts.listenerCount(), 6)
+  check('缺 uiSession 不装提问桥', noUi.shortcuts.listenerCount(), 5)
   check('缺 uiSession 不告警', noUi.warnings.length, 0)
 
   // 没有 sessions 同样不装。

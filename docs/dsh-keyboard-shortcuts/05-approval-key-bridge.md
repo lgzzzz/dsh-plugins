@@ -38,7 +38,7 @@ answer(event.key === 'Enter' ? 'allowed-once' : 'rejected')
 
 ```ts
 function installApprovalBridge(ctx) {
-  ctx.inject(['shortcuts', 'sessions', 'uiSession'], (scope) => {
+  ctx.inject(['shortcuts', 'sessions', 'uiSession', 'uiSession.sessionStatus'], (scope) => {
     const shortcuts = scope.shortcuts
     const sessions = scope.sessions
     const uiSession = scope.uiSession
@@ -77,7 +77,7 @@ function handleApprovalInput(shortcuts, sessions, uiSession, input) {
 }
 ```
 
-- **① 需要 `uiSession`。** 判定用到的待答交互全部来自 `uiSession.sessionStatus`。`ctx.inject(['shortcuts', 'sessions', 'uiSession'], ...)` 在任一服务缺席时不解析，这段逻辑不执行也不抛错；`observeFixedInput` 缺席时告警 `shortcuts service exposes no observeFixedInput; approval bridge not installed` 并放弃安装。
+- **① 需要 `uiSession` 与 `uiSession.sessionStatus`。** 判定用到的待答交互全部来自 `uiSession.sessionStatus`；它是 `@deepseek-ai/dsh-client-ui-session-status` 提供的独立服务，**读取它的属性必须在注入列表里单独声明 `'uiSession.sessionStatus'`**，否则 cordis 拒绝该属性读取。`ctx.inject([...])` 在任一服务缺席时不解析，这段逻辑不执行也不抛错；`observeFixedInput` 缺席时告警 `shortcuts service exposes no observeFixedInput; approval bridge not installed` 并放弃安装。
 - **② 只认按键。** `type === 'reset'` 的输入（焦点变化、指针按下、组字、模态变化、窗口失焦）直接跳过：审批是单按，没有半完成的序列。
 - **②′ 第二条投递路径。** `installApprovalCapture` 在同一作用域里再挂一个 window **捕获阶段** keydown 监听，早于一切目标 / 冒泡处理器。两条路共用同一判定、互斥不双触发：捕获路命中就吞掉事件，固定通道收不到；捕获路放行，固定通道再按 ③～⑨ 判定一次。
 - **③ 准入 `approvalEligible`：**
@@ -204,7 +204,7 @@ function installApprovalCapture(shortcuts, sessions, uiSession) {
 
 ### 5.10.1 提问卡片取消桥（第 6 组）：`editable` 的放行与 `dismiss()` 的三种落点
 
-提问桥与审批桥同走一条线：`ctx.inject(['shortcuts', 'sessions', 'uiSession'], ...)`；`shortcuts.observeFixedInput` 缺席时告警 `shortcuts service exposes no observeFixedInput; question bridge not installed` 并放弃安装；Web 与 Desktop 都安装（这里没有"可配置绑定"要交给原生键盘桥派发）。卡片本身是 **Web 独有**的客户端特性（`@deepseek-ai/dsh-client-ui-user-questions` 声明 `dsh.client.platform: "web"`）：桌面端没有人发布提问域的 `pendingInteraction`，这条桥在 Desktop 装上也是 no-op。处理顺序：
+提问桥与审批桥同走一条线：`ctx.inject(['shortcuts', 'sessions', 'uiSession', 'uiSession.sessionStatus'], ...)`；`shortcuts.observeFixedInput` 缺席时告警 `shortcuts service exposes no observeFixedInput; question bridge not installed` 并放弃安装；Web 与 Desktop 都安装（这里没有"可配置绑定"要交给原生键盘桥派发）。卡片本身是 **Web 独有**的客户端特性（`@deepseek-ai/dsh-client-ui-user-questions` 声明 `dsh.client.platform: "web"`）：桌面端没有人发布提问域的 `pendingInteraction`，这条桥在 Desktop 装上也是 no-op。处理顺序：
 
 1. 准入 `questionEscapeEligible`：`Escape`、非长按、非组字、未被消费、无修饰键、`modal === null`、`region !== 'terminal'`；
 2. 用主视图会话取到可关闭卡片：`presentedQuestion` → `asDismissableQuestion`（`kind` 为 `question` / `plan-review`、`key` 为字符串、`dismiss` 为函数）；

@@ -843,9 +843,11 @@ export function apply(ctx: Context): void {
         data.set({ actionPending: action, error: null })
         syncRows()
         try {
+          // 远程签名的第三个实参是工作树分支名(`name`):这里的快捷操作按 HEAD 创建、
+          // 不指定名字,与上游 forge 面板的调用一致传 null。
           const result = pending
             ? await cancel.call(remote, sessionId)
-            : await request.call(remote, sessionId, null)
+            : await request.call(remote, sessionId, null, null)
           // 回包先对会话：等 Host 的这段时间里用户可能已经切走（refreshSession 会把
           // actionPending 清掉）；不属于当前会话的结果整条丢弃，不写状态、不设覆盖。
           if (!actionResponseIsCurrent(sessionId, action)) {

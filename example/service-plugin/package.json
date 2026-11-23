@@ -14,10 +14,10 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.1.0"
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
     "@types/node": "^24.19.2",
     "typescript": "^5.9.3"
   }

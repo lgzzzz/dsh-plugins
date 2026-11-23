@@ -2,19 +2,11 @@
  * `dsh-ui-css-patches` 的全部补丁规则,由 `client.ts` 挂成一条 `<style>`。
  *
  * 同特异性规则的覆盖顺序由本文件的源码顺序唯一确定(后写者胜);锚点是稳定的 `data-*` / `role` /
- * `aria-label`。两处例外:
- *   - 后台任务菜单那三条锚在菜单自身 `aria-label` 上(中英文各一个取值),并额外用元素类型 `ul` 收窄:
- *     菜单 `<ul>` 上没有任何 `data-*`,而整个菜单由 `createPortal` 渲染到 `document.body`、定位是
- *     `position:fixed` —— 不是 `[data-slot="conversation.session.header.actions"]` 的后代,按槽位锚定
- *     会整条落空(上游的 `useAnchoredPosition` 会按实测 `offsetWidth` 重算 `left`,所以 portal 不影响
- *     加宽后的回拉)。其中宽度那条用 `:has()` 把同一个 `aria-label` 锚点从 `<ul>` 翻到外层菜单容器上
- *     (上游 0.2.1-alpha.3 起菜单由共享的 `MenuSurface` 渲染,宽度与 `position:fixed` 都落在容器
- *     `div[data-menu-material="translucent"]` 上,`<ul>` 只是容器里可滚动的 body);这是本文件唯一一处
- *     `:has()`,选择器参数仍是那个 `aria-label`,不是 `:nth-child` 那类位置猜测。`dsh-client-ui-schedule`
- *     的活动提醒菜单是另一个 portal 到 body 的 `<ul>`,文案不同,由 css-contract.json 的
- *     jobs-menu-aria-unique 反向契约兜住。框(终端卡)的宽度钉在上游基线 476px 上并居中:父面板没有
- *     属性锚点,所以这条约定放在框自身上(见该处注释)。
- *   - 侧栏会话行的时间戳额外用了 CSS Module 的局部类名通配符(见该处注释)。
+ * `aria-label`。一处例外:侧栏会话行的时间戳额外用了 CSS Module 的局部类名通配符(见该处注释)。
+ *
+ * 后台任务区是会话面板里的一个 section(`<ul class="…_list" data-jobs-section>`,槽位
+ * `conversation.session.panel.section`),由上游按面板宽度自然排布;补丁只统一它的字号,
+ * 锚点 `data-jobs-section`(见该处注释)。
  *
  * 锚点与令牌清单、以及构建后校验见 docs/dsh-css-architecture/04-css-patches-relationship.md。
  */
@@ -161,54 +153,16 @@ section[data-plan-preview] :not(pre) > code {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
-/* 后台任务菜单加宽 500px → 548px(= 框 476 + 两侧空隙 2×36,见下一条)。
-   菜单 <ul> 上没有任何 data-*,而整个菜单是 createPortal 到 document.body 的 position:fixed 浮层,
-   不在 header.actions 槽的子树里,所以锚在菜单自身的 aria-label 上(t("list.aria"),中英文两个取值);
-   ul 只用来收窄到列表元素。
-   上游 0.2.1-alpha.3 起菜单由共享的 MenuSurface 渲染:<ul> 只是容器里那个可滚动的 body
-   (padding 4px / gap / overflow),500px 宽度、position:fixed 与 overflow:hidden 都在容器的
-   div[data-menu-material="translucent"] 上 —— 宽度钉在 <ul> 上只会撑宽内层、被容器的 overflow:hidden
-   裁掉,菜单外框仍是 500px。容器上没有能区分出「后台任务菜单」的属性(所有菜单的 data-menu-material
-   都是 translucent,类名带构建哈希),而菜单的全部内容仍在这个 <ul> 子树里,所以宽度经 :has() 锚到
-   「内含该 <ul> 的容器」上:锚点与关系都是语义的,不用类名通配符、也不数元素位置。
-   :has() 的参数不带 >,上游在容器与 <ul> 之间加一层 viewport 包裹时这条规则不必跟着改。
-   上游是 width:500px + max-width:min(560px, calc(100vw - 32px), var(--dsh-anchored-max-width,100vw)):
-   max-width 也一并覆盖,菜单宽度才不跟着上游那些上限走(上游调小它时,菜单会跟着缩、空隙静默变小)。
-   菜单的 left/top 由上游按实测 offsetWidth 算(menuRef 指向容器),加宽后它经 ResizeObserver
-   重算,仍会把菜单拉回视口内 */
-div[data-menu-material="translucent"]:has(ul[aria-label="后台任务"]),
-div[data-menu-material="translucent"]:has(ul[aria-label="Background jobs"]) {
-  width: 548px;
-  max-width: min(548px, 100vw - 32px);
-}
-
-/* 命令 + 实时输出那个框保持上游基线宽度 476px(= 菜单 500 − 菜单内边距 2×4 − 面板左右外边距 2×8),
-   菜单比它宽出来的 72px 全变成两侧空隙:548 菜单下 = 4 + 8 + 24 居中余量 = 36,由 margin:auto 对称。
-   上游 .…_block 是 content-box 且带 12px 左内边距,不写 box-sizing 会变成 490px,故显式声明 border-box;
-   max-width:100% 兜住窄窗口(菜单被 min(548px,100vw - 32px) 收窄时框跟着收窄,不溢出面板)。
-   476 / 548 / 36 互相推导,依赖上游的 500 菜单、4px 菜单内边距与 8px 面板外边距 —— css-contract.json 的
-   jobs-menu-width / jobs-menu-body-padding / jobs-panel-margin 负责让构建失败。面板里的提示行
-   (「已省略 N 行」/输出错误)没有属性锚点、不参与居中 */
-ul[aria-label="后台任务"] [data-terminal],
-ul[aria-label="Background jobs"] [data-terminal] {
-  box-sizing: border-box;
-  width: 476px;
-  max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* 后台任务菜单自身与整棵子树 14px(默认 14px,跟随 --dsh-content-font-size)。
-   菜单里的分组标题 / 停止按钮 / 命令行 / 种类 / 状态 / 时长 / 提示行各自声明了 10–12px,
-   菜单 <ul> 自己反而没有 font-size,所以根元素与后代都要显式覆盖,且要 !important 压过后代声明。
-   这条不能省:菜单由 createPortal 挂到 document.body,不在会话标题栏那一行里,
-   [data-slot="conversation.session.header"] * 那条 14px 覆盖不到它。
-   锚点仍是菜单自身的 aria-label(中英文两个取值),ul 只用来收窄到列表元素。字号不受容器换代影响:
-   MenuSurface 只搬走了宽度与定位,菜单里的全部内容都还在这个 <ul> 子树里,所以这条不跟着用 :has()。 */
-ul[aria-label="后台任务"],
-ul[aria-label="Background jobs"],
-ul[aria-label="后台任务"] *,
-ul[aria-label="Background jobs"] * {
+/* 后台任务区自身与整棵子树 14px(默认 14px,跟随 --dsh-content-font-size)。
+   区块根是 <ul class="…_list" data-jobs-section>,渲染在会话面板的 section 槽位里,
+   宽度由面板给,不需要补丁。
+   区里的分组标题 / 停止按钮 / 命令行 / 种类 / 状态 / 时长 / 提示行各自声明了 10–12px,
+   <ul> 自己反而没有 font-size,所以根元素与后代都要显式覆盖,且要 !important 压过后代声明。
+   这条不能省:面板在右栏里,不在会话标题栏那一行,[data-slot="conversation.session.header"] *
+   那条 14px 覆盖不到它。锚点 data-jobs-section 是上游这个 section 唯一的语义标记,
+   由 css-contract.json 的 jobs-section-attr 在构建后报失效。 */
+[data-jobs-section],
+[data-jobs-section] * {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 

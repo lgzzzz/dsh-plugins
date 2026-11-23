@@ -2,6 +2,9 @@
   "name": "dsh-header-action-order",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
   "description": "按固定顺序重排会话标题栏的动作图标(conversation.session.header.actions 列表槽位):就地改写各注册项的 options.order,并在槽位注册变化时重排。",
   "type": "module",
   "exports": {
@@ -29,10 +32,10 @@
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.1.0",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-rc.5",
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.3-alpha.2",
     "tsdown": "^0.23.5",
     "typescript": "^5.9.3"
   }

@@ -30,7 +30,7 @@ const SCROLLER_SELECTOR = '[data-conversation-scroll]'
 const COMPOSER_SELECTOR = '[data-composer-seat]'
 
 /** 模态 / 浮层：打开时所有翻页键都让给它们。 */
-const MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], [role="menu"], [role="listbox"]'
+const MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], [data-menu-popup], [role="menu"], [role="listbox"]'
 
 /** Space 有自己默认动作的控件：按钮激活、输入、选择、播放器等。 */
 const SPACE_OWNER_SELECTOR = [

@@ -642,7 +642,7 @@ console.log('--- C⑩b 快捷操作:工作树与团队协作都能只用键盘�
   check('再 ↑ 到新建工作树', fixture.store.getSnapshot().activeIndex, 0)
   fixture.dom.pressKey('Enter')
   await tick()
-  check('Enter 请求工作树（基于 HEAD）', fixture.remote.worktreeCalls, [{ sessionId: 's1', from: null }])
+  check('Enter 请求工作树（基于 HEAD）', fixture.remote.worktreeCalls, [{ sessionId: 's1', from: null, name: null }])
   check('成功也不关闭浮层', fixture.store.getSnapshot().open, true)
   check('行状态变成已请求', fixture.data.getSnapshot().worktree?.request, { from: null })
   check('副标题只报开启', fixture.store.getSnapshot().entries[0].subtitle, '已开启')
@@ -787,7 +787,7 @@ console.log('--- C⑩b5 工作树请求 await 期间切会话:回包不写进 s2
   fixture.store.select(0)
   fixture.dom.pressKey('Enter')
   await tick()
-  check('工作树请求属于 s1 且还停在等 Host', fixture.remote.worktreeCalls, [{ sessionId: 's1', from: null }])
+  check('工作树请求属于 s1 且还停在等 Host', fixture.remote.worktreeCalls, [{ sessionId: 's1', from: null, name: null }])
   check('等待期间标记 actionPending', fixture.data.getSnapshot().actionPending, 'worktree')
 
   sessions.list.setCurrent('s2')
@@ -805,7 +805,7 @@ console.log('--- C⑩b5 工作树请求 await 期间切会话:回包不写进 s2
   fixture.store.select(worktreeRow)
   fixture.dom.pressKey('Enter')
   await tick()
-  check('下一次操作使用 s2', fixture.remote.worktreeCalls[1], { sessionId: 's2', from: null })
+  check('下一次操作使用 s2', fixture.remote.worktreeCalls[1], { sessionId: 's2', from: null, name: null })
   off()
 }
 

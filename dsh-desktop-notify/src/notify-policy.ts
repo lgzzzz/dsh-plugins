@@ -9,11 +9,9 @@
  * `tag` 按会话与原因区分,投递方配 `renotify: true` 使用:同一 tag 的后一条通知替换前一条;
  * 正文统一裁到 `BODY_LIMIT`。
  */
-import type {
-  SessionPendingInteraction,
-  SessionStatus,
-  SessionStatusSnapshot,
-} from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
+// 会话状态类型由 `@deepseek-ai/dsh-client-ui-session-status` 提供。
+import type { SessionStatus, SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 

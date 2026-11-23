@@ -18,7 +18,9 @@ import type { NotifyServices } from './types.ts'
 
 export const name = 'dsh-desktop-notify'
 
-export const inject = ['sessions', 'uiSession', 'slots']
+// 会话状态表是 `uiSession` 下的独立服务(`uiSession.sessionStatus`):读取它的属性须在注入里
+// 单独声明这个服务名,否则 cordis 拒绝该属性读取。
+export const inject = ['sessions', 'uiSession', 'uiSession.sessionStatus', 'slots']
 
 const SETTINGS_ITEM_SLOT = 'settings.general.item'
 const SETTINGS_ITEM_ID = 'desktop-notify'

@@ -150,7 +150,7 @@ function resolveStopSession(ctx, sessions) {
   const snapshot = binding.session.getSnapshot()
   if (!snapshot.running || snapshot.removed) return undefined
   if (snapshot.subagent !== null && snapshot.subagent.address.mode !== 'continuable') return undefined
-  const uiSession = ctx.get('uiSession')
+  const uiSession = ctx.get('uiSession')   // 依赖已由 ctx.inject 注入(含 uiSession.sessionStatus)
   const pending = uiSession?.sessionStatus.getSnapshot().get(sessionId)?.pendingInteraction
   if (pending !== undefined) return undefined
   return { sessionId, binding }

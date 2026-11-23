@@ -48,7 +48,9 @@ import type {ISessions, SessionListState} from '@deepseek-ai/dsh-api-session-con
 // 空导入：让 TS 加载本包对 `@deepseek-ai/cordis` 的模块增强(`ctx.uiSession`)与
 // `SessionPendingInteractionMap` 的域声明;type-only 导入在打包前被擦除。
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type {SessionStatusSnapshot, UiSession} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {UiSessionService} from '@deepseek-ai/dsh-client-ui-session/client'
+// 会话状态表由独立包提供。
+import type {SessionStatusSnapshot} from '@deepseek-ai/dsh-client-ui-session-status/client'
 // 会话导航面（`UiWorkspace`）的公开类型；同时加载它对 `Context.uiWorkspace` 的模块增强。
 import type {UiWorkspace} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {Context} from '@deepseek-ai/cordis'
@@ -435,7 +437,7 @@ const CONSUMED_ONLY: SessionCycleDecision = { target: undefined, consume: true }
 export function sessionCycleDecision(
   shortcuts: Shortcuts,
   sessions: ISessions,
-  uiSession: UiSession,
+  uiSession: UiSessionService,
   gesture: ShortcutGesture,
   context: ShortcutContext,
 ): SessionCycleDecision {
@@ -474,10 +476,10 @@ export function sessionCycleDecision(
  * 真正可用再跑,服务缺席(没有 Workspace browser 的客户端)时同样退化为不安装。
  */
 export function installSessionCycleBridge(ctx: Context): void {
-  ctx.inject(['shortcuts', 'sessions', 'uiSession', 'uiWorkspace'], (scope) => {
+  ctx.inject(['shortcuts', 'sessions', 'uiSession', 'uiSession.sessionStatus', 'uiWorkspace'], (scope) => {
     const shortcuts: Shortcuts = scope.shortcuts
     const sessions: ISessions = scope.sessions
-    const uiSession: UiSession = scope.uiSession
+    const uiSession: UiSessionService = scope.uiSession
     if (typeof shortcuts.observeFixedInput !== 'function') {
       warn('shortcuts service exposes no observeFixedInput; session-cycle keys not installed')
       return
@@ -530,7 +532,7 @@ export function installSessionCycleBridge(ctx: Context): void {
 function handleSessionCycleInput(
   shortcuts: Shortcuts,
   sessions: ISessions,
-  uiSession: UiSession,
+  uiSession: UiSessionService,
   navigation: SessionNavigation,
   input: KeydownInput,
 ): void {

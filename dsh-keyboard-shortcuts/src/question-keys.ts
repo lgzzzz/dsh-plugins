@@ -20,11 +20,9 @@ import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type Sessi
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {ISessions} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {PendingQuestion} from '@deepseek-ai/dsh-client-ui-user-questions/client'
-import type {
-  SessionPendingInteraction,
-  SessionStatusSnapshot,
-  UiSession,
-} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {SessionPendingInteraction, UiSessionService} from '@deepseek-ai/dsh-client-ui-session/client'
+// 会话状态表由独立包提供;只在 `UiSessionService`(`ctx.uiSession`)上可见。
+import type {SessionStatusSnapshot} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type {Context} from '@deepseek-ai/cordis'
 
 /** 问题包渲染的两种卡片根节点。 */
@@ -92,10 +90,10 @@ export function presentedQuestion(
  * 未挂载它的 Client 不会发布问题交互，此桥接保持为空操作。
  */
 export function installQuestionBridge(ctx: Context): void {
-  ctx.inject(['shortcuts', 'sessions', 'uiSession'], (scope) => {
+  ctx.inject(['shortcuts', 'sessions', 'uiSession', 'uiSession.sessionStatus'], (scope) => {
     const shortcuts: Shortcuts = scope.shortcuts
     const sessions: ISessions = scope.sessions
-    const uiSession: UiSession = scope.uiSession
+    const uiSession: UiSessionService = scope.uiSession
     if (typeof shortcuts.observeFixedInput !== 'function') {
       warn('shortcuts service exposes no observeFixedInput; question bridge not installed')
       return
@@ -110,7 +108,7 @@ export function installQuestionBridge(ctx: Context): void {
 /** 处理固定通道投递的一次 keydown；只有解析出待答问题时才消费按键。 */
 function handleQuestionInput(
   sessions: ISessions,
-  uiSession: UiSession,
+  uiSession: UiSessionService,
   input: KeydownInput,
 ): void {
   const gesture: ShortcutGesture = input.gesture

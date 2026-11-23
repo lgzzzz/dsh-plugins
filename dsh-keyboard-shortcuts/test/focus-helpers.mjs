@@ -743,8 +743,22 @@ export class FakeCtx {
     /** 依赖未就绪的注入:复刻 Cordis 的「等」,而不是直接放弃。 */
     this.pending = []
   }
+  /**
+   * 按服务名取值。子服务名带点(如 `uiSession.sessionStatus`),与 Cordis 一样沿路径解析:
+   * 这个服务由 ui-session-status 包挂在父服务下,测试里只放父服务就够。
+   */
+  lookup(name) {
+    if (this.services[name] !== undefined) return this.services[name]
+    if (!name.includes(".")) return undefined
+    let value = this.services
+    for (const part of name.split(".")) {
+      if (value === null || value === undefined) return undefined
+      value = value[part]
+    }
+    return value
+  }
   get(name) {
-    return this.services[name]
+    return this.lookup(name)
   }
   /** 新增一项服务,并按 Cordis 的语义重试等待中的注入。 */
   provide(name, value) {
@@ -760,7 +774,7 @@ export class FakeCtx {
     return { dispose }
   }
   inject(deps, callback) {
-    if (deps.some((name) => this.services[name] === undefined)) {
+    if (deps.some((name) => this.lookup(name) === undefined)) {
       // 服务缺席时 Cordis 让这段逻辑停在等待中,服务到齐后再跑(见 provide)。
       this.pending.push({ deps, callback })
       return undefined

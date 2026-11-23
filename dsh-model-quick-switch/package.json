@@ -2,6 +2,9 @@
   "name": "dsh-model-quick-switch",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
   "description": "快捷键 ⌘⌥U（Windows / Linux 上是 Ctrl+Alt+U）弹出快捷菜单：顶部「新建工作树」「团队协作」开关直接作用于当前会话，两行格式一致（角标只有「操作」、副标题只报开启 / 关闭；无会话或对应服务缺席时隐藏，工作区不是 Git 仓库时工作树行隐藏；工作树请求在发送首条消息时创建），下面是从设置页维护的模型列表选模型；模型公布了思考等级时再选一档，最后切换当前会话使用的模型。浮层里的模型来自本插件在设置页维护的列表，可在「设置 → 模型快速切换」里从 Host 模型目录中按提供方添加、删除。",
   "type": "module",
   "exports": {
@@ -30,27 +33,27 @@
     "check": "node --check lib/client.js && node --check index.ts"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "~3.19.0"
+    "@deepseek-ai/schemastery": "~3.20.0-alpha.1"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.1.0"
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.1.0",
-    "@deepseek-ai/dsh-agent": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-agent-team": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-api-gateway": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-api-session-controller": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-shortcuts": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-layout": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-session": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-experimental-client-ui-forge": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-session": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-settings": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-typert-protocol": "^0.2.2-rc.5",
-    "@deepseek-ai/dsh-util-values": "^0.2.2-rc.5",
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-agent": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-agent-team": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-api-gateway": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-shortcuts": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-layout": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-experimental-client-ui-forge": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-settings": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-typert-protocol": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-util-values": "^0.2.3-alpha.2",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "react": "^18.3.1",

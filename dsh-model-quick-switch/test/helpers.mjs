@@ -284,8 +284,8 @@ export function fakeRemote({
       },
     },
     forgePanel: {
-      async requestWorktree(sessionId, from) {
-        worktreeCalls.push({ sessionId, from })
+      async requestWorktree(sessionId, from, name) {
+        worktreeCalls.push({ sessionId, from, name })
         if (worktreeGate !== undefined) await worktreeGate
         return worktreeResult ?? { ok: true, value: undefined }
       },

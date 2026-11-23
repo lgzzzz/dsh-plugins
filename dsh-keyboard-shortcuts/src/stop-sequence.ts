@@ -14,7 +14,7 @@ import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type Sessi
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {ISessions, SessionBinding} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {IConversation} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type {UiSession} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {UiSessionService} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {Context} from '@deepseek-ai/cordis'
 
 /**
@@ -114,7 +114,7 @@ interface StopCandidate {
  * 桥接连按两次 Escape 停止回合。
  */
 export function installStopBridge(ctx: Context): void {
-  ctx.inject(['shortcuts', 'sessions'], (scope) => {
+  ctx.inject(['shortcuts', 'sessions', 'uiSession', 'uiSession.sessionStatus'], (scope) => {
     const shortcuts: Shortcuts = scope.shortcuts
     const sessions: ISessions = scope.sessions
     if (typeof shortcuts.observeFixedInput !== 'function') {
@@ -190,7 +190,7 @@ function resolveStopSession(ctx: Context, sessions: ISessions): StopCandidate | 
   const snapshot = binding.session.getSnapshot()
   if (!snapshot.running || snapshot.removed) return undefined
   if (snapshot.subagent !== null && snapshot.subagent.address.mode !== 'continuable') return undefined
-  const uiSession: UiSession | undefined = ctx.get('uiSession')
+  const uiSession: UiSessionService | undefined = ctx.get('uiSession')
   const pending = uiSession?.sessionStatus.getSnapshot().get(sessionId)?.pendingInteraction
   if (pending !== undefined) return undefined
   return { sessionId, binding }
