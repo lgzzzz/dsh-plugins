@@ -1,5 +1,5 @@
 {
-  "description": "统一 CSS 补丁插件 dsh-ui-css-patches 依赖的 DSH 前端稳定契约（data-* 属性 + role / aria-label 文案 + 槽位键 + CSS 变量，以及侧栏会话行时间戳那一处的 CSS Module 局部类名）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中；带 forbid 的条目反过来验证「契约禁止的 token 没有出现在别处」。",
+  "description": "统一 CSS 补丁插件 dsh-ui-css-patches 依赖的 DSH 前端稳定契约（data-* 属性 + role / aria-label 文案 + 槽位键 + CSS 变量 + 主对话正文宽度与面板停靠阈值，以及侧栏会话行时间戳那一处的 CSS Module 局部类名）。check-css.mjs 逐条验证这些 token 仍存在于上游构建产物中；带 forbid 的条目反过来验证「契约禁止的 token 没有出现在别处」。",
   "checks": [
     {"id":"flow-kind-attr","token":"data-chat-flow-kind","paths":["dsh-client-ui-chat/lib"],"hint":"data-chat-flow-kind 属性消失，卡片内代码块字体从 14px 变为 11px/19px"},
     {"id":"sample-attr","token":"data-sample","paths":["dsh-client-ui-tool/lib"],"hint":"data-sample 属性消失，样例卡内代码字体从 14px 变为 11px/19px"},
@@ -43,6 +43,24 @@
     {"id":"commandview-title-token","pattern":"font-size:var\\(--dsh-content-font-size-secondary,\\s*13px\\);line-height:calc\\(24px \\+ var\\(--dsh-content-font-delta,\\s*0px\\)\\);color:inherit","paths":["dsh-web-frontend/dist/assets"],"hint":"DisclosureRow 标题不再用 --dsh-content-font-size-secondary 取字号（或行高/颜色声明顺序变了）：槽位上的令牌覆盖只剩摘要生效，命令名仍是 13px"},
     {"id":"layout-drag-handle","pattern":"\"data-side\":\\s*[\\w$]+\\.side","paths":["dsh-client-ui-layout/lib"],"hint":"AppFrame 的拖动柄不再输出 data-side 属性（或改挂到别的元素上）：[data-side=\"sidebar\"] / [data-side=\"rightbar\"] 整条落空，左右栏恢复可拖动改宽"},
     {"id":"layout-handle-side-values","pattern":"side:\\s*[`'\"]sidebar[`'\"][\\s\\S]{0,800}?side:\\s*[`'\"]rightbar[`'\"]","paths":["dsh-client-ui-layout/lib"],"hint":"拖动柄的 side 取值改名（sidebar / rightbar）：隐藏两条柄的规则同时落空，左右栏恢复可拖动改宽"},
-    {"id":"files-navigator-resize-attr","pattern":"\"data-files-navigator-resize\":\\s*true","paths":["dsh-client-ui-sidebar-files/lib"],"hint":"右栏文件列表（workspace navigator）的分隔条不再输出 data-files-navigator-resize：隐藏分隔条的规则整条落空，文件列表恢复可拖动改宽"}
+    {"id":"files-navigator-resize-attr","pattern":"\"data-files-navigator-resize\":\\s*true","paths":["dsh-client-ui-sidebar-files/lib"],"hint":"右栏文件列表（workspace navigator）的分隔条不再输出 data-files-navigator-resize：隐藏分隔条的规则整条落空，文件列表恢复可拖动改宽"},
+    {"id":"main-slot","token":"main.conversation","paths":["dsh-client-ui-conversation/src"],"hint":"main.conversation 槽位键消失：[data-slot=\"main.conversation\"] 作用域整条落空，嵌入侧边对话也可能被误伤，主对话正文宽度不再固定"},
+    {"id":"content-attr","token":"data-conversation-content","paths":["dsh-client-ui-conversation/src"],"hint":"Conversation 根上的 data-conversation-content 标记消失：正文宽度与隐藏把手的规则都锚不到正文容器，宽度恢复上游拖拽 / 自适应"},
+    {"id":"width-handle-attr","token":"data-width-handle","paths":["dsh-client-ui-conversation/src"],"hint":"宽度拖动把手的 data-width-handle 标记消失：隐藏规则整条落空，正文列两侧的 10px 拖动条重新出现并可拖动改宽"},
+    {"id":"viewport-width-var","token":"--dsh-conversation-viewport-width","paths":["dsh-client-ui-conversation/src"],"hint":"--dsh-conversation-viewport-width 变量消失：V − 380 拿不到实测滚动口宽，正文宽停在 640px 回退值，面板默认停靠失效"},
+    {"id":"viewport-width-published","pattern":"setProperty\\(\\s*'--dsh-conversation-viewport-width'","paths":["dsh-client-ui-conversation/src"],"hint":"上游不再把 scrollport.clientWidth 写进 --dsh-conversation-viewport-width：正文宽不再随窗口 / 侧栏变化，V − 380 失效"},
+    {"id":"resolved-width-declared","pattern":"--dsh-chat-content-width-resolved\\s*:","paths":["dsh-client-ui-conversation/src"],"hint":"--dsh-chat-content-width-resolved 声明消失：固定宽度的覆盖不再被上游消费，正文宽度规则整条失效"},
+    {"id":"content-width-alias","pattern":"--dsh-chat-content-width:\\s*var\\(--dsh-chat-content-width-resolved\\)","paths":["dsh-client-ui-conversation/src"],"hint":"--dsh-chat-content-width 不再取自 resolved 变量：正文、气泡、卡片与输入框不再跟随固定宽度"},
+    {"id":"content-min","pattern":"CONTENT_MIN\\s*=\\s*640","paths":["dsh-client-ui-conversation/src"],"hint":"上游最小正文宽不再是 640px：本插件 max() 的 640 下限与上游规则不一致，窄窗口会停在错误的宽度"},
+    {"id":"panel-clear","pattern":"--panel-clear:\\s*40px","paths":["dsh-client-ui-session-panel/src"],"hint":"面板与正文的 40px 净空变更：380px 阈值不再等于停靠所需余量，面板默认停不住或压住正文"},
+    {"id":"panel-edge","pattern":"--panel-edge:\\s*8px","paths":["dsh-client-ui-session-panel/src"],"hint":"面板距 Chat 末端边缘的 8px 变更：380px 阈值失效，需要重算 V − 380 的常数"},
+    {"id":"panel-min-width","pattern":"--panel-min-width:\\s*300px","paths":["dsh-client-ui-session-panel/src"],"hint":"停靠面板最小宽 300px 变更：348px 预留与 380px 阈值都要重算，正文宽度不再恰好够停靠"},
+    {"id":"composer-side-clearance","pattern":"--dsh-composer-side-clearance:\\s*16px","paths":["dsh-client-ui-conversation/src"],"hint":"composer 侧净空不再是 16px：380 = 348 + 16 + 16 里的后一个 16 与让位后保留的起始安全区改变，V − 380 不再正好等于停靠边界"},
+    {"id":"reserve-rule","pattern":"--dsh-chat-end-reserve:\\s*calc\\(\\s*var\\(--panel-clear\\)\\s*\\+\\s*var\\(--panel-edge\\)\\s*\\+\\s*var\\(--panel-min-width\\)\\s*\\)","paths":["dsh-client-ui-session-panel/src"],"hint":"面板不再向 Conversation 主体申请 40 + 8 + 300 的末端预留：正文不会为面板让位，V − 380 也不再是停靠边界"},
+    {"id":"reserve-max-formula","pattern":"--dsh-chat-end-reserve-max:\\s*calc\\(\\s*var\\(--dsh-conversation-viewport-width\\)\\s*-\\s*var\\(--dsh-chat-content-width-resolved\\)\\s*-\\s*var\\(--dsh-composer-side-clearance\\)\\s*-\\s*16px\\s*\\)","paths":["dsh-client-ui-conversation/src"],"hint":"最大末端预留公式变更（滚动口宽 − 正文宽 − 净空 − 16px）：380px 不再对应主体肯让位的边界，面板默认停靠可能失效"},
+    {"id":"reserve-room-step","pattern":"\\*\\s*10000000\\s*\\+\\s*1px","paths":["dsh-client-ui-session-panel/src"],"hint":"reserve-room 的边界步进（× 10^7 + 1px）改变：V − 正文宽 = 380 时不再回报 1px，面板在默认宽度下会退回浮层"},
+    {"id":"probe-measure","pattern":"contentRect\\.width\\s*>=\\s*1","paths":["dsh-client-ui-session-panel/src"],"hint":"上游不再用「探针宽度 >= 1px」判定停靠空间：边界上 1px 的探针可能不再被认成有空间，面板默认退回浮层"},
+    {"id":"presentation-docked","pattern":"visibility\\.pinned\\s*\\?\\s*'docked'\\s*:\\s*'hidden'","paths":["dsh-client-ui-session-panel/src"],"hint":"presentationOf 的「fits && pinned -> docked」分支变更：有空间且默认钉住时不再停靠，V − 380 保证默认打开的前提消失"},
+    {"id":"pinned-default","pattern":"pinned\\s*=\\s*createSnapshotStore<unknown>\\(\\s*true","paths":["dsh-client-ui-session-panel/src"],"hint":"面板的默认 pinned 偏好不再是 true：正文即便留足 380px，会话面板也不会在首次打开时自动停靠"}
   ]
 }

@@ -53,7 +53,7 @@
 
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
-| `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + `role` / `aria-label` 文案（含一条反向的 `forbid`）+ CSS 变量 + 槽位键 |
+| `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + `role` / `aria-label` 文案（含一条反向的 `forbid`）+ CSS 变量 + 槽位键 + 主对话正文宽度与面板停靠阈值 |
 | `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点（含 `aria-expanded` 同元素）+ 标题右侧箭头的图标与 `chevron` 局部类名 + fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话槽位与会话作用域 + 折叠目标 / 聊天行 / 轮次 / 跟随尾部 / 上游动画 / 封口锚点 |
 | `dsh-changes-behavior` | [`contract.json`](../dsh-changes-behavior/contract.json) | 改动卡片锚点（含启动期补丁的 `singleFile` 初始化锚点）+ 本地变更地址 + 右栏四个打开入口 / `mounted` / `claim` / `data-sidebar-right-panel` / `commandTarget` / `isTargetCurrent` / `toggleFullscreen` / 窄窗口断点 + 审查根 / 分栏 / 换行 / review store seed + 快捷键固定行服务 + 悬停延迟 + 两个 forge 字号锚点与反向 `!important` + 文件树分隔条的 `role` / `aria-controls`（固定文件列表宽度用，共 45 条） |
