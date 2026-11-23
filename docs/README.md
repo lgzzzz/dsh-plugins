@@ -26,7 +26,6 @@
 | `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁 | — |
-| `dsh-session-panel-dock` | 会话面板始终停靠：恒开主对话的停靠探针；面板显示时把正文宽度上限设为 `min(自然宽度, max(480px, 列宽 − 400px))`，宽外框不改正文宽度；Chat 外框宽于约 870px 时真实并排，更窄时仍保持停靠但覆盖正文右缘 | [说明](dsh-session-panel-dock.md) |
 | `dsh-desktop-notify` | 桌面通知 | — |
 | `dsh-directory-picker-browse` | 应用内目录浏览选择器 | — |
 | `dsh-git-guard` | git 操作保护 | — |
@@ -55,7 +54,6 @@
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
 | `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + `role` / `aria-label` 文案（含一条反向的 `forbid`）+ CSS 变量 + 槽位键 |
-| `dsh-session-panel-dock` | [`css-contract.json`](../dsh-session-panel-dock/css-contract.json) | 停靠探针 / reserve 标记 + 呈现判定 + 348px 阈值的三个取值 + 自然宽度公式、正文宽度变量与末端预留公式（共 19 条） |
 | `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点（含 `aria-expanded` 同元素）+ 标题右侧箭头的图标与 `chevron` 局部类名 + fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话槽位与会话作用域 + 折叠目标 / 聊天行 / 轮次 / 跟随尾部 / 上游动画 / 封口锚点 |
 | `dsh-changes-behavior` | [`contract.json`](../dsh-changes-behavior/contract.json) | 改动卡片锚点（含启动期补丁的 `singleFile` 初始化锚点）+ 本地变更地址 + 右栏四个打开入口 / `mounted` / `claim` / `data-sidebar-right-panel` / `commandTarget` / `isTargetCurrent` / `toggleFullscreen` / 窄窗口断点 + 审查根 / 分栏 / 换行 / review store seed + 快捷键固定行服务 + 悬停延迟 + 两个 forge 字号锚点与反向 `!important` + 文件树分隔条 / `aria-valuenow` / 宽度上下限（共 47 条） |
