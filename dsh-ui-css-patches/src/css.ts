@@ -307,6 +307,34 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   --dsh-content-font-size-secondary: var(--dsh-content-font-size, 14px);
 }
 
+/* 授权卡片(conversation.approval.card)里的小字 14px。
+   卡片自己的字号都是固定 px:大字标题 .…_headline 是 15px/24px;顶部「等待审批」状态条
+   .…_strip 是 13px/18px,说明行 .…_description 与命令行 .…_command 都是 13px/20px。
+   三处小字都写死 14px、不引用 --dsh-content-font-size,保持「15 大字 > 14 小字」的层级
+   不随应用字号翻转;行高保持上游(状态条 18px,说明行 / 命令行 20px)。三处小字的锚点:
+     - 状态条:它没有 data-* 属性,唯一抓手是 CSS Module 的局部类名 strip —— 生成名是
+       [hash]_strip,构建只换前缀,与侧栏时间戳的 _time 是同一套写法;锚点写成
+       [data-approval-key] [class*="_strip"],作用域限定在授权卡片内,卡片里没有别的类名
+       以 _strip 结尾;
+     - 说明行:调用方传入 description 时渲染成正文容器 [data-approval-scroll] 的直接子元素
+       <p>(工具审批不带 description;CUA 应用授权等 factory 调用方会带);
+     - 命令行:工具审批的详情子槽位 conversation.approval.detail,由 SlotOutlet 渲染成
+       [data-slot="conversation.approval.detail"] 的 display:contents 包装,包在 .…_command
+       (13px)里。字号落在包装上,包装里的文本继承 14px;自定义详情内容自己声明的字号仍以自己为准。
+   锚点:[data-approval-key] 是 ApprovalCard 根元素上的请求键属性(approval:<n>),三处小字都在
+   它的子树里。三条选择器的特异性分别是 (0,2,0) / (0,2,1) / (0,2,0),都大于上游 .…_strip /
+   .…_description / .…_command 的 (0,1,0),不依赖源码顺序;!important 只为不被模块样式重新
+   挂载时的顺序翻盘(本插件 <style> 在启动期挂载,与模块样式谁先挂上不归本插件掌握)。
+   上游改掉卡片根 / strip 这个局部名 / 正文容器 / 说明行的渲染方式 / 子槽位键时,对应规则
+   整条落空,由 css-contract.json 的 approval-key-attr / approval-strip-class /
+   approval-scroll-attr / approval-description-structure / approval-detail-slot 五条契约在
+   构建后报失效。 */
+[data-approval-key] [class*="_strip"],
+[data-approval-key] [data-approval-scroll] > p,
+[data-approval-key] [data-slot="conversation.approval.detail"] {
+  font-size: 14px !important;
+}
+
 /* 主对话正文列宽固定为 max(640px, 滚动口宽 − 400px),并隐藏正文列左右两条宽度拖动把手。
    400 = 348(会话面板停靠所需的末端预留:40 面板与正文净空 + 8 面板距 Chat 末端边距 +
    300 面板最小宽) + 52(起始空白);52 里 32(16 + 16)是上游让位后保留的最小起始安全区,

@@ -68,6 +68,11 @@
     {"id":"session-panel-toggle-disabled","pattern":"aria-disabled=\\{available\\s*\\?\\s*undefined\\s*:\\s*true\\}","paths":["dsh-client-ui-session-panel/src"],"hint":"面板开关的 aria-disabled 不再在「会话没有 Chat View」时置 true：兜底可能在无 Chat View 的会话上白点，或误判可点状态"},
     {"id":"session-panel-probe-attr","token":"data-session-panel-probe","paths":["dsh-client-ui-session-panel/src"],"hint":"停靠探针的 data-session-panel-probe 标记消失：启动期兜底读不到主对话的实测宽度来判定「放得下」，只能按未钉住处理，历史上关掉的面板不会在当前页面恢复"},
     {"id":"session-panel-reserve-attr","token":"data-session-panel-reserve","paths":["dsh-client-ui-session-panel/src"],"hint":"停靠探针上的 data-session-panel-reserve 标记消失：启动期兜底读不到「面板已钉住」的信号，会一直巡查到轮数上限"},
-    {"id":"pinned-storage-key","token":"dsh.sessionPanel.pinned","paths":["dsh-client-ui-session-panel/src"],"hint":"面板的 pinned 偏好存储键改名：启动期兜底补写的是旧键，历史 false 不会恢复，面板在开关隐藏后永久 hidden"}
+    {"id":"pinned-storage-key","token":"dsh.sessionPanel.pinned","paths":["dsh-client-ui-session-panel/src"],"hint":"面板的 pinned 偏好存储键改名：启动期兜底补写的是旧键，历史 false 不会恢复，面板在开关隐藏后永久 hidden"},
+    {"id":"approval-key-attr","token":"data-approval-key","paths":["dsh-client-ui-approval/lib"],"hint":"授权卡片根不再输出 data-approval-key：授权卡小字 14px 的规则整条落空，状态条 / 说明行 / 命令行回到上游 13px"},
+    {"id":"approval-strip-class","pattern":"\"strip\":\\s*`[^`]+_strip`","paths":["dsh-client-ui-approval/lib"],"hint":"授权卡顶部状态条的 CSS Module 局部类名不再叫 strip（生成名形如 mna1RW_strip；[hash] 前缀随构建变化不影响该通配符，局部名变化才影响）：[class*=\"_strip\"] 落空，状态条字号回到上游 13px"},
+    {"id":"approval-scroll-attr","token":"data-approval-scroll","paths":["dsh-client-ui-approval/lib"],"hint":"授权卡正文容器不再输出 data-approval-scroll：[data-approval-scroll] > p 落空，说明行回到上游 13px"},
+    {"id":"approval-description-structure","pattern":"data-approval-scroll=\"\"[\\s\\S]{0,2000}?\\{description\\s*!==\\s*undefined\\s*&&\\s*<p className=\\{css\\.description\\}>","paths":["dsh-client-ui-approval/src"],"hint":"说明行不再渲染成正文容器内的 <p className={css.description}>：说明行选择器落空，CUA 等调用方的授权说明回到上游 13px"},
+    {"id":"approval-detail-slot","token":"conversation.approval.detail","paths":["dsh-client-ui-approval/lib"],"hint":"授权卡的详情子槽位键改名：[data-slot=\"conversation.approval.detail\"] 落空，工具审批的命令行回到上游 13px"}
   ]
 }
