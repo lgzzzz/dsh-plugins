@@ -1,0 +1,95 @@
+{
+  "description": "dsh-subagent-forge-panel 依赖的 DSH 前端稳定契约：会话面板的「环境」行槽与两个标准 props（`useSession` / `useSessions`）、会话快照与列表行上认出子智能体会话的两个字段、面板给分区 / 行 / 行部件打的 `data-*` 锚点，以及 forge 侧被隐藏的那一行与服务面。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：槽位不再声明时守卫无处挂载、隐藏完全不生效；标准 props 或身份字段缺席时认不出子会话、标记打不上；分区锚点改名时标记落不到分区；forge 改名时隐藏规则落空，`forgeChanges` 缺席时插件干脆不激活。",
+  "checks": [
+    {
+      "id": "environment-row-slot",
+      "plugin": "dsh-subagent-forge-panel",
+      "token": "conversation.session.panel.environment.row",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "会话面板不再声明或渲染 conversation.session.panel.environment.row 槽：守卫无处挂载，隐藏完全不生效，子会话里又回到那条「状态已停止更新」与注定失败的重试"
+    },
+    {
+      "id": "session-standard-prop",
+      "plugin": "dsh-subagent-forge-panel",
+      "token": "useSession",
+      "paths": [
+        "dsh-client-ui-session/lib"
+      ],
+      "hint": "标准 props 不再提供 useSession：读不到会话快照上的 subagent 地址，从子会话打开的子会话认不出来"
+    },
+    {
+      "id": "sessions-standard-prop",
+      "plugin": "dsh-subagent-forge-panel",
+      "token": "useSessions",
+      "paths": [
+        "dsh-client-ui-session/lib"
+      ],
+      "hint": "标准 props 不再提供 useSessions：读不到会话列表行上的 origin，从侧栏直接打开的子会话认不出来"
+    },
+    {
+      "id": "snapshot-subagent-field",
+      "plugin": "dsh-subagent-forge-panel",
+      "pattern": "readonly subagent:",
+      "paths": [
+        "dsh-api-session-controller/lib"
+      ],
+      "hint": "会话快照不再带 subagent 地址：判定子会话只剩列表行一条依据，从子会话打开时认不出来"
+    },
+    {
+      "id": "summary-subagent-origin",
+      "plugin": "dsh-subagent-forge-panel",
+      "pattern": "origin\\??:\\s*['\"]subagent['\"]",
+      "paths": [
+        "dsh-api-session-controller/lib"
+      ],
+      "hint": "会话列表行不再标 origin: 'subagent'：页面重开后认不出子会话，隐藏不生效"
+    },
+    {
+      "id": "panel-section-anchor",
+      "plugin": "dsh-subagent-forge-panel",
+      "token": "data-session-panel-section",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "分区元素不再打 data-session-panel-section：标记找不到落点，隐藏 forge 连接行的规则整条失效"
+    },
+    {
+      "id": "panel-row-anchor",
+      "plugin": "dsh-subagent-forge-panel",
+      "token": "data-session-panel-row",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "面板不再按 data-session-panel-row 排版行：同一分栏里的行失去行高与缩进（守卫自己不渲染行，故不受影响）"
+    },
+    {
+      "id": "panel-row-part-anchor",
+      "plugin": "dsh-subagent-forge-panel",
+      "token": "data-row-part",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "面板不再按 data-row-part 排版行部件：同一分栏里的行失去图标列与正文对齐（守卫不受影响）"
+    },
+    {
+      "id": "forge-connection-row",
+      "plugin": "dsh-subagent-forge-panel",
+      "token": "data-forge-connection",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "forge 的连接行不再打 data-forge-connection：隐藏规则落空，子会话里「状态已停止更新」与那个注定失败的重试又出现"
+    },
+    {
+      "id": "forge-changes-service",
+      "plugin": "dsh-subagent-forge-panel",
+      "token": "forgeChanges",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "forge 不再提供 ctx.forgeChanges：本插件不激活，这是显式退化而不是静默失效"
+    }
+  ]
+}
