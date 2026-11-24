@@ -23,6 +23,7 @@ dsh-keyboard-shortcuts/lib/
 dsh-turn-process-open/lib/
 dsh-ui-css-patches/lib/
 dsh-workspace-quick-switch/lib/
+dsh-workspace-activity-sort/lib/
 dsh-model-quick-switch/lib/
 dsh-agent-team-hero-toggle/lib/
 dsh-subagent-parent-nav/lib/

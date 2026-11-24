@@ -9,8 +9,15 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-// 先跑这三个测试文件，其余按名字排在后面。
-const ORDER = ['bump-plan.test.mjs', 'plugin-apply.test.mjs', 'cordis-integration.test.mjs']
+// 先跑这六个测试文件（纯判定 → 宿主行为 → 浏览器行为 → 产物装配），其余按名字排在后面。
+const ORDER = [
+  'bump-plan.test.mjs',
+  'scroll-plan.test.mjs',
+  'plugin-apply.test.mjs',
+  'client-apply.test.mjs',
+  'artifact-client.test.mjs',
+  'cordis-integration.test.mjs',
+]
 
 const filters = process.argv.slice(2)
 const all = readdirSync(here).filter((entry) => entry.endsWith('.test.mjs'))

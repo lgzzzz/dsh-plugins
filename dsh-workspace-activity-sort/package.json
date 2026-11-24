@@ -5,28 +5,38 @@
   "engines": {
     "dsh": "^0.2.3-alpha.2"
   },
-  "description": "按会话活动自动排序左侧栏的 Workspace 分组：把最近有用户消息、任务完成、大模型请求重试耗尽，或正在等用户处理（工具审批、提问、计划确认）的工作区提到 Workspace 注册表持久显示顺序的最前。",
+  "description": "按会话活动自动排序左侧栏的 Workspace 分组：把最近有用户消息、任务完成、大模型请求重试耗尽，或正在等用户处理（工具审批、提问、计划确认）的工作区提到 Workspace 注册表持久显示顺序的最前；某个工作区被排到第一位时，浏览器半部把侧栏的工作区列表滚回最上面。",
   "type": "module",
   "main": "index.ts",
   "exports": {
     ".": {
       "default": "./index.ts"
     },
+    "./client": {
+      "default": "./lib/client.js"
+    },
     "./package.json": "./package.json"
   },
   "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
   "scripts": {
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
     "test": "node test/run-all.mjs",
-    "check": "node --check index.ts && node --check src/bump.ts"
+    "check": "node --check lib/client.js && node --check index.ts && node --check src/bump.ts && node --check src/scroll.ts"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "~4.2.0-alpha.1",
     "@deepseek-ai/dsh-api-session-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-api-workspace-controller": "^0.2.3-alpha.2",
     "@deepseek-ai/dsh-llm-retry": "^0.2.3-alpha.2",
     "@deepseek-ai/dsh-session": "^0.2.3-alpha.2",
     "@deepseek-ai/dsh-storage-domain": "^0.2.3-alpha.2",
@@ -34,6 +44,7 @@
     "@deepseek-ai/dsh-user-questions": "^0.2.3-alpha.2",
     "@deepseek-ai/dsh-workspace": "^0.2.3-alpha.2",
     "@types/node": "^24.19.2",
+    "tsdown": "^0.23.5",
     "typescript": "^5.9.3"
   }
 }

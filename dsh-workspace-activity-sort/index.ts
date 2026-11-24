@@ -3,7 +3,8 @@
  *
  * 分组顺序就是 Workspace 注册表的持久显示顺序（域全局单例的 `workspaceIds`，`registry.list()` 按它投影），
  * 浏览器通过 workspace 控制器 follow() 的 order 增量跟随。插件只写注册表顺序：用注册表自己的
- * `insertBefore` 把目标工作区移到最前。
+ * `insertBefore` 把目标工作区移到最前；浏览器半部（`src/client.ts`）跟随同一份顺序，某个工作区被
+ * 排到第一位时把侧栏的工作区列表滚回最上面。
  *
  * 触发与动作：
  *   - `api-session/activity`：该会话所属工作区上浮到最前；

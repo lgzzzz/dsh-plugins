@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | `dsh-model-quick-switch` | 快捷菜单：`⌘⌥U`（Windows / Linux 上是 `Ctrl+Alt+U`，与其它固定键同用逻辑 `primary`）弹出与工作区浮层同一套面板；顶部是作用于当前会话的「新建工作树」「团队协作」开关（两行格式一致：角标只有「操作」、副标题只报开启 / 关闭；无会话或对应服务缺席时隐藏，工作区不是 Git 仓库时工作树行隐藏；工作树在发送首条消息时创建），下面选设置页「模型快速切换」里维护的模型，模型公布思考等级时第二步原地换成「默认 + 各档强度」（默认高亮最大一档），选完把当前会话切到「模型 + 强度」（成功关闭、失败留在浮层显示 Host 错误）；设置页从 Host 模型目录按提供方添加、删除，列表存在插件即时配置里 | [说明](dsh-model-quick-switch.md) |
 | `dsh-workspace-quick-switch` | 两张浮层：`⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows）按左侧栏顺序列出工作区、`Enter` 在该工作区新建会话；`⌘⌥I` / `Ctrl+Alt+I` 按左侧栏「单列表 + 最近更新 + 隐藏已归档」的顺序列出会话、`Enter` 打开该会话。都是一屏 10 个、窗口连续滑动（滚轮滚一格 1–10 → 2–11、`←/→` 滑一整屏、`↑/↓` 移选中行，两端停住）；鼠标点一行即确认（焦点在终端里时同样生效） | [说明](dsh-workspace-quick-switch.md) |
-| `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动、任务完成、大模型请求重试耗尽，或正在等用户处理（工具审批、提问、计划确认）的工作区自动浮到最前；审批 / 提问两条 waterfall 上只观察、原样把请求交还应答链 | [说明](dsh-workspace-activity-sort.md) |
+| `dsh-workspace-activity-sort` | 宿主半部：最近有会话活动、任务完成、大模型请求重试耗尽，或正在等用户处理（工具审批、提问、计划确认）的工作区自动浮到最前；审批 / 提问两条 waterfall 上只观察、原样把请求交还应答链。浏览器半部：某个工作区被排到第一位时，把左侧栏的工作区列表滚回最上面 | [说明](dsh-workspace-activity-sort.md) |
 | `dsh-header-action-order` | 会话标题栏动作图标的固定顺序 | — |
 | `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |
 | `dsh-agent-team-hero-toggle` | 空白新会话行的「新建工作树」右侧加「团队协作」开关：读 `agentTeam` 投影、写 `remote.agentTeams.setEnabled`，模型菜单旧入口保留（A2）；首轮后随 hero 行消失 | [说明](dsh-agent-team-hero-toggle.md) |
@@ -66,8 +66,9 @@
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-model-quick-switch` | [`css-contract.json`](../dsh-model-quick-switch/css-contract.json) | `shell.overlay` / `settings.section` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
+| `dsh-workspace-activity-sort` | [`css-contract.json`](../dsh-workspace-activity-sort/css-contract.json) | 侧栏区块滚动容器 `data-sidebar-list-area` + 工作区分组行 `data-row-key` 的 `workspace:` 前缀（排除单列表 / 搜索 / 收起成 rail） |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 11 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 12 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 
@@ -78,7 +79,8 @@ pnpm install                 # 把各插件的 devDependencies 提到根 node_mo
 pnpm -r build                # 构建所有插件的产物
 pnpm -r typecheck            # 类型检查
 pnpm -r test                 # 跑有 test 脚本的插件(各插件的 node test/run-all.mjs)
-pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
+pnpm check                   # lib 语法检查
+pnpm check:css               # 上游 CSS / DOM 契约校验
 
 ./add-plugins.ps1            # 挂载仓库根下所有 dsh-* 插件(PowerShell 版)
 ./add-plugins.sh             # 同上(bash)
@@ -97,8 +99,8 @@ pnpm check                   # lib 语法检查 + 上游 CSS 契约校验
 - `add-plugins` 在挂载每个插件前先补齐客户端半部产物：仓库根的 `node_modules/.bin/tsdown` 缺失时先跑一次
   `pnpm install`，然后对 `package.json` 的 `exports` 里写明、但磁盘上不存在的 `.js`（即 `.gitignore` 里的
   `lib/*.js`）跑 `pnpm --filter <name> build`。缺产物时插件照样挂得上，只是浏览器里是个空壳、启动日志里
-  只有一行 `ENOENT`，所以这一步失败就不挂该插件。只按 `exports` 判定，没有 `build` 脚本的宿主半部插件
-  （`dsh-git-guard`、`dsh-workspace-activity-sort` 等）不会被误构建；已有产物的插件也不会被重复构建。
+  只有一行 `ENOENT`，所以这一步失败就不挂该插件。只按 `exports` 判定，没有 `build` 脚本、`exports` 里也不写
+  `.js` 产物的插件（如 `dsh-git-guard`）不会被误构建；已有产物的插件也不会被重复构建。
 - `remove-plugins` 从 profile 的 `dependencies` 中挑出指向本仓库的 `link:` / `file:` 条目来卸载，因此插件目录
   删除后遗留的注册项也能清掉。它不碰 `lib/` 产物：卸下不会让产物失效，再挂回去不必重新构建。
 

@@ -1,12 +1,13 @@
 {
-  // 无编译步骤：index.ts 与 src/bump.ts 由 Node Type Stripping 直接加载，
-  // 本配置只服务 tsserver 与 pnpm typecheck。
+  // 无编译步骤：index.ts 与 src/bump.ts 由 Node Type Stripping 直接加载，src/client.ts 由
+  // tsdown.config.mjs 打成 lib/client.js；本配置只服务 tsserver 与 pnpm typecheck。
   "compilerOptions": {
     // 与宿主运行时（Node 22+，type=module）一致的 ESM 语义
     "target": "esnext",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "lib": ["esnext"],
+    // dom：浏览器半部读 `document` 与 `requestAnimationFrame`；宿主半部不用
+    "lib": ["esnext", "dom", "dom.iterable"],
 
     "noEmit": true,
     // 允许 .ts 相对导入，需配合 noEmit
@@ -22,6 +23,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": ["index.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", "lib"]
 }

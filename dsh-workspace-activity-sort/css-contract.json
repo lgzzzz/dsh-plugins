@@ -1,0 +1,23 @@
+{
+  "description": "dsh-workspace-activity-sort 浏览器半部依赖的上游事实：把侧栏滚回最上面读取的两个 `data-*` 锚点——`[data-sidebar-list-area]`（WorkspaceBrowser 的 listArea，展开态侧栏里唯一可见的滚动条，上游 README 列为供测试与集成方定位的稳定标记）与 `[data-row-key^=\"workspace:\"]`（工作区分组行，用来判定当前不是单列表视图 / 搜索中 / 收起成 rail；上游未把它写进稳定标记，所以尤其需要这条契约）。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）：这类锚点被改名 / 搬走时插件不报错、只退化成 no-op——顺序照旧上浮，那一刻屏幕却停在下面；这里把那种退化提前变成一次显式失败，并在 hint 里写明后果。",
+  "checks": [
+    {
+      "id": "sidebar-list-area",
+      "plugin": "dsh-workspace-activity-sort",
+      "token": "\"data-sidebar-list-area\":",
+      "paths": [
+        "dsh-client-ui-workspace/lib"
+      ],
+      "hint": "侧栏区块的滚动容器标记消失：找不到要滚的元素，\"上浮到第一位 → 滚回最上面\" 退化成 no-op（顺序照旧上浮，屏幕上看不见）"
+    },
+    {
+      "id": "workspace-row-key",
+      "plugin": "dsh-workspace-activity-sort",
+      "pattern": "\"data-row-key\":\\s*`workspace:",
+      "paths": [
+        "dsh-client-ui-workspace/lib"
+      ],
+      "hint": "工作区分组行的 key 前缀变了：分不清单列表视图 / 搜索中 / 收起成 rail 与分组视图，可能在顺序不可见时也滚（无害但不该做）；两条锚点同时失效时只会静默不滚"
+    }
+  ]
+}
