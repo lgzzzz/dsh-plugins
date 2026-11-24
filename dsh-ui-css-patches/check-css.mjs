@@ -22,7 +22,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execSync } from 'node:child_process'
+import { resolveDshRoot } from './dsh-root.mjs'
 
 // 契约清单默认与脚本同目录。
 const here = dirname(fileURLToPath(import.meta.url))
@@ -36,30 +36,6 @@ function parseArgs(argv) {
     else if (a === '--help' || a === '-h') out.help = true
   }
   return out
-}
-
-function resolveDshRoot(opt) {
-  if (opt) return resolve(opt)
-  if (process.env.DSH_ROOT) return resolve(process.env.DSH_ROOT)
-
-  const candidates = []
-  try {
-    const g = execSync('npm root -g', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-    if (g) candidates.push(g)
-  } catch { /* spawn 被拒(受限环境下为 EPERM)时,继续走下面的纯路径回退 */ }
-
-  // 纯路径回退:不 spawn 任何子进程。
-  if (process.env.APPDATA) candidates.push(join(process.env.APPDATA, 'npm', 'node_modules'))
-  const execDir = dirname(process.execPath) // <prefix>/bin/node
-  candidates.push(join(execDir, '..', 'lib', 'node_modules'))
-  candidates.push(join(execDir, 'node_modules'))
-  if (process.env.PNPM_HOME) candidates.push(join(process.env.PNPM_HOME, 'global', '5', 'node_modules'))
-
-  for (const root of candidates) {
-    const p = join(root, '@deepseek-ai', 'dsh')
-    if (existsSync(p)) return p
-  }
-  return null
 }
 
 function walk(dir, out = []) {

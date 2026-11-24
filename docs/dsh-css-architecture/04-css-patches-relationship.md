@@ -35,6 +35,7 @@
    - [`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json)：逐条声明「依赖哪个 token（或正则）、去哪几个包的 `lib/` 里找、失效时的后果 hint」；带 `forbid` 的条目是反向契约（命中即失败），用于钉住「同样的锚点出现在别处会让选择器撞车」这类退化。
    - [`../../dsh-ui-css-patches/check-css.mjs`](../../dsh-ui-css-patches/check-css.mjs)：按清单在上游构建产物里逐个 `grep`，缺失即报错（退出码 1）。
    - `package.json` 的 `check:css` 脚本是 `node check-css.mjs`：在**构建后**单独跑（`pnpm check:css`），不在 `pnpm build` 里；升级上游版本后重跑一次即可发现静默失效。
+   - [`../../dsh-ui-css-patches/test/cascade.test.mjs`](../../dsh-ui-css-patches/test/cascade.test.mjs)：**级联测试**，补静态契约覆盖不到的一类失效——锚点和令牌都在，规则却因为特异性 / 注入顺序输给上游。它从安装的 `dsh-web-frontend` 产物里抽出 Markdown 组件的真实规则（类名带构建哈希，运行时从规则里读，不写死），与插件 CSS 按线上顺序（插件在前、上游在后）放进同一页，再用无头 Chrome 的 `getComputedStyle` 断言正文 / 思考 / 计划预览 / 文档预览四处行内代码都是 14px；同一棵树还会禁用插件样式再量一次（上游基线 12.25px / 13px / 12.25px / 12.25px），证明它确实命中了上游规则，而不是「没被覆盖所以碰巧是 14px」。找不到 DSH 安装或 Chrome 时跳过，`DSH_CSS_STRICT=1` 时跳过即失败。`dsh-root.mjs` 是它与 `check-css.mjs` 共用的 DSH 安装解析。
 
 3. **复合属性选择器的覆盖条件**：上游类名带构建哈希（`_tab_6nhg2_134` 每版构建都变），无法可靠命中；而 `data-dockkit-tab` + `role="tab"` 是稳定的语义锚点，且特异性 `(0,2,0)` 大于上游 `.tab` 的 `(0,1,0)`，因此**无需 `!important` 即可覆盖**（`css.ts` 里的 `[data-dockkit-tab][role="tab"] { box-sizing; min-width: 100px; max-width: 100px }` 即如此）。
 
@@ -43,6 +44,8 @@
    `[data-changed-files="true"]` 连取值一起钉住（上游是 React 的布尔属性 `data-changed-files={true}`，渲染成 `="true"`，与卡片自己的 `[data-single=true]` 同一套写法），取值一变选择器就整条落空，由 `changed-files-attr` 契约在构建后校验。卡片内的字号由上游 `ChangedFiles.module.css` 逐个声明（标题 13px、统计行 10px、文件名行 11px、路径与展开按钮 12px），根元素自己没有 `font-size`，所以根元素与后代都要覆盖，并靠 `!important` 取胜——这条规则的后代段与上游 `.…_title` / `.…_row` 特异性同为 `(0,1,0)`，而上游 `<style>` 由模块自注入、挂载顺序不归插件掌握。两个边界：卡片里 500ms 悬停预览的 `HoverCard` 内容 portal 到 `document.body`，不在卡片子树内，这条规则覆盖不到它；卡片折叠只影响渲染的行数与按钮文案，字号不随折叠状态变化。
 
    计划预览（`section[data-plan-preview]`）的 Markdown 根节点只有构建哈希类名、没有 `data-*`，计划标题（`aria-label`）又随内容变化，所以锚在 PlanPreview 根 `<section>` 自己的 `data-plan-preview` 上，用它整棵子树承载代码块 / 表格 / 行内代码三条字号覆盖。行内代码那条写成 `section[data-plan-preview] :not(pre) > code`：上游 `.markdown :not(pre) > code` 同为 `!important` 且特异性 `(0,1,2)`，加上元素类型 `section` 后本规则是 `(0,1,3)`，不依赖 `<style>` 的挂载先后。`plan-preview-attr` / `plan-preview-section` 两条契约分别钉住属性与根元素类型。
+
+   对话流内的行内代码（最终回答正文与卡片）走同一条思路：上游 `.…_markdown :not(pre) > code` 的 `font-size: .875em` 带 `!important`、特异性 `(0,1,2)`，而本插件的 `<style>` 在启动期就挂到 `head` 前部（实测排在模块样式之前），同样 `(0,1,2)` 的旧选择器 `[data-chat-flow-kind] :not(pre) > code` 平局时输给后注入的模块样式，正文行内代码落到 `0.875em`（14px 下即 12.25px）。规则把锚点属性重复一次，`[data-chat-flow-kind][data-chat-flow-kind] :not(pre) > code` 只把特异性抬到 `(0,2,2)`、命中范围不变，不再依赖挂载顺序；思考等过程文本走 `compact` 变体（`font-size: 1em`，过程组子树已统一 14px），这条规则对它是幂等的。headless Chrome 复测：修复前 12.25px、修复后 14px（插件样式仍排在模块样式之前）。
 
    计划卡片（`[data-plan-card]`）是对话里的持久计划卡：根 `<button>` 自己没有 `font-size`（上游只写 `font: inherit`），标题 13px / 描述 10px / 打开按钮 12px 都声明在哈希类名上，所以规则同时覆盖根元素与整棵子树，并靠 `!important` 压过后代自己的声明（上游 `<style>` 的挂载顺序不归本插件掌握）。锚点取值是 `plan.callId`、随每次工具调用变化，选择器因此只写属性名、不带取值；`plan-card-attr` 契约钉住它。
 

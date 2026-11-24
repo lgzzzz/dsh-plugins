@@ -120,8 +120,13 @@ section[data-plan-preview] :not(pre) > code {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
-/* 卡片内行内代码 14px */
-[data-chat-flow-kind] :not(pre) > code {
+/* 对话流内的行内代码 14px（卡片与最终回答正文都在这棵子树里）。
+   上游 .…_markdown :not(pre) > code 声明 font-size: .875em !important，特异性 (0,1,2)；本插件的
+   <style> 在启动期挂到 head 前部（实测排在模块样式之前），!important 让平局只剩源码顺序可比，
+   所以旧选择器 [data-chat-flow-kind] :not(pre) > code 同为 (0,1,2) 时会输给后注入的模块样式，
+   正文行内代码落到 12.25px。把锚点属性重复一次只把特异性抬到 (0,2,2)，命中范围不变，不再依赖
+   挂载先后；compact 变体（思考等过程文本，font-size: 1em）本来就继承父级的 14px，这条对它是幂等的。 */
+[data-chat-flow-kind][data-chat-flow-kind] :not(pre) > code {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
 
