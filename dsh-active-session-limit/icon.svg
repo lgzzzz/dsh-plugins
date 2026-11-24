@@ -1,0 +1,17 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="9.5" cy="10" r="3" fill="url(#active-session-limit-slots)" />
+  <circle cx="18" cy="10" r="3" fill="url(#active-session-limit-slots)" />
+  <circle cx="26.5" cy="10" r="3" fill="url(#active-session-limit-slots)" />
+  <circle cx="18" cy="25" r="5.4" stroke="url(#active-session-limit-clock)" stroke-width="2.4" />
+  <path d="M18 21.9V25L20.5 26.5" stroke="url(#active-session-limit-clock)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+  <defs>
+    <linearGradient id="active-session-limit-slots" x1="6.5" y1="7" x2="29.5" y2="13" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67C7FE" />
+      <stop offset="1" stop-color="#3F77D8" />
+    </linearGradient>
+    <linearGradient id="active-session-limit-clock" x1="12.6" y1="19.6" x2="23" y2="30.4" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67C7FE" />
+      <stop offset="1" stop-color="#3F77D8" />
+    </linearGradient>
+  </defs>
+</svg>

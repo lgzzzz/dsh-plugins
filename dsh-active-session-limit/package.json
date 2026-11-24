@@ -1,0 +1,50 @@
+{
+  "name": "dsh-active-session-limit",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
+  "description": "限制同时活跃的会话数（默认 3，含子智能体）：会话开始跑任务时占一个名额，跑完转空闲即释放；名额占满时后到的会话按先来先到排队，等名额空出、且上一个会话结束已满 5 秒后才启动。只有新会话排队并等这段冷却，已有会话继续对话只受名额限制；排队中的会话在界面上保持「运行中」，不往会话里写任何记录，排队与放行只写宿主日志。上限与冷却时间在插件 Config 的 maxActive / cooldownMs 里调整。",
+  "type": "module",
+  "main": "index.ts",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node test/run-all.mjs",
+    "check:css": "node check-contract.mjs",
+    "check": "node --check index.ts && node --check src/limiter.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.20.0-alpha.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-agent": "^0.2.3-alpha.2",
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3"
+  }
+}

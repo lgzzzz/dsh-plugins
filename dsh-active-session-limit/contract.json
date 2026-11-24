@@ -1,0 +1,75 @@
+{
+  "description": "dsh-active-session-limit 宿主半部依赖的上游接线契约。插件只靠 `agent/*` 生命周期事件与 `ctx.agents` 工作：`agent/pre-step` 是唯一能挂起一次 step 的通路（挡住的会话仍显示运行中、但不发模型请求）；`agent/status` 的 idle 是「一段运行结束、交回名额」的唯一信号；`agent/created` / `agent/disposed` 用来登记新会话与清理；`turnBoundaryOf().lastTurn === 0` 判定「新会话」（只有它的首次准入等冷却）；`session.header.parentSession` 与 `origin: 'subagent'` 拼出子智能体的上级链，用于名额接管。这些名字被上游改名时事件不再触发，插件只会静默退化成 no-op——这里（pnpm check:contract）把它变成一次显式失败，并在 hint 里写明后果。",
+  "checks": [
+    {
+      "id": "pre-step-waterfall",
+      "plugin": "dsh-active-session-limit",
+      "token": "\"agent/pre-step\"",
+      "paths": ["dsh-agent-loop/lib"],
+      "hint": "挂起 step 的通路没了：名额满了也挡不住会话，插件退化成 no-op（不限流、不排队）"
+    },
+    {
+      "id": "status-event",
+      "plugin": "dsh-active-session-limit",
+      "token": "\"agent/status\"",
+      "paths": ["dsh-agent-loop/lib"],
+      "hint": "运行状态事件没了：拿不到「一段运行结束」的信号，名额永远不释放，队列会卡死"
+    },
+    {
+      "id": "status-idle",
+      "plugin": "dsh-active-session-limit",
+      "pattern": "\"idle\"\\s*:\\s*\"running\"",
+      "paths": ["dsh-agent-loop/lib"],
+      "hint": "idle / running 状态字面量变了：插件把「结束」认成别的值，名额永不释放"
+    },
+    {
+      "id": "created-event",
+      "plugin": "dsh-active-session-limit",
+      "token": "\"agent/created\"",
+      "paths": ["dsh-agent/lib"],
+      "hint": "新会话创建事件没了：新会话不会被登记，首次准入不再等 5 秒冷却"
+    },
+    {
+      "id": "disposed-event",
+      "plugin": "dsh-active-session-limit",
+      "token": "\"agent/disposed\"",
+      "paths": ["dsh-agent/lib"],
+      "hint": "销毁事件没了：销毁的会话仍在队列/名额里留痕，可能拖住后面的会话"
+    },
+    {
+      "id": "agents-service",
+      "plugin": "dsh-active-session-limit",
+      "token": "super(ctx, \"agents\")",
+      "paths": ["dsh-agent/lib"],
+      "hint": "agents 服务名变了：`inject: ['agents']` 等不到服务，插件整体不激活"
+    },
+    {
+      "id": "turn-boundary",
+      "plugin": "dsh-active-session-limit",
+      "token": "turnBoundaryOf",
+      "paths": ["dsh-agent/lib"],
+      "hint": "turnBoundaryOf 没了：判断不出「新会话」（还没跑过回合），冷却适用范围退化"
+    },
+    {
+      "id": "last-turn",
+      "plugin": "dsh-active-session-limit",
+      "token": "lastTurn",
+      "paths": ["dsh-agent/lib"],
+      "hint": "lastTurn 投影字段变了：新会话判定读不到值，冷却可能对所有会话生效或全部失效"
+    },
+    {
+      "id": "parent-session-header",
+      "plugin": "dsh-active-session-limit",
+      "token": "parentSession",
+      "paths": ["dsh-session/lib"],
+      "hint": "会话头没了 parentSession：子会话找不到上级，名额接管失效，父等子可能互相卡死"
+    },
+    {
+      "id": "subagent-origin",
+      "plugin": "dsh-active-session-limit",
+      "pattern": "origin:\\s*\"subagent\"",
+      "paths": ["dsh-subagent/lib"],
+      "hint": "子智能体会话的 origin 标记变了：普通 fork 也会被当成子会话，接管的上级链不可信"
+    }
+  ]
+}
