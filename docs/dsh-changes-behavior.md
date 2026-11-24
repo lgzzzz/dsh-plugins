@@ -2,7 +2,7 @@
 
 右栏改动视图的统一行为插件。它把原先五个独立插件合成一个，并为「打开右栏」定一条统一策略：
 
-- **改动卡片标题**打开右栏「本地变更」、**`⌘⌥Y` / `Ctrl+Alt+Y`** 打开会话绑定的「变更请求」页（没有绑定时打开「本地变更」）时，默认**全屏**；
+- **改动卡片标题**打开右栏「本地变更」、**`⌘⌥Y` / `Ctrl+Alt+Y`** 打开会话绑定的「变更请求」页（没有绑定时打开「本地变更」）、**点会话面板那行「本地变更」**时，默认**全屏**；
 - **其余任何打开右栏的入口**——改动卡片的文件行、中间过程里的文件 / 资源链接、上下文菜单、其它插件发起的打开——都默认**非全屏**（推挤呈现）；
 - 改动审查（`changes-review`）标签页按面板呈现方式默认分栏（非全屏单栏、全屏左右对比），并默认开启自动换行；
 - 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层；
@@ -20,15 +20,19 @@
 |---|---|
 | 改改动卡片**标题** | 打开 / 聚焦「本地变更」，并切到全屏 |
 | `⌘⌥Y` / `Ctrl+Alt+Y` | 打开 / 聚焦会话第一张变更请求卡片的变更页（没有绑定时是「本地变更」），并切到全屏 |
+| 点**会话面板**里「本地变更 · N 个文件」那行的行主体，或同一行「⋯」菜单里的「查看变更」 | 打开 / 聚焦「本地变更」，并切到全屏（已经是全屏时保持） |
 | 改动卡片**文件行** | 打开本轮审查页，**非全屏** |
 | 中间过程 / 正文里的可点击文件、资源链接 | 打开对应右栏页面，**非全屏** |
 | 上下文菜单的「在侧边栏打开」 | **非全屏** |
 | 其它插件经 `sidebarRight.openResource` / `openTab` / `openResourceIn` / `openTabIn` 发起 | **非全屏** |
 | 用户手动点面板右上角的全屏按钮 | 只改呈现方式，不受本策略干预 |
 
-实现不在点击捕获里猜手势，而是给右栏面的四个打开入口各包一层：**先按原逻辑打开；打开前若面板是全屏，打开成功后立刻切回推挤**。打开成功时右栏一定已经展开，`toggleFullscreen` 才能生效；先打开再切换也避开了「折叠状态下无法切呈现方式」的上游限制。
+呈现方式不靠「猜这次点击是不是指定入口」：右栏面的四个打开入口各包一层，**先按原逻辑打开；打开前若面板是全屏，打开成功后立刻切回推挤**。打开成功时右栏一定已经展开，`toggleFullscreen` 才能生效；先打开再切换也避开了「折叠状态下无法切呈现方式」的上游限制。
 
-指定入口（卡片标题、`⌘⌥Y`）在自己的打开动作外套一个 `withFullscreenIntent()`。包装层看到意图就跳过「切回推挤」，打开后再由 `presentFullscreen()` 按 DOM 现值决定：原本是推挤就切成全屏，原本已经全屏就保持。意图只在同一个同步任务内有效，`finally` 一定还原，不会泄漏到下一次打开。
+指定入口用两种方式告诉包装层「这一次打开要全屏」：
+
+- **卡片标题、`⌘⌥Y`** 在自己的打开动作外套一个 `withFullscreenIntent()`。包装层看到意图就跳过「切回推挤」，打开后再由 `presentFullscreen()` 按 DOM 现值决定：原本是推挤就切成全屏，原本已经全屏就保持。意图只在同一个同步任务内有效，`finally` 一定还原，不会泄漏到下一次打开。
+- **会话面板那一行**在打开入口上判定（`session-panel.ts` 的 `isSessionPanelLocalOpen`）：打开的是当前会话的「本地变更」页、且此刻会话面板可见，就算这一行的打开。包层跳过「切回推挤」，打开后自己调 `presentFullscreen()` 切成全屏。行主体与行内「⋯」菜单走的是同一个打开入口，所以两者结果一致；已经全屏时从这一行再打开也不会被推回推挤（见「会话面板的『本地变更』行」）。
 
 不干预的情况：
 
@@ -53,6 +57,44 @@
 判定只看卡片的两条结构事实：标题是卡片内、**不在 `<li>` 里**、且**不带 `aria-expanded`** 的按钮；文件行在 `<li>` 里；折叠按钮带 `aria-expanded`。单文件卡片打完补丁后也有列表，标题依旧不在 `<li>` 里，所以判定不变。
 
 标题点击不区分修饰键：`⌘` / `Ctrl` / `Alt` / `Shift` + 左键标题与普通左键一样打开本地变更。标题与文件行上的右键不接管，保留浏览器原生菜单。
+
+-----
+
+## 会话面板的「本地变更」行
+
+会话标题栏打开的那块**会话面板**（`conversation.session.panel`）在「环境」分区里由上游 forge 包注册了一行本地变更：
+
+```html
+<div data-session-panel-row data-forge-local>
+  <button data-row-part="body" aria-label="本地变更 · 3 个文件，新增 12 行，删除 4 行">…</button>
+  <span data-row-part="trailing">+12 −4</span>
+  <span data-row-part="menu"><button aria-label="本地变更操作" aria-haspopup="menu">⋯</button></span>
+</div>
+```
+
+行主体（`data-row-part="body"`）与右侧「⋯」菜单里的「查看变更」都走同一个动作：`viewLocalChanges()` → `openChanges(sessionId,{kind:'local'})` → `sidebarRight.openResourceIn(sessionId, dsh-resource://forge-changes/<session>/local)`，随后各自 `dismissOverlay()` 收起浮层版的面板。
+
+本插件让它和改动卡片标题、`⌘⌥Y` 一样**打开即全屏**，但不用拦点击：那一行点完还要收起浮层版面板，吞掉点击会让面板留在原地；同一行有两个入口，菜单还 portal 到 `document.body`，没有稳定锚点。判定改放在打开入口上（`src/session-panel.ts`）：
+
+```ts
+isSessionPanelLocalOpen(address, sessionId, doc)
+  = address === dsh-resource://forge-changes/<sessionId>/local   // 就是这一页
+  && 文档里有可见的 [data-session-panel]                          // 会话面板此刻开着
+```
+
+`install.ts` 把这个判定作为 `designated` 交给打开策略的包层：命中时跳过「切回推挤」，打开成功后由包层自己调 `presentFullscreen()`；不命中时照旧按非全屏处理。
+
+| 情形 | 结果 |
+|---|---|
+| 面板可见（`docked` / `overlay`）时打开当前会话的本地变更页（行主体、行内「⋯」菜单） | 打开 / 聚焦并切成全屏 |
+| 右栏本来已经是全屏，从这一行再打开 | 保持全屏（不会像「其余入口」那样被推回推挤） |
+| 面板不可见（没有 `data-session-panel`，例如收起后由其它插件经 `forgeChanges.open` 打开） | 按非全屏处理 |
+| 其它会话的本地变更页、变更请求页、文件、审查页 | 与本行无关，按非全屏处理 |
+| 隐藏会话视图里的会话面板（`hidden` 祖先） | 不算可见 |
+
+`[data-session-panel]` 只在面板真正画出来时才由上游输出（取值 `docked` / `overlay`；面板收起时元素不存在）。这一行就在面板里，用户点得到它就一定可见；反过来面板收起时既没有入口可点，也不会把别处的打开误判成这一行。全屏判定与卡片标题共用 `presentFullscreen()`：只在「刚打开 / 聚焦的确实是本地变更」且右栏当前是推挤时切换；已经全屏（含窄窗口自动全屏）、面板还没画出来、读不到呈现现值、目标陈旧，都只打开、不切呈现方式。
+
+不处理的部分：行的右键 / 中键、行尾的 `+N −M` 与「⋯」按钮（它们不打开页面）；会话面板里其它行（Git、连接状态、变更请求卡片）。
 
 -----
 
@@ -220,6 +262,14 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') //
 
    启动日志里对应的证据是 `[dsh-changes-single-card] 单文件卡片已改为汇总形制：<产物路径>`。
 
+10. 点会话面板里「本地变更 · N 个文件」那行的**行主体**（或它的「⋯」→「查看变更」）→ 右栏活动页是「本地变更」，面板变全屏，浮层版的会话面板同时收起；右栏已经是全屏时从这一行再打开，仍是全屏：
+
+   ```js
+   document.querySelector('[data-session-panel] [data-forge-local] button[data-row-part="body"]')
+   document.querySelector('[data-sidebar-right-session]:not([hidden]) [data-sidebar-right-panel]')
+     .getAttribute('data-sidebar-right-panel')   // 'fullscreen'
+   ```
+
 - 标记为 `false` → 浏览器这一页没有加载到本插件，先硬刷新；仍为 `false` 说明 Host 还没有重新合成 profile，需要重启 `dsh web`（或在「设置 → 插件」里关掉再打开本插件）。
 - 标记为 `true`、行为不对 → 对照 [`contract.json`](../dsh-changes-behavior/contract.json) 运行 `pnpm --filter dsh-changes-behavior check:css`，清单会指出是哪条上游锚点失效。
 
@@ -237,6 +287,10 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') //
 | 「展开全部文件」 | 只展开 / 折叠列表 |
 | 标题 / 文件行右键 | 不接管，保留浏览器原生菜单 |
 | `⌘` / `Ctrl` / `Alt` / `Shift` + 左键标题 | 与普通左键一样打开本地变更 |
+| 会话面板可见时打开当前会话的「本地变更」页（行主体、行内「⋯」菜单） | 打开 / 聚焦并切成全屏；右栏本来全屏时保持全屏 |
+| 会话面板不可见时打开当前会话的「本地变更」页（例如其它插件经 `forgeChanges.open`） | 按非全屏处理 |
+| 同一行的「⋯」按钮 / `+N −M` / 右键 | 不打开页面 |
+| 会话面板其它行（Git、连接状态、变更请求卡片） | 不处理 |
 | 正文 / 过程中间链接、其它插件打开 | 打开目标页，非全屏 |
 | 窄窗口（< 768px） | 上游自动全屏；本插件不尝试切回推挤 |
 | 浮层（`destination: 'float'`） | 不改变停靠栏呈现方式 |
@@ -263,8 +317,9 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') //
 | [`src/host/single-card.ts`](../dsh-changes-behavior/src/host/single-card.ts) | 单文件卡片补丁：文本三态、写产物、`rebuilt`、卸载恢复 |
 | [`src/client.ts`](../dsh-changes-behavior/src/client.ts) | 浏览器入口：先装 changes 面板行为，再装 `⌘⌥Y` 桥 |
 | [`src/install.ts`](../dsh-changes-behavior/src/install.ts) | 总装：逐条安装、单条失败不阻断其余、逆序卸载 |
-| [`src/presentation.ts`](../dsh-changes-behavior/src/presentation.ts) | 面板呈现方式读数、指定入口全屏、四个打开入口的非全屏包层、全屏意图 |
+| [`src/presentation.ts`](../dsh-changes-behavior/src/presentation.ts) | 面板呈现方式读数、指定入口全屏、四个打开入口的包层、全屏意图与 `designated` 判定接缝 |
 | [`src/card.ts`](../dsh-changes-behavior/src/card.ts) | 卡片标题 / 文件行 / 折叠按钮判定、本地变更地址 |
+| [`src/session-panel.ts`](../dsh-changes-behavior/src/session-panel.ts) | 会话面板「本地变更」行的判定：面板可见 + 当前会话的本地变更页 |
 | [`src/dom.ts`](../dsh-changes-behavior/src/dom.ts) | 捕获层的最小 DOM 形状与事件目标提取 |
 | [`src/split-default.ts`](../dsh-changes-behavior/src/split-default.ts) | 审查分栏默认：身份、seed 等待、重试、呈现方式观察 |
 | [`src/wrap-default.ts`](../dsh-changes-behavior/src/wrap-default.ts) | 审查换行默认：身份、一次写入、重试 |
@@ -275,7 +330,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') //
 | [`src/change-request.ts`](../dsh-changes-behavior/src/change-request.ts) | 变更页地址、面板流第一帧解析（带超时与释放） |
 | [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`（分栏 / 换行共用） |
 | [`dsh-shortcut-utils`](dsh-shortcut-utils.md) | 快捷键判定与捕获层；共享纯函数包，客户端构建时内联 |
-| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（45 条） |
+| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（47 条） |
 | [`check-css.mjs`](../dsh-changes-behavior/check-css.mjs) | 构建后逐条校验上面的清单 |
 
 快捷键的共享纯函数（固定行绑定匹配、键帽格式化、捕获阶段手势 / 归属上下文）放在 [`dsh-shortcut-utils`](dsh-shortcut-utils.md)，由 `dsh-keyboard-shortcuts` 与 `dsh-changes-behavior` 共用；它是纯函数包，没有运行时状态，客户端构建时分别内联进两个 bundle。
@@ -323,7 +378,8 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-changes-behavior
 - 快捷键服务的 `registerFixed(command` / `observeFixedInput(listener` / `fixedCatalog` / `platform`；
 - 悬停浮层的 `openDelayMs: 500` 与 `data-changes-hover-preview`；
 - 两个 forge 根锚点，以及上游没有用 `!important` 钉字号（反向）；
-- 文件树分隔条的 `role="separator"` 与 `aria-controls`（固定宽度依赖的隐藏锚点）。
+- 文件树分隔条的 `role="separator"` 与 `aria-controls`（固定宽度依赖的隐藏锚点）；
+- 会话面板根的 `data-session-panel` 与会话面板「本地变更」行的打开动作 `openChanges(sessionId,{kind:`local`})`（点它切全屏依赖这两条）。
 
 上游改名或删 token 时显式失败，而不是让某条行为静默失效。
 

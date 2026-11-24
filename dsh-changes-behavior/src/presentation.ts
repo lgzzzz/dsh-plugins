@@ -3,7 +3,9 @@
  *
  * 需求只有两条规则：
  *
- *   - **指定入口默认全屏**：改动卡片标题（打开「本地变更」）与 `⌘⌥Y`（打开「变更请求」）。
+ *   - **指定入口默认全屏**：改动卡片标题（打开「本地变更」）、`⌘⌥Y`（打开「变更请求」，没有
+ *     绑定时打开「本地变更」），以及会话面板里那行「本地变更」（行主体与它的「⋯」菜单，见
+ *     `session-panel.ts`）。
  *   - **其余任何打开都非全屏**：改动卡片的文件行、中间过程里的文件 / 资源链接、上下文菜单
  *     打开文件、工具栏 / 其它插件发起的打开，都先把右栏从 `fullscreen` 拉回 `push` 再打开。
  *
@@ -12,10 +14,16 @@
  * 全屏，打开后再切回推挤**。打开成功时右栏一定已经展开，`toggleFullscreen` 才能生效；
  * 先打开再切换也避开了「折叠状态下无法切呈现方式」的上游限制。
  *
- * 指定入口仍然在打开之后自己调 `presentFullscreen`，所以它们会经历「打开 → 回推挤 →
- * 切全屏」两步；两步合并在同一个事件任务里，React 只提交最终的全屏布局，用户看不到
- * 中间态。这样不需要在插件之间传递「这次打开要不要全屏」的意图，`⌘⌥Y` 留在
- * `dsh-keyboard-shortcuts` 里也照样工作。
+ * 「这次打开是不是指定入口」有两个来源：
+ *
+ *   - **卡片标题、`⌘⌥Y`** 在自己的打开动作外套一个 `withFullscreenIntent()`：包层看到意图就
+ *     跳过「切回推挤」，打开后由它们自己调 `presentFullscreen()`。意图只在同一个同步任务内
+ *     有效，`finally` 一定还原，不会泄漏到下一次打开。
+ *   - **会话面板那一行**由安装时传入的 `designated` 判定回答：打开的是当前会话的「本地变更」
+ *     页、且此刻会话面板可见时，包层跳过「切回推挤」并在打开后自己切成全屏。判定对行主体和
+ *     同一行的「⋯」菜单一视同仁（见 `session-panel.ts`）。
+ *
+ * 两种来源最后都落到同一个 `presentFullscreen()`：只在推挤时切，已经全屏时保持。
  *
  * 不干预的情况：
  *
@@ -91,6 +99,12 @@ type Sidebar = Context['sidebarRight']
 export interface PresentationRuntime {
   /** 输出一条带插件前缀的诊断。 */
   readonly warn?: (message: string) => void
+  /**
+   * 「这次打开算不算指定入口」的判定：给出即将打开的地址（按 kind 打开时为 undefined）与
+   * 这次打开所属的会话。由安装方提供（`session-panel.ts` 判会话面板那一行），本模块不知道
+   * 有哪些入口，只负责照判定结果跳过「切回推挤」并在打开后切成全屏。
+   */
+  readonly designated?: (address: string | undefined, sessionId: string) => boolean
 }
 
 /** 默认告警：统一加插件前缀。 */
@@ -237,8 +251,14 @@ export function installOpenPolicy(
    * @param name - 方法名。
    * @param sessionArg - 会话来源：`'mounted'` 从服务读，数字表示第几个参数。
    * @param optionsArg - 打开选项在参数里的下标。
+   * @param addressArg - 资源地址在参数里的下标；按 kind 打开的入口没有地址，不传。
    */
-  const wrap = (name: keyof WrappableSidebar, sessionArg: 'mounted' | number, optionsArg: number): void => {
+  const wrap = (
+    name: keyof WrappableSidebar,
+    sessionArg: 'mounted' | number,
+    optionsArg: number,
+    addressArg?: number,
+  ): void => {
     const original = target[name]
     if (typeof original !== 'function') return
     const own = Object.prototype.hasOwnProperty.call(target, name)
@@ -248,12 +268,17 @@ export function installOpenPolicy(
         : args[sessionArg]
       if (typeof sessionId !== 'string') return original.apply(this, args)
       const options = args[optionsArg] as OpenOptions | undefined
+      const opened = addressArg === undefined ? undefined : args[addressArg]
+      const address = typeof opened === 'string' ? opened : undefined
+      // 判定要在打开之前读：会话面板那一行是先打开、再收起浮层版面板。
+      const designated = runtime.designated?.(address, sessionId) === true
       const result = original.apply(this, args)
       if (options?.destination !== 'float' && !hasFullscreenIntent()) {
         try {
-          presentPush(sidebar, doc, sessionId)
+          if (designated && address !== undefined) presentFullscreen(sidebar, doc, sessionId, { contentId: address })
+          else presentPush(sidebar, doc, sessionId)
         } catch (error) {
-          warn(`present push failed: ${messageOf(error)}`)
+          warn(`present ${designated ? 'fullscreen' : 'push'} failed: ${messageOf(error)}`)
         }
       }
       return result
@@ -262,11 +287,11 @@ export function installOpenPolicy(
     wrapped.push({ name, original, wrapper, own })
   }
 
-  // 公开的导航入口：会话取自 mounted，选项在第 2 个参数。
-  wrap('openResource', 'mounted', 1)
+  // 公开的导航入口：会话取自 mounted，选项在第 2 个参数，资源地址是第 1 个参数。
+  wrap('openResource', 'mounted', 1, 0)
   wrap('openTab', 'mounted', 1)
   // Tab 自己的动作 / 上下文菜单用的按会话入口：会话是第 1 个参数，选项在最后。
-  wrap('openResourceIn', 0, 2)
+  wrap('openResourceIn', 0, 2, 1)
   wrap('openTabIn', 0, 2)
 
   doc.documentElement?.setAttribute(MARKER_ATTRIBUTE, '')

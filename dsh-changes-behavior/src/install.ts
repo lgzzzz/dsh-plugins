@@ -1,7 +1,9 @@
 /**
  * 改动面板行为的总装：把六条彼此独立的默认行为装到同一个客户端插件里。
  *
- *   1. **打开呈现策略**（`presentation.ts`）：指定入口默认全屏，其余打开一律非全屏；
+ *   1. **打开呈现策略**（`presentation.ts`）：指定入口（改动卡片标题、`⌘⌥Y`、会话面板那行
+ *      「本地变更」）默认全屏，其余打开一律非全屏；会话面板那一行的判定在 `session-panel.ts`，
+ *      安装时作为 `designated` 交给策略；
  *   2. **改动卡片入口**（`card.ts`）：标题打开「本地变更」并切全屏；
  *   3. **审查分栏默认**（`split-default.ts`）：非全屏单栏、全屏左右对比；
  *   4. **审查换行默认**（`wrap-default.ts`）：新审查标签页默认自动换行；
@@ -9,10 +11,10 @@
  *   6. **文件树宽度固定**（`tree-fixed.ts`）：「本地变更」「变更请求」左侧文件列表的宽度固定为
  *      上游默认值，隐藏既是拖动入口也是键盘入口的那条分隔条。
  *
- * 这些行为原先分在五个插件里（文件树宽度是后加的一条），彼此都只依赖上游 DOM 锚点与右栏公开面，没有共享服务或
- * 配置；合并后仍然各自独立安装、独立失败：某一条的锚点失效只影响它自己，不会阻止其余
- * 行为。总装上只多一个文档根标记 `data-dsh-changes-behavior`，卸载时逆序清理全部监听、
- * 观察器、样式与服务包层。
+ * 这些行为原先分在五个插件里（文件树宽度是后加的一条），彼此都只依赖上游 DOM 锚点与右栏
+ * 公开面，没有共享服务或配置；合并后仍然各自独立安装、独立失败：某一条的锚点失效只影响它
+ * 自己，不会阻止其余行为。总装上只多一个文档根标记 `data-dsh-changes-behavior`，卸载时逆序
+ * 清理全部监听、观察器、样式与服务包层。
  *
  * 上游锚点、覆盖边界与手工验证方式见 docs/dsh-changes-behavior.md。
  */
@@ -21,6 +23,7 @@ import { installCardBehavior, serviceOf } from './card.ts'
 import { installFont14 } from './font-14.ts'
 import { installHoverGate } from './hover-gate.ts'
 import { installOpenPolicy } from './presentation.ts'
+import { isSessionPanelLocalOpen } from './session-panel.ts'
 import { installReviewSplitDefault } from './split-default.ts'
 import { installFixedTreeWidth } from './tree-fixed.ts'
 import { installReviewWrapDefault } from './wrap-default.ts'
@@ -89,7 +92,11 @@ export function installChangesBehavior(
   if (sidebar === undefined) {
     warn('sidebarRight is unavailable; the open presentation policy is not installed')
   } else {
-    add('open policy', () => installOpenPolicy(sidebar, doc, { warn }))
+    add('open policy', () => installOpenPolicy(sidebar, doc, {
+      warn,
+      // 会话面板那一行：打开的是当前会话的本地变更页、且面板可见时，按指定入口切成全屏。
+      designated: (address, sessionId) => isSessionPanelLocalOpen(address, sessionId, doc),
+    }))
   }
   add('card behavior', () => installCardBehavior(ctx, { warn }, doc))
   add('review split default', () => installReviewSplitDefault(doc as unknown as Parameters<typeof installReviewSplitDefault>[0], { warn }))

@@ -15,6 +15,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const ORDER = [
   'install.test.mjs',
   'card.test.mjs',
+  'session-panel.test.mjs',
   'changes-open.test.mjs',
   'presentation.test.mjs',
   'split-default.test.mjs',

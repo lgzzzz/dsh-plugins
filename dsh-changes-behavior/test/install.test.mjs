@@ -1,6 +1,6 @@
 /**
- * 总装行为测试：一个插件装上后同时具备卡片点击、审查分栏 / 换行默认、悬停闸门、
- * 14px 样式、固定文件列表宽度与打开呈现策略，并且卸载时全部清理。
+ * 总装行为测试：一个插件装上后同时具备卡片点击、会话面板「本地变更」行、审查分栏 / 换行
+ * 默认、悬停闸门、14px 样式、固定文件列表宽度与打开呈现策略，并且卸载时全部清理。
  *
  * 运行：`node test/install.test.mjs`（或 pnpm test 跑全部）。
  */
@@ -12,6 +12,7 @@ import { MARKER_ATTRIBUTE as HOVER_MARKER } from '../src/hover-gate.ts'
 import { MARKER_ATTRIBUTE as FONT_MARKER } from '../src/font-14.ts'
 import { MARKER_ATTRIBUTE as TREE_MARKER } from '../src/tree-fixed.ts'
 import {
+  FakeElement,
   attachSidebarPanel,
   check,
   checkTrue,
@@ -83,7 +84,16 @@ console.log('--- I② 指定入口：标题打开本地变更并切全屏；其�
   check('包层没有破坏原方法', originals.openResource !== sidebar.openResource, true)
 }
 
-console.log('--- I③ 悬停浮层：卡片内手势被拦下 ---')
+console.log('--- I③ 会话面板「本地变更」行：面板可见时打开后切全屏 ---')
+{
+  const { doc, sidebar } = setup({ mode: 'push' })
+  doc.mount(new FakeElement('aside', { 'data-session-panel': 'docked' }))
+  sidebar.openResourceIn('session-1', 'dsh-resource://forge-changes/session-1/local')
+  check('打开本地变更', sidebar.inOpened, [['session-1', 'dsh-resource://forge-changes/session-1/local']])
+  check('打开后切全屏一次', sidebar.toggles.length, 1)
+}
+
+console.log('--- I④ 悬停浮层：卡片内手势被拦下 ---')
 {
   const { doc } = setup()
   const { card } = multiCard()
@@ -92,7 +102,7 @@ console.log('--- I③ 悬停浮层：卡片内手势被拦下 ---')
   check('阻止 React 合成 enter', event.stopped, 1)
 }
 
-console.log('--- I④ 卸载：监听、样式、标记、包层全部还原 ---')
+console.log('--- I⑤ 卸载：监听、样式、标记、包层全部还原 ---')
 {
   const { doc, sidebar, dispose, originals } = setup()
   dispose()
@@ -107,7 +117,7 @@ console.log('--- I④ 卸载：监听、样式、标记、包层全部还原 ---
   check('卸载后还原 toggleFullscreen', sidebar.toggleFullscreen, originals.toggleFullscreen)
 }
 
-console.log('--- I⑤ 没有文档：空操作 ---')
+console.log('--- I⑥ 没有文档：空操作 ---')
 {
   const dispose = installChangesBehavior({ get: () => undefined }, {}, undefined)
   checkTrue('返回可调用卸载函数', typeof dispose === 'function')

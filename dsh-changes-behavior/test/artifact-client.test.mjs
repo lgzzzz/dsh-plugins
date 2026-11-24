@@ -119,6 +119,7 @@ console.log('--- A③ 产物里的稳定行为 token ---')
     'openDelayMs: 500', 'data-changes-hover-preview',
     'data-forge-changes', 'data-forge-panel', 'font-size: 14px !important',
     'dsh-resource://forge-changes/', '__reactFiber$',
+    'data-session-panel',
     '[data-forge-changes] [role="separator"][aria-controls]', 'display: none !important',
     MARKER_ATTRIBUTE, CARD_MARKER, SPLIT_MARKER, WRAP_MARKER, HOVER_MARKER, FONT_MARKER, TREE_MARKER,
   ]

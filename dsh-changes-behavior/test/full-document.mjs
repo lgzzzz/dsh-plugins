@@ -70,6 +70,8 @@ export function fakePolicySidebar(options = {}) {
   sidebar.inOpened = []
   sidebar.openResourceIn = (sessionId, address) => {
     sidebar.inOpened.push([sessionId, address])
+    // 真实右栏打开后活动页就是刚打开的这一页；全屏判定要读它。
+    sidebar.activeTab = { kind: 'forge-changes', contentId: address }
   }
   sidebar.openTabIn = (sessionId, kind) => {
     sidebar.inOpened.push([sessionId, kind])

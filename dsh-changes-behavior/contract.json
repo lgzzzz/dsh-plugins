@@ -1,5 +1,5 @@
 {
-  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、单文件卡片初始化（启动期补丁的锚点）、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟、forge 与审查页的字号锚点，以及固定文件列表宽度所依赖的分隔条锚点。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
+  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、单文件卡片初始化（启动期补丁的锚点）、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟、forge 与审查页的字号锚点、固定文件列表宽度所依赖的分隔条锚点，以及会话面板根元素与会话面板行的打开动作。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
   "checks": [
     {
       "id": "changed-files-attr",
@@ -405,6 +405,24 @@
         "dsh-experimental-client-ui-forge/lib"
       ],
       "hint": "分隔条的 aria-controls 输出消失：隐藏规则要求 role 与 aria-controls 同时存在，这条分隔条不再被命中，拖动把手重新出现"
+    },
+    {
+      "id": "session-panel-root",
+      "plugin": "dsh-changes-behavior",
+      "token": "\"data-session-panel\":owner.presentation",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "会话面板根不再输出 data-session-panel：点面板里「本地变更」那一行打开时不会切成全屏（判定要求面板可见）"
+    },
+    {
+      "id": "session-panel-local-open",
+      "plugin": "dsh-changes-behavior",
+      "token": "openChanges(sessionId,{kind:`local`})",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "会话面板「本地变更」行的打开动作不再调用 openChanges(sessionId,{kind:`local`})：地址判定落空，点击退回推挤呈现"
     }
   ]
 }
