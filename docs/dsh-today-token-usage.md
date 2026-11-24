@@ -29,7 +29,8 @@
 |---|---|
 | 位置 | 槽位 `conversation.session.panel.section`，`id: today-usage`，`order: 300`：排在上游「改动请求」(100)、「子智能体」(200) 与「共享任务」(250) 之后；与上游「后台任务」同为 300，按注册顺序排在它后面 |
 | 出现时机 | 今天只要有任何一个会话用掉过 Token 就显示；今天没有任何用量（或会话列表还没到）时整节渲染为空——面板会连标题一起隐藏，与其它分区一致 |
-| 内容 | 一项指标一行：标签在左、数值右对齐；首行是总用量（带数据库图标），其后依次是缓存命中、未缓存输入、缓存读取、缓存写入（为 0 时不占行）、输出 |
+| 内容 | 一项指标一行：图标 + 标签在左、数值右对齐；依次是总用量、缓存命中、未缓存输入、缓存读取、缓存写入（为 0 时不占行）、输出 |
+| 图标 | 每行一个 16px 线框字形，同一套 1.2px 圆头笔画：总用量是数据库（与「用量」按钮同形）、缓存命中是靶心、未缓存输入是入框下箭头、缓存读取是从缓存柱指出、缓存写入（非零时）是箭头指回缓存柱、输出是出框上箭头 |
 | 统计范围 | **全部会话**，包括子智能体会话与看不见的旧会话；不是当前会话自己的用量。当前会话的用量看输入框下面的「用量」按钮 |
 | 日期边界 | 宿主进程的本地时区。跨过本地零点后，昨天的桶自动退出今天的读数（面板开着也会重算） |
 | 更新时机 | 跟着会话列表的投影推送走：新结算发生、会话列表刷新都会让读数自己变，不需要打开会话 |
@@ -118,7 +119,7 @@
 | [`src/schema.ts`](../dsh-today-token-usage/src/schema.ts) | 状态与 wire 视图的 zod schema、投影定义（含 `stateVersion`） |
 | [`src/backfill.ts`](../dsh-today-token-usage/src/backfill.ts) | 回填判据与执行（外部动作注入，测试给假实现） |
 | [`src/client.ts`](../dsh-today-token-usage/src/client.ts) | 浏览器入口：注册字典、等分区槽、注册分区 |
-| [`src/component.ts`](../dsh-today-token-usage/src/component.ts) | 分区组件：五行读数、跨零点重渲染 |
+| [`src/component.ts`](../dsh-today-token-usage/src/component.ts) | 分区组件：五行读数与六个字形、跨零点重渲染 |
 | [`src/aggregate.ts`](../dsh-today-token-usage/src/aggregate.ts) | 纯计算：按会话汇总今天、紧凑格式、缓存命中百分比 |
 | [`src/registration.ts`](../dsh-today-token-usage/src/registration.ts) | 槽键 / 注册 id / `order` 与注册选项（纯模块） |
 | [`src/locales.ts`](../dsh-today-token-usage/src/locales.ts) | 本插件字典（zh / en） |
@@ -185,6 +186,6 @@ pnpm --filter dsh-today-token-usage check:css  # 21 条上游契约
 - **回填是一次性的**：只在缺行且今天活跃时读日志。把插件卸下再挂上不会重复读，除非缓存被清空。
 - **首次挂载或宿主重启后有一次先后问题**：会话列表若在回填写回之前被读取，冷会话那部分要等下一次列表读取
   （刷新页面）才补齐；已经连上的会话不受影响，它们走活投影。实测挂载后刷新的页面上读数与日志审计值一致。
-- **没有自己的图标与详情文档**：本仓库的插件都以 `link:` 直接挂在本地 profile，Plugins 页用
+- **插件包自身没有图标与详情文档**（行内字形是插件自己画的，不在此列）：本仓库的插件都以 `link:` 直接挂在本地 profile，Plugins 页用
   `package.json` 的 `name` / `description` 兜底；这一栏只影响 Web 页面，不影响插件清单的显示。
   需要的话可以按 `references/host-plugin.md` 的清单补 `locale/*.json`、`icon` 与 `docs/DETAIL.md`。

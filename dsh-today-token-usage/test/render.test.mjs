@@ -118,7 +118,7 @@ checkTrue('未缓存输入', filled.html.includes('>未缓存输入<') && filled
 checkTrue('缓存读取', filled.html.includes('>缓存读取<') && filled.html.includes('>750K<'))
 checkTrue('输出', filled.html.includes('>输出<') && filled.html.includes('>200K<'))
 checkTrue('没有 tok 后缀', !/\d\s*tok/.test(filled.html))
-checkTrue('图标是 svg', filled.html.includes('<svg'))
+checkTrue('每行一个图标', (filled.html.match(/<svg/g) ?? []).length === 5)
 check('渲染期无告警', filled.warnings, [])
 
 console.log('--- R② 今天没有用量：渲染为空 ---')

@@ -138,12 +138,14 @@ function readRows(tree) {
     const content = body?.children.find(child => child?.props?.['data-row-part'] === 'content')
     const trailing = parts.find(part => part.props['data-row-part'] === 'trailing')
     const icon = body?.children.find(child => child?.props?.['data-row-part'] === 'icon')
+    const glyph = (icon?.children ?? []).find(child => child !== null && child !== undefined)
     return {
       key: row.props['data-today-token-usage'],
       label: content?.children[0],
       value: trailing?.children[0],
-      // 字形是自定义组件元素（桩不展开），所以这里只数图标位有没有子元素。
+      // 字形是自定义组件元素（桩不展开），所以这里只数图标位的子元素个数，并记住它的类型。
       iconChildren: (icon?.children ?? []).filter(child => child !== null && child !== undefined).length,
+      iconType: glyph?.type,
     }
   })
 }
@@ -156,7 +158,8 @@ const rows = readRows(render(state({ a: TODAY, b: { ...TODAY, uncachedInputToken
 check('五行（没有缓存写入时不占行）', rows.map(row => row.key), ['total', 'cache-hit', 'uncached-input', 'cache-read', 'output'])
 check('读数', rows.map(row => row.label), ['总用量', '缓存命中', '未缓存输入', '缓存读取', '输出'])
 check('数值（无单位 / K / M）', rows.map(row => row.value), ['2.5M', '75%', '500K', '1.5M', '500K'])
-check('只有首行放图标', rows.map(row => row.iconChildren), [1, 0, 0, 0, 0])
+check('每行都有图标', rows.map(row => row.iconChildren), [1, 1, 1, 1, 1])
+check('五个不同的字形', new Set(rows.map(row => row.iconType)).size, 5)
 checkTrue('没有 tok 后缀', rows.every(row => !String(row.value).includes('tok')))
 
 console.log('--- C④ 有缓存写入：多一行 ---')
@@ -164,7 +167,8 @@ const withWrite = readRows(render(state({
   a: { day: DAY, uncachedInputTokens: 1000, outputTokens: 20, cacheReadTokens: 9000, cacheWriteTokens: 1111 },
 })))
 check('六行', withWrite.map(row => row.key), ['total', 'cache-hit', 'uncached-input', 'cache-read', 'cache-write', 'output'])
-check('写入值', withWrite[4], { key: 'cache-write', label: '缓存写入', value: '1.1K', iconChildren: 0 })
+check('写入值', withWrite[4].key + ' ' + withWrite[4].label + ' ' + withWrite[4].value, 'cache-write 缓存写入 1.1K')
+checkTrue('缓存写入与缓存读取不同字形', withWrite[3].iconType !== withWrite[4].iconType)
 // 缓存写入也计入输入侧：命中率 = 9000 / (1000 + 9000 + 1111)
 check('命中率', withWrite[1].value, '81%')
 
