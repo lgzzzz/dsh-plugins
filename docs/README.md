@@ -31,7 +31,6 @@
 | `dsh-ui-css-patches` | Web UI 的 CSS 补丁；另隐藏会话面板开关，并用启动期兜底恢复被历史关掉的面板（窄窗口仍按上游隐藏，变宽后自动恢复） | — |
 | `dsh-desktop-notify` | 桌面通知 | — |
 | `dsh-directory-picker-browse` | 应用内目录浏览选择器 | — |
-| `dsh-active-session-limit` | 全进程同时最多 3 个会话在跑任务（含子智能体）；名额占满时后到的会话按先来先到排队，等名额空出、且上一个会话结束满 5 秒后才启动。只有新会话等冷却，已有会话继续对话只受名额限制；排队中的会话保持「运行中」，排队 / 放行只写宿主日志；父会话在等子智能体结果时，子会话可临时接管父会话的名额，避免「父等子、子等名额」互相卡死 | [说明](dsh-active-session-limit.md) |
 | `dsh-git-guard` | git 操作保护 | — |
 
 > `dsh-jobs-optimize` 已退役并从仓库移除：0.2.2-rc.2 起上游后台任务控件原生实现悬停 150ms 展开、离开 120ms 折叠与点击钉住，插件不再必要。
@@ -65,14 +64,13 @@
 | `dsh-agent-team-hero-toggle` | [`css-contract.json`](../dsh-agent-team-hero-toggle/css-contract.json) | `conversation.hero.options` 槽 + forge 工作树注册 id + `agentTeam` 投影 + `agentTeams/setEnabled` 端点 + 11 个 `--dsw-*` 令牌 |
 | `dsh-subagent-parent-nav` | [`css-contract.json`](../dsh-subagent-parent-nav/css-contract.json) | `conversation.session.panel.section` 槽 + 标准 props 的 `useSessions` + `uiWorkspace.openSession` + 9 个 `--dsw-*` 令牌 |
 | `dsh-today-token-usage` | [`contract.json`](../dsh-today-token-usage/contract.json) | 会话面板分区槽与渲染 + 通用行标记（`data-session-panel-row` / `data-row-part`）+ 标准 props 的 `useSessions` + 投影登记表（`sessionProjections` / `summaryKeys`）+ `inheritedEventCount` + `assistant/message` 与 `llm/retry-started` + 「用量」按钮的数值口径（总用量算式、`number.thousand` / `number.million`、`formatCacheHitPercent`） |
-| `dsh-active-session-limit` | [`contract.json`](../dsh-active-session-limit/contract.json) | 宿主接线：`agent/pre-step` / `agent/status`（含 `"idle" : "running"` 字面量）/ `agent/created` / `agent/disposed` / `agents` 服务名 / `turnBoundaryOf` 与 `lastTurn` / 会话头 `parentSession` / `origin: "subagent"`（10 条） |
 | `dsh-subagent-forge-panel` | [`css-contract.json`](../dsh-subagent-forge-panel/css-contract.json) | `conversation.session.panel.environment.row` 槽 + 标准 props 的 `useSession` / `useSessions` + 会话身份字段 `subagent` / `origin: 'subagent'` + 面板的 `data-session-panel-section` / `data-session-panel-row` / `data-row-part` + forge 的 `data-forge-connection` / `forgeChanges` |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-model-quick-switch` | [`css-contract.json`](../dsh-model-quick-switch/css-contract.json) | `shell.overlay` / `settings.section` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-workspace-activity-sort` | [`css-contract.json`](../dsh-workspace-activity-sort/css-contract.json) | 侧栏区块滚动容器 `data-sidebar-list-area` + 工作区分组行 `data-row-key` 的 `workspace:` 前缀（排除单列表 / 搜索 / 收起成 rail） |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 14 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 13 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 

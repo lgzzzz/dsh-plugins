@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Active session limit",
-    "description": "Caps simultaneously running sessions at 3, subagents included, and staggers new sessions. A session takes a slot when its turn starts and gives the slot back when it goes idle; when every slot is taken, later sessions wait in a first-come queue and start only after a slot frees. A newly created session additionally waits until 5 seconds have passed since the previous session ended, while an existing conversation is limited by slots alone. Waiting sessions keep the running state in the UI, nothing is added to their transcript, and queueing as well as admission go to the host log. A child session may take over the slot of its running creator while that creator waits on it, so delegating parents never block their own children. Only in-process agents count; out-of-process subagent providers are not tracked. Tune maxActive and cooldownMs in the plugin config."
-  }
-}
