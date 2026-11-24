@@ -1,0 +1,59 @@
+{
+  "name": "dsh-today-token-usage",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
+  "description": "在会话面板里按行显示今日全部会话的 Token 用量：总用量、缓存命中、未缓存输入、缓存读取、缓存写入（非零时）、输出，数值只用无单位 / K / M。宿主半部注册 todayTokenUsage 会话投影，按宿主本地日期把每个会话自己（不含 fork 继承前缀）的 assistant 用量折进当天；浏览器半部把各会话今天的桶相加，口径与输入框下方「用量」按钮一致——未缓存输入 + 缓存读取 + 缓存写入 + 输出。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts && node --check src/fold.ts && node --check src/backfill.ts && node --check src/schema.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "dependencies": {
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-locale": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-session-panel": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-llm": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-llm-retry": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session-persistence": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session-projection": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session-projection-cache": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session-query": "^0.2.3-alpha.2",
+    "@types/react": "^18.3.31",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}

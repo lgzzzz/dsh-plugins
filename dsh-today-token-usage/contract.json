@@ -1,0 +1,185 @@
+{
+  "description": "dsh-today-token-usage 依赖的上游事实：会话面板分区槽与通用行样式、标准 props 的会话列表选择器、会话投影登记表与持久化缓存的冷读/写回、fork 继承前缀长度、用量折叠认的两种结算事件与重试事件，以及「用量」按钮的读数口径（总用量算式、`number.thousand` / `number.million` 单位、缓存命中百分比）。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：槽或行标记改名时整栏静默消失或变成没有样式的裸行；登记表/缓存/继承前缀改名时投影注册不上、冷会话缺行后不再回填，或 fork 继承前缀被重复计入；读数口径改名时面板数字与输入框下方的「用量」按钮分叉（数值口径对齐，单位按本栏自己的「无单位 / K / M」显示）。",
+  "checks": [
+    {
+      "id": "session-panel-section-slot",
+      "plugin": "dsh-today-token-usage",
+      "token": "conversation.session.panel.section",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "会话面板不再声明 conversation.session.panel.section 槽：注册进去也不显示，「今日 Token 用量」整栏静默消失"
+    },
+    {
+      "id": "session-panel-section-render",
+      "plugin": "dsh-today-token-usage",
+      "pattern": "renderSlot\\(\\s*[\"'`]conversation\\.session\\.panel\\.section[\"'`]",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "面板不再渲染分区槽出口：即使槽键还在，这一栏也永远不会被渲染"
+    },
+    {
+      "id": "session-panel-row",
+      "plugin": "dsh-today-token-usage",
+      "token": "data-session-panel-row",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "面板行的通用容器标记改名：本插件那一行没有面板行的高度、内边距与字体，变成裸文本"
+    },
+    {
+      "id": "session-panel-row-part-trailing",
+      "plugin": "dsh-today-token-usage",
+      "pattern": "data-row-part=trailing",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "面板行的 trailing 位改名：缓存命中不再排在读数右侧、也不再使用次级色"
+    },
+    {
+      "id": "use-sessions-standard-prop",
+      "plugin": "dsh-today-token-usage",
+      "token": "useSessions",
+      "paths": [
+        "dsh-client-ui-session/lib"
+      ],
+      "hint": "标准 props 不再提供 useSessions：拿不到会话列表投影，整节渲染为空"
+    },
+    {
+      "id": "projection-registry-service",
+      "plugin": "dsh-today-token-usage",
+      "token": "sessionProjections",
+      "paths": [
+        "dsh-session-projection/lib"
+      ],
+      "hint": "投影登记表服务名改名：宿主半部注入不到，投影注册不上，整栏不显示"
+    },
+    {
+      "id": "projection-summary-keys",
+      "plugin": "dsh-today-token-usage",
+      "token": "summaryKeys",
+      "paths": [
+        "dsh-session-projection/lib"
+      ],
+      "hint": "列表摘要键集合不再由登记表派生：新登记的投影可能不进会话列表，读数永远为空"
+    },
+    {
+      "id": "projection-cached-snapshot",
+      "plugin": "dsh-today-token-usage",
+      "token": "cachedSnapshot",
+      "paths": [
+        "dsh-session-projection-cache/lib"
+      ],
+      "hint": "持久化缓存的 cachedSnapshot 改名：回填判据读不到「有没有行 / 最近提示时间」，回填被跳过"
+    },
+    {
+      "id": "projection-cold-snapshot",
+      "plugin": "dsh-today-token-usage",
+      "token": "coldSnapshot",
+      "paths": [
+        "dsh-session-projection-cache/lib"
+      ],
+      "hint": "冷读折叠并写回缓存的 coldSnapshot 改名：装上插件之前就冷掉的会话缺行且补不上，今天的读数偏小"
+    },
+    {
+      "id": "session-inherited-count",
+      "plugin": "dsh-today-token-usage",
+      "token": "inheritedEventCount",
+      "paths": [
+        "dsh-session/lib"
+      ],
+      "hint": "fork 继承前缀长度改名：继承来的历史会被当成今天的消耗重复计入，fork 后读数翻倍"
+    },
+    {
+      "id": "assistant-settlement-event",
+      "plugin": "dsh-today-token-usage",
+      "token": "assistant/message",
+      "paths": [
+        "dsh-token-meter/lib"
+      ],
+      "hint": "上游按 assistant/message 结算用量的事实不再成立：折叠认的事件或用量取法变了，读数与「用量」按钮分叉"
+    },
+    {
+      "id": "llm-retry-event",
+      "plugin": "dsh-today-token-usage",
+      "token": "llm/retry-started",
+      "paths": [
+        "dsh-llm-retry/lib"
+      ],
+      "hint": "重试事件改名：替换槽不再被清空，重试那一次的消耗会被下一次结算覆盖掉，读数偏小"
+    },
+    {
+      "id": "usage-total-formula",
+      "plugin": "dsh-today-token-usage",
+      "pattern": "billedInputTokens\\([a-zA-Z_]+\\)\\+[a-zA-Z_$]+\\.outputTokens",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "「用量」按钮的总量算式变了（不再等于输入三桶 + 输出）：面板读数与它不再同一个数"
+    },
+    {
+      "id": "usage-cache-hit-format",
+      "plugin": "dsh-today-token-usage",
+      "token": "formatCacheHitPercent",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "缓存命中百分比算法改名：本插件照抄的那份会与按钮读数分叉（尤其是部分命中不许舍入成 100 的规则）"
+    },
+    {
+      "id": "usage-pill-entry",
+      "plugin": "dsh-today-token-usage",
+      "pattern": "id:`usage`",
+      "paths": [
+        "dsh-client-ui-chat/lib"
+      ],
+      "hint": "输入框下方的「用量」条目 id 改名：口径的对照物不在了，文档与读数对齐的对象需要重新确认"
+    },
+    {
+      "id": "number-thousand-unit",
+      "plugin": "dsh-today-token-usage",
+      "token": "number.thousand",
+      "paths": [
+        "dsh-client-locale/lib"
+      ],
+      "hint": "common 字典的 number.thousand 消失：千级读数会退化成裸键名"
+    },
+    {
+      "id": "number-million-unit",
+      "plugin": "dsh-today-token-usage",
+      "token": "number.million",
+      "paths": [
+        "dsh-client-locale/lib"
+      ],
+      "hint": "common 字典的 number.million 消失：百万级读数会退化成裸键名"
+    },
+    {
+      "id": "session-list-metadata",
+      "plugin": "dsh-today-token-usage",
+      "token": "sessionListMetadata",
+      "paths": [
+        "dsh-session-query/lib"
+      ],
+      "hint": "sessionListMetadata 投影改名：回填读不到最近提示时间，只能按「未知」处理（每次启动都可能重折旧会话）"
+    },
+    {
+      "id": "session-last-prompt-at",
+      "plugin": "dsh-today-token-usage",
+      "token": "lastPromptAt",
+      "paths": [
+        "dsh-session-query/lib"
+      ],
+      "hint": "lastPromptAt 字段改名：回填的「今天有没有活动」判据读不到时间，回填会跳过真正该补的会话"
+    },
+    {
+      "id": "session-persistence-service",
+      "plugin": "dsh-today-token-usage",
+      "token": "sessionPersistence",
+      "paths": [
+        "dsh-session-persistence/lib"
+      ],
+      "hint": "持久化服务名改名：回填列不出会话、也读不到日志，冷会话的行补不上"
+    }
+  ]
+}

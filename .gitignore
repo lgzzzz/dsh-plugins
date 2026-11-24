@@ -28,6 +28,7 @@ dsh-model-quick-switch/lib/
 dsh-agent-team-hero-toggle/lib/
 dsh-subagent-parent-nav/lib/
 dsh-subagent-forge-panel/lib/
+dsh-today-token-usage/lib/
 
 # 本地排查痕迹(探针脚本产出、快照、备份)
 .scratch/
