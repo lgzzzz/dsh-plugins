@@ -84,28 +84,14 @@
 
 -----
 
-## 冷会话回填：为什么启动时还要折一遍日志
+## 冷会话：只读缓存行，不回填
 
-会话列表里的冷会话只按**持久化缓存里的行**出投影值（零 I/O，缺行不折）；这一行只在该会话活着
-跨过一次存档点时才写。插件装上**之前**就已经冷掉的会话，它今天早些时候用掉的 Token 不在任何
-一行里——不补，面板第一次看到的数会偏小，直到那些会话被重新打开。
+会话列表里的冷会话只按**持久化缓存里的行**出投影值（零 I/O，缺行不折）；这一行由投影登记表在
+会话活着跨过存档点时写回。本插件不额外读日志，也不做启动回填：插件装上**之前**就已经冷掉、之后
+没有再打开的会话没有这一行，它今天早些时候用掉的 Token 不计入读数，直到该会话重新打开（变活后
+登记表自己会折，并在下一个存档点写回）。
 
-回填在插件激活后台跑，不阻塞激活，判据都来自缓存里已有的行：
-
-| 条件 | 处理 |
-|---|---|
-| 本插件的行已存在 | 跳过（已经折过） |
-| 会话此刻活在内存里 | 跳过（登记表自己会折，重复折会把旧结果写回缓存） |
-| 日志需要迁移（`formatStatus: 'migration-required'`） | 跳过 |
-| `max(createdAt, sessionListMetadata.lastPromptAt)` 早于今天零点 | 跳过（今天不可能有用量，不读日志） |
-| 其余 | 打开日志 → 整段折叠 → 写回缓存（`sessionProjectionCache.coldSnapshot`） |
-
-行补齐之后，同样的判据在下次启动时直接命中「已有行」，不再读任何日志；日常的今天用量由活会话
-自己的存档点维护。
-
-**已知缺口**：只由机器提示驱动的子智能体会话没有 `lastPromptAt`。如果它**创建于昨天、今天又继续
-用**，上面这条判据会漏掉它，直到那次会话重新变活（变活后会自动算并写回）。这种会话很少见，
-但它的成本会少算进当天总量。
+这个取舍换来的是启动时零日志 I/O：激活插件不会打开任何历史会话，也不会把旧结果写回缓存。
 
 -----
 
@@ -113,20 +99,18 @@
 
 | 文件 | 职责 |
 |---|---|
-| [`index.ts`](../dsh-today-token-usage/index.ts) | 宿主入口：注册投影、适配持久化与缓存、后台跑一轮回填 |
+| [`index.ts`](../dsh-today-token-usage/index.ts) | 宿主入口：注册投影 |
 | [`src/wire.ts`](../dsh-today-token-usage/src/wire.ts) | 共享词汇：投影键、四个桶、日期键与日界、口径算式（纯模块） |
 | [`src/fold.ts`](../dsh-today-token-usage/src/fold.ts) | 纯折叠：日期归属、替换槽、重试、继承前缀、视图引用稳定性 |
 | [`src/schema.ts`](../dsh-today-token-usage/src/schema.ts) | 状态与 wire 视图的 zod schema、投影定义（含 `stateVersion`） |
-| [`src/backfill.ts`](../dsh-today-token-usage/src/backfill.ts) | 回填判据与执行（外部动作注入，测试给假实现） |
 | [`src/client.ts`](../dsh-today-token-usage/src/client.ts) | 浏览器入口：注册字典、等分区槽、注册分区 |
 | [`src/component.ts`](../dsh-today-token-usage/src/component.ts) | 分区组件：五行读数与六个字形、跨零点重渲染 |
 | [`src/aggregate.ts`](../dsh-today-token-usage/src/aggregate.ts) | 纯计算：按会话汇总今天、紧凑格式、缓存命中百分比 |
 | [`src/registration.ts`](../dsh-today-token-usage/src/registration.ts) | 槽键 / 注册 id / `order` 与注册选项（纯模块） |
 | [`src/locales.ts`](../dsh-today-token-usage/src/locales.ts) | 本插件字典（zh / en） |
-| [`check-css.mjs`](../dsh-today-token-usage/check-css.mjs) + [`contract.json`](../dsh-today-token-usage/contract.json) | 上游槽、行标记、投影/缓存接口与读数口径的静态契约（21 条） |
+| [`check-css.mjs`](../dsh-today-token-usage/check-css.mjs) + [`contract.json`](../dsh-today-token-usage/contract.json) | 上游槽、行标记、投影接口与读数口径的静态契约（15 条） |
 
-宿主半部用 `inject = ['sessionProjections', 'sessions']`：投影登记表或活会话表缺席时整项不激活。
-持久化与投影缓存按可选服务取（`ctx.get`），缺席时投影照常工作，只是没有回填。
+宿主半部用 `inject = ['sessionProjections']`：投影登记表缺席时整项不激活。
 浏览器半部用 `inject = ['slots', 'locale']`，`dsh.client.platform = web`、`immediately: true`。
 
 这一栏不挂样式表：行直接吃会话面板给 `[data-session-panel-row]` / `[data-row-part]` 铺的通用规则，
@@ -136,10 +120,10 @@
 
 ## 契约与静默失败
 
-面板槽、行标记、投影服务、缓存冷读接口、继承前缀长度，以及「用量」按钮的读数口径，都是**改名即
-静默退化**的上游事实：槽没了整栏不显示，行标记没了变成裸文本，缓存接口没了回填悄悄跳过，口径
-变了面板数字与按钮各说各话。这些名字改不改由上游决定，所以 [`contract.json`](../dsh-today-token-usage/contract.json)
-把 21 条事实列成清单，`pnpm check:css` 逐条对 DSH 安装产物 grep 一遍，缺一条就显式失败并写明后果。
+面板槽、行标记、投影服务、继承前缀长度，以及「用量」按钮的读数口径，都是**改名即静默退化**的上游
+事实：槽没了整栏不显示，行标记没了变成裸文本，投影登记表改名则整项不激活，口径变了面板数字与按钮
+各说各话。这些名字改不改由上游决定，所以 [`contract.json`](../dsh-today-token-usage/contract.json)
+把 15 条事实列成清单，`pnpm check:css` 逐条对 DSH 安装产物 grep 一遍，缺一条就显式失败并写明后果。
 
 归一化接线里还有两处约定值得记住：
 
@@ -155,8 +139,8 @@
 ```powershell
 pnpm --filter dsh-today-token-usage build      # 产出 lib/client.js（浏览器半部）
 pnpm --filter dsh-today-token-usage typecheck  # tsc --noEmit
-pnpm --filter dsh-today-token-usage test       # 6 个测试文件
-pnpm --filter dsh-today-token-usage check:css  # 21 条上游契约
+pnpm --filter dsh-today-token-usage test       # 5 个测试文件
+pnpm --filter dsh-today-token-usage check:css  # 15 条上游契约
 ```
 
 测试覆盖：
@@ -165,8 +149,7 @@ pnpm --filter dsh-today-token-usage check:css  # 21 条上游契约
 |---|---|
 | `test/fold.test.mjs` | 日期归属、同日叠加、替换、重试新增、跨零点换桶、继承前缀、stream 取用量、视图引用稳定性 |
 | `test/aggregate.test.mjs` | 只加今天、投影覆盖列表行且不重复、紧凑格式、缓存命中（含不许舍入成 100% 的两个端点） |
-| `test/backfill.test.mjs` | 六条判据、只读该读的会话、单会话失败不中断、中止、列不出会话 |
-| `test/plugin-apply.test.mjs` | 真 `apply` 注册的投影键/版本/视图、状态与视图过 schema、回填真跑一轮、活会话跳过、缺服务时仍注册 |
+| `test/plugin-apply.test.mjs` | 真 `apply` 注册的投影键/版本/视图、状态与视图过 schema、只依赖投影登记表 |
 | `test/artifact-client.test.mjs` | 产物模块 id / 声明 / 字典 / 分区注册，元素树里的行标记与两端读数的各分支 |
 | `test/render.test.mjs` | 真 React 渲染：读数与命中插值正确、空数据渲染为空、无告警 |
 
@@ -181,11 +164,9 @@ pnpm --filter dsh-today-token-usage check:css  # 21 条上游契约
   远程打开时，读数按宿主那一天切分。跨时区访问需要按客户端时区分桶，那是另一件事。
 - **fork 继承前缀不计入**，所以本栏的「今日总量」可能小于把每个会话「用量」按钮上的整段累计相加
   再按天估出来的数——后者会把源会话的历史在两个会话里各算一遍。
-- **今天之前就冷掉、且今天没有再动的会话**没有本插件的缓存行，回填也按判据跳过：它们今天没有用量，
-  读数不受影响。
-- **回填是一次性的**：只在缺行且今天活跃时读日志。把插件卸下再挂上不会重复读，除非缓存被清空。
-- **首次挂载或宿主重启后有一次先后问题**：会话列表若在回填写回之前被读取，冷会话那部分要等下一次列表读取
-  （刷新页面）才补齐；已经连上的会话不受影响，它们走活投影。实测挂载后刷新的页面上读数与日志审计值一致。
+- **插件装上之前就冷掉、之后没再打开的会话**没有本插件的缓存行，也不回填：它们今天早些时候的
+  用量不计入读数，直到那个会话重新打开（重新打开后登记表自己会折）。今天活着跨过存档点的会话
+  不受影响——它们的行由登记表自己维护。
 - **插件包自身没有图标与详情文档**（行内字形是插件自己画的，不在此列）：本仓库的插件都以 `link:` 直接挂在本地 profile，Plugins 页用
   `package.json` 的 `name` / `description` 兜底；这一栏只影响 Web 页面，不影响插件清单的显示。
   需要的话可以按 `references/host-plugin.md` 的清单补 `locale/*.json`、`icon` 与 `docs/DETAIL.md`。

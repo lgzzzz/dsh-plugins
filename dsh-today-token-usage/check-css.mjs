@@ -6,7 +6,7 @@
 //   1. 会话面板不再声明 / 渲染 `conversation.session.panel.section` 槽——这一栏不显示；
 //   2. 标准 props 不再提供 `useSessions`——拿不到会话列表，整节渲染为空；
 //   3. 行标记 `data-session-panel-row` / `data-row-part` 改名——行没有面板行的通用样式；
-//   4. 投影登记表 / 持久化缓存改名或改签名——宿主半部注册不上，或冷会话缺行时不再回填；
+//   4. 投影登记表改名或改签名——宿主半部注册不上；
 //   5. `inheritedEventCount` 改名——fork 继承前缀会被当成今天的消耗重复计入；
 //   6. 「用量」按钮的读数口径（总用量算式、`number.thousand` / `number.million` 单位、缓存命中
 //      百分比不许把部分命中舍入成 100）变了——面板数字与它分叉（数值口径对齐，单位按本栏自己的

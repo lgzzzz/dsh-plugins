@@ -15,7 +15,6 @@ const here = dirname(fileURLToPath(import.meta.url))
 const ORDER = [
   'fold.test.mjs',
   'aggregate.test.mjs',
-  'backfill.test.mjs',
   'plugin-apply.test.mjs',
   'artifact-client.test.mjs',
   'render.test.mjs',
