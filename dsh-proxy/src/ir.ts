@@ -310,30 +310,38 @@ function validateConditionValue(key: string, value: string, at: string, ruleId: 
 /**
  * 形状合法之后，再对照现实：出口是否真存在、geo 数据文件在不在、有没有被前序规则完全遮住。
  * @param routing - 已通过形状校验的规则集。
- * @param options - `exits` 可用出口名；`geo` 数据文件事实；`sniffing` 是否开启嗅探。
+ * @param options - `exits` 可用出口名；`labels` 出口名 → 展示名（诊断里显示节点名字）；
+ * `geo` 数据文件事实；`sniffing` 是否开启嗅探。
  */
 export function checkSemantics(
   routing: unknown,
-  { exits = [...EXIT_BUILTIN], geo = {}, sniffing = true }: { exits?: string[]; geo?: GeoFacts; sniffing?: boolean } = {},
+  {
+    exits = [...EXIT_BUILTIN],
+    labels = {},
+    geo = {},
+    sniffing = true,
+  }: { exits?: string[]; labels?: Record<string, string>; geo?: GeoFacts; sniffing?: boolean } = {},
 ): Diagnostic[] {
   const out: Diagnostic[] = []
   const push = (severity: Severity, code: string, path: string, message: string, ruleId?: string) => {
     out.push(diagnostic(severity, code, path, message, ruleId))
   }
   const known = new Set(exits)
+  const show = (exit: unknown): string => describeExit(exit, labels)
+  const knownList = [...known].map(show).join('、')
   const routingObject = isPlainObject(routing) ? routing : {}
   const rules = Array.isArray(routingObject.rules) ? routingObject.rules : []
 
   const fallback = routingObject.default
   if (typeof fallback === 'string' && fallback !== '' && !known.has(fallback)) {
-    push('error', 'routing/exit-unknown', 'routing.default', `default 指向的出口 "${fallback}" 不存在；可用出口：${[...known].join('、')}`)
+    push('error', 'routing/exit-unknown', 'routing.default', `default 指向的出口 "${show(fallback)}" 不存在；可用出口：${knownList}`)
   }
 
   rules.forEach((rule: unknown, index: number) => {
     if (!isPlainObject(rule)) return
     const ruleId = typeof rule.id === 'string' ? rule.id : undefined
     if (typeof rule.out === 'string' && rule.out !== '' && !known.has(rule.out)) {
-      push('error', 'rule/exit-unknown', `routing.rules[${index}].out`, `出口 "${rule.out}" 不存在；可用出口：${[...known].join('、')}`, ruleId)
+      push('error', 'rule/exit-unknown', `routing.rules[${index}].out`, `出口 "${show(rule.out)}" 不存在；可用出口：${knownList}`, ruleId)
     }
     const match = isPlainObject(rule.match) ? rule.match : {}
     const protocol = stringValues(match.protocol)
@@ -495,4 +503,16 @@ export function describeMatch(match: unknown): string {
     parts.push(`${key}: ${shown}`)
   }
   return parts.join(' · ')
+}
+
+/**
+ * 出口的展示文本：有名字写名字，否则写出口名。`labels` 里没有的出口（例如写错的出口名）
+ * 原样返回，让诊断指向用户真正填的那个值。
+ * @param exit - 规则里 `out` / `default` 的值。
+ * @param labels - 出口名 → 展示名。
+ */
+export function describeExit(exit: unknown, labels: Record<string, string> = {}): string {
+  const name = String(exit ?? '')
+  const label = labels[name]
+  return label === undefined || label === name ? name : label
 }

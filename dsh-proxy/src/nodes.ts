@@ -33,8 +33,9 @@ export interface NodeTransport {
 /** 一个代理节点。凭据字段只用于生成内核配置，永远不进工具输出与日志。 */
 export interface ProxyNode {
   id: string
+  /** 订阅里写的名字，原样保留（含 emoji 与非 ASCII）。展示用，不参与匹配。 */
   name: string
-  /** 出口名：规则里 `out` 写的就是它。 */
+  /** 出口名：规则里 `out` 写的就是它，也是内核配置里的 outbound tag。 */
   tag: string
   protocol: NodeProtocol
   server: string
@@ -66,10 +67,23 @@ export interface SubscriptionParse {
 /** 一个节点的 TCP 握手耗时。 */
 export interface LatencyResult {
   nodeId: string
+  /** 出口名，也就是规则里 `out` 的取值。 */
   tag: string
+  /** 展示用的名字；为空时退回 tag。 */
+  name: string
   ok: boolean
   ms?: number
   error?: string
+}
+
+/**
+ * 节点的展示名：订阅里写的名字，没有名字时退回出口名。
+ *
+ * 名字只用于展示 —— 规则里的 `out`、内核配置里的 outbound tag 始终是 `node.tag`。
+ */
+export function nodeLabel(node: Pick<ProxyNode, 'name' | 'tag'>): string {
+  const name = String(node.name ?? '').trim()
+  return name === '' ? node.tag : name
 }
 
 function decodeBase64(text: string): string {
@@ -435,6 +449,8 @@ function streamSettingsOf(node: ProxyNode): Record<string, unknown> | undefined 
 export function redactNode(node: ProxyNode): {
   id: string
   name: string
+  /** 展示名：名字，缺失时等于 `tag`。 */
+  label: string
   tag: string
   protocol: NodeProtocol
   server: string
@@ -446,6 +462,7 @@ export function redactNode(node: ProxyNode): {
   const redacted: ReturnType<typeof redactNode> = {
     id: node.id,
     name: node.name,
+    label: nodeLabel(node),
     tag: node.tag,
     protocol: node.protocol,
     server: node.server,
@@ -473,15 +490,16 @@ export function measureLatency(node: ProxyNode, timeoutMs = 5000): Promise<Laten
       socket.destroy()
       resolve(result)
     }
+    const name = nodeLabel(node)
     socket.setTimeout(timeoutMs)
     socket.once('connect', () => {
-      finish({ nodeId: node.id, tag: node.tag, ok: true, ms: Date.now() - startedAt })
+      finish({ nodeId: node.id, tag: node.tag, name, ok: true, ms: Date.now() - startedAt })
     })
     socket.once('timeout', () => {
-      finish({ nodeId: node.id, tag: node.tag, ok: false, error: `连接超时（${timeoutMs}ms）` })
+      finish({ nodeId: node.id, tag: node.tag, name, ok: false, error: `连接超时（${timeoutMs}ms）` })
     })
     socket.once('error', (error: Error) => {
-      finish({ nodeId: node.id, tag: node.tag, ok: false, error: error.message })
+      finish({ nodeId: node.id, tag: node.tag, name, ok: false, error: error.message })
     })
   })
 }

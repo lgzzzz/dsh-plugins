@@ -100,4 +100,26 @@ checkEqual(asIs.uncertain[0]?.kind, 'opaque', 'geoip 条件无法本地判定')
 check(asIs.assumptions.some((line) => line.includes('AsIs')), '说明 domainStrategy 的影响')
 check(asIs.assumptions.some((line) => line.includes('geoip')), '说明 geo 数据缺失')
 
+console.log('explain: 出口展示名')
+
+const labels = { us: '🇺🇸 美国 01', direct: 'direct', proxy: 'proxy' }
+
+const labelled = explainFlow(routing, { domain: 'api.openai.com', port: 443 }, { labels })
+checkEqual(labelled.matched?.out, 'us', 'out 仍是出口名')
+checkEqual(labelled.matched?.outLabel, '🇺🇸 美国 01', 'outLabel 是节点名字')
+checkEqual(labelled.skipped.map((entry) => entry.outLabel), ['direct', 'direct'], '内置出口的展示名就是自己')
+checkEqual(labelled.uncertain[0]?.outLabel, 'block', '没有映射的出口原样显示')
+
+const noLabel = explainFlow(routing, { domain: 'api.openai.com', port: 443 })
+checkEqual(noLabel.matched?.outLabel, 'us', '没给 labels 时展示名等于出口名')
+
+const fallbackNamed = explainFlow(
+  { default: 'hk-01', rules: [] },
+  { domain: 'nothing.example' },
+  { labels: { 'hk-01': '🇭🇰 香港01' } },
+)
+checkEqual(fallbackNamed.matched, null, '没有规则时不命中')
+checkEqual(fallbackNamed.fallbackOut, 'hk-01', '兜底出口仍是出口名')
+checkEqual(fallbackNamed.fallbackOutLabel, '🇭🇰 香港01', '兜底出口的展示名是节点名字')
+
 finish('explain')

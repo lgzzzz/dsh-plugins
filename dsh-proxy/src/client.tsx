@@ -59,7 +59,7 @@ const ZH: Record<string, string> = {
   'field.port': '端口',
   'field.protocol': '协议',
   'field.hint': '多个值用空格或逗号分隔；留空表示不限制。',
-  'nodes.empty': '还没有节点。导入订阅后，规则里就能用节点 tag 当出口。',
+  'nodes.empty': '还没有节点。导入订阅后，规则里就能用节点当出口。',
   'nodes.import': '导入订阅',
   'nodes.url': '订阅地址',
   'nodes.name': '名字（可选）',
@@ -67,6 +67,7 @@ const ZH: Record<string, string> = {
   'nodes.selected': '已选中',
   'nodes.latency': '测延迟',
   'nodes.protocol': '协议',
+  'nodes.tag': '出口名',
   'nodes.subscriptions': '订阅',
   'simulate.domain': '域名',
   'simulate.ip': 'IP',
@@ -133,7 +134,7 @@ const EN: Record<string, string> = {
   'field.port': 'Ports',
   'field.protocol': 'Protocols',
   'field.hint': 'Separate values with spaces or commas; leave empty for no constraint.',
-  'nodes.empty': 'No nodes yet. Import a subscription to use node tags as exits.',
+  'nodes.empty': 'No nodes yet. Import a subscription to use nodes as exits.',
   'nodes.import': 'Import subscription',
   'nodes.url': 'Subscription URL',
   'nodes.name': 'Name (optional)',
@@ -141,6 +142,7 @@ const EN: Record<string, string> = {
   'nodes.selected': 'Selected',
   'nodes.latency': 'Test latency',
   'nodes.protocol': 'Protocol',
+  'nodes.tag': 'exit',
   'nodes.subscriptions': 'Subscriptions',
   'simulate.domain': 'Domain',
   'simulate.ip': 'IP',
@@ -241,10 +243,11 @@ interface Routing {
 }
 
 interface ExplainResult {
-  matched: { id: string; name?: string; out: string; position: number } | null
-  uncertain: { id: string; name?: string; out: string; position: number; kind: 'opaque' | 'missing'; reason: string }[]
-  skipped: { id: string; name?: string; out: string; position: number; reason: string }[]
+  matched: { id: string; name?: string; out: string; outLabel?: string; position: number } | null
+  uncertain: { id: string; name?: string; out: string; outLabel?: string; position: number; kind: 'opaque' | 'missing'; reason: string }[]
+  skipped: { id: string; name?: string; out: string; outLabel?: string; position: number; reason: string }[]
   fallbackOut: string
+  fallbackOutLabel?: string
   certain: boolean
   warnings: string[]
   assumptions: string[]
@@ -262,14 +265,16 @@ interface PanelState {
     ruleCount: number
     enabledRuleCount: number
     nodeCount: number
-    selectedNode: { id: string; tag: string; name: string } | null
+    selectedNode: { id: string; tag: string; name: string; label?: string } | null
     exits: string[]
+    /** 出口名 → 展示名；节点出口是节点名字。旧宿主不给这个字段时按出口名显示。 */
+    exitLabels?: Record<string, string>
     geo: { dir: string; hasGeosite: boolean; hasGeoip: boolean }
     ports: { socks: number; http: number }
     note: string
   }
-  routing: { default: string; rules: Rule[]; exits: string[]; diagnostics: Diagnostic[] }
-  nodes: { nodes: { id: string; name: string; tag: string; protocol: string; server: string; port: number }[]; selectedNode: string | null; subscriptions: { id: string; name: string; source: string; nodeCount: number }[] }
+  routing: { default: string; rules: Rule[]; exits: string[]; exitLabels?: Record<string, string>; diagnostics: Diagnostic[] }
+  nodes: { nodes: { id: string; name: string; label?: string; tag: string; protocol: string; server: string; port: number }[]; selectedNode: string | null; subscriptions: { id: string; name: string; source: string; nodeCount: number }[] }
   logs: LogLine[]
 }
 
@@ -313,6 +318,36 @@ function splitField(text: string): string[] {
     .filter((part) => part !== '')
 }
 
+/**
+ * 出口的展示文本。名字只用于显示：`<option>` 的 value 与规则的 `out` 始终是出口名。
+ * @param exit - 出口名（规则的 `default` / `out` 取值）。
+ * @param labels - 出口名 → 展示名；省略时原样显示出口名。
+ */
+function exitLabel(exit: string, labels: Record<string, string> = {}): string {
+  const label = labels[exit]
+  return label === undefined || label === exit ? exit : label
+}
+
+/** 出口选择项：value 是出口名，标签是展示名。 */
+function exitOptions(exits: string[], labels: Record<string, string>) {
+  return exits.map((exit) => (
+    <option key={exit} value={exit}>
+      {exitLabel(exit, labels)}
+    </option>
+  ))
+}
+
+/**
+ * 节点的展示名。宿主半部与浏览器半部不一定同批更新，所以这里也做一次兜底：
+ * `label` 缺席时依次退回 `name`、`tag`，面板不会因此渲染出空白。
+ */
+function nodeLabelOf(node: { label?: string; name?: string; tag: string }): string {
+  const label = node.label
+  if (label !== undefined && label !== '') return label
+  const name = node.name
+  return name === undefined || name === '' ? node.tag : name
+}
+
 /* ------------------------------------------------------------------ 规则 tab */
 
 function RulesTab(props: {
@@ -330,6 +365,7 @@ function RulesTab(props: {
   const { t, draft, dirty, busy, diagnostics } = props
   const [form, setForm] = React.useState({ id: '', name: '', out: 'proxy', domain: '', ip: '', port: '', protocol: '' })
   const exits = props.state.routing.exits
+  const labels = props.state.routing.exitLabels ?? {}
   const update = (next: Routing) => props.onChange(next)
 
   const move = (index: number, delta: number) => {
@@ -388,7 +424,9 @@ function RulesTab(props: {
                 .join('  ·  ')}
             </span>
           </span>
-          <span className="proxy-tag">{rule.out}</span>
+          <span className="proxy-tag" title={rule.out}>
+            {exitLabel(rule.out, labels)}
+          </span>
           <button type="button" className="proxy-btn" data-kind="icon" title={t('rules.up')} disabled={index === 0} onClick={() => move(index, -1)}>
             ↑
           </button>
@@ -419,11 +457,7 @@ function RulesTab(props: {
         <label className="proxy-field">
           {t('field.out')}
           <select className="proxy-input" value={form.out} onChange={(event) => setForm({ ...form, out: event.target.value })}>
-            {exits.map((exit) => (
-              <option key={exit} value={exit}>
-                {exit}
-              </option>
-            ))}
+            {exitOptions(exits, labels)}
           </select>
         </label>
         <label className="proxy-field">
@@ -456,11 +490,7 @@ function RulesTab(props: {
         <label className="proxy-field" style={{ flex: '0 0 200px' }}>
           {t('rules.default')}
           <select className="proxy-input" value={draft.default} onChange={(event) => update({ ...draft, default: event.target.value })}>
-            {exits.map((exit) => (
-              <option key={exit} value={exit}>
-                {exit}
-              </option>
-            ))}
+            {exitOptions(exits, labels)}
           </select>
         </label>
         <button type="button" className="proxy-btn" disabled={busy} onClick={props.onCheck}>
@@ -528,11 +558,10 @@ function NodesTab(props: {
       {state.nodes.nodes.length === 0 ? <div className="proxy-empty">{t('nodes.empty')}</div> : null}
       {state.nodes.nodes.map((node) => (
         <div key={node.id} className="proxy-row">
-          <span className="proxy-tag">{node.tag}</span>
           <span className="proxy-rule-main">
-            <span className="proxy-rule-name">{node.name}</span>
+            <span className="proxy-rule-name">{nodeLabelOf(node)}</span>
             <span className="proxy-rule-match">
-              {node.protocol} · {node.server}:{node.port}
+              {node.protocol} · {node.server}:{node.port} · {t('nodes.tag')} {node.tag}
             </span>
           </span>
           {state.nodes.selectedNode === node.id ? (
@@ -614,7 +643,8 @@ function SimulateTab(props: { t: (key: string) => string; busy: boolean; onExpla
           {result.matched === null ? null : (
             <div>
               {t('simulate.matched')}：#{result.matched.id}
-              {result.matched.name === undefined ? '' : `（${result.matched.name}）`} → <strong>{result.matched.out}</strong>
+              {result.matched.name === undefined ? '' : `（${result.matched.name}）`} →{' '}
+              <strong>{result.matched.outLabel ?? result.matched.out}</strong>
             </div>
           )}
           {result.matched !== null && !result.certain ? (
@@ -623,7 +653,9 @@ function SimulateTab(props: { t: (key: string) => string; busy: boolean; onExpla
           {result.matched === null ? (
             <div>
               {result.uncertain.length === 0 ? `${t('simulate.fallback')} → ` : `${t('simulate.indeterminate')} → `}
-              <strong>{result.uncertain.length === 0 ? result.fallbackOut : result.uncertain[0]?.id}</strong>
+              <strong>
+                {result.uncertain.length === 0 ? (result.fallbackOutLabel ?? result.fallbackOut) : result.uncertain[0]?.id}
+              </strong>
             </div>
           ) : null}
           {result.uncertain.length === 0 ? null : (
@@ -631,7 +663,7 @@ function SimulateTab(props: { t: (key: string) => string; busy: boolean; onExpla
               <div className="proxy-kv">{t('simulate.uncertain')}</div>
               {result.uncertain.map((entry) => (
                 <div key={`${entry.position}-${entry.id}`} className="proxy-rule-match">
-                  #{entry.id} → {entry.out}（{entry.kind === 'opaque' ? t('simulate.opaque') : t('simulate.missing')}）{entry.reason}
+                  #{entry.id} → {entry.outLabel ?? entry.out}（{entry.kind === 'opaque' ? t('simulate.opaque') : t('simulate.missing')}）{entry.reason}
                 </div>
               ))}
             </div>
@@ -784,7 +816,11 @@ function ProxyPanel({ t }: { t: (key: string) => string }) {
           <span>
             {t('status.binary')}：{core.version ?? (core.binary === null ? t('status.binaryMissing') : core.binary)}
           </span>
-          <span>{state.status.selectedNode === null ? t('status.noNode') : `→ ${state.status.selectedNode.tag}`}</span>
+          <span>
+            {state.status.selectedNode === null
+              ? t('status.noNode')
+              : `→ ${state.status.selectedNode.label ?? state.status.selectedNode.name ?? state.status.selectedNode.tag}`}
+          </span>
         </span>
         <span className="proxy-spacer" />
         {core.running ? (

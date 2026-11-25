@@ -2,7 +2,7 @@
  * 节点：分享链接解析、订阅解码、出口生成、脱敏。
  */
 
-import { assignIdentities, outboundForNode, parseNodeUri, parseSubscription, redactNode } from '../src/nodes.ts'
+import { assignIdentities, nodeLabel, outboundForNode, parseNodeUri, parseSubscription, redactNode } from '../src/nodes.ts'
 import { check, checkEqual, finish } from './helpers.mjs'
 
 const b64 = (text) => Buffer.from(text, 'utf8').toString('base64')
@@ -105,5 +105,16 @@ const redacted = redactNode(nodes[0])
 checkEqual(redacted.password, undefined, '脱敏结果不含密码')
 checkEqual(redacted.uuid, undefined, '脱敏结果不含 uuid')
 check(JSON.stringify(redacted).includes(nodes[0].server), '脱敏结果仍保留服务器地址')
+
+console.log('nodes: 展示名')
+
+const named = { ...nodes[0], name: '🇭🇰 香港01', tag: 'hk-01' }
+checkEqual(nodeLabel(named), '🇭🇰 香港01', '展示名取节点名字')
+checkEqual(nodeLabel({ ...named, name: '' }), 'hk-01', '名字为空时退回出口名')
+checkEqual(nodeLabel({ ...named, name: '   ' }), 'hk-01', '名字只有空白时退回出口名')
+checkEqual(redactNode(named).label, '🇭🇰 香港01', '脱敏视图带展示名')
+checkEqual(redactNode(named).tag, 'hk-01', '脱敏视图仍保留出口名')
+checkEqual(redactNode(named).name, '🇭🇰 香港01', '脱敏视图保留原始名字')
+checkEqual(outboundForNode(named).tag, 'hk-01', '内核 outbound tag 仍是出口名，不受名字影响')
 
 finish('nodes')

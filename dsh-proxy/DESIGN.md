@@ -176,7 +176,7 @@ type Rule = {
   name?: string                   // 人类可读的名字，UI 与 explain 用
   enabled?: boolean               // 默认 true
   match: Match
-  out: string                     // 出口名：proxy / direct / block / 分组
+  out: string                     // 出口名：proxy / direct / block / 节点 tag
 }
 
 type Match = {

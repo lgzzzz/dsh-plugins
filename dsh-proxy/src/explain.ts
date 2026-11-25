@@ -10,6 +10,7 @@
  */
 
 import type { Routing, Rule } from './ir.ts'
+import { describeExit } from './ir.ts'
 import { ipInCidr, parsePortRange } from './util.ts'
 
 /** 待仿真的流量。字段都可以缺，缺得越多结论越弱。 */
@@ -31,6 +32,8 @@ export interface UncertainRule {
   id: string
   name?: string
   out: string
+  /** `out` 的展示名：节点出口显示节点名字。 */
+  outLabel: string
   /** 在规则列表里的位置，从 1 开始。 */
   position: number
   /** `opaque` 依赖本地没有的数据；`missing` 只是缺输入。 */
@@ -43,6 +46,8 @@ export interface SkippedRule {
   id: string
   name?: string
   out: string
+  /** `out` 的展示名：节点出口显示节点名字。 */
+  outLabel: string
   position: number
   reason: string
 }
@@ -50,13 +55,15 @@ export interface SkippedRule {
 /** 仿真结果。 */
 export interface ExplainResult {
   /** 第一条**确定**命中的规则；没有则为 null（此时走兜底出口）。 */
-  matched: { id: string; name?: string; out: string; position: number } | null
+  matched: { id: string; name?: string; out: string; outLabel: string; position: number } | null
   /** 命中规则之前那些无法排除的规则；它们可能抢先。 */
   uncertain: UncertainRule[]
   /** 命中规则之前被确定否定的规则。 */
   skipped: SkippedRule[]
   /** 兜底出口（没有任何规则命中时使用）。 */
   fallbackOut: string
+  /** 兜底出口的展示名。 */
+  fallbackOutLabel: string
   /** `matched` 是否已经确定：有 `uncertain` 时它不是必然结果。 */
   certain: boolean
   warnings: string[]
@@ -197,10 +204,17 @@ function describe(rule: Rule): { id: string; name?: string } {
  * 按顺序仿真一条流量。
  * @param routing - 当前规则集。
  * @param flow - 待仿真的流量；缺字段会降低结论强度并写进 `assumptions`。
- * @param options - `domainStrategy` 影响 ip 条件的解释，默认 `IPIfNonMatch`。
+ * @param options - `domainStrategy` 影响 ip 条件的解释，默认 `IPIfNonMatch`；
+ * `labels` 是出口名 → 展示名，用于 `outLabel` / `fallbackOutLabel`。
  */
-export function explainFlow(routing: Routing, flow: Flow, options: { domainStrategy?: string } = {}): ExplainResult {
+export function explainFlow(
+  routing: Routing,
+  flow: Flow,
+  options: { domainStrategy?: string; labels?: Record<string, string> } = {},
+): ExplainResult {
   const domainStrategy = options.domainStrategy ?? 'IPIfNonMatch'
+  const labels = options.labels ?? {}
+  const labelOf = (out: string): string => describeExit(out, labels)
   const uncertain: UncertainRule[] = []
   const skipped: SkippedRule[] = []
   const warnings: string[] = []
@@ -248,20 +262,28 @@ export function explainFlow(routing: Routing, flow: Flow, options: { domainStrat
         warnings.push(`前面有 ${uncertain.length} 条规则无法本地判定，它们可能抢先命中；结论不是必然结果`)
       }
       return {
-        matched: { ...describe(rule), out: rule.out, position: index + 1 },
+        matched: { ...describe(rule), out: rule.out, outLabel: labelOf(rule.out), position: index + 1 },
         uncertain,
         skipped,
         fallbackOut: routing.default,
+        fallbackOutLabel: labelOf(routing.default),
         certain: uncertain.length === 0,
         warnings,
         assumptions,
       }
     }
     if (verdict === 'opaque' || verdict === 'missing') {
-      uncertain.push({ ...describe(rule), out: rule.out, position: index + 1, kind, reason })
+      uncertain.push({
+        ...describe(rule),
+        out: rule.out,
+        outLabel: labelOf(rule.out),
+        position: index + 1,
+        kind,
+        reason,
+      })
       continue
     }
-    skipped.push({ ...describe(rule), out: rule.out, position: index + 1, reason })
+    skipped.push({ ...describe(rule), out: rule.out, outLabel: labelOf(rule.out), position: index + 1, reason })
   }
 
   if (usesGeo) assumptions.push('含 geosite:/geoip: 的规则无法本地判定：没有解析 .dat 数据文件')
@@ -281,5 +303,14 @@ export function explainFlow(routing: Routing, flow: Flow, options: { domainStrat
     warnings.push(`有 ${uncertain.length} 条规则无法本地判定，它们可能抢先命中；结论不是必然结果`)
   }
 
-  return { matched: null, uncertain, skipped, fallbackOut: routing.default, certain: false, warnings, assumptions }
+  return {
+    matched: null,
+    uncertain,
+    skipped,
+    fallbackOut: routing.default,
+    fallbackOutLabel: labelOf(routing.default),
+    certain: false,
+    warnings,
+    assumptions,
+  }
 }

@@ -93,7 +93,7 @@ function ruleSchema(): JsonSchemaNode {
       name: { type: 'string', description: '人类可读的名字，UI 与 explain 会显示它。' },
       enabled: { type: 'boolean', description: 'false 表示保留但禁用；省略等于启用。' },
       match: matchSchema(),
-      out: { type: 'string', description: '出口名：proxy / direct / block，或某个节点 tag（以 proxy_routing_read 的 exits 为准）。' },
+      out: { type: 'string', description: '出口名：proxy / direct / block，或某个节点 tag（以 proxy_routing_read 的 exits 为准）。节点出口在界面上显示为节点名字，见 exitLabels。' },
     },
   }
 }
@@ -196,7 +196,14 @@ export function registerTools(ctx: Context, service: ProxyService, activation?: 
     async execute(args) {
       const candidate = service.candidateFor(args as Parameters<ProxyService['candidateFor']>[0])
       if (candidate.error !== undefined) {
-        return { valid: false, diagnostics: [candidate.error], exits: service.exits(), compiled: null, changes: null }
+        return {
+          valid: false,
+          diagnostics: [candidate.error],
+          exits: service.exits(),
+          exitLabels: service.exitLabels(),
+          compiled: null,
+          changes: null,
+        }
       }
       return { ...service.check(candidate.routing), changes: candidate.changes }
     },
@@ -250,7 +257,8 @@ export function registerTools(ctx: Context, service: ProxyService, activation?: 
       return {
         ...service.nodesView(),
         exits: service.exits(),
-        note: '出口名（tag）就是规则里 out 的取值；proxy 是「当前选中节点」的别名。',
+        exitLabels: service.exitLabels(),
+        note: '出口名（tag）就是规则里 out 的取值；proxy 是「当前选中节点」的别名。界面上显示的是节点名字（label / exitLabels）。',
       }
     },
   }
