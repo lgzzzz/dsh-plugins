@@ -1,0 +1,60 @@
+{
+  "name": "dsh-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Split routing for DSH: the model writes, checks, explains, and applies routing rules that an upstream Xray-core binary executes.",
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-client-locale": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-layout": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-host-webserver": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-skill": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-subprocess": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-tools": "^0.2.3-alpha.2",
+    "@types/node": "^24.19.2",
+    "@types/react": "^18.3.31",
+    "react": "^18.3.1",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-storage-domain": "0.2.3-alpha.2",
+    "zod": "4.6.6"
+  }
+}

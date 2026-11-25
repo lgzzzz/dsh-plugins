@@ -1,0 +1,11 @@
+- insert:
+    - id: proxy
+      name: dsh-proxy
+      config:
+        # Absolute path or bare name of the Xray-core binary; empty = look up
+        # `xray` on PATH. Nothing is downloaded automatically.
+        coreBinary: ''
+        socksPort: 10808
+        httpPort: 10809
+        # Extra domain list data (`geosite.dat` / `geoip.dat`) for `ext:` values.
+        geoDir: ''

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "分流路由",
+    "description": "把代理分流规则当作结构化数据编辑，在生效之前先校验、再解释，交给上游 Xray-core 执行。直接让对话里的 agent 改分流：它会先调 proxy_routing_check 和 proxy_route_explain，再用 proxy_routing_write 落盘。面板里可以看规则、节点，并模拟一条流量会走哪个出口。只有显式连接 127.0.0.1:10808（SOCKS）或 127.0.0.1:10809（HTTP）的应用会走它：它不改系统代理，也不代理 DSH 自己访问模型 API 的流量。需要你自己安装 xray 可执行文件，插件不会下载任何二进制。"
+  }
+}
