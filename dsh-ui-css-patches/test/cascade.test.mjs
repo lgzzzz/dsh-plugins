@@ -1,6 +1,6 @@
 /**
  * 级联测试:在真实浏览器里把「上游 CSS + 本插件 CSS」按真实挂载顺序放进同一个页面,
- * 用 `getComputedStyle` 断言最终字号。
+ * 用 `getComputedStyle` 断言最终字号,以及编辑工具行体量后缀 / diff 统计的 display。
  *
  * 为什么需要它:`check-css.mjs` 只能证明锚点 / 令牌还在,证明不了声明的级联胜负。
  * 2026-11 的正文行内代码失效就是后一类——上游 `.…_markdown :not(pre) > code` 是
@@ -8,6 +8,8 @@
  * 同特异性 + 都带 `!important` 时后写者胜,规则肉眼可见地存在、契约也全绿,计算值却是 12.25px。
  * 这里把上游那段真实规则从安装产物里抽出来,和插件 CSS 按「插件在前、上游在后」放进同一页,
  * 谁赢由浏览器判定,不再靠人读特异性。
+ * 工具行那条同理:体量后缀与 diff 统计共用 summarySuffix,只有前者应被 `:not(…_diffStat)`
+ * 排除出去,display 的计算值由浏览器给出。
  *
  * 依赖本机安装的 DSH(与 check-css 同一套解析)与 Chrome/Chromium(可用 $CHROME_PATH 指定)。
  * 任一缺失时跳过并以 0 退出;设置 DSH_CSS_STRICT=1 可让跳过也报失败。
@@ -75,6 +77,43 @@ function readMarkdownRules(assetsDir) {
     const compactCode = pick(new RegExp(`\\.${hash}_compact\\s+:not\\(pre\\)\\s*>\\s*code\\{[^}]*\\}`))
     if (!root || !compactRoot || !compactCode) return null
     return { hash, file: join(assetsDir, name), markdownRoot: root, markdownCode: code[0], compactRoot, compactCode }
+  }
+  return null
+}
+
+/**
+ * 从安装产物里抽出工具行(ToolRow)与摘要后缀(TextShimmer)的真实模块 CSS 与类名。
+ * 体量后缀就是 TextShimmer 根类 + ToolRow 的 summarySuffix 局部类名,diff 统计再多一个
+ * diffStat 局部类名;这些类名都带构建哈希,运行时从类名映射对象 / 规则文本里读,不写死。
+ * 结构变了(找不到类名或规则)时返回 null,由调用方报失败。
+ */
+function readToolRowRules(dshRoot) {
+  const toolDir = join(dshRoot, 'node_modules', '@deepseek-ai', 'dsh-client-ui-tool', 'lib')
+  const assetsDir = join(dshRoot, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist', 'assets')
+  if (!existsSync(toolDir) || !existsSync(assetsDir)) return null
+
+  let tool = null
+  for (const name of readdirSync(toolDir)) {
+    if (!name.endsWith('.js')) continue
+    const text = readFileSync(join(toolDir, name), 'utf8')
+    const sheet = text.match(/"src\/client\/tool\/components\/ToolRow\.module\.css":\{text:context=>`([^`]*)`/)
+    const suffix = text.match(/"summarySuffix":`([A-Za-z0-9_-]+_summarySuffix)`/)
+    const diffStat = text.match(/"diffStat":`([A-Za-z0-9_-]+_diffStat)`/)
+    if (!sheet || !suffix || !diffStat) continue
+    if (!sheet[1].includes(`.${suffix[1]}{`) || !sheet[1].includes(`.${diffStat[1]}{`)) continue
+    tool = { suffix: suffix[1], diffStat: diffStat[1], toolCss: sheet[1], toolFile: join(toolDir, name) }
+    break
+  }
+  if (tool === null) return null
+
+  for (const name of readdirSync(assetsDir)) {
+    if (!name.endsWith('.js')) continue
+    const text = readFileSync(join(assetsDir, name), 'utf8')
+    const sheet = text.match(/"src\/TextShimmer\.module\.css":\{text:[A-Za-z_$][\w$]*=>"([^"]*)"/)
+    if (!sheet) continue
+    const root = sheet[1].match(/\.([A-Za-z0-9_-]+_root)\{/)
+    if (!root || !sheet[1].includes('display:inline-grid')) continue
+    return { ...tool, shimmerRoot: root[1], shimmerCss: sheet[1], shimmerFile: join(assetsDir, name) }
   }
   return null
 }
@@ -212,11 +251,15 @@ async function launchChrome(chromePath) {
   }
 }
 
-/** 页面里的测量脚本:同一棵 fixture,分别在启用 / 禁用插件样式时读计算字号。 */
+/** 页面里的测量脚本:同一棵 fixture,分别在启用 / 禁用插件样式时读计算字号与 display。 */
 const MEASURE = `(() => {
   const size = (id) => {
     const el = document.getElementById(id)
     return el === null ? null : getComputedStyle(el).fontSize
+  }
+  const display = (id) => {
+    const el = document.getElementById(id)
+    return el === null ? null : getComputedStyle(el).display
   }
   const plugin = document.getElementById('plugin')
   const withPlugin = {
@@ -224,6 +267,8 @@ const MEASURE = `(() => {
     thinking: size('thinking-code'),
     plan: size('plan-code'),
     document: size('doc-code'),
+    kbSuffix: display('kb-suffix'),
+    diffStat: display('diff-stat'),
   }
   plugin.disabled = true
   const upstreamOnly = {
@@ -231,6 +276,8 @@ const MEASURE = `(() => {
     thinking: size('thinking-code'),
     plan: size('plan-code'),
     document: size('doc-code'),
+    kbSuffix: display('kb-suffix'),
+    diffStat: display('diff-stat'),
   }
   plugin.disabled = false
   return { withPlugin, upstreamOnly }
@@ -249,6 +296,13 @@ async function main() {
   if (!/font-size\s*:\s*\.875em\s*!important/.test(rules.markdownCode)) {
     failures += 1
     console.log(`FAIL 上游行内代码规则不再是 .875em !important — 请复核测试与补丁规则:${rules.markdownCode}`)
+    return finish()
+  }
+
+  const tool = readToolRowRules(dshRoot)
+  if (!tool) {
+    failures += 1
+    console.log('FAIL 上游工具行的结构变了 — 找不到 ToolRow 的 summarySuffix / diffStat 类名或 TextShimmer 的 inline-grid 根规则,请复核本测试与 css.ts 里的 KB 体量后缀规则')
     return finish()
   }
 
@@ -278,6 +332,8 @@ ${rules.markdownRoot}
 ${rules.markdownCode}
 ${rules.compactRoot}
 ${rules.compactCode}
+${tool.toolCss}
+${tool.shimmerCss}
 </style></head>
 <body>
 <div data-chat-flow-kind="assistant-step">
@@ -296,6 +352,13 @@ ${rules.compactCode}
 <div data-textpreview-body>
   <div data-document-markdown>
     <div class="${rules.hash}_markdown"><p>文档 <code id="doc-code">inline</code></p></div>
+  </div>
+</div>
+<!-- 编辑工具行:体量后缀是 TextShimmer 根 + summarySuffix,diff 统计再多一个 diffStat。 -->
+<div data-tool="edit" data-state="ok">
+  <div>
+    <span id="kb-suffix" class="${tool.shimmerRoot} ${tool.suffix}">4KB</span>
+    <span id="diff-stat" class="${tool.shimmerRoot} ${tool.suffix} ${tool.diffStat}">+12 -3</span>
   </div>
 </div>
 </body></html>`
@@ -318,7 +381,7 @@ ${rules.compactCode}
     if (outcome.exceptionDetails) throw new Error(outcome.exceptionDetails.exception?.description ?? '页面测量脚本抛错')
     const { withPlugin, upstreamOnly } = outcome.result.value
 
-    console.log(`fixture:${rules.hash}_markdown(来源 ${rules.file})`)
+    console.log(`fixture:${rules.hash}_markdown(来源 ${rules.file});${tool.suffix} / ${tool.diffStat}(来源 ${tool.toolFile})`)
     // 对照组先证明这棵树真的会命中上游规则,否则下面的 14px 只是没被覆盖。
     check('上游单独作用:正文行内代码 = 0.875em × 14px', upstreamOnly.answer, '12.25px')
     check('上游单独作用:思考行内代码 = 1em × compact 的 13px', upstreamOnly.thinking, '13px')
@@ -329,6 +392,11 @@ ${rules.compactCode}
     check('插件生效:思考行内代码 14px(过程组子树已统一 14px)', withPlugin.thinking, '14px')
     check('插件生效:计划预览行内代码 14px(1em × 14px)', withPlugin.plan, '14px')
     check('插件生效:文档预览行内代码 14px(1em × 14px)', withPlugin.document, '14px')
+    // 工具行:上游给体量后缀与 diff 统计同一个 TextShimmer 根(inline-grid),插件只压后缀。
+    check('上游单独作用:编辑工具行的 KB 体量后缀 = inline-grid', upstreamOnly.kbSuffix, 'inline-grid')
+    check('上游单独作用:编辑工具行的 diff 统计 = inline-grid', upstreamOnly.diffStat, 'inline-grid')
+    check('插件生效:编辑工具行的 KB 体量后缀 display:none', withPlugin.kbSuffix, 'none')
+    check('插件生效:编辑工具行的 diff 统计仍然显示', withPlugin.diffStat, 'inline-grid')
   } finally {
     await chrome.dispose()
     rmSync(dir, { recursive: true, force: true })

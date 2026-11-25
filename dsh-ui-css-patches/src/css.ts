@@ -149,6 +149,29 @@ section[data-plan-preview] :not(pre) > code {
   --dsw-font-markdown-code-block: var(--dsh-content-font-size, 14px)/calc(var(--dsh-content-font-size, 14px) + 5px) var(--ds-font-family-code);
 }
 
+/* 编辑 / 写入 / apply_patch 的工具行不再显示体量后缀(「4KB」)。
+   上游 FileMutationRow 把工具参数里正在流式生成或已经落定的正文(content / old_string /
+   new_string)算成整数 KB,用 t('tool.preparing.content', {kilobytes}) 取文案后作为 summarySuffix
+   交给 ToolRow:摘要那一列是文件路径,后缀就是紧随其后的「4KB」,同一行还可能再跟着 diff 统计
+   (+12 −3)。这些行只出现在过程组里,改的是工具行自身。
+   三个工具注册在同一个工具视图(FileMutationRow)上,ToolRow 根上带 data-tool(取值就是注册键
+   apply_patch / edit / write)与 data-state;data-tool 是工具行自身的稳定锚点。
+   体量后缀与 diff 统计共用 ToolRow 的 summarySuffix 局部类名,后者还额外带 diffStat 局部类名;
+   选择器在通配符上排除 diffStat,只压掉体量后缀、保留 +/− 统计。
+   这两个 span 上没有 data-* 属性,唯一抓手是 CSS Module 的局部类名:生成名是 [hash]_[local],
+   构建只换 [hash] 前缀、局部名不变就不影响 [class*="_summarySuffix"] / [class*="_diffStat"],
+   与侧栏时间戳的 _time、授权卡状态条的 _strip 是同一套写法。
+   本规则特异性 (0,3,0),大于上游 .…_summarySuffix 与 TextShimmer 根 .…_root(display:
+   inline-grid)的 (0,1,0),display 不依赖 <style> 的挂载顺序,因此不需要 !important。
+   上游改掉工具行结构 / 局部类名 / 把体量后缀从 summarySuffix 挪走时规则整条落空、KB 重新出现,
+   由 css-contract.json 的 file-mutation-tool-keys / tool-name-attr / tool-summary-suffix-class /
+   tool-diffstat-class / tool-summary-suffix-diffstat / tool-preparing-suffix 六条契约在构建后报失效。 */
+[data-tool="edit"] [class*="_summarySuffix"]:not([class*="_diffStat"]),
+[data-tool="write"] [class*="_summarySuffix"]:not([class*="_diffStat"]),
+[data-tool="apply_patch"] [class*="_summarySuffix"]:not([class*="_diffStat"]) {
+  display: none;
+}
+
 /* 触发条标题固定 14px */
 [data-turn-trigger] > button {
   --dsh-content-font-size: var(--dsh-content-font-size, 14px);
