@@ -1,6 +1,7 @@
 /**
  * 产物装配：把 `lib/client.js` 当成浏览器里的独立 bundle 加载，验证模块 id / 插件名 /
- * inject 声明 / 字典注册 / 会话面板分区注册；组件在拿到数据前渲染为空（数据来自宿主路由）。
+ * inject 声明 / 字典注册 / 会话面板分区注册 / 后台轮询的启动与清理；组件在拿到数据前渲染为空
+ * （数据来自宿主路由）。测试环境没有 window，后台轮询必须安静跳过、不发请求。
  *
  * 行级渲染断言在 `render.test.mjs`（那里用真 React 渲染纯展示组件）。
  *
@@ -79,7 +80,14 @@ const ctx = {
     effects.push({ label, disposer: callback() })
   },
 }
+const originalFetch = globalThis.fetch
+let fetchCalls = 0
+globalThis.fetch = async () => {
+  fetchCalls += 1
+  throw new Error('测试环境不应发起后台请求')
+}
 plugin.apply(ctx)
+check('测试环境不悄悄发起后台请求', fetchCalls, 0)
 
 check('只注入一个槽', injections, ['conversation.session.panel.section'])
 check('一个分区注册', registrations.length, 1)
@@ -105,8 +113,12 @@ const required = [
   'value.seconds', 'value.tps',
 ]
 checkTrue('文案键齐全', required.every(key => typeof zh[key] === 'string' && typeof en[key] === 'string'))
-check('挂了一个字典 effect', effects.length, 1)
-checkTrue('effect 带清理函数', typeof effects[0].disposer === 'function')
+check('字典与后台轮询各挂一个 effect', effects.length, 2)
+check('effect 标签', effects.map(effect => effect.label), [
+  'dsh-opencode-status: dictionaries',
+  'dsh-opencode-status: background polling',
+])
+checkTrue('每个 effect 带清理函数', effects.every(effect => typeof effect.disposer === 'function'))
 
 console.log('--- C③ 拿到宿主数据前渲染为空 ---')
 const tree = component({
@@ -117,4 +129,5 @@ const tree = component({
 })
 check('空', tree, null)
 
+globalThis.fetch = originalFetch
 finish()

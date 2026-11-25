@@ -4,12 +4,15 @@
  * 网页由宿主同源提供，请求自动带上会话 cookie；宿主路由 `auth: 'required'` + owner 校验，
  * 因此这里不需要也不应该自己带任何凭据。
  *
- * 节奏：挂载时立刻取一次，之后每 5 秒一次（下一次在上一次有结果后才排，避免慢请求叠在一起）。
+ * 节奏：启动时立刻取一次，之后每 5 秒一次（下一次在上一次有结果后才排，避免慢请求叠在一起）。
  * 上游快照本身约每分钟才变一次、且带 `cache-control: max-age=15`，5 秒是「更快看到变化」与
  * 「不放大上游请求」之间的折中。
  * 页面在后台标签里时跳过请求，只保留轻量的定时检查，回到前台后下一拍自动补取。
- * 单次请求 15 秒超时；失败不抛出，而是把 `{ ok: false }` 交给调用方——面板因此能在失败时
- * 保留上一份读数，或者在第一份就失败时给出可诊断的「暂时无法获取」。卸载时中止在途请求。
+ * 单次请求 15 秒超时；失败不抛出，而是把 `{ ok: false }` 交给调用方——读数仓因此能在失败时
+ * 保留上一份读数，或者在第一份就失败时给出可诊断的「暂时无法获取」。停止时中止在途请求。
+ *
+ * 启动与停止由 `status-store.ts` 在页面装载 / 插件卸载时控制：轮询不绑在组件挂载上，
+ * 所以切换会话不会清空读数，也不会重新等一轮请求。
  */
 
 import { parseStatusReply, STATUS_PATH } from './wire.ts'
@@ -117,7 +120,7 @@ export async function readStatus(fetchImpl: StatusFetch, signal: AbortSignal): P
  * 轮询宿主路由。
  * @param onReply - 每份响应的回调（成功与失败都会回调）。
  * @param options - 轮询间隔、抓取实现与超时。
- * @returns 取订函数：中止在途请求并停掉下一次轮询。
+ * @returns 停止函数：中止在途请求并停掉下一次轮询。
  */
 export function pollStatus(
   onReply: (reply: OpencodeStatusReply) => void,

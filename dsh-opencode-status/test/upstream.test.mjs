@@ -1,13 +1,24 @@
 /**
- * 宿主取数器：TTL 缓存、并发合流、失败后的缓存兜底与超时/失败的错误路径。
+ * 宿主取数器：TTL 缓存、并发合流、后台保活刷新、失败后的缓存兜底与超时/失败的错误路径。
  *
- * 用可注入的时钟与 fetch，不打真实网络。
+ * 用可注入的时钟与 fetch，不打真实网络；后台保活本身用真实计时器，测试里只等几毫秒。
  *
  * 运行：`node test/upstream.test.mjs`（或 pnpm test 跑全部）。
  */
-import { createStatusSource, DEFAULT_STALE_MAX_AGE_MS, DEFAULT_TTL_MS } from '../src/upstream.ts'
+import {
+  createStatusSource,
+  DEFAULT_BACKGROUND_REFRESH_MS,
+  DEFAULT_STALE_MAX_AGE_MS,
+  DEFAULT_TTL_MS,
+} from '../src/upstream.ts'
+import { POLL_INTERVAL_MS } from '../src/status-client.ts'
 import { UPSTREAM_STATUS_URL } from '../src/wire.ts'
 import { check, checkTrue, finish, upstreamFixture } from './helpers.mjs'
+
+/** 睡眠：等待后台保活跑一两次。 */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 /** 一个成功响应。 */
 function okResponse(body = upstreamFixture()) {
@@ -139,5 +150,70 @@ try {
   failed = true
 }
 checkTrue('dispose 后拒绝', failed)
+
+console.log('--- U⑧ 后台保活：启动即预热，读取只取内存 ---')
+let warmClock = 0
+let warmCalls = 0
+const warm = createStatusSource({
+  now: () => warmClock,
+  ttlMs: DEFAULT_TTL_MS,
+  // 间隔远大于测试时长：这里只验证「启动即预热」与「读取不触发按需抓取」。
+  backgroundRefreshMs: 60_000,
+  fetchImpl: async () => {
+    warmCalls += 1
+    return okResponse()
+  },
+})
+await sleep(10)
+check('启动即预热', warmCalls, 1)
+warmClock += DEFAULT_TTL_MS + 1
+const stored = await warm.read()
+check('读取拿到内存快照', stored.model?.ttftMs, 9058)
+check('读取没有触发上游', warmCalls, 1)
+warm.dispose()
+
+console.log('--- U⑨ 后台保活：按间隔继续刷新，dispose 后停止 ---')
+let beatCalls = 0
+const beating = createStatusSource({
+  backgroundRefreshMs: 5,
+  fetchImpl: async () => {
+    beatCalls += 1
+    return okResponse()
+  },
+})
+await sleep(30)
+checkTrue('间隔内多次刷新', beatCalls >= 2)
+beating.dispose()
+const beforeDispose = beatCalls
+await sleep(25)
+check('dispose 后停止', beatCalls, beforeDispose)
+
+console.log('--- U⑩ 后台刷新失败：保留内存旧读数并标记陈旧 ---')
+let backgroundMode = 'ok'
+let backgroundClock = 0
+const backgroundWarnings = []
+const background = createStatusSource({
+  now: () => backgroundClock,
+  backgroundRefreshMs: 5,
+  staleMaxAgeMs: 60_000,
+  onError: message => backgroundWarnings.push(message),
+  fetchImpl: async () => {
+    if (backgroundMode === 'fail') throw new Error('connect ECONNREFUSED')
+    return okResponse()
+  },
+})
+await sleep(10)
+backgroundMode = 'fail'
+backgroundClock += DEFAULT_TTL_MS + 1
+await sleep(15)
+const staleRead = await background.read()
+check('仍交出旧读数', staleRead.model?.ttftMs, 9058)
+check('标记陈旧', staleRead.stale, true)
+checkTrue('告警出口收到说明', backgroundWarnings.some(message => message.includes('ECONNREFUSED')))
+background.dispose()
+
+console.log('--- U⑪ 装配节奏：宿主保活与页面轮询同为 5 秒 ---')
+check('宿主保活间隔', DEFAULT_BACKGROUND_REFRESH_MS, 5_000)
+check('页面轮询间隔', POLL_INTERVAL_MS, 5_000)
 
 finish()

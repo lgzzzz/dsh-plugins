@@ -5,7 +5,7 @@
   "engines": {
     "dsh": "^0.2.3-alpha.2"
   },
-  "description": "在会话面板里加「OpenCode Go」一栏：宿主半部代理 https://opencode.ai/status/api/status（主站不带 CORS 头，浏览器不能直连），从 components 里取出 service=go 的 deepseek-v4.1-flash，经同源、owner-only 的 GET /opencode-status/status 交给页面；浏览器半部每 5 秒轮询一次（宿主侧同样 5 秒缓存 + 并发合流，后台标签页跳过请求），按行显示服务状态、模型、模型状态、首 Token 与吞吐，上游失败时有缓存就先用缓存并标记陈旧，重试期间保留上一次读数。",
+  "description": "在会话面板里加「OpenCode Go」一栏：宿主半部代理 https://opencode.ai/status/api/status（主站不带 CORS 头，浏览器不能直连），后台每 5 秒保活刷新、把收窄后的快照常驻内存，经同源、owner-only 的 GET /opencode-status/status 立即交给页面；浏览器半部在页面装载时就启动唯一一个 5 秒轮询（结果存内存，切换会话直接复用，后台标签页跳过请求），按行显示服务状态、模型、模型状态、首 Token 与吞吐，上游失败时有缓存就先用缓存并标记陈旧，重试期间保留上一次读数。",
   "type": "module",
   "exports": {
     ".": {
@@ -29,7 +29,7 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check:css": "node check-css.mjs",
-    "check": "node --check lib/client.js && node --check index.ts && node --check src/wire.ts && node --check src/upstream.ts && node --check src/route.ts && node --check src/install.ts && node --check src/web-types.ts && node --check src/locales.ts && node --check src/format.ts && node --check src/rows.ts && node --check src/status-client.ts && node --check src/component.ts && node --check src/client.ts && node --check src/registration.ts",
+    "check": "node --check lib/client.js && node --check index.ts && node --check src/wire.ts && node --check src/upstream.ts && node --check src/route.ts && node --check src/install.ts && node --check src/web-types.ts && node --check src/locales.ts && node --check src/format.ts && node --check src/rows.ts && node --check src/status-client.ts && node --check src/status-store.ts && node --check src/component.ts && node --check src/client.ts && node --check src/registration.ts",
     "test": "node test/run-all.mjs"
   },
   "devDependencies": {

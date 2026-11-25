@@ -19,6 +19,7 @@ const ORDER = [
   'upstream.test.mjs',
   'route.test.mjs',
   'status-client.test.mjs',
+  'status-store.test.mjs',
   'plugin-apply.test.mjs',
   'artifact-client.test.mjs',
   'render.test.mjs',

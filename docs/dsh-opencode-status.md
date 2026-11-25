@@ -18,8 +18,9 @@
 ```
 
 > 一句话分工：上游接口不带 CORS 头，页面不能直连，所以**宿主半部**代理抓取并把 90KB 的整页
-> 快照收窄成「`go` 服务 + `deepseek-v4.1-flash`」一条，挂在同源、owner-only 的
-> `GET /opencode-status/status` 上；**浏览器半部**轮询它，把读数摊成会话面板的分区行。
+> 快照收窄成「`go` 服务 + `deepseek-v4.1-flash`」一条，后台每 5 秒保活刷新、常驻内存，挂在
+> 同源、owner-only 的 `GET /opencode-status/status` 上；**浏览器半部**在页面装载时轮询它，
+> 把读数摊成会话面板的分区行。
 
 -----
 
@@ -27,7 +28,7 @@
 
 ```text
 https://opencode.ai/status/api/status（Cloudflare，cache-control: max-age=15，无 CORS 头）
-  → 宿主：createStatusSource（5 秒 TTL 缓存 + 并发合流，超时 10 秒）
+  → 宿主：createStatusSource（后台每 5 秒保活刷新 + 并发合流 + 5 秒 TTL，超时 10 秒）
   → wire.ts：extractSnapshot —— components[service=go]
        ├─ service.status / service.reason
        ├─ breakdown[id=deepseek-v4.1-flash].status / reason / speed.{ttft,tps}
@@ -60,7 +61,8 @@ https://opencode.ai/status/api/status（Cloudflare，cache-control: max-age=15�
 
 | 环节 | 行为 |
 |---|---|
-| 页面轮询 | 挂载立即取一次，之后每 5 秒一次（下一次在上一次有结果后才排，避免慢请求叠加） |
+| 宿主保活 | 装配即抓一次，之后每 5 秒后台刷新，最新快照常驻内存；页面请求只读内存，不等上游往返 |
+| 页面轮询 | 页面装载即启动一次，之后每 5 秒一次（下一次在上一次有结果后才排，避免慢请求叠加）；读数留在内存，切换会话直接复用 |
 | 后台标签页 | `document.visibilityState === 'hidden'` 时跳过请求，回到前台后下一拍补取 |
 | 单次请求 | 15 秒超时；网络失败 / 非 JSON / 形状不对都折成 `{ ok: false }`，不抛错 |
 | 宿主缓存 | 5 秒 TTL + 并发合流：多个页面同时刷新只打一次上游 |
@@ -72,8 +74,9 @@ https://opencode.ai/status/api/status（Cloudflare，cache-control: max-age=15�
 
 为什么是 5 秒：上游响应带 `cache-control: max-age=15`，实测 `updatedAt` 只在整分
 `:32` 跳（间隔 1–5 分钟），5 秒既能让面板较快看到边缘缓存刷新后的新值，又把请求量控制在
-1 秒轮询的 1/5；更密的轮询大部分时间只会拿到同一份快照。面板本身不显示更新时间，读数是否
-新鲜由外部状态页负责，插件只保证请求节奏稳定。
+1 秒轮询的 1/5；更密的轮询大部分时间只会拿到同一份快照，多出的请求由 Cloudflare 边缘缓存
+接住。宿主保活与页面轮询用同一节奏：页面每一拍读到的内存快照最老约 5 秒，且不必等上游往返。
+面板本身不显示更新时间，读数是否新鲜由外部状态页负责，插件只保证请求节奏稳定。
 
 -----
 
@@ -109,17 +112,18 @@ https://opencode.ai/status/api/status（Cloudflare，cache-control: max-age=15�
 | 文件 | 作用 |
 |---|---|
 | `index.ts` | 宿主半部入口：`name` + `apply`（调用 `src/install.ts`） |
-| `src/install.ts` | 把取数器挂到 `ctx.webServer` 的 exact 路由上，卸载时一起收回 |
-| `src/upstream.ts` | 抓上游 + 15 秒 TTL 缓存 + 并发合流 + 失败兜底 + 超时 |
+| `src/install.ts` | 把取数器挂到 `ctx.webServer` 的 exact 路由上，装配即启动后台保活，卸载时一起收回 |
+| `src/upstream.ts` | 抓上游 + 5 秒保活刷新（含 5 秒 TTL）+ 并发合流 + 失败兜底 + 超时 |
 | `src/route.ts` | 同源 JSON 路由：owner / GET 校验、200 / 403 / 405 / 502 |
 | `src/wire.ts` | 共享类型、上游收窄 `extractSnapshot`、浏览器侧守卫 `parseStatusReply` |
 | `src/web-types.ts` | 本插件用到的 `ctx.webServer` 最小类型面（不引入宿主包依赖） |
-| `src/client.ts` | 浏览器半部入口：注册字典与分区槽 |
+| `src/client.ts` | 浏览器半部入口：注册字典与分区槽，页面装载时启动后台轮询 |
 | `src/registration.ts` | 分区注册契约：槽键 / id / 排序 / 标题 thunk |
-| `src/component.ts` | 分区组件与 16px 字形；订阅轮询并渲染纯展示行 |
+| `src/component.ts` | 分区组件与 16px 字形；同步读取共享读数仓并订阅变化 |
 | `src/rows.ts` | 一份响应 → 面板行的纯函数 |
 | `src/format.ts` | 状态/原因译文、秒与 tok/s、相对时间 |
-| `src/status-client.ts` | 浏览器侧轮询：15 秒间隔、超时、后台跳过、卸载中止 |
+| `src/status-client.ts` | 浏览器侧轮询：5 秒间隔、15 秒超时、后台跳过、停止中止 |
+| `src/status-store.ts` | 页面级读数仓：单点轮询、最近一份响应、订阅；读数不随面板卸载丢失 |
 | `src/locales.ts` | 中英文字典（标题、行标签、状态/原因、单位、时间） |
 | `contract.json` / `check-css.mjs` | 上游契约静态校验（分区槽、行标记、webServer 鉴权链路） |
 
@@ -131,7 +135,7 @@ https://opencode.ai/status/api/status（Cloudflare，cache-control: max-age=15�
 cd dsh-opencode-status
 pnpm build        # tsdown → lib/client.js（浏览器半部）
 pnpm typecheck    # tsc --noEmit
-pnpm test         # 9 个测试文件：收窄、格式化、排版、取数、路由、轮询、渲染、产物装配
+pnpm test         # 10 个测试文件：收窄、格式化、排版、取数、路由、轮询、读数仓、装配、渲染
 pnpm check        # node --check 全部 .ts / 构建产物语法
 pnpm check:css    # 对 DSH 安装产物校验槽位、行标记、路由与鉴权契约
 ```
@@ -152,10 +156,13 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-opencode-status
 已验证：
 
 - 宿主路由：不带 cookie 401，带 owner cookie 200，返回的 `go` / `deepseek-v4.1-flash` 字段与
-  上游一致；连续两次请求 `fetchedAt` 相同（5 秒缓存生效）；
+  上游一致；
+- 取数节奏：按装配参数用真实计时器跑 14 秒，三次上游请求的间隔为 5001 ms / 5000 ms；线上
+  `GET /opencode-status/status` 的 `fetchedAt` 约每 5 秒推进一次（上游响应快慢带来的抖动属正常）；
 - 在线 slot 注册：`conversation.session.panel.section` 的 occupants 里有
   `dsh-opencode-status / opencode-status / order 320 / active: true`；
-- 单元与装配测试 9 个文件全绿；`check-css.mjs` 8/8 通过。
+- 单元与装配测试 10 个文件全绿；`check-css.mjs` 8/8 通过。
 
-验证限制：当前环境没有浏览器控制，无法确认实际像素、悬停行为与明暗主题下的观感；客户端
-bundle 更新后，已打开的页面需要刷新一次才会用上新的 5 秒轮询。
+验证限制：当前环境没有浏览器控制，无法确认实际像素、悬停行为与明暗主题下的观感。改完宿主
+半部的取数节奏后，运行中的进程仍按旧间隔抓取，直到下一次重组合替换已加载的模块；判断线上
+节奏要看 `GET /opencode-status/status` 里 `fetchedAt` 的推进，而不是仓库里的常量。

@@ -9,8 +9,9 @@
  * ```
  *
  * 数据来自宿主半部的同源路由 `GET /opencode-status/status`（主站接口不带 CORS 头，页面不能
- * 直连）。挂载时立刻取一次，之后每 5 秒一次；宿主侧有同长度缓存与并发合流，所以多个页面
- * 同时开着也不会翻倍打上游。取不到时保留最后一次成功读数；从未成功过则显示一行「暂时无法获取」。
+ * 直连）。宿主侧在后台保活刷新，页面一装载也开始唯一一个 5 秒轮询并把读数留在内存里，所以
+ * 打开 / 切换会话时这里第一帧就能读到最近一份快照，不会先空一拍再出现。宿主取不到时保留
+ * 最后一次成功读数；从未成功过则显示一行「暂时无法获取」。
  *
  * 行直接用会话面板给 `[data-session-panel-row]` / `[data-row-part]` 铺的通用规则：
  * 每行一个 16px 字形，标签在 content、读数在 trailing。
@@ -23,7 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { NS } from './locales.ts'
 import { statusRows } from './rows.ts'
 import type { StatusRow, StatusRowKey } from './rows.ts'
-import { pollStatus } from './status-client.ts'
+import { statusStore } from './status-store.ts'
 import type { OpencodeStatusReply } from './wire.ts'
 
 /** 完整组件 props：分区槽的标准 props + 本插件字典的 `t`。 */
@@ -32,21 +33,21 @@ export type OpencodeStatusSectionProps =
   & PropsLocale<typeof NS>
 
 /**
- * 订阅宿主路由的读数。
+ * 读取共享的最近一份响应。
  *
- * 一次成功之后如果刷新失败，保留最后一份成功读数（而不是切成错误行）——宿主自己已经会用
- * 缓存兜底上游失败，这里的失败更可能是宿主路由不可达；保留旧数据比清空整栏更有用。
- * 从未成功过时才把错误交给排版层去画「暂时无法获取」。
- * @returns 最近一份可展示的响应，或 undefined（还没有任何响应）。
+ * 初始状态直接从模块级读数仓同步取：页面装载时后台轮询已经启动，切换会话重挂载时这里
+ * 已经有一份成功读数，第一帧就有内容。之后订阅变化；轮询本身是后台任务，组件卸载不停止它。
+ * 一次成功之后如果刷新失败，读数仓会保留最后一份成功读数（而不是切成错误行）——宿主自己
+ * 已经会用缓存兜底上游失败，这里的失败更可能是宿主路由不可达；保留旧数据比清空整栏更有用。
+ * @returns 最近一份可展示的响应，或 undefined（页面还没拿到任何响应）。
  */
 function useStatusReply(): OpencodeStatusReply | undefined {
-  const [reply, setReply] = useState<OpencodeStatusReply | undefined>(undefined)
-  useEffect(
-    () => pollStatus(next => setReply(previous => (
-      next.ok || previous === undefined || !previous.ok ? next : previous
-    ))),
-    [],
-  )
+  const [reply, setReply] = useState<OpencodeStatusReply | undefined>(() => statusStore.current())
+  useEffect(() => {
+    // 幂等：正常情况下页面装载时已经启动；这里兜住组件比插件 apply 更早挂载的极端顺序。
+    statusStore.start()
+    return statusStore.subscribe(setReply)
+  }, [])
   return reply
 }
 

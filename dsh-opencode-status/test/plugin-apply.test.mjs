@@ -1,8 +1,8 @@
 /**
  * 宿主半部装配：真 `apply` 在假 ctx 上把取数器接到 `webServer` 的同源路由上。
  *
- * `globalThis.fetch` 换成返回固定上游快照的假实现，不碰真实网络；浏览器侧走一遍处理函数，
- * 验证 200 载荷、owner 校验与卸载时路由/取数器一起收回。
+ * `globalThis.fetch` 换成返回固定上游快照的假实现，不碰真实网络；装配后验证后台保活已经
+ * 预热过上游，再走一遍处理函数，验证 200 载荷、owner 校验与卸载时路由/取数器一起收回。
  *
  * 运行：`node test/plugin-apply.test.mjs`（或 pnpm test 跑全部）。
  */
@@ -74,7 +74,11 @@ async function callRoute(route, peer, method = 'GET') {
 console.log('--- P① 声明与挂载 ---')
 check('导出名', name, 'dsh-opencode-status')
 
-globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => upstreamFixture() })
+let upstreamCalls = 0
+globalThis.fetch = async () => {
+  upstreamCalls += 1
+  return { ok: true, status: 200, json: async () => upstreamFixture() }
+}
 const { ctx, injections, routes, effects, warnings } = createContext()
 apply(ctx)
 check('注入 webServer', injections, [['webServer']])
@@ -84,6 +88,10 @@ check('路由精确匹配', routes[0].kind, 'exact')
 check('路由需要鉴权', routes[0].auth, 'required')
 check('挂了一个 effect', effects.length, 1)
 checkTrue('effect 带清理函数', typeof effects[0].disposer === 'function')
+
+console.log('--- P①b 后台保活：装配后不等页面请求就预热上游 ---')
+await new Promise(resolve => setTimeout(resolve, 10))
+checkTrue('装配后已抓过一次上游', upstreamCalls >= 1)
 
 console.log('--- P② 浏览器侧取数：200 与 go / deepseek-v4.1-flash ---')
 const ok = await callRoute(routes[0], OWNER)
