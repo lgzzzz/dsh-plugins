@@ -4,10 +4,12 @@
 //
 // 本插件会**静默**退化或与上游读数分叉的上游事实：
 //   1. 会话面板不再声明 / 渲染 `conversation.session.panel.section` 槽——这一栏不显示；
-//   2. 标准 props 不再提供 `useSessions`——拿不到会话列表，整节渲染为空；
-//   3. 行标记 `data-session-panel-row` / `data-row-part` 改名——行没有面板行的通用样式；
-//   4. 投影登记表改名或改签名——宿主半部注册不上；
-//   5. `inheritedEventCount` 改名——fork 继承前缀会被当成今天的消耗重复计入；
+//   2. 行标记 `data-session-panel-row` / `data-row-part` 改名——行没有面板行的通用样式；
+//   3. `llm/stream` waterfall 或 chunk 词汇里的 `usage` 块改名——一次模型调用也拦截不到 / 记不到
+//      用量，journal 不落行、面板永远为空；
+//   4. `ctx.webServer.register(route)`、`webserver/authorize`、浏览器 cookie 鉴权提供方改名——
+//      同源统计路由注册不上或页面读不到（401/403），面板没有数据；
+//   5. web server 不再把 `text/event-stream` 排除在 gzip 之外——SSE 帧可能被压缩缓冲，推送滞留；
 //   6. 「用量」按钮的读数口径（总用量算式、`number.thousand` / `number.million` 单位、缓存命中
 //      百分比不许把部分命中舍入成 100）变了——面板数字与它分叉（数值口径对齐，单位按本栏自己的
 //      「无单位 / K / M」显示，刻意不带 `tok`）。

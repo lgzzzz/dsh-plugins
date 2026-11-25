@@ -1,5 +1,5 @@
 {
-  "description": "dsh-today-token-usage 依赖的上游事实：会话面板分区槽与通用行样式、标准 props 的会话列表选择器、会话投影登记表（`sessionProjections` / `summaryKeys`）、fork 继承前缀长度、用量折叠认的两种结算事件与重试事件，以及「用量」按钮的读数口径（总用量算式、`number.thousand` / `number.million` 单位、缓存命中百分比）。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：槽或行标记改名时整栏静默消失或变成没有样式的裸行；登记表或继承前缀改名时投影注册不上，或 fork 继承前缀被重复计入；读数口径改名时面板数字与输入框下方的「用量」按钮分叉（数值口径对齐，单位按本栏自己的「无单位 / K / M」显示）。",
+  "description": "dsh-today-token-usage 依赖的上游事实：会话面板分区槽与通用行样式；`llm/stream` 拦截点与其中的 `usage` 块（每一次模型调用的用量来源）；宿主 `webServer` 路由注册面、`webserver/authorize` 鉴权决策、浏览器 cookie 鉴权提供方，以及 web server 对 `text/event-stream` 的免压缩处理（同源 SSE 推送能否被页面即时收到）；还有「用量」按钮的读数口径（总用量算式、`number.thousand` / `number.million` 单位、缓存命中百分比）。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：槽或行标记改名时整栏静默消失或变成没有样式的裸行；`llm/stream` 或 `usage` 块改名时一次模型调用也记不到；路由、鉴权或 SSE 免压缩处理改名时页面拿不到推送；读数口径改名时面板数字与输入框下方的「用量」按钮分叉（数值口径对齐，单位按本栏自己的「无单位 / K / M」显示）。",
   "checks": [
     {
       "id": "session-panel-section-slot",
@@ -35,61 +35,70 @@
       "paths": [
         "dsh-client-ui-session-panel/lib"
       ],
-      "hint": "面板行的 trailing 位改名：缓存命中不再排在读数右侧、也不再使用次级色"
+      "hint": "面板行的 trailing 位改名：读数不再排在右侧、也不再使用次级色"
     },
     {
-      "id": "use-sessions-standard-prop",
+      "id": "llm-stream-waterfall",
       "plugin": "dsh-today-token-usage",
-      "token": "useSessions",
+      "token": "llm/stream",
       "paths": [
-        "dsh-client-ui-session/lib"
+        "dsh-llm/lib"
       ],
-      "hint": "标准 props 不再提供 useSessions：拿不到会话列表投影，整节渲染为空"
+      "hint": "llm/stream waterfall 改名或消失：宿主半部拦截不到任何模型调用，journal 与面板始终为空"
     },
     {
-      "id": "projection-registry-service",
+      "id": "llm-usage-chunk",
       "plugin": "dsh-today-token-usage",
-      "token": "sessionProjections",
+      "pattern": "type: 'usage'",
       "paths": [
-        "dsh-session-projection/lib"
+        "dsh-llm/lib"
       ],
-      "hint": "投影登记表服务名改名：宿主半部注入不到，投影注册不上，整栏不显示"
+      "hint": "chunk 词汇里的 usage 块改名：每次调用都记不到用量，journal 不落行、面板永远为空"
     },
     {
-      "id": "projection-summary-keys",
+      "id": "webserver-route-register",
       "plugin": "dsh-today-token-usage",
-      "token": "summaryKeys",
+      "token": "register(route",
       "paths": [
-        "dsh-session-projection/lib"
+        "dsh-host-webserver/lib"
       ],
-      "hint": "列表摘要键集合不再由登记表派生：新登记的投影可能不进会话列表，读数永远为空"
+      "hint": "ctx.webServer.register(route) 的签名改名：宿主统计路由注册不上，浏览器半部拿不到当天合计"
     },
     {
-      "id": "session-inherited-count",
+      "id": "webserver-authorize-event",
       "plugin": "dsh-today-token-usage",
-      "token": "inheritedEventCount",
+      "token": "webserver/authorize",
       "paths": [
-        "dsh-session/lib"
+        "dsh-host-webserver/lib"
       ],
-      "hint": "fork 继承前缀长度改名：继承来的历史会被当成今天的消耗重复计入，fork 后读数翻倍"
+      "hint": "webserver/authorize 决策点改名：路由的 auth: 'required' 不再按预期校验，可能一律 401/503 或未鉴权"
     },
     {
-      "id": "assistant-settlement-event",
+      "id": "webserver-sse-uncompressed",
       "plugin": "dsh-today-token-usage",
-      "token": "assistant/message",
+      "token": "text/event-stream",
       "paths": [
-        "dsh-token-meter/lib"
+        "dsh-host-webserver/lib"
       ],
-      "hint": "上游按 assistant/message 结算用量的事实不再成立：折叠认的事件或用量取法变了，读数与「用量」按钮分叉"
+      "hint": "web server 不再把 text/event-stream 排除在 gzip 之外：SSE 帧可能被压缩缓冲，页面收不到即时推送"
     },
     {
-      "id": "llm-retry-event",
+      "id": "connection-authorize-listener",
       "plugin": "dsh-today-token-usage",
-      "token": "llm/retry-started",
+      "token": "webserver/authorize",
       "paths": [
-        "dsh-llm-retry/lib"
+        "dsh-client-connection/lib"
       ],
-      "hint": "重试事件改名：替换槽不再被清空，重试那一次的消耗会被下一次结算覆盖掉，读数偏小"
+      "hint": "连接层不再监听 webserver/authorize：浏览器带 cookie 的同源请求不会被识别为 owner，统计路由返回 403/401"
+    },
+    {
+      "id": "cookie-authentication-provider",
+      "plugin": "dsh-today-token-usage",
+      "token": "authentication.register",
+      "paths": [
+        "dsh-host-authentication-token/lib"
+      ],
+      "hint": "浏览器会话 cookie 的鉴权提供方注册面改名：页面里的同源 fetch 拿不到 owner Peer，面板没有数据"
     },
     {
       "id": "usage-total-formula",

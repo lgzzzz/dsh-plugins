@@ -1,9 +1,7 @@
 # dsh-today-token-usage
 
-在会话面板里加一栏「今日 Token 用量」：一项指标一行，是**今天全部会话**加起来的 Token 用量——
-总用量、缓存命中、未缓存输入、缓存读取、缓存写入（非零时）、输出。数值口径与输入框下方那个
-「用量」按钮一致，单位只用无单位 / K / M（不带 `tok`）——把各会话的用量按天累计起来看，
-而不是只看某一个会话。
+记录 **DSH 发出的每一次大模型请求**的 Token 用量，并在会话面板里显示宿主**当天**的合计：
+总用量、请求数、缓存命中、未缓存输入、缓存读取、缓存写入（非零时）、输出。
 
 ```text
 会话面板
@@ -12,86 +10,120 @@
 ├─ 子智能体
 └─ 今日 Token 用量
     总用量          326M
+    请求数          1.3K
     缓存命中        99%
     未缓存输入      2.7M
     缓存读取        320M
     输出            1.1M
 ```
 
-> 一句话分工：宿主半部把一个会话**今天**用掉的 Token 算成会话投影，浏览器半部把各会话那一份
-> 加起来。不读日志、不折事件，也不新增任何页面。
+> 一句话分工：宿主半部在 `llm/stream` 上拦下每一次模型调用，把用量按天追加到 JSONL（保留
+> 30 天）；浏览器半部经同源、owner-only 的 SSE 长连接（`GET /today-token-usage/stream`）接收
+> 宿主推送并渲染。
+> 面板与 journal 是同一个数。
 
 -----
 
-## 它加的是什么
+## 它记录哪些请求
 
-| | 行为 |
+采集点是 `llm/stream` waterfall——DSH 里所有模型调用的唯一必经之路：
+
+| 请求来源 | `purpose` | 旧版（会话投影）是否统计 |
+|---|---|---|
+| 主对话、子智能体（每一步） | 无 | 是（assistant/message、assistant/attempt） |
+| 会话标题生成 | `session-title` | **否**（用量根本没写进会话日志） |
+| 压缩摘要 | `compaction` | **否**（用量只在 `compaction/summary` 事件里） |
+| 时间线报告 | `timeline-report` | 否 |
+| auto-review | `auto-review` | 否 |
+| 其它插件直接 `ctx.llm.stream()` 的调用 | 取决于调用方 | 否 |
+
+口径：一次 `llm/stream` 调用 = 一条记录。用量取流里**最后一个** `usage` 块（provider 真正
+回报的值）；没有回报用量的请求（失败、取消且 provider 未回报）没有 Token 可记，不落行、也
+不计入「请求数」。重试的每一次尝试都是独立的模型调用，各记一条，与 provider 实际收到的请求
+一一对应。
+
+-----
+
+## 数据从哪来，怎么到面板
+
+```text
+ctx.llm.stream(options)
+  → llm/stream waterfall（宿主半部：global 监听，append 在链路里）
+  → tapStream：chunk 原样透传，记住最后一个 usage / finish
+  → store.record：同步更新当天内存合计 + 串行 append 一行 JSONL
+  → GET /today-token-usage/stream（auth: required + owner 校验，SSE 长连接）
+  → 每次记录成功推一帧（跨零点也推新一天的空读数）→ 面板
+```
+
+为什么不再用会话投影：
+
+| 方案 | 结论 |
 |---|---|
-| 位置 | 槽位 `conversation.session.panel.section`，`id: today-usage`，`order: 300`：排在上游「改动请求」(100)、「子智能体」(200) 与「共享任务」(250) 之后；与上游「后台任务」同为 300，按注册顺序排在它后面 |
-| 出现时机 | 今天只要有任何一个会话用掉过 Token 就显示；今天没有任何用量（或会话列表还没到）时整节渲染为空——面板会连标题一起隐藏，与其它分区一致 |
-| 内容 | 一项指标一行：图标 + 标签在左、数值右对齐；依次是总用量、缓存命中、未缓存输入、缓存读取、缓存写入（为 0 时不占行）、输出 |
-| 图标 | 每行一个 16px 线框字形，同一套 1.2px 圆头笔画：总用量是数据库（与「用量」按钮同形）、缓存命中是靶心、未缓存输入是入框下箭头、缓存读取是从缓存柱指出、缓存写入（非零时）是箭头指回缓存柱、输出是出框上箭头 |
-| 统计范围 | **全部会话**，包括子智能体会话与看不见的旧会话；不是当前会话自己的用量。当前会话的用量看输入框下面的「用量」按钮 |
-| 日期边界 | 宿主进程的本地时区。跨过本地零点后，昨天的桶自动退出今天的读数（面板开着也会重算） |
-| 更新时机 | 跟着会话列表的投影推送走：新结算发生、会话列表刷新都会让读数自己变，不需要打开会话 |
-| 读屏 | 每行连续文本：`总用量 326M`、`缓存读取 320M`……；图标对辅助技术隐藏 |
+| 会话投影折 `assistant/message` | 标题生成的用量不在日志里，压缩摘要的用量在别的事件里：**永远统计不全** |
+| 浏览器直接读 journal | 浏览器没有宿主文件权限 |
+| 自定义 `ctx.remote` 命名空间 | 构建期按包选定，第三方插件挂不上 |
+| **`llm/stream` 拦截 + 同源 SSE 推送（本实现）** | 覆盖所有请求；宿主 `webServer` 是公开服务，路由带 cookie 鉴权且只认 owner，页面无需轮询 |
+
+两条路由：
+
+| 路径 | 形态 | 用途 |
+|---|---|---|
+| `GET /today-token-usage/stream` | `text/event-stream` 长连接，每帧 `data: {...}` | 页面接收推送（连接建立先补发当前快照） |
+| `GET /today-token-usage/today` | 一次性 JSON | curl / 排障 / 兜底 |
+
+路由安全：`auth: 'required'`（请求必须是活着的 Peer，浏览器靠会话 cookie 过
+`webserver/authorize`），处理函数再校验 `peer.principal.kind === 'owner'`；只接受 GET，响应
+`cache-control: no-store`，不返回会话内容，只有聚合数字。DSH 的 web server 明确把
+`text/event-stream` 排除在 gzip 之外，长连接不会被压缩缓冲；空闲时每 15 秒写一行注释帧保活。
+
+-----
+
+## 落盘：按天 JSONL，保留 30 天
+
+- 目录：`$DSH_HOME/state/today-token-usage/`（`$DSH_HOME` 优先，否则 `~/.dsh`；目录 0700）。
+- 文件：`requests-YYYY-MM-DD.jsonl`（宿主本地日期），文件 0600，一行一个请求：
+
+```json
+{"v":1,"time":1795578…,"day":"2026-11-25","provider":"opencode-go","model":"deepseek-v4.1-flash","reasoningEffort":"max","sessionId":"session-…","purpose":"session-title","finish":"stop","usage":{"inputTokens":1234,"outputTokens":456,"cacheReadTokens":7890,"cacheWriteTokens":0}}
+```
+
+- 只存元数据与用量：**不存 prompt、消息内容或凭据**。
+- 保留**今天 + 前 29 天**共 30 个日文件；更早的文件在插件启动与跨天时自动删除。目录里其它
+  文件不动。
+- 启动时读回当天文件恢复合计（行解析失败跳过并告警一次），所以 DSH 重启不丢当天数字。
+- 读盘/写盘失败只告警一次：面板仍按内存合计显示，模型调用不受任何影响。
 
 -----
 
 ## 读数口径：与「用量」按钮一致
 
-一致性是这一栏的设计约束，而不是巧合。四个数来自同一个投影形状
-（`uncachedInputTokens` / `outputTokens` / `cacheReadTokens` / `cacheWriteTokens`），算式与格式逐条
-照抄上游 `@deepseek-ai/dsh-client-ui-chat`：
+一致性是这一栏的设计约束，而不是巧合。算式与格式逐条照抄上游
+`@deepseek-ai/dsh-client-ui-chat`：
 
 | 项 | 规则 | 上游出处 |
 |---|---|---|
 | 总用量 | 未缓存输入 + 缓存读取 + 缓存写入 + 输出 | `UsagePill` 的 `billedInputTokens(usage) + usage.outputTokens` |
 | 紧凑格式 | `<1000` 原样；`<1M` 用 `K`（百位以上取整、其余一位小数）；否则 `M` | `token-format.ts` 的 `formatTokens` |
 | 单位 | 小于 1000 显示原数，千级 `K`、百万级 `M`，**不带 `tok` 后缀**（本栏自己的取舍；上游按钮读数是 `{count} tok`） | 本插件 `src/aggregate.ts` |
-| 单位 | common 字典的 `number.thousand` / `number.million`，与应用内其它读数同一份 | `dsh-client-locale` 的 common 命名空间 |
 | 缓存命中 | 缓存读取 ÷ 输入侧三桶之和；**部分命中不会被舍入成 100%**（自动加位区分到 100 以下） | `formatCacheHitPercent` |
-
-按天切分只影响「算哪些结算」：每个会话今天的那一份仍按上表算，加起来就是今天的总量。所以
-「今日总量」= 把这一天里每个会话的「用量」加总；面板上的五行就是这一天总量的四桶拆解 +
-由它们推出的缓存命中。
+| 请求数 | 当天回报了用量的模型调用次数，按同一套 K / M 紧凑格式 | 本插件 |
 
 「用量」按钮开关（设置 → 通用设置 → 性能与用量）里的**简洁 / 详细**只作用于那条按钮；这一栏
 始终是「详细」形态的两段读数（总量 + 缓存命中），因为面板里没有悬浮对话框可放详表。
 
 -----
 
-## 为什么是会话投影，而不是自己读日志
+## 面板行为
 
-| 方案 | 结论 |
+| | 行为 |
 |---|---|
-| 浏览器直接读会话日志 | 会话列表里几百个历史会话要全读一遍；日志是压缩的分段文件，翻页与并发都归 Host 管，客户端不该碰 |
-| 客户端调自定义 Host 服务 | `ctx.remote` 是构建期按包选定的命名空间，第三方插件挂不上自己的命名空间 |
-| 每个会话存「全部历史累计」 | 上游 `tokenUsage` 投影已经是这个；它答不了「今天」 |
-| **按天分桶的会话投影（本实现）** | 登记表就是为这种派生量准备的：活会话由它增量折，冷会话读持久化缓存；客户端只做加法 |
-
-宿主半部注册 `todayTokenUsage` 单元，`wire.view` 直接返回状态里那个对象（引用稳定，没变化时不重复
-发布）。客户端从会话列表行（`projectionValues`）与已连接会话的投影里各取一份，按会话 id 去重、
-已连接的那份优先，只累加 `day` 等于本机今天的值。
-
-折叠语义与上游 `tokenUsage` 一致，另加两处：
-
-- **按事件发生的那一天归属**，只保留最后一个有用量的日期；跨零点的替换结算不会再往昨天累。
-- **fork / seed 继承来的前缀不计入**：那是源会话的消耗，源会话自己的日志里已经算过。
-
-同一 `turn + step` 的重复结算按替换处理（先减后加），`llm/retry-started` 之后那次结算算新增——
-与上游 `tokenUsage` 的替换槽逐条对齐。
-
------
-
-## 冷会话：只读缓存行，不回填
-
-会话列表里的冷会话只按**持久化缓存里的行**出投影值（零 I/O，缺行不折）；这一行由投影登记表在
-会话活着跨过存档点时写回。本插件不额外读日志，也不做启动回填：插件装上**之前**就已经冷掉、之后
-没有再打开的会话没有这一行，它今天早些时候用掉的 Token 不计入读数，直到该会话重新打开（变活后
-登记表自己会折，并在下一个存档点写回）。
-
-这个取舍换来的是启动时零日志 I/O：激活插件不会打开任何历史会话，也不会把旧结果写回缓存。
+| 位置 | 槽位 `conversation.session.panel.section`，`id: today-usage`，`order: 300` |
+| 出现时机 | 当天总用量大于 0 时显示；没有数据（或宿主暂时没给）时整节渲染为空——面板连标题一起隐藏 |
+| 内容 | 一项指标一行：图标 + 标签在左、数值右侧；总用量、请求数、缓存命中、未缓存输入、缓存读取、缓存写入（为 0 时不占行）、输出 |
+| 更新 | **宿主推送**：连接建立即收到当前快照，之后每次记录更新推一帧；跨零点推新一天的空读数。断线由浏览器自动重连，重连后宿主补发当前快照；卸载时关闭连接 |
+| 失败 | 保留上一次成功读数；从未成功过则整节为空。路由未就绪、401/403、HTML fallback、坏 JSON 都按「暂时没有数据」处理 |
+| 日期边界 | 宿主进程的本地时区；零点后宿主返回新一天的空合计，面板自动收起 |
+| 读屏 | 每行连续文本：`总用量 326M`、`缓存命中 99%`……；图标对辅助技术隐藏 |
 
 -----
 
@@ -99,74 +131,85 @@
 
 | 文件 | 职责 |
 |---|---|
-| [`index.ts`](../dsh-today-token-usage/index.ts) | 宿主入口：注册投影 |
-| [`src/wire.ts`](../dsh-today-token-usage/src/wire.ts) | 共享词汇：投影键、四个桶、日期键与日界、口径算式（纯模块） |
-| [`src/fold.ts`](../dsh-today-token-usage/src/fold.ts) | 纯折叠：日期归属、替换槽、重试、继承前缀、视图引用稳定性 |
-| [`src/schema.ts`](../dsh-today-token-usage/src/schema.ts) | 状态与 wire 视图的 zod schema、投影定义（含 `stateVersion`） |
+| [`index.ts`](../dsh-today-token-usage/index.ts) | 宿主入口：解析 journal 目录并装配记录器 |
+| [`src/install.ts`](../dsh-today-token-usage/src/install.ts) | 接线：`llm/stream` global 监听、journal store、路由注册（`webServer` 可选） |
+| [`src/tap.ts`](../dsh-today-token-usage/src/tap.ts) | 用量旁路：chunk 原样透传、结算只回调一次、旁路失败不影响模型流 |
+| [`src/journal.ts`](../dsh-today-token-usage/src/journal.ts) | journal 词汇：记录格式、文件名、容错解析、合计（纯模块） |
+| [`src/store.ts`](../dsh-today-token-usage/src/store.ts) | 落盘存储：读回、追加、跨天、30 天清理、失败降级 |
+| [`src/paths.ts`](../dsh-today-token-usage/src/paths.ts) | `$DSH_HOME` 解析与 journal 目录 |
+| [`src/route.ts`](../dsh-today-token-usage/src/route.ts) | 两条 owner-only 路由：JSON 快照 + SSE 推送（扇出、保活、零点补发、断开清理） |
+| [`src/web-types.ts`](../dsh-today-token-usage/src/web-types.ts) | `ctx.webServer` 的最小结构化类型（不引入宿主包依赖） |
+| [`src/wire.ts`](../dsh-today-token-usage/src/wire.ts) | 两侧共享词汇：路由路径、当天读数、守卫、日期与四桶算式（纯模块） |
+| [`src/aggregate.ts`](../dsh-today-token-usage/src/aggregate.ts) | 纯计算：读数 → 面板合计、紧凑格式、缓存命中百分比 |
+| [`src/usage-client.ts`](../dsh-today-token-usage/src/usage-client.ts) | 浏览器收推送：SSE 订阅、坏帧守卫、卸载关闭 |
 | [`src/client.ts`](../dsh-today-token-usage/src/client.ts) | 浏览器入口：注册字典、等分区槽、注册分区 |
-| [`src/component.ts`](../dsh-today-token-usage/src/component.ts) | 分区组件：五行读数与六个字形、跨零点重渲染 |
-| [`src/aggregate.ts`](../dsh-today-token-usage/src/aggregate.ts) | 纯计算：按会话汇总今天、紧凑格式、缓存命中百分比 |
+| [`src/component.ts`](../dsh-today-token-usage/src/component.ts) | 分区组件：SSE 订阅、七个字形、按行渲染、空数据隐藏 |
 | [`src/registration.ts`](../dsh-today-token-usage/src/registration.ts) | 槽键 / 注册 id / `order` 与注册选项（纯模块） |
 | [`src/locales.ts`](../dsh-today-token-usage/src/locales.ts) | 本插件字典（zh / en） |
-| [`check-css.mjs`](../dsh-today-token-usage/check-css.mjs) + [`contract.json`](../dsh-today-token-usage/contract.json) | 上游槽、行标记、投影接口与读数口径的静态契约（15 条） |
+| [`check-css.mjs`](../dsh-today-token-usage/check-css.mjs) + [`contract.json`](../dsh-today-token-usage/contract.json) | 上游槽、行标记、`llm/stream`、`usage` 块、路由与鉴权、SSE 不被 gzip 缓冲、读数口径的静态契约（16 条） |
 
-宿主半部用 `inject = ['sessionProjections']`：投影登记表缺席时整项不激活。
-浏览器半部用 `inject = ['slots', 'locale']`，`dsh.client.platform = web`、`immediately: true`。
+宿主半部用 `inject = ['llm']`：模型调用服务缺席时整项不激活。`webServer` 走可选注入：没有它
+时只记录、不开路由（非 web composition）。浏览器半部用 `inject = ['slots', 'locale']`，
+`dsh.client.platform = web`、`immediately: true`。
 
-这一栏不挂样式表：行直接吃会话面板给 `[data-session-panel-row]` / `[data-row-part]` 铺的通用规则，
-图标 16px，颜色随行文字，明暗主题自动跟随。
+这一栏不挂样式表：行直接吃会话面板给 `[data-session-panel-row]` / `[data-row-part]` 铺的通用
+规则，图标 16px，颜色随行文字，明暗主题自动跟随。
 
 -----
 
 ## 契约与静默失败
 
-面板槽、行标记、投影服务、继承前缀长度，以及「用量」按钮的读数口径，都是**改名即静默退化**的上游
-事实：槽没了整栏不显示，行标记没了变成裸文本，投影登记表改名则整项不激活，口径变了面板数字与按钮
-各说各话。这些名字改不改由上游决定，所以 [`contract.json`](../dsh-today-token-usage/contract.json)
-把 15 条事实列成清单，`pnpm check:css` 逐条对 DSH 安装产物 grep 一遍，缺一条就显式失败并写明后果。
-
-归一化接线里还有两处约定值得记住：
-
-- **`stateVersion: 1`**：折叠状态的字段或语义一变就必须加一，否则缓存里的旧状态会被当成当前状态读；
-  加一之后旧行因版本不匹配被丢弃并整段重折，这是安全的。
-- **继承前缀用 `inheritedEventCount` 判定**：`seq` 小于它的都是 fork 复制来的事件，跳过它们才不会
-  让同一次请求在两个会话里各算一遍。
+面板槽、行标记、`llm/stream`、`usage` 块、`ctx.webServer.register`、`webserver/authorize`、
+cookie 鉴权提供方，以及「用量」按钮的读数口径，都是**改名即静默退化**的上游事实：拦截点没了
+一次请求也记不到，鉴权链路没了页面拿不到数据，口径变了面板与按钮各说各话。
+[`contract.json`](../dsh-today-token-usage/contract.json) 把这 16 条事实列成清单，
+`pnpm check:css` 逐条对 DSH 安装产物 grep 一遍，缺一条就显式失败并写明后果。
 
 -----
 
 ## 验证
 
-```powershell
+```bash
 pnpm --filter dsh-today-token-usage build      # 产出 lib/client.js（浏览器半部）
 pnpm --filter dsh-today-token-usage typecheck  # tsc --noEmit
-pnpm --filter dsh-today-token-usage test       # 5 个测试文件
-pnpm --filter dsh-today-token-usage check:css  # 15 条上游契约
+pnpm --filter dsh-today-token-usage test       # 9 个测试文件
+pnpm --filter dsh-today-token-usage check:css  # 16 条上游契约
 ```
 
 测试覆盖：
 
 | 文件 | 覆盖 |
 |---|---|
-| `test/fold.test.mjs` | 日期归属、同日叠加、替换、重试新增、跨零点换桶、继承前缀、stream 取用量、视图引用稳定性 |
-| `test/aggregate.test.mjs` | 只加今天、投影覆盖列表行且不重复、紧凑格式、缓存命中（含不许舍入成 100% 的两个端点） |
-| `test/plugin-apply.test.mjs` | 真 `apply` 注册的投影键/版本/视图、状态与视图过 schema、只依赖投影登记表 |
-| `test/artifact-client.test.mjs` | 产物模块 id / 声明 / 字典 / 分区注册，元素树里的行标记与两端读数的各分支 |
-| `test/render.test.mjs` | 真 React 渲染：读数与命中插值正确、空数据渲染为空、无告警 |
+| `test/journal.test.mjs` | 编解码往返、坏行/错版本/错日期跳过、四桶合计、文件名与日期偏移、用量规整 |
+| `test/tap.test.mjs` | chunk 原样透传、最后一个 usage/finish、抛错与提前 break 都结算一次、回调抛错不影响流 |
+| `test/store.test.mjs` | 追加、重启恢复、跨天切换、30 天清理、坏行容错、磁盘不可写降级、NaN 规整、变化订阅 |
+| `test/route.test.mjs` | 两条路由的 owner-only / 405 / 500；SSE 初始快照、扇出、断开清理、保活 |
+| `test/usage-client.test.mjs` | SSE 订阅路径、合法帧回调、坏帧忽略、取消订阅关闭连接 |
+| `test/aggregate.test.mjs` | 读数 → 面板合计、紧凑格式、缓存命中（含不许舍入成 100% 的两个端点） |
+| `test/plugin-apply.test.mjs` | 真 `apply`：global `llm/stream` 监听、journal 落盘、两条路由、SSE 初始帧与推送 |
+| `test/artifact-client.test.mjs` | 产物模块 id / 声明 / 字典 / 分区注册 |
+| `test/render.test.mjs` | 真 React 渲染：行集合、数值、命中插值、空数据、无告警 |
 
-挂载后建议的肉眼检查：面板里出现「今日 Token 用量」一栏，读数与输入框下方「用量」按钮同一套
-格式；发一条消息后读数变大；对照某个会话的「用量」按钮详表，确认两边「总用量」同式。
+挂载后建议的肉眼检查：面板里出现「今日 Token 用量」一栏；发一条消息后「总用量」「请求数」变大；
+宿主日志无告警；`$DSH_HOME/state/today-token-usage/requests-<今天>.jsonl` 出现新行（标题生成的
+请求 `purpose` 是 `session-title`）。SSE 可以用 curl 直接看：
+
+```bash
+curl -N -H "Cookie: <会话 cookie>" http://127.0.0.1:3080/today-token-usage/stream
+```
 
 -----
 
 ## 已知边界
 
-- **日期边界跟宿主进程的本地时区**。浏览器与宿主在同一台机器时两边算出的「今天」相同；从别的时区
-  远程打开时，读数按宿主那一天切分。跨时区访问需要按客户端时区分桶，那是另一件事。
-- **fork 继承前缀不计入**，所以本栏的「今日总量」可能小于把每个会话「用量」按钮上的整段累计相加
-  再按天估出来的数——后者会把源会话的历史在两个会话里各算一遍。
-- **插件装上之前就冷掉、之后没再打开的会话**没有本插件的缓存行，也不回填：它们今天早些时候的
-  用量不计入读数，直到那个会话重新打开（重新打开后登记表自己会折）。今天活着跨过存档点的会话
-  不受影响——它们的行由登记表自己维护。
-- **插件包自身没有图标与详情文档**（行内字形是插件自己画的，不在此列）：本仓库的插件都以 `link:` 直接挂在本地 profile，Plugins 页用
-  `package.json` 的 `name` / `description` 兜底；这一栏只影响 Web 页面，不影响插件清单的显示。
-  需要的话可以按 `references/host-plugin.md` 的清单补 `locale/*.json`、`icon` 与 `docs/DETAIL.md`。
+- **记录从插件生效那一刻开始，不回填。** 面板不再回放会话日志或投影缓存：插件生效之前今天
+  已经发生的用量不会补进 journal（标题生成的用量本来就没有日志来源），生效之后跨重启由 JSONL
+  恢复。这是「所有请求都有一份可查记录」换来的取舍。
+- **只有 web 客户端有这个面板。** 客户端平台是 web；非 web composition 里宿主仍会记录（如果
+  插件被挂载），但没有这一栏。
+- **日期边界跟宿主进程的本地时区。** 浏览器在别的时区打开也按宿主日界切分。
+- **同一 `$DSH_HOME` 下只假设一个宿主进程。** 多个 DSH 进程同时运行时，各进程只统计自己发出
+  的请求，内存合计不跨进程合并（journal 文件是共享的，重启后会读到彼此写入的行）。
+- **每个打开的页面保持一条 SSE 长连接。** 断线由浏览器自动重连，重连时宿主补发当前快照；长时间没有任何请求时宿主每 15 秒发一行注释帧保活。
+- **不计算价格/费用，不提供历史查询 UI。** journal 是普通 JSONL，可用 `jq` 自己查。
+- **没有 Config。** 保留天数（30 天）与路由路径固定。

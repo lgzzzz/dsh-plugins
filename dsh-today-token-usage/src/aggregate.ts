@@ -1,5 +1,5 @@
 /**
- * 浏览器半部的纯计算：把各会话今天的 Token 桶相加，并按「用量」按钮同一套规则格式化。
+ * 浏览器半部的纯计算：把宿主给的当天读数摊成面板口径，并按「用量」按钮同一套规则格式化。
  *
  * 口径一致性是这一栏的重点，因此格式化不重写，而是逐条照抄上游
  * `@deepseek-ai/dsh-client-ui-chat` 的 `src/client/chat/token-format.ts`：
@@ -9,19 +9,18 @@
  *   - `formatCacheHitPercent`：整数百分比，且**部分命中永远不会被四舍五入成 100%**（用多少位
  *     小数区分到 100 以下为止），这个二分与阈值算法原样搬自上游，避免两条读数各说各话。
  *
- * 与上游的差别只在数据面：上游读的是单个会话的 `tokenUsage`（整段日志的累计），这里读各会话
- * `todayTokenUsage`（只算自己、只算今天）并把它们加起来。
+ * 与上游的差别只在数据面：上游读单个会话的 `tokenUsage`（整段日志的累计），这里读宿主当天
+ * 全部模型调用的合计（`TodayUsagePayload`）——包括标题生成、压缩摘要等没有会话结算的调用。
  *
  * 纯模块：只依赖 `./wire.ts` 的类型与纯函数，可直接测试。
  */
 
-import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
-import type { TodayTokenUsage } from './wire.ts'
-import { PROJECTION_KEY, billedInputTokens } from './wire.ts'
+import type { TodayUsagePayload } from './wire.ts'
+import { billedInputTokens } from './wire.ts'
 
-/** 一整天、全部会话加起来的用量（四个数足够推出「总用量」与缓存命中）。 */
+/** 一整天、全部模型调用加起来的用量（四个数足够推出「总用量」与缓存命中）。 */
 export interface TodayTotals {
   /** 未缓存输入。 */
   readonly uncachedInput: number
@@ -35,56 +34,30 @@ export interface TodayTotals {
   readonly prompt: number
   /** 计入总用量的 Token 数：`prompt + output`，与「用量」按钮同式。 */
   readonly total: number
+  /** 当天回报了用量的模型调用次数。 */
+  readonly requests: number
 }
 
 /**
- * 会话列表里能读到的投影值：已连接会话的完整投影，或列表行带的摘要投影。
- * @param state - 会话列表快照。
- * @returns 全部已知的「某会话某天用量」值（不保证唯一，按 id 去重）。
- */
-function valuesOf(state: Pick<SessionListState, 'byId' | 'projectionsBySession'>): Map<string, TodayTokenUsage> {
-  const values = new Map<string, TodayTokenUsage>()
-  // 已连接会话的投影（控制基线 / 跟随流）比列表行更新，先放它们。
-  for (const [id, projection] of Object.entries(state.projectionsBySession)) {
-    const value = projection.values[PROJECTION_KEY]
-    if (value !== undefined) values.set(id, value)
-  }
-  // 列表行：冷会话只有这一处来源；同时存在的会话以已连接的那份为准，不覆盖。
-  for (const [id, summary] of Object.entries(state.byId)) {
-    if (values.has(id)) continue
-    const value = summary.projectionValues?.[PROJECTION_KEY]
-    if (value !== undefined) values.set(id, value)
-  }
-  return values
-}
-
-/**
- * 汇总今天（`today` 是本机日期键）全部会话的用量。
+ * 把宿主读数换成面板用的合计。
  *
- * 一个会话的 `day` 不是今天就不计：它的桶属于更早的某一天，零点之后没有新结算就不该进今天。
- * @param state - 会话列表快照。
- * @param today - 本机今天 `YYYY-MM-DD`。
- * @returns 汇总值；今天没有任何用量（或会话列表还没到）时为 undefined。
+ * 总用量为 0（当天还没有任何用量回报）时返回 undefined：面板整节隐藏，与其它分区一致。
+ * @param payload - 宿主路由的当天读数。
+ * @returns 面板合计，或 undefined。
  */
-export function aggregateToday(
-  state: Pick<SessionListState, 'byId' | 'projectionsBySession'>,
-  today: string,
-): TodayTotals | undefined {
-  let uncachedInput = 0
-  let cacheRead = 0
-  let cacheWrite = 0
-  let output = 0
-  for (const value of valuesOf(state).values()) {
-    if (value.day !== today) continue
-    uncachedInput += value.uncachedInputTokens
-    cacheRead += value.cacheReadTokens
-    cacheWrite += value.cacheWriteTokens
-    output += value.outputTokens
-  }
-  const prompt = billedInputTokens({ uncachedInputTokens: uncachedInput, cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite })
-  const total = prompt + output
+export function totalsOf(payload: TodayUsagePayload): TodayTotals | undefined {
+  const prompt = billedInputTokens(payload)
+  const total = prompt + payload.outputTokens
   if (total === 0) return undefined
-  return { uncachedInput, cacheRead, cacheWrite, output, prompt, total }
+  return {
+    uncachedInput: payload.uncachedInputTokens,
+    cacheRead: payload.cacheReadTokens,
+    cacheWrite: payload.cacheWriteTokens,
+    output: payload.outputTokens,
+    prompt,
+    total,
+    requests: payload.requests,
+  }
 }
 
 /**

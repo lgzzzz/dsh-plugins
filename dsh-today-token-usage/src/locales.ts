@@ -1,8 +1,9 @@
 /**
- * 本插件的 Web 字典：分区标题、五行指标的标签。
+ * 本插件的 Web 字典：分区标题、每行指标的标签。
  *
  * 指标名与输入框下方「用量」按钮的详表一致（`@deepseek-ai/dsh-client-ui-chat` 的
- * `message.turnUsage.*`：未缓存输入 / 缓存读取 / 缓存写入 / 输出），缓存命中沿用 `stats.cacheHit` 的说法。
+ * `message.turnUsage.*`：未缓存输入 / 缓存读取 / 缓存写入 / 输出），缓存命中沿用 `stats.cacheHit`
+ * 的说法；「请求数」是本栏自己的一项读数。
  *
  * 数值不走字典：客户端按「无单位 / K / M」三档自行格式化（见 `src/aggregate.ts`），不再带上游的
  * `tok` 后缀；`number.thousand` / `number.million` 是 `dsh-client-locale` 的 common 字典，命名空间
@@ -18,6 +19,7 @@ export const NS = 'dsh-today-token-usage'
 export const zh = {
   'section.title': '今日 Token 用量',
   'row.total': '总用量',
+  'row.requests': '请求数',
   'row.cacheHit': '缓存命中',
   'row.uncachedInput': '未缓存输入',
   'row.cacheRead': '缓存读取',
@@ -32,6 +34,7 @@ export type TodayTokenUsageKey = keyof typeof zh
 export const en = {
   'section.title': 'Token usage today',
   'row.total': 'Total',
+  'row.requests': 'Requests',
   'row.cacheHit': 'Cache hit',
   'row.uncachedInput': 'Uncached input',
   'row.cacheRead': 'Cached input',

@@ -2,8 +2,8 @@
  * 浏览器半部：在会话面板里注册「今日 Token 用量」一栏。
  *
  * 面板的分区槽由 `@deepseek-ai/dsh-client-ui-session-panel` 声明，可能在页面加载后才就位；
- * `ctx.slots.inject` 负责等它，声明撤下时注册项随之收回。这一栏没有业务动作，只读会话列表里
- * 的投影值（宿主半部的 `todayTokenUsage`），所以不注入任何服务，也不再挂样式表。
+ * `ctx.slots.inject` 负责等它，声明撤下时注册项随之收回。这一栏没有业务动作，只订阅宿主半部的
+ * 同源 SSE 推送（`GET /today-token-usage/stream`），所以不注入任何数据服务，也不再挂样式表。
  */
 import type { Context } from '@deepseek-ai/cordis'
 // 空类型导入(不引入任何名字):加载 cordis 对 `slots` / `locale` 的服务声明，以及 session-panel

@@ -2,7 +2,7 @@
  * 跑完 test/ 下所有 `*.test.mjs`，按主题顺序执行并汇总结果。
  *
  *   node test/run-all.mjs            # 全部
- *   node test/run-all.mjs fold       # 只跑文件名匹配 "fold" 的测试
+ *   node test/run-all.mjs store      # 只跑文件名匹配 "store" 的测试
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -13,7 +13,11 @@ const here = dirname(fileURLToPath(import.meta.url))
 
 // 先纯逻辑，再宿主装配，最后产物与真 React 渲染。
 const ORDER = [
-  'fold.test.mjs',
+  'journal.test.mjs',
+  'tap.test.mjs',
+  'store.test.mjs',
+  'route.test.mjs',
+  'usage-client.test.mjs',
   'aggregate.test.mjs',
   'plugin-apply.test.mjs',
   'artifact-client.test.mjs',
