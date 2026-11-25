@@ -119,7 +119,7 @@ https://opencode.ai/status/api/status（Cloudflare，cache-control: max-age=15�
 | `src/web-types.ts` | 本插件用到的 `ctx.webServer` 最小类型面（不引入宿主包依赖） |
 | `src/client.ts` | 浏览器半部入口：注册字典与分区槽，页面装载时启动后台轮询 |
 | `src/registration.ts` | 分区注册契约：槽键 / id / 排序 / 标题 thunk |
-| `src/component.ts` | 分区组件与 16px 字形；同步读取共享读数仓并订阅变化 |
+| `src/component.tsx` | 分区组件与 16px 字形；同步读取共享读数仓并订阅变化 |
 | `src/rows.ts` | 一份响应 → 面板行的纯函数 |
 | `src/format.ts` | 状态/原因译文、秒与 tok/s、相对时间 |
 | `src/status-client.ts` | 浏览器侧轮询：5 秒间隔、15 秒超时、后台跳过、停止中止 |

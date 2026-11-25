@@ -5,7 +5,7 @@
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SubagentParentInjected } from './component.ts'
+import type { SubagentParentInjected } from './component.tsx'
 import type { NS } from './locales.ts'
 
 /** 会话面板的分区槽：每一节自带标题与正文，正文渲染为空的那节连标题一起隐藏。 */

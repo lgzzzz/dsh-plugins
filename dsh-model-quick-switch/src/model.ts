@@ -24,7 +24,22 @@ import type {
   ModelReasoningEffort,
   ModelSelection,
 } from '@deepseek-ai/dsh-api-session-controller/types'
+import { ZH_MODEL_TEXTS } from './locales.ts'
 import type { PaletteRow } from './palette.ts'
+
+/** 模型 / 思考等级行的可见文案；默认取简体中文字典。 */
+export interface ModelTexts {
+  /** 思考等级第一行「默认」的标题。 */
+  readonly defaultTitle: string
+  /** 目录没有默认强度时的副标题。 */
+  readonly defaultSubtitle: string
+  /** 目录给出默认强度时的副标题模板。 */
+  readonly defaultFollow: (value: string) => string
+  /** 思考等级与 id 不同的行副标题。 */
+  readonly effortSubtitle: string
+  /** 目录里找不到的模型角标。 */
+  readonly outsideBadge: string
+}
 
 /** 一条可选模型（与宿主 Config 的 `models[]` 同形；插件私有配置领域类型）。 */
 export interface ModelChoice {
@@ -279,9 +294,10 @@ export function choiceRows(
   choices: readonly ModelChoice[],
   catalog: readonly CatalogModelRow[],
   current: ModelSelectionLike | null | undefined,
-  options: { readonly catalogReady?: boolean } = {},
+  options: { readonly catalogReady?: boolean; readonly texts?: ModelTexts } = {},
 ): PaletteRow[] {
   const catalogReady = options.catalogReady !== false
+  const texts = options.texts ?? ZH_MODEL_TEXTS
   return choices.map((choice) => {
     const presentation = choicePresentation(choice, catalog)
     const currentHit = matchesCurrent(choice, current)
@@ -290,7 +306,7 @@ export function choiceRows(
       title: presentation.title,
       subtitle: presentation.subtitle,
       ...currentHit ? { current: true } : {},
-      ...catalogReady && !presentation.known ? { badges: ['目录外'] } : {},
+      ...catalogReady && !presentation.known ? { badges: [texts.outsideBadge] } : {},
     }
   })
 }
@@ -328,12 +344,16 @@ export interface EffortChoice {
  * @param row - 这个模型在展开后的目录里的那一行；找不到时为 undefined。
  * @returns 思考等级候选。
  */
-export function effortChoices(choice: ModelSelectionLike, row: CatalogModelRow | undefined): EffortChoice[] {
+export function effortChoices(
+  choice: ModelSelectionLike,
+  row: CatalogModelRow | undefined,
+  texts: ModelTexts = ZH_MODEL_TEXTS,
+): EffortChoice[] {
   const fallback = row?.defaultEffort === undefined ? undefined : effortName(row, row.defaultEffort)
   const choices: EffortChoice[] = [
     {
-      title: '默认',
-      subtitle: fallback === undefined ? '跟随模型目录的默认强度' : `跟随目录默认 · ${fallback}`,
+      title: texts.defaultTitle,
+      subtitle: fallback === undefined ? texts.defaultSubtitle : texts.defaultFollow(fallback),
     },
   ]
   for (const effort of row?.efforts ?? []) {
@@ -343,7 +363,7 @@ export function effortChoices(choice: ModelSelectionLike, row: CatalogModelRow |
     choices.push({
       reasoningEffort: effort.id,
       title: name ?? effort.id,
-      subtitle: name === undefined || name === effort.id ? '思考等级' : effort.id,
+      subtitle: name === undefined || name === effort.id ? texts.effortSubtitle : effort.id,
     })
   }
   return choices

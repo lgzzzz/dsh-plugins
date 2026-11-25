@@ -31,12 +31,10 @@
  * 都可能比本插件晚到位）。服务缺席时浮层照常能开，只是没有候选 / 工作树行隐藏 / 团队行写明
  * 不可用 / 执行时给出可读错误。
  */
-import * as React from 'react'
 import {
   EMPTY_TEAM_FACTS,
   EMPTY_WORKTREE_FACTS,
   actionOfKey,
-  actionRowCount,
   checkoutStateOf,
   firstModelRowIndex,
   quickActionRows,
@@ -53,21 +51,13 @@ import { name } from './runtime.ts'
 import {
   MODEL_SWITCH_BINDING,
   MODEL_SWITCH_ID,
-  PAGE_SIZE,
   bindingPress,
   clampIndex,
-  clampOffset,
   createPaletteStore,
   inRange,
-  installPaletteKeys,
-  installPaletteWheel,
-  keepOptionVisible,
   modelSwitchKeys,
-  windowSlice,
   type ModelSwitchGesture,
-  type PaletteRow,
   type PaletteStore,
-  type PaletteView,
   type QuickSwitchPlatform,
 } from './palette.ts'
 import {
@@ -85,8 +75,6 @@ import {
   removeChoice,
   selectionOfChoice,
   selectionOfEffort,
-  type CatalogModelRow,
-  type CatalogGroup,
   type EffortChoice,
   type ModelChoice,
   type ModelSelectionLike,
@@ -99,6 +87,13 @@ import {
   type PaletteStage,
 } from './model-data.ts'
 import { PALETTE_CSS, SETTINGS_CSS } from './styles.ts'
+import {
+  ModelOverlay,
+  ModelSettingsSection,
+  type SettingsActions,
+} from './components.tsx'
+import { NS, en, modelTextsOf, quickActionTextsOf, translateZh, zh } from './locales.ts'
+import { effortView, modelView } from './views.ts'
 
 // 上游类型：服务面与数据契约全部直接用包导出的名字，本文件不再自己重写一份同名形状。
 import type { Context } from '@deepseek-ai/cordis'
@@ -124,12 +119,13 @@ import type {} from '@deepseek-ai/dsh-agent-team/remote'
 import type {} from '@deepseek-ai/dsh-agent-team/types'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
 
 export { name }
 export { paletteAction } from './palette.ts'
 
-/** 浮层依赖的两个客户端服务；任一缺席就整体不安装。 */
-export const inject = ['slots', 'shortcuts']
+/** 浮层依赖的三个客户端服务；slots / shortcuts 任一缺席就整体不安装，locale 缺席时退回简体中文。 */
+export const inject = ['slots', 'shortcuts', 'locale']
 
 /** 设置页的分区 id（也用于图标寻址）。 */
 export const SETTINGS_SECTION_ID = name
@@ -140,15 +136,6 @@ export const SETTINGS_SECTION_ORDER = 70
 /** 本插件在 profile 里的条目 id —— 也就是设置命名空间 / `configForms.get` 的键。 */
 export const CONFIG_ENTRY_ID = name
 
-/** 浮层根节点的 DOM 标记（人工排查与自动化验证都读它）。 */
-export const PALETTE_ROOT_ATTR = 'data-model-quick-switch'
-
-/** 浮层里一行候选的 DOM 标记。 */
-export const PALETTE_OPTION_ATTR = 'data-model-quick-switch-option'
-
-/** 设置页根节点的 DOM 标记。 */
-export const SETTINGS_ROOT_ATTR = 'data-model-quick-switch-settings'
-
 /**
  * 目录已经在手上时，两次自动刷新之间的最小间隔。
  *
@@ -158,71 +145,7 @@ export const SETTINGS_ROOT_ATTR = 'data-model-quick-switch-settings'
  */
 const CATALOG_FRESH_MS = 60_000
 
-/** 模型浮层的文案。 */
-export const MODEL_VIEW: PaletteView = {
-  id: name,
-  domId: name,
-  rootAttr: PALETTE_ROOT_ATTR,
-  title: '快捷菜单',
-  unit: '个模型',
-  emptyCount: '列表里还没有模型',
-  emptyHint: '在「设置 → 模型快速切换」里添加要在这里出现的模型。',
-  listLabel: '模型与操作',
-  enterHint: 'Enter 切换模型',
-}
-
-/** 思考等级浮层的文案。 */
-export const EFFORT_VIEW: PaletteView = {
-  id: `${name}.effort`,
-  domId: `${name}-effort`,
-  rootAttr: PALETTE_ROOT_ATTR,
-  title: '选择思考等级',
-  unit: '个等级',
-  emptyCount: '没有可选等级',
-  emptyHint: '这个模型没有公布思考等级。',
-  listLabel: '思考等级',
-  enterHint: 'Enter 切换模型',
-}
-
-/*
- * 服务面与数据契约不再本地重写：`ctx.slots` 是 `SlotRegistry`、`ctx.shortcuts` 是 `Shortcuts`、
- * `ctx.configForms` 是 `ConfigForms`（表单是 `ConfigForm<T>`）、`ctx.sessions` 是
- * `Context['sessions']`，三个远程命名空间是 `Context['remote']` 的 `session` / `forgePanel` /
- * `agentTeams`；投影与摘要全部走会话语义包的命名导出。下面只保留本插件自己的领域类型
- * （浮层、设置页 props 与动作面）。
- */
-
-/** 设置页里可执行的动作。 */
-export interface SettingsActions {
-  /** 重新拉取 Host 模型目录。 */
-  loadCatalog(): Promise<void>
-  /** 往列表里加一条（已存在则不动）。 */
-  add(choice: ModelChoice): Promise<void>
-  /** 从列表里删一条（不存在则不动）。 */
-  remove(choice: ModelChoice): Promise<void>
-}
-
-/** 设置页组件的 props（由 `options.inject` 交出）。 */
-export interface SettingsProps {
-  readonly data: ModelDataStore
-  readonly actions: SettingsActions
-}
-
-/** 浮层组件的 props。 */
-export interface OverlayProps {
-  readonly store: PaletteStore
-  readonly data: ModelDataStore
-  readonly view: PaletteView
-  /** 第二步（选思考等级）的文案；缺席时复用 `view`。 */
-  readonly effortView?: PaletteView
-  /** 第二步按 `Esc` 时退回第一步。 */
-  readonly onBack?: () => void
-}
-
-/**
- * 安装一条样式表（浮层 + 设置页）。
- * @returns 移除样式表的函数。
- */
+/** 安装一条样式表（浮层 + 设置页）。 */
 function installStyleTag(): () => void {
   if (typeof document === 'undefined') return () => {}
   const tag = document.createElement('style')
@@ -238,34 +161,12 @@ function warn(message: string, detail?: unknown): void {
   else console.warn(`[${name}] ${message}`, detail)
 }
 
-/** 标题右侧的计数文案：一屏装得下时报总数，否则报当前看到的行范围。 */
-export function countLabel(view: PaletteView, total: number, offset: number): string {
-  if (total <= PAGE_SIZE) return `${total} ${view.unit}`
-  const from = offset + 1
-  const to = Math.min(offset + PAGE_SIZE, total)
-  return `${total} ${view.unit} · 显示 ${from}–${to}`
-}
-
-/**
- * 快捷菜单标题右侧的计数：把模型与操作分开报。
- *
- * 没有操作行时保持原行为（含「显示 a–b」的窗口提示）；有操作行时只报「n 个模型 · m 个操作」，
- * 不把两行操作算进模型数。
- * @param view - 浮层文案。
- * @param entries - 全部候选。
- * @param offset - 窗口起点。
- * @returns 一行计数文案。
- */
-export function paletteCountLabel(view: PaletteView, entries: readonly PaletteRow[], offset: number): string {
-  const actions = actionRowCount(entries)
-  if (actions === 0) return countLabel(view, entries.length, offset)
-  const models = entries.length - actions
-  return `${models} ${view.unit} · ${actions} 个操作`
-}
-
-/** 一行候选项的 DOM id（与 `aria-activedescendant` 配对，滚进可见区也按它定位）。 */
-export function optionDomId(view: PaletteView, index: number): string {
-  return `${view.domId}-option-${index}`
+/** 从注入面读 locale 服务（字典注册与翻译）。 */
+function readLocale(scope: Context): Context['locale'] | undefined {
+  const value = scope.get('locale')
+  if (typeof value !== 'object' || value === null) return undefined
+  if (typeof value.bind !== 'function' || typeof value.register !== 'function') return undefined
+  return value as Context['locale']
 }
 
 /**
@@ -421,6 +322,19 @@ export function apply(ctx: Context): void {
 
     // `primary` 按平台展开：macOS 上是 meta（⌘⌥U），其余平台是 control（Ctrl+Alt+U）。
     const platform: QuickSwitchPlatform = shortcuts.platform ?? 'windows'
+
+    // 可见文案走 Client locale；字典登记在 scope 上，随插件 fiber 卸载一起撤回。
+    // locale 服务缺席（受限环境 / 测试桩）时退回简体中文字典。
+    const locale = readLocale(scope)
+    if (locale !== undefined) {
+      scope.effect(() => locale.register(NS, { zh, en }), `${name}: dictionaries`)
+    }
+    const t = locale === undefined ? translateZh : locale.bind(NS)
+    const quickActionTexts = quickActionTextsOf(t)
+    const modelTexts = modelTextsOf(t)
+    const modelPaletteView = modelView(t)
+    const effortPaletteView = effortView(t)
+
     const data = createModelDataStore()
     const palette = createPaletteStore()
     let form: ConfigForm<unknown> | undefined
@@ -651,8 +565,11 @@ export function apply(ctx: Context): void {
         worktree: state.worktree,
         team: state.team,
         checkout: state.checkout,
+      }, quickActionTexts)
+      const models = choiceRows(state.choices, state.catalog, current, {
+        catalogReady: state.catalogStatus === 'ready',
+        texts: modelTexts,
       })
-      const models = choiceRows(state.choices, state.catalog, current, { catalogReady: state.catalogStatus === 'ready' })
       const rows = [...actions, ...models]
       const before = palette.getSnapshot()
       const activeKey = before.open && inRange(before.activeIndex, before.entries.length)
@@ -690,7 +607,7 @@ export function apply(ctx: Context): void {
       if (sessionRemote === undefined || typeof modelCatalog !== 'function') {
         // 已经有目录时链路断开的说法由 `remote.session` 的释放回调负责，这里不改写可用目录。
         if (background) return Promise.resolve()
-        data.set({ catalogStatus: 'error', catalogError: '模型目录服务不可用（remote.session 尚未就绪）。' })
+        data.set({ catalogStatus: 'error', catalogError: t('errCatalogUnavailable') })
         return Promise.resolve()
       }
       if (background && options.force !== true && Date.now() - catalogLoadedAt < CATALOG_FRESH_MS) {
@@ -744,12 +661,12 @@ export function apply(ctx: Context): void {
       if (data.getSnapshot().pending) return false
       const sessionId = refreshSession()
       if (sessionId === null) {
-        data.set({ error: '当前没有打开的会话：先在左侧栏打开或新建一个会话，再切换模型。' })
+        data.set({ error: t('errNoSessionSwitch') })
         return false
       }
       const selectModel = sessionRemote?.selectModel
       if (sessionRemote === undefined || typeof selectModel !== 'function') {
-        data.set({ error: '模型选择服务不可用（remote.session 尚未就绪）。' })
+        data.set({ error: t('errSelectUnavailable') })
         return false
       }
       const requestEpoch = selectEpoch + 1
@@ -769,7 +686,7 @@ export function apply(ctx: Context): void {
           return false
         }
         if (!response.ok) {
-          settle({ pending: false, error: `切换失败：${describeRemoteFailure(response.error)}` })
+          settle({ pending: false, error: t('errSwitchFailed', { message: describeRemoteFailure(response.error) }) })
           return false
         }
         const selected = response.value?.selected ?? selectionOfChoice(choice)
@@ -780,7 +697,7 @@ export function apply(ctx: Context): void {
           settle({ pending: false })
           return false
         }
-        settle({ pending: false, error: `切换失败：${messageOf(error)}` })
+        settle({ pending: false, error: t('errSwitchFailed', { message: messageOf(error) }) })
         return false
       }
     }
@@ -823,20 +740,20 @@ export function apply(ctx: Context): void {
       // 盖回旧值，连按第二次就会把「取消」又变成一次「请求」。会话切换由目录订阅负责刷新。
       const sessionId = state.sessionId ?? refreshSession()
       if (sessionId === null) {
-        data.set({ error: '当前没有打开的会话：先在左侧栏打开或新建一个会话，再使用这里的开关。' })
+        data.set({ error: t('errNoSessionAction') })
         return
       }
       const facts = data.getSnapshot().worktree
       if (action === 'worktree') {
         if (facts !== null && facts.created !== null) {
-          data.set({ error: `当前会话已经有工作树：${facts.created.branch ?? facts.created.path ?? '已创建'}。` })
+          data.set({ error: t('errWorktreeExists', { detail: facts.created.branch ?? facts.created.path ?? t('errWorktreeCreated') }) })
           return
         }
         const remote = forgePanelRemote
         const request = remote?.requestWorktree
         const cancel = remote?.cancelWorktree
         if (remote === undefined || typeof request !== 'function' || typeof cancel !== 'function') {
-          data.set({ error: '工作树服务不可用（forge 面板未启用）。' })
+          data.set({ error: t('errWorktreeUnavailable') })
           return
         }
         const pending = facts !== null && facts.request !== null
@@ -857,7 +774,7 @@ export function apply(ctx: Context): void {
           if (!result.ok) {
             data.set({
               actionPending: null,
-              error: `${pending ? '取消工作树' : '新建工作树'}失败：${describeRemoteFailure(result.error)}`,
+              error: t('errActionFailed', { action: pending ? t('worktreeCancel') : t('worktreeTitle'), message: describeRemoteFailure(result.error) }),
             })
           } else {
             // 面板流会随后推同一份状态；先按写入结果更新，避免等待一拍才看到角标变化。
@@ -875,7 +792,7 @@ export function apply(ctx: Context): void {
           }
           data.set({
             actionPending: null,
-            error: `${pending ? '取消工作树' : '新建工作树'}失败：${messageOf(error)}`,
+            error: t('errActionFailed', { action: pending ? t('worktreeCancel') : t('worktreeTitle'), message: messageOf(error) }),
           })
         }
         syncRows()
@@ -885,7 +802,7 @@ export function apply(ctx: Context): void {
       const remote = agentTeamsRemote
       const setEnabled = remote?.setEnabled
       if (remote === undefined || typeof setEnabled !== 'function') {
-        data.set({ error: '团队协作服务不可用（agentTeams 未挂载）。' })
+        data.set({ error: t('errTeamUnavailable') })
         return
       }
       const next = !(team?.enabled ?? false)
@@ -899,7 +816,7 @@ export function apply(ctx: Context): void {
           return
         }
         if (!result.ok) {
-          data.set({ actionPending: null, error: `保存团队协作设置失败：${describeRemoteFailure(result.error)}` })
+          data.set({ actionPending: null, error: t('errTeamSaveFailed', { message: describeRemoteFailure(result.error) }) })
         } else {
           const target: TeamFacts = { enabled: next }
           teamOverride = { sessionId, baseline: team ?? EMPTY_TEAM_FACTS, target }
@@ -910,7 +827,7 @@ export function apply(ctx: Context): void {
           dropStaleActionResponse()
           return
         }
-        data.set({ actionPending: null, error: `保存团队协作设置失败：${messageOf(error)}` })
+        data.set({ actionPending: null, error: t('errTeamSaveFailed', { message: messageOf(error) }) })
       }
       syncRows()
     }
@@ -974,7 +891,7 @@ export function apply(ctx: Context): void {
       }
       // 等目录期间用户可能已经切会话或关掉/重开浮层：这次确认只属于发起时的会话与那一代浮层。
       if (epoch !== paletteEpoch || data.getSnapshot().sessionId !== sessionId) return
-      const efforts = effortChoices(choice, findCatalogModel(data.getSnapshot().catalog, choice))
+      const efforts = effortChoices(choice, findCatalogModel(data.getSnapshot().catalog, choice), modelTexts)
       if (efforts.length <= 1) {
         const selected = await selectChoice(choice)
         if (selected && epoch === paletteEpoch && data.getSnapshot().sessionId === sessionId) closePalette()
@@ -1030,7 +947,7 @@ export function apply(ctx: Context): void {
         void confirmModel()
       }, index < 0 ? 0 : index)
       if (sessionId === null) {
-        data.set({ error: '当前没有打开的会话：先在左侧栏打开或新建一个会话，再切换模型。' })
+        data.set({ error: t('errNoSessionSwitch') })
       }
       // 有目录时这是一次后台刷新（不回落到 loading、去抖），确认模型不必等它回来。
       void loadCatalog()
@@ -1044,7 +961,7 @@ export function apply(ctx: Context): void {
     const writeChoices = async (next: readonly ModelChoice[]): Promise<boolean> => {
       const entry = form
       if (entry === undefined) {
-        data.set({ writeError: '设置服务不可用，无法保存模型列表。' })
+        data.set({ writeError: t('errSettingsUnavailable') })
         return false
       }
       data.set({ writing: true, writeError: null })
@@ -1058,10 +975,10 @@ export function apply(ctx: Context): void {
         // 但条件展开让它在值对象里缺席，运行期仍是合法 JSON，边界处一次性收窄。
         const ops: readonly SettingsPathOpView[] = [{ op: 'set', path: ['models'], value: value as unknown as JsonValue }]
         const accepted = await entry.mutate(ops)
-        if (!accepted) data.set({ writeError: 'Host 拒绝了这次写入：设置不可写，或列表没有通过校验。' })
+        if (!accepted) data.set({ writeError: t('errSettingsRejected') })
         return accepted
       } catch (error) {
-        data.set({ writeError: `保存失败：${messageOf(error)}` })
+        data.set({ writeError: t('errSaveFailed', { message: messageOf(error) }) })
         return false
       } finally {
         data.set({ writing: false })
@@ -1093,7 +1010,7 @@ export function apply(ctx: Context): void {
     scope.effect(() => {
       const command: ShortcutFixedCommand = {
         id: MODEL_SWITCH_ID,
-        label: () => '模型快速切换',
+        label: () => t('fixedLabel'),
         keys: modelSwitchKeys(platform),
         bindings: [MODEL_SWITCH_BINDING],
         group: 'application',
@@ -1144,7 +1061,7 @@ export function apply(ctx: Context): void {
             id: name,
             order: 70,
             // 业务 props 只能由 inject 交出来：渲染器对条目做的是 jsx(entry.component, props)。
-            inject: () => ({ store: palette, data, view: MODEL_VIEW, effortView: EFFORT_VIEW, onBack: backToModels }),
+            inject: () => ({ store: palette, data, view: modelPaletteView, effortView: effortPaletteView, onBack: backToModels, t }),
           },
           ModelOverlay,
         )
@@ -1167,8 +1084,8 @@ export function apply(ctx: Context): void {
             name: 'settings.section',
             id: SETTINGS_SECTION_ID,
             order: SETTINGS_SECTION_ORDER,
-            label: () => '模型快速切换',
-            inject: () => ({ data, actions }),
+            label: () => t('settingsLabel'),
+            inject: () => ({ data, actions, t }),
           },
           ModelSettingsSection,
         )
@@ -1221,7 +1138,7 @@ export function apply(ctx: Context): void {
         data.set({
           catalogStatus: 'error',
           catalogRefreshing: false,
-          catalogError: '模型目录服务不可用（remote.session 已断开）。',
+          catalogError: t('errCatalogDisconnected'),
         })
       }, `${name}: remote session release`)
       // 设置页/浮层可能先因为链路未就绪落到 error：链路一到就补拉一次。新链路可能换了一份
@@ -1280,467 +1197,18 @@ export function apply(ctx: Context): void {
   })
 }
 
-/** 浮层本体：只在 `open` 为真时渲染；开着的时候按捕获阶段收到的按键动作。 */
-export function ModelOverlay(props: OverlayProps): React.ReactElement | null {
-  const { store, data, view: modelView, effortView, onBack } = props
-  const state = React.useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
-  const dataState = React.useSyncExternalStore(data.subscribe, data.getSnapshot, data.getSnapshot)
-  const stage = dataState.stage
-  const view = stage === 'efforts' && effortView !== undefined ? effortView : modelView
-  const stagePresentation = dataState.stageModel === null
-    ? undefined
-    : choicePresentation(dataState.stageModel, dataState.catalog)
-  const rootRef = React.useRef<HTMLDivElement | null>(null)
-  const panelRef = React.useRef<HTMLDivElement | null>(null)
-  const listRef = React.useRef<HTMLDivElement | null>(null)
-  const open = state.open
-  const entries = state.entries
-  const activeIndex = clampIndex(state.activeIndex, entries.length)
-  const offset = clampOffset(state.offset, entries.length)
-  const visible = windowSlice(entries, offset)
-  const activeEntry = activeIndex < 0 ? undefined : entries[activeIndex]
-  const enterHint = activeEntry !== undefined && actionOfKey(activeEntry.key) !== null
-    ? 'Enter 执行'
-    : view.enterHint
-  // 一份目录都没有时，确认模型要等 Host 返回目录（见 confirmModel 里的等待）：把这段等待写出来。
-  // 后台刷新（目录已在手上）不阻塞任何操作，不出提示，免得每次打开浮层都闪一下。
-  const waitingCatalog = dataState.catalog.length === 0 && dataState.groups.length === 0
-    && (dataState.catalogStatus === 'idle' || dataState.catalogStatus === 'loading')
-
-  React.useEffect(() => {
-    if (!open) return
-    panelRef.current?.focus()
-  }, [open])
-
-  // 选中行必须留在可见范围：窗口不够高时列表只在内部滚动，键盘把选中行移出视口等于「看不见」。
-  React.useEffect(() => {
-    if (!open) return
-    const list = listRef.current
-    keepOptionVisible(activeIndex < 0 ? null : list?.querySelector(`#${optionDomId(view, activeIndex)}`))
-  }, [open, activeIndex, view])
-
-  React.useEffect(
-    () => installPaletteKeys(store, document, undefined, stage === 'efforts' && onBack !== undefined ? { back: onBack } : {}),
-    [store, stage, onBack],
-  )
-
-  // 滚轮按行滑动窗口（一格一行），不改选中行；挂在整个浮层上，指针偏到遮罩留白也归浮层。
-  React.useEffect(() => {
-    if (!open) return
-    return installPaletteWheel(rootRef.current, (rows) => store.slide(rows))
-  }, [open, store])
-
-  if (!open) return null
-
-  const children: React.ReactNode[] = [
-    React.createElement('div', { key: 'backdrop', className: 'dsh-model-quick-switch-backdrop' }),
-    React.createElement(
-      'div',
-      {
-        key: 'panel',
-        ref: panelRef,
-        className: 'dsh-model-quick-switch-panel',
-        tabIndex: -1,
-        role: 'dialog',
-        'aria-modal': 'true',
-        'aria-label': view.title,
-      },
-      React.createElement(
-        'div',
-        { key: 'head', className: 'dsh-model-quick-switch-head' },
-        React.createElement('span', { key: 'title', className: 'dsh-model-quick-switch-title' }, view.title),
-        React.createElement(
-          'span',
-          { key: 'count', className: 'dsh-model-quick-switch-count' },
-          entries.length === 0 ? view.emptyCount : paletteCountLabel(view, entries, offset),
-        ),
-      ),
-      stagePresentation === undefined
-        ? null
-        : React.createElement(
-            'div',
-            { key: 'subhead', className: 'dsh-model-quick-switch-subhead' },
-            `模型：${stagePresentation.title} · ${stagePresentation.subtitle}`,
-          ),
-      entries.length === 0
-        ? React.createElement(
-            'div',
-            { key: 'empty', className: 'dsh-model-quick-switch-empty' },
-            view.emptyHint,
-          )
-        : React.createElement(
-            'div',
-            {
-              key: 'list',
-              ref: listRef,
-              className: 'dsh-model-quick-switch-list',
-              role: 'listbox',
-              'aria-label': view.listLabel,
-              'aria-activedescendant': optionDomId(view, activeIndex),
-            },
-            visible.map((entry, index) => optionElement(store, view, entry, offset + index, offset + index === activeIndex)),
-          ),
-      // 状态区始终占一行高：切换工作树 / 团队协作时浮层不增不减，面板不会因这一行出现
-      // 或消失而在视口里上下跳一下（浮层是居中的，高度一变整块就平移）。快捷操作不显示
-      // 中间态：开关成功与否只用行上的角标与副标题体现，状态区只留给模型切换、目录等待与错误。
-      React.createElement(
-        'div',
-        { key: 'status', className: 'dsh-model-quick-switch-status' },
-        dataState.pending
-          ? React.createElement('span', { key: 'pending', className: 'dsh-model-quick-switch-pending' }, '正在切换模型…')
-          : null,
-        !dataState.pending && waitingCatalog
-          ? React.createElement('span', { key: 'catalog', className: 'dsh-model-quick-switch-pending' }, '正在读取模型目录…')
-          : null,
-        dataState.error === null
-          ? null
-          : React.createElement('span', { key: 'error', className: 'dsh-model-quick-switch-error', role: 'alert' }, dataState.error),
-      ),
-      React.createElement(
-        'div',
-        { key: 'foot', className: 'dsh-model-quick-switch-foot' },
-        React.createElement('span', { key: 'move' }, '↑ ↓ 选择'),
-        entries.length > PAGE_SIZE
-          ? React.createElement('span', { key: 'page' }, '← → 翻一屏')
-          : null,
-        React.createElement('span', { key: 'enter' }, enterHint),
-        React.createElement('span', { key: 'esc' }, stage === 'efforts' ? 'Esc 返回' : 'Esc 关闭'),
-      ),
-    ),
-  ]
-
-  return React.createElement(
-    'div',
-    { ref: rootRef, className: 'dsh-model-quick-switch-overlay', [view.rootAttr]: '' },
-    children,
-  )
-}
-
-/** 一行候选项。 */
-function optionElement(
-  store: PaletteStore,
-  view: PaletteView,
-  entry: PaletteRow,
-  index: number,
-  active: boolean,
-): React.ReactElement {
-  const label = entry.title === '' ? entry.key : entry.title
-  const badges = entry.badges ?? []
-  const action = actionOfKey(entry.key)
-  return React.createElement(
-    'button',
-    {
-      key: entry.key,
-      type: 'button',
-      id: optionDomId(view, index),
-      role: 'option',
-      className: 'dsh-model-quick-switch-option',
-      'aria-selected': active ? 'true' : 'false',
-      [PALETTE_OPTION_ATTR]: '',
-      // 稳定身份（列表项的复合 key）：人工排查与自动化验证按它定位行。
-      'data-palette-key': entry.key,
-      'data-active': active ? 'true' : 'false',
-      ...action === null ? {} : { 'data-action': action },
-      onClick: () => {
-        store.select(index)
-        const binding = store.getSnapshot().binding
-        if (binding !== null) binding()
-      },
-    },
-    React.createElement('span', { key: 'index', className: 'dsh-model-quick-switch-index' }, `${index + 1}`),
-    React.createElement(
-      'span',
-      { key: 'texts', className: 'dsh-model-quick-switch-texts' },
-      React.createElement(
-        'span',
-        { key: 'label', className: 'dsh-model-quick-switch-label' },
-        React.createElement('span', { key: 'name', className: 'dsh-model-quick-switch-name' }, label),
-        entry.current === true
-          ? React.createElement('span', { key: 'current', className: 'dsh-model-quick-switch-current' }, '当前')
-          : null,
-        badges.map((badge) => React.createElement(
-          'span',
-          { key: `badge:${badge}`, className: 'dsh-model-quick-switch-badge', 'data-badge': badge },
-          badge,
-        )),
-      ),
-      React.createElement('span', { key: 'path', className: 'dsh-model-quick-switch-path' }, entry.subtitle),
-    ),
-    active
-      ? React.createElement('span', { key: 'enter', className: 'dsh-model-quick-switch-enter' }, 'Enter')
-      : null,
-  )
-}
-
-/**
- * 设置页：「列表里有什么」+「从目录里添加」。
- *
- * 列表与浮层候选是同一份数据（`ctx.configForms` 的 `models` 字段），所以这里增删一条，
- * 浮层下一次打开（以及开着的那张）立刻跟着变。写入进行中禁用所有增删按钮，失败时在页面上
- * 显示 Host 的拒绝原因。
- */
-export function ModelSettingsSection(props: SettingsProps): React.ReactElement {
-  const state = React.useSyncExternalStore(props.data.subscribe, props.data.getSnapshot, props.data.getSnapshot)
-  const [addOpen, setAddOpen] = React.useState(false)
-  const { actions } = props
-
-  // 打开设置页就拉一次目录（目录可能比页面挂载晚就绪，失败时页面给重试入口）。
-  React.useEffect(() => {
-    void actions.loadCatalog()
-  }, [actions])
-
-  const groups = orderCatalogGroups(state.groups)
-  const effective = state.current ?? state.defaultSelection
-  const currentPresentation = effective === null ? undefined : choicePresentation(effective, state.catalog)
-  const busy = state.writing || state.pending
-  const disabled = busy || !state.writable
-
-  const children: React.ReactNode[] = [
-    React.createElement(
-      'div',
-      { key: 'head' },
-      React.createElement('h2', { key: 'title', className: 'dsh-model-quick-switch-settings-title' }, '模型快速切换'),
-      React.createElement(
-        'p',
-        { key: 'intro', className: 'dsh-model-quick-switch-settings-intro' },
-        '按 ⌘⌥U（Windows / Linux 上是 Ctrl+Alt+U）打开快捷菜单：顶部两行是「新建工作树」与「团队协作」开关，生效于当前会话；下面是模型列表，先选模型，模型公布了思考等级时再选一档，最后切换当前会话使用的模型。下面这份列表就是模型候选，顺序与浮层一致。',
-      ),
-      React.createElement(
-        'p',
-        { key: 'current', className: 'dsh-model-quick-switch-settings-intro' },
-        currentLine(state, currentPresentation),
-      ),
-    ),
-    React.createElement(
-      'div',
-      { key: 'list-section' },
-      React.createElement(
-        'div',
-        { key: 'heading', className: 'dsh-model-quick-switch-settings-heading' },
-        React.createElement('h3', { key: 'subtitle', className: 'dsh-model-quick-switch-settings-subtitle' }, '浮层里的模型'),
-        React.createElement('span', { key: 'hint', className: 'dsh-model-quick-switch-settings-hint' }, `${state.choices.length} 个`),
-      ),
-      state.configStatus === 'unavailable'
-        ? React.createElement(
-            'p',
-            { key: 'unavailable', className: 'dsh-model-quick-switch-settings-empty' },
-            '当前 DSH 没有提供本插件的设置命名空间（dsh-model-quick-switch 未启用或被组合排除），无法保存模型列表。',
-          )
-        : state.configStatus === 'loading'
-          ? React.createElement('p', { key: 'loading', className: 'dsh-model-quick-switch-settings-empty' }, '正在读取设置…')
-          : state.choices.length === 0
-            ? React.createElement(
-                'p',
-                { key: 'empty', className: 'dsh-model-quick-switch-settings-empty' },
-                '还没有添加模型。点下面的「添加模型」从当前模型目录里挑，添加后按快捷键就能选它。',
-              )
-            : React.createElement(
-                'ul',
-                { key: 'rows', className: 'dsh-model-quick-switch-settings-list' },
-                state.choices.map((choice) => choiceSettingsRow(choice, state, state.catalogStatus === 'ready', disabled, actions)),
-              ),
-      state.writable ? null : React.createElement(
-        'p',
-        { key: 'readonly', className: 'dsh-model-quick-switch-settings-note' },
-        '当前设置文档是只读的，添加与删除已禁用。',
-      ),
-    ),
-    React.createElement(
-      'div',
-      { key: 'add-section' },
-      React.createElement(
-        'div',
-        { key: 'actions', className: 'dsh-model-quick-switch-settings-actions' },
-        React.createElement(
-          'button',
-          {
-            key: 'toggle',
-            type: 'button',
-            className: 'dsh-model-quick-switch-settings-button',
-            'aria-expanded': addOpen ? 'true' : 'false',
-            onClick: () => setAddOpen(!addOpen),
-          },
-          addOpen ? '收起模型目录' : '添加模型',
-        ),
-        React.createElement(
-          'button',
-          {
-            key: 'refresh',
-            type: 'button',
-            className: 'dsh-model-quick-switch-settings-button',
-            disabled: busy || state.catalogStatus === 'loading' || state.catalogRefreshing,
-            onClick: () => {
-              void actions.loadCatalog()
-            },
-          },
-          state.catalogStatus === 'loading' || state.catalogRefreshing ? '正在加载目录…' : '刷新模型目录',
-        ),
-        state.catalogError === null
-          ? null
-          : React.createElement('span', { key: 'catalog-error', className: 'dsh-model-quick-switch-settings-error', role: 'alert' }, state.catalogError),
-      ),
-      state.writeError === null
-        ? null
-        : React.createElement('p', { key: 'write-error', className: 'dsh-model-quick-switch-settings-error', role: 'alert' }, state.writeError),
-      addOpen ? catalogPicker(groups, state.catalog, state.choices, state.catalogStatus, disabled, actions) : null,
-    ),
-  ]
-
-  return React.createElement(
-    'div',
-    { className: 'dsh-model-quick-switch-settings', [SETTINGS_ROOT_ATTR]: '' },
-    children,
-  )
-}
-
-/**
- * 设置页顶部那句「当前使用什么」。
- *
- * 三种读数分开说：没有会话、会话没有显式选择（跟随目录默认）、会话有显式选择。
- * @param state - 数据快照。
- * @param presentation - 当前有效选择（显式或默认）的显示名。
- * @returns 一行说明。
- */
-function currentLine(
-  state: { readonly sessionId: string | null; readonly current: ModelSelectionLike | null },
-  presentation: ReturnType<typeof choicePresentation> | undefined,
-): string {
-  if (state.sessionId === null) return '当前没有打开的会话。'
-  if (presentation === undefined) return '当前会话：还没有选择模型，模型目录也没有给出默认值。'
-  const detail = `${presentation.title} · ${presentation.subtitle}`
-  return state.current === null ? `当前会话：跟随默认（${detail}）` : `当前会话：${detail}`
-}
-
-/** 设置页里的一行已添加模型。 */
-function choiceSettingsRow(
-  choice: ModelChoice,
-  state: { readonly catalog: readonly CatalogModelRow[]; readonly current: ModelSelectionLike | null },
-  catalogReady: boolean,
-  disabled: boolean,
-  actions: SettingsActions,
-): React.ReactElement {
-  const presentation = choicePresentation(choice, state.catalog)
-  const isCurrent = state.current !== null
-    && state.current.provider === choice.provider
-    && state.current.model === choice.model
-    && (choice.reasoningEffort === undefined || choice.reasoningEffort === state.current.reasoningEffort)
-  return React.createElement(
-    'li',
-    { key: choiceKey(choice), className: 'dsh-model-quick-switch-settings-row' },
-    React.createElement(
-      'div',
-      { className: 'dsh-model-quick-switch-settings-texts' },
-      React.createElement(
-        'span',
-        { className: 'dsh-model-quick-switch-settings-name' },
-        React.createElement('span', { className: 'dsh-model-quick-switch-settings-name-text' }, presentation.title),
-        isCurrent ? React.createElement('span', { className: 'dsh-model-quick-switch-settings-current' }, '当前') : null,
-        catalogReady && !presentation.known
-          ? React.createElement('span', { className: 'dsh-model-quick-switch-settings-badge' }, '目录外')
-          : null,
-      ),
-      React.createElement(
-        'span',
-        { className: 'dsh-model-quick-switch-settings-id' },
-        presentation.subtitle,
-      ),
-    ),
-    React.createElement(
-      'button',
-      {
-        type: 'button',
-        className: 'dsh-model-quick-switch-settings-button dsh-model-quick-switch-settings-button-danger',
-        disabled,
-        'aria-label': `从列表删除 ${presentation.title}`,
-        onClick: () => {
-          void actions.remove(choice)
-        },
-      },
-      '删除',
-    ),
-  )
-}
-
-/** 目录里一个模型的副标题：模型 id，附带适配器公布的推理强度名单。 */
-function modelSubtitle(model: CatalogGroup['models'][number]): string {
-  const efforts = model.reasoning?.efforts ?? []
-  if (efforts.length === 0) return model.id
-  return `${model.id} · ${efforts.map((effort) => effort.name ?? effort.id).join(' / ')}`
-}
-
-/**
- * 目录角标的可显示文本。
- *
- * 上游 `ModelCatalogModel['badge']` 的 `text` 是 `LocalizedText`（字符串或按语言分键）；
- * 设置页只画一行，按 `en` 兜底，避免把结构对象直接交给 React。
- */
-function badgeText(badge: CatalogModelRow['badge']): string {
-  if (badge === undefined) return ''
-  return typeof badge.text === 'string' ? badge.text : badge.text.en
-}
-
-/** 「添加模型」面板：按提供方分组列出目录里的模型。 */
-function catalogPicker(
-  groups: readonly CatalogGroup[],
-  catalog: readonly CatalogModelRow[],
-  choices: readonly ModelChoice[],
-  status: 'idle' | 'loading' | 'ready' | 'error',
-  disabled: boolean,
-  actions: SettingsActions,
-): React.ReactElement {
-  if (groups.length === 0) {
-    const message = status === 'loading'
-      ? '正在加载模型目录…'
-      : '模型目录为空：先在「设置 → 模型」里配置提供方与 API 密钥。'
-    return React.createElement(
-      'div',
-      { className: 'dsh-model-quick-switch-settings-catalog' },
-      React.createElement('p', { className: 'dsh-model-quick-switch-settings-note' }, message),
-    )
-  }
-  return React.createElement(
-    'div',
-    { className: 'dsh-model-quick-switch-settings-catalog' },
-    groups.map((group) => React.createElement(
-      'div',
-      { key: group.id, className: 'dsh-model-quick-switch-settings-group' },
-      React.createElement('h4', { className: 'dsh-model-quick-switch-settings-group-title' }, group.name ?? group.id),
-      group.models.length === 0
-        ? React.createElement('p', { className: 'dsh-model-quick-switch-settings-note' }, '这个提供方没有可用模型。')
-        : group.models.map((model) => {
-            const presentation = choicePresentation({ provider: group.id, model: model.id }, catalog)
-            const added = choices.some((choice) => choice.provider === group.id && choice.model === model.id)
-            return React.createElement(
-              'div',
-              { key: model.id, className: 'dsh-model-quick-switch-settings-model' },
-              React.createElement(
-                'div',
-                { className: 'dsh-model-quick-switch-settings-model-texts' },
-                React.createElement(
-                  'span',
-                  { className: 'dsh-model-quick-switch-settings-model-name' },
-                  React.createElement('span', { className: 'dsh-model-quick-switch-settings-model-name-text' }, presentation.title),
-                  model.badge === undefined
-                    ? null
-                    // 上游 0.2.2-rc.2 的角标是 `{ text, tone }` 结构，本设置的展示槽只画一行文本。
-                    : React.createElement('span', { className: 'dsh-model-quick-switch-settings-badge' }, badgeText(model.badge)),
-                ),
-                React.createElement('span', { className: 'dsh-model-quick-switch-settings-model-id' }, modelSubtitle(model)),
-              ),
-              React.createElement(
-                'button',
-                {
-                  type: 'button',
-                  className: 'dsh-model-quick-switch-settings-button',
-                  disabled: disabled || added,
-                  onClick: () => {
-                    void actions.add({ provider: group.id, model: model.id })
-                  },
-                },
-                added ? '已添加' : '添加',
-              ),
-            )
-          }),
-    )),
-  )
-}
+/** 测试与产物检查用的再导出：组件与浮层文案仍从入口取。 */
+export { ModelOverlay, ModelSettingsSection } from './components.tsx'
+export type { OverlayProps, SettingsActions, SettingsProps } from './components.tsx'
+export {
+  EFFORT_VIEW,
+  MODEL_VIEW,
+  PALETTE_OPTION_ATTR,
+  PALETTE_ROOT_ATTR,
+  SETTINGS_ROOT_ATTR,
+  countLabel,
+  effortView,
+  modelView,
+  optionDomId,
+  paletteCountLabel,
+} from './views.ts'

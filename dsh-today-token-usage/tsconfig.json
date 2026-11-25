@@ -8,6 +8,7 @@
     "moduleResolution": "nodenext",
     // dom：浏览器半部读 `document` 与 `setTimeout`；宿主半部用 Node 的计时器类型
     "lib": ["esnext", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
 
     "noEmit": true,
     // 允许 .ts 相对导入，需配合 noEmit
@@ -23,6 +24,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["index.ts", "src/**/*.ts"],
+  "include": ["index.ts", "src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "lib"]
 }

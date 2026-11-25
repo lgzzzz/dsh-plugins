@@ -74,7 +74,7 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-model-quick-switch
 | --- | --- |
 | 快捷键 | 注册一条**固定行**（group `application`）：`dsh-model-quick-switch.model-switch` 占逻辑组合 `primary+alt+U`（macOS 上是 `⌘⌥U`，Windows / Linux 上是 `Ctrl+Alt+U`），键帽按同一平台展开；经 `observeFixedInput` 的固定通道收键，命中时立刻 `consume()`（适配器就是 `preventDefault`）—— 固定行只「占住」组合键，不消费的话平台会把同一次按键再当一次自己的快捷键 |
 | 打开键的捕获兜底 | 固定通道挂在 window 冒泡上，页面里任何一处 `stopPropagation`（终端、模态、编辑器）都会让它收不到；所以另挂 window 捕获阶段 `keydown` 监听，判定与固定通道共用 `ownedModelSwitch`，命中即 `preventDefault()+stopPropagation()` 再开浮层。捕获先跑，固定通道收不到同一按，不会开两次 |
-| 浮层 | 注册进 `shell.overlay`（`order: 70`），等 ui-layout 声明该槽后再注册；业务 props 只由 `options.inject: () => ({ store, data, view })` 交出来，注册的第二个参数是组件本体 |
+| 浮层 | 注册进 `shell.overlay`（`order: 70`），等 ui-layout 声明该槽后再注册；业务 props 只由 `options.inject: () => ({ store, data, view, effortView, onBack, t })` 交出来，注册的第二个参数是组件本体 |
 | 列表的真源 | 宿主 Config 的 `models` 字段（`z.array(...).volatile()`）：`dsh-settings` 只投影带 volatile 的命名空间，设置文档因此能读到、也能按路径写回；浏览器半部经 `ctx.configForms.get('dsh-model-quick-switch')` 读同一份快照并订阅变化 |
 | 设置页 | 注册进 `settings.section`（id `dsh-model-quick-switch`，`order: 70`，label「模型快速切换」）；Host 半部用 `settings.configure({ auto: false })` 关掉按 schema 自动生成的通用表单页，避免出现两张编辑同一字段的页面 |
 | 写入 | `form.mutate([{ op: 'set', path: ['models'], value }])` 整份替换（不是字段级 `set`，因为值是一个数组）；写入状态与 `writeError` 放在数据快照里，页面据此禁用按钮并显示原因 |
@@ -93,6 +93,8 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-model-quick-switch
 | 滚轮 | 监听挂在浮层根节点上（`passive: false`），每次都 `preventDefault()`；`wheelStep` 只看方向（非零即 ±1），所以一格固定滑一行；`ctrlKey` 的捏合手势放行 |
 | 服务晚到 | 只等 `slots` / `shortcuts`；`configForms`、`sessions`、`remote` 各用等待子 fiber 接上（设置文档、会话目录、远程链路都可能比本插件激活晚）。缺席时浮层照常能开，表现为空列表、没有会话提示或可读的服务不可用错误 |
 | 样式 | 插件自己的 `<style>`（随 fiber 卸载移除），只用自己的类名与主题令牌 `--dsw-*` / `--dsh-*`，亮 / 暗主题自动跟随 |
+| 文案 | Client locale（`src/locales.ts` 的 zh / en）：浮层、设置页、快捷操作行与错误提示都按命名空间取；`quickActionTextsOf(t)` / `modelTextsOf(t)` 把文案面交给 `actions.ts` / `model.ts`，locale 服务缺席时退回简体中文 |
+| 组件 | `src/components.tsx` 的 `ModelOverlay` / `ModelSettingsSection`（JSX，自动运行时）；`src/views.ts` 管浮层文案与计数，`src/styles.ts` 管样式表，`src/client.ts` 只做装配与数据动作 |
 
 宿主半部（`index.ts`）只声明 Config schema 与 `auto: false`，没有构建产物，由 Node Type Stripping 直接加载；**改客户端代码必须重建 `lib/client.js`**。
 

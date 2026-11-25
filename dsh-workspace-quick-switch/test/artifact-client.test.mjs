@@ -8,6 +8,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as reactNamespace from 'react'
+import * as jsxRuntime from 'react/jsx-runtime'
 
 import {
   captureWarnings,
@@ -29,7 +30,7 @@ import {
 } from './helpers.mjs'
 
 const dom = installDom()
-const { installPaletteKeys, paletteAction } = await import('../src/client.ts')
+const { installPaletteKeys, paletteAction } = await import('../src/keys.ts')
 
 /** 模块表里的 react:与源码测试用的是同一个实例。 */
 const reactModule = reactNamespace.default ?? reactNamespace
@@ -53,8 +54,9 @@ function loadArtifact() {
   }
   const plugin = registration.factory((specifier) => {
     requested.push(specifier)
-    if (specifier !== 'react') throw new Error(`产物要求了未提供的模块:${specifier}`)
-    return reactModule
+    if (specifier === 'react') return reactModule
+    if (specifier === 'react/jsx-runtime' || specifier === 'react/jsx-dev-runtime') return jsxRuntime
+    throw new Error(`产物要求了未提供的模块:${specifier}`)
   })
   return { registration, plugin, requested }
 }
@@ -76,9 +78,9 @@ const { registration, plugin, requested } = loadArtifact()
 {
   checkTrue('有注册项', registration !== null)
   check('模块 id', registration.id, 'dsh-workspace-quick-switch')
-  check('只向模块表要 react', requested, ['react'])
+  check('只向模块表要 react 与 JSX 运行时', requested, ['react', 'react/jsx-runtime'])
   check('插件名', plugin.name, 'dsh-workspace-quick-switch')
-  check('inject 声明', plugin.inject, ['slots', 'shortcuts'])
+  check('inject 声明', plugin.inject, ['slots', 'shortcuts', 'locale'])
 }
 
 console.log('--- D② 产物装配后固定行与浮层生效 ---')
@@ -108,7 +110,7 @@ console.log('--- D② 产物装配后固定行与浮层生效 ---')
     'dsh-workspace-quick-switch.session-switch',
   ])
   check('交出去的是组件本体(不是元素)', slots.registered.map((entry) => typeof entry.component), ['function', 'function'])
-  check('业务 props 由 inject 提供', Object.keys(slots.registered[0].options.inject()), ['store', 'view'])
+  check('业务 props 由 inject 提供', Object.keys(slots.registered[0].options.inject()), ['store', 'view', 't'])
 
   check('未打开时渲染为空', renderSlotEntry(slots.registered[0]), '')
   shortcuts.fire(fixedKeydown())

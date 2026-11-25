@@ -1,53 +1,23 @@
 /**
- * 浏览器半部:两张浮层,各占一条固定键。
+ * 浏览器半部：两张浮层，各占一条固定键。
  *
- *   - **工作区浮层**:`⌘⌥M`(macOS)/ `Ctrl+Alt+M`(Windows、Linux)按左侧栏 Workspace
- *     分组的顺序列出工作区,`Enter` 在该工作区**新建会话**;
- *   - **会话浮层**:`⌘⌥I`(macOS)/ `Ctrl+Alt+I`(Windows、Linux)按左侧栏「单列表 +
- *     最近更新 + 隐藏已归档」的顺序列出会话,`Enter` **打开**选中的会话。
+ *   - **工作区浮层**：`⌘⌥M`（macOS）/ `Ctrl+Alt+M`（Windows、Linux）按左侧栏 Workspace
+ *     分组的顺序列出工作区，`Enter` 在该工作区**新建会话**；
+ *   - **会话浮层**：`⌘⌥I`（macOS）/ `Ctrl+Alt+I`（Windows、Linux）按左侧栏「单列表 +
+ *     最近更新 + 隐藏已归档」的顺序列出会话，`Enter` **打开**选中的会话。
  *
- * 两条固定行声明的都是逻辑组合 `primary+alt`+字母,注册表在 macOS 上展开成 `meta+alt`
- * (⌘⌥)、在 Windows/Linux 上展开成 `control+alt`(Ctrl+Alt),所以同一份声明在两端
+ * 两条固定行声明的都是逻辑组合 `primary+alt`+字母，注册表在 macOS 上展开成 `meta+alt`
+ * （⌘⌥）、在 Windows/Linux 上展开成 `control+alt`（Ctrl+Alt），所以同一份声明在两端
  * 各是各的键。
  *
- * 两张浮层共用同一套面板(同一份样式、同样的窗口滑动/选中规则,状态层在
- * `palette.ts`),只是候选来源与确认动作不同:工作区候选照抄 Workspace 控制器的 `list`
- * 快照(`dsh-workspace-activity-sort` 之类改的正是这份顺序);会话候选由 `sessions.ts`
- * 按左侧栏的派生链投影,顺序与「单列表 / 最近更新 / 隐藏已归档」完全一致。一屏只渲染
- * {@link PAGE_SIZE} 行,窗口**连续滑动**:滚轮滚一格就是 1–10 → 2–11,`←` / `→` 滑一
- * 整屏,`↑` / `↓` 移选中行并在它离开窗口时把窗口滑到贴边;到两端都停住。
- * 两张浮层互斥:打开一张会先关掉另一张。
+ * 两张浮层共用同一套组件（`overlay.tsx`）、同一套样式（`style.ts`）与状态层（`palette.ts`），
+ * 只是候选来源与确认动作不同：工作区候选照抄 Workspace 控制器的 `list` 快照；会话候选由
+ * `sessions.ts` 按左侧栏的派生链投影。四条通路（固定行 / 浮层槽 / 浮层内按键 / 终端内打开键）
+ * 的说明见 docs/dsh-workspace-quick-switch.md。
  *
- * 四条通路(两张浮层各自一份):
- *
- *   - **固定行**注册在快捷键服务里(group `application`),占据 `primary+alt+字母`,存在
- *     本身就是占用;按键经 `observeFixedInput` 的固定通道送达,只认这一条物理组合,命中时
- *     立刻 `consume()`(适配器就是 `preventDefault`)。**消费是必须的**:固定行只是「占住」
- *     组合键,上游不会替它消费,不消费的话平台会把同一次 `⌘⌥M` 再当一次自己的快捷键 ——
- *     macOS 上顺手最小化窗口就是这么来的。
- *   - **浮层**注册进 `shell.overlay`(加法式列表槽)。候选由本插件直接订阅上游快照得来
- *     (槽只给框架标准 props,容器与其注入面在 `ctx.inject` 的 scope 里造好),所以候选一变
- *     就重渲。
- *   - **浮层内的按键**由本插件在 document 捕获阶段取走(`Escape` / `Enter` / `↑` / `↓`
- *     与整屏滑动的 `←` / `→`):浮层一开它就先于任何本地控件看到按键,关掉后立即放行。
- *   - **终端内的打开键**由本插件在 window 捕获阶段取走:落在 `.xterm` 里的 keydown 到不了
- *     固定通道(终端在自己的 textarea 处理器里 `stopPropagation()`),所以另挂一个捕获监听,
- *     早于事件进入终端判定,命中即吞掉这一按并开对应的浮层(判定与固定通道共用同一函数)。
- *     macOS 上 `⌘⌥I` 还是死键(Option+I = ˆ),固定通道会把这一按标成组字中,所以另有一条
- *     只认 `key === 'Dead'` 的捕获补偿(与 `dsh-keyboard-shortcuts` 对 `⌘⌥N` 的做法同源)。
- *
- * 内核两条固定行与浮层只等 `slots` / `shortcuts`,所以两组键从一开始就占着、浮层也随时能开。
- * 候选要用的 `workspaces` / `sessions` 是另一回事 —— 它们经 gateway + WebSocket 的远程链路
- * 提供,通常比本插件激活晚得多,所以各挂一个**等待子 fiber**(`scope.inject`),服务到位后再
- * 接上订阅;服务缺席就只是没有候选(浮层照常打开并提示),不会把启动审计拖成「等待激活」。
- *
- * 动作只有两条:`uiWorkspace.startSession(workspaceId)`(与左侧栏工作区分组上的「新建会话」
- * 同一个动词,复用该工作区已有的空白会话)与 `uiWorkspace.openSession(sessionId)`(与点击
- * 左侧栏那一行同一个操作)。
- *
- * 键位冲突、启用方式与已知边界见 docs/dsh-workspace-quick-switch.md。
+ * 可见文案（标题、空态、底栏、角标、相对时间、固定行名称）全部走 Client locale；
+ * 本文件只做装配，不渲染。
  */
-import * as React from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   ShortcutBinding,
@@ -59,6 +29,7 @@ import type {
   Shortcuts,
 } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { UiWorkspace } from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -66,432 +37,58 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // 只取模块增强:`Context['sessions'].list` 的 `SessionSummary.retainedBy.mainView`
 // 由 ui-session 合并进 `SessionReferenceSourceMap`。
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import { name } from './runtime.ts'
+import { NS, en, sessionTextsOf, translateZh, zh, type PaletteLocaleNS } from './locales.ts'
+import { PaletteOverlay } from './overlay.tsx'
 import {
-  PAGE_SIZE,
   QUICK_SWITCH_BINDING,
   QUICK_SWITCH_ID,
   SESSION_SWITCH_BINDING,
   SESSION_SWITCH_ID,
   bindingPress,
   clampIndex,
-  clampOffset,
   createPaletteStore,
   currentRowIndex,
   paletteEntries,
-  windowSlice,
   quickSwitchKeys,
   sessionSwitchKeys,
-  type PaletteRow,
   type PaletteStore,
-  type PaletteView,
 } from './palette.ts'
+import { installStyleTag } from './style.ts'
+import { name } from './runtime.ts'
 import { sessionPaletteEntries } from './sessions.ts'
+import { sessionView, workspaceView } from './views.ts'
+import type { PaletteTranslate } from './views.ts'
 
 export { name }
 
-/** 浮层依赖的两个客户端服务;任一缺席就整体不安装。 */
-export const inject = ['slots', 'shortcuts']
+/** 浮层依赖的三个客户端服务;slots / shortcuts 任一缺席就整体不安装，locale 缺席时退回简体中文。 */
+export const inject = ['slots', 'shortcuts', 'locale']
 
-/**
- * 浮层自己注入的样式(随本插件的 fiber 卸载一起移除)。
- *
- * 高度预算:面板不设固定上限,只吃满浮层这一层留给它的空间(`max-height: 100%` —— 浮层是
- * `inset: 0` 的定长容器,上下各留一层内边距,百分比因此有确定参照)。10 行候选在常规密度下
- * 约 613px 高,窗口够高时整份候选一次看全;视口高度不足 860px 时末尾那组 `@media` 收紧内边距,
- * 把这份高度压到约 561px,常见笔记本窗口(视口 ≥ 800px)同样一次看全。只有更矮的窗口才由
- * 列表内部滚动兜底,那时选中行靠 `scrollIntoView({ block: 'nearest' })` 跟着走。
- *
- * 指针:浮层根节点仍是 click-through(`pointer-events: none`),遮罩与**面板**吃指针
- * 事件 —— 面板因此能点(每一行就是按钮);滚轮由 `installPaletteWheel` 挂在浮层根节点上
- * 接管(见那里对被动监听与「一格一行」的说明)。
- *
- * 曾经的写法是 `max-height: min(70vh, 560px)`:面板在任何窗口里都被截到 560px,而候选列表
- * 需要 526px 放 10 行 × 50px,于是第 10 行永远在滚动区外。
- */
-export const PALETTE_CSS = `
-.dsh-workspace-quick-switch-overlay {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: max(24px, var(--dsh-frame-overlay-top, 24px)) 24px 24px;
-  font-family: var(--dsw-font-family);
-}
-.dsh-workspace-quick-switch-backdrop {
-  pointer-events: auto;
-  position: absolute;
-  inset: 0;
-  background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.24));
-  backdrop-filter: var(--dsw-mask-blur, none);
-}
-.dsh-workspace-quick-switch-panel {
-  pointer-events: auto;
-  box-sizing: border-box;
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  width: min(520px, 100%);
-  max-height: 100%;
-  overflow: hidden;
-  border-radius: var(--dsw-radius-lg, 16px);
-  background: var(--dsw-alias-bg-layer-2, #ffffff);
-  box-shadow: var(--dsw-elevation-prominent, 0 10px 30px rgba(0, 0, 0, 0.18));
-}
-.dsh-workspace-quick-switch-panel:focus {
-  outline: none;
-}
-.dsh-workspace-quick-switch-head {
-  flex: none;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px 10px;
-}
-.dsh-workspace-quick-switch-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary, #1b1b1c);
-}
-.dsh-workspace-quick-switch-count {
-  font-size: 12px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
-}
-.dsh-workspace-quick-switch-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0 8px 8px;
-  list-style: none;
-  overflow-y: auto;
-}
-.dsh-workspace-quick-switch-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border: none;
-  border-radius: var(--dsw-radius-sm, 8px);
-  background: transparent;
-  color: var(--dsw-alias-label-primary, #1b1b1c);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.dsh-workspace-quick-switch-option[data-active='true'] {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
-}
-.dsh-workspace-quick-switch-option:hover:not([data-active='true']) {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
-}
-.dsh-workspace-quick-switch-option:focus {
-  outline: none;
-}
-.dsh-workspace-quick-switch-index {
-  flex: none;
-  width: 20px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-tertiary, #81858c);
-}
-.dsh-workspace-quick-switch-texts {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-.dsh-workspace-quick-switch-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 14px;
-}
-.dsh-workspace-quick-switch-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dsh-workspace-quick-switch-current {
-  flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
-  color: var(--dsw-alias-label-tertiary, #81858c);
-  font-size: 11px;
-  line-height: 18px;
-}
-.dsh-workspace-quick-switch-badge {
-  flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
-  color: var(--dsw-alias-label-tertiary, #81858c);
-  font-size: 11px;
-  line-height: 17px;
-}
-.dsh-workspace-quick-switch-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
-}
-.dsh-workspace-quick-switch-enter {
-  flex: none;
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
-}
-.dsh-workspace-quick-switch-empty {
-  padding: 8px 18px 18px;
-  font-size: 13px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
-}
-.dsh-workspace-quick-switch-foot {
-  flex: none;
-  display: flex;
-  gap: 14px;
-  padding: 10px 18px 14px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
-}
-/*
- * 视口高度不足 860px 时收紧内部留白与行高,保证一屏 10 行在常见笔记本窗口(视口 ≥ 800px)
- * 里一次看全;更矮的窗口仍由列表内部滚动兜底。
- *
- * 行高要显式写死:候选行是「名称 + 路径」两行文字,默认值 line-height: normal 会按字体
- * 给不同高度(中文 / 日文字体比拉丁字体高 2~3px/行,10 行累计差 20~30px,足以让第 10 行
- * 掉出视口)。写死之后一屏高度与标题语言无关。
- *
- * 只改内部间距,不动浮层根节点的顶部内边距 —— 那个值要让开 macOS 红绿灯 / Windows 标题栏。
- */
-@media (max-height: 860px) {
-  .dsh-workspace-quick-switch-head {
-    padding: 12px 18px 8px;
-  }
-  .dsh-workspace-quick-switch-option {
-    padding: 5px 10px;
-  }
-  .dsh-workspace-quick-switch-name {
-    line-height: 18px;
-  }
-  .dsh-workspace-quick-switch-path {
-    line-height: 15px;
-  }
-  .dsh-workspace-quick-switch-foot {
-    padding: 8px 18px 10px;
-  }
-}
-`
-
-/** 工作区浮层根节点的 DOM 标记(人工排查与自动化验证都读它)。 */
-export const PALETTE_ROOT_ATTR = 'data-workspace-quick-switch'
-
-/** 工作区浮层里一行候选的 DOM 标记。 */
-export const PALETTE_OPTION_ATTR = 'data-workspace-quick-switch-option'
-
-/** 会话浮层根节点的 DOM 标记。 */
-export const SESSION_ROOT_ATTR = 'data-session-quick-switch'
-
-/** 会话浮层里一行候选的 DOM 标记。 */
-export const SESSION_OPTION_ATTR = 'data-session-quick-switch-option'
-
-/**
- * 工作区浮层的文案:标题、计数单位、空态与底栏。
- *
- * 两张浮层共用同一个组件与同一套样式,差异只在这份文案与候选来源上。
- */
-export const WORKSPACE_VIEW: PaletteView = {
-  id: name,
-  domId: name,
-  rootAttr: PALETTE_ROOT_ATTR,
-  title: '新建会话于工作区',
-  unit: '个工作区',
-  emptyCount: '左侧栏还没有工作区',
-  emptyHint: '先在左侧栏添加一个工作区。',
-  listLabel: '工作区',
-  enterHint: 'Enter 新建会话',
-}
-
-/**
- * 会话浮层的文案。
- *
- * 候选顺序照抄左侧栏「单列表 + 最近更新 + 隐藏已归档」,确认动作是打开该会话。
- */
-export const SESSION_VIEW: PaletteView = {
-  id: `${name}.session-switch`,
-  domId: `${name}-session`,
-  rootAttr: SESSION_ROOT_ATTR,
-  title: '切换会话',
-  unit: '个会话',
-  emptyCount: '左侧栏还没有会话',
-  emptyHint: '先在左侧栏新建一个会话。',
-  listLabel: '会话',
-  enterHint: 'Enter 打开会话',
-}
-
-/**
- * 把选中行滚进可见区(`nearest`:已经可见的行不动)。
- *
- * 窗口够高时 10 行全部可见,这里什么都不做;窗口矮到列表内部滚动时,键盘把选中行移出
- * 视口就等于「看不见」,所以每次选中行变化后都要补一次。
- * @param option - 选中行元素;缺席(浮层未开、空候选、测试替身)时静默跳过。
- */
-export function keepOptionVisible(option: Element | null | undefined): void {
-  option?.scrollIntoView?.({ block: 'nearest' })
-}
-
-/** 一格滚轮事件(结构与 `WheelEvent` 兼容,测试替身也能给)。 */
-export interface PaletteWheelEventLike {
-  readonly deltaY: number
-  /** `0` 像素、`1` 行、`2` 页(DOM_DELTA_*);缺席按像素。 */
-  readonly deltaMode?: number
-  readonly ctrlKey?: boolean
-}
-
-/** 滚轮监听目标(浮层根节点结构上满足它)。 */
-export interface PaletteWheelTarget {
-  addEventListener(
-    type: 'wheel',
-    listener: (event: WheelEvent) => void,
-    options?: AddEventListenerOptions | boolean,
-  ): void
-  removeEventListener(
-    type: 'wheel',
-    listener: (event: WheelEvent) => void,
-    options?: EventListenerOptions | boolean,
-  ): void
-}
-
-/**
- * 一次滚轮折算成多少像素。
- *
- * 像素模式(触控板、多数浏览器)原样使用;行 / 页模式(部分平台的鼠标滚轮)按一行 16px、
- * 一整屏 400px 折算。幅度只用来判方向,见 {@link wheelStep}。
- * @param event - 滚轮事实。
- * @returns 纵向位移(向上为负)。
- */
-export function wheelPixels(event: PaletteWheelEventLike): number {
-  if (event.deltaMode === 1) return event.deltaY * 16
-  if (event.deltaMode === 2) return event.deltaY * 400
-  return event.deltaY
-}
-
-/**
- * 一次滚轮折算成滑几行:**一格就是一行,与幅度无关**。
- *
- * 有的鼠标一格只报十几像素、有的报到一百多,按像素折算会让前者「滚了没反应」、后者
- * 「一格跳两三行」。这里不读幅度,只看方向:非零位移一律算一行(向上为 -1)。
- * 触控板的连续事件也因此每个事件走一行 —— 手感由滚轮 / 触控板自己的节奏决定。
- * @param pixels - 这一格折算出的像素(向上为负)。
- * @returns -1 / 0 / 1。
- */
-export function wheelStep(pixels: number): -1 | 0 | 1 {
-  if (!Number.isFinite(pixels) || pixels === 0) return 0
-  return pixels > 0 ? 1 : -1
-}
-
-/**
- * 让滚轮滑动浮层窗口(一格一行),不是滚选中行,也不整屏跳。
- *
- * 监听挂在**浮层根节点**上、`passive: false`:
- *
- *   - 指针落在浮层任何位置(面板、遮罩留白)滚轮都归浮层 —— 只挂在面板上的话,指针偏到
- *     遮罩那片留白里,滚轮就会穿到背后正文上;
- *   - 每次都 `preventDefault()`:浮层是模态的,背后的正文被遮罩盖着,不该跟着滚;
- *   - 触控板捏合在 Chrome 里报成 `ctrlKey + wheel`,那是浏览器缩放手势,原样放行;
- *   - 每一格滚轮按 {@link wheelStep} 折成一行,窗口因此是**连续**的:显示 1–10 时滚一格
- *     变成 2–11,而不是整屏跳到 11–20。
- *
- * 选中行不跟着滚轮走:高亮只由键盘与点击改;滑动把选中行带出窗口时,store 会把它贴到
- * 最近的可见边上。
- * @param root - 浮层根节点;缺席(浮层未挂载)时不装。
- * @param slide - 滑动动作,参数是行数(正数往下)。
- * @returns 卸载函数。
- */
-export function installPaletteWheel(
-  root: PaletteWheelTarget | null | undefined,
-  slide: (rows: number) => void,
-): () => void {
-  if (root === null || root === undefined) return () => {}
-  const onWheel = (event: WheelEvent): void => {
-    // 捏合缩放在 Chrome 里报成 ctrlKey + wheel:那是浏览器缩放手势,不归浮层。
-    if (event.ctrlKey === true) return
-    const rows = wheelStep(wheelPixels(event))
-    if (rows === 0) return
-    // 浮层是模态的:滚轮一律归它,哪怕已经滑到头 —— 否则会漏到背后那层正文上。
-    event.preventDefault()
-    slide(rows)
-  }
-  root.addEventListener('wheel', onWheel, { passive: false })
-  // 卸载只按 capture 匹配:`passive` 不参与「是不是同一个监听」的判定。
-  return () => root.removeEventListener('wheel', onWheel, false)
-}
-
-/** 浮层内一个按键解出的动作。 */
-export type PaletteAction = 'close' | 'confirm' | 'next' | 'previous' | 'page-next' | 'page-previous'
-
-/** `paletteAction` 读到的按键事实(KeyboardEvent 结构上满足它)。 */
-export interface PaletteEventLike {
-  readonly key: string
-  readonly repeat?: boolean
-  readonly isComposing?: boolean
-  readonly ctrlKey?: boolean
-  readonly altKey?: boolean
-  readonly shiftKey?: boolean
-  readonly metaKey?: boolean
-  readonly defaultPrevented?: boolean
-}
-
-/** 会话目录服务面:上游 `ctx.sessions`(候选来源与「主视图会话」标记)。 */
-type Sessions = Context['sessions']
-
-/** 宿主工作区服务面:上游 `ctx.workspaces`(候选来源与置顶/归档集合)。 */
-type Workspaces = Context['workspaces']
-
-/** 往 `<head>` 挂一张样式表,并返回移除它的函数。 */
-function installStyleTag(): () => void {
-  const tag = document.createElement('style')
-  tag.dataset.plugin = name
-  tag.textContent = PALETTE_CSS
-  document.head.appendChild(tag)
-  return () => tag.remove()
-}
-
-/**
- * 一次按键解码出的动作。
- *
- * 只认没有修饰键的 `Escape` / `Enter` / `↑` / `↓`(选行)与 `←` / `→`(翻页);组合中、
- * 已被别的处理器消费、或带修饰键的按键统统放行(浮层不抢 `Ctrl+↑`、`Shift+←` 这类有主的键)。
- * @param event - 按键事实。
- * @returns 动作,或不属于浮层时的 undefined。
- */
-export function paletteAction(event: PaletteEventLike): PaletteAction | undefined {
-  if (event.defaultPrevented === true) return undefined
-  if (event.isComposing === true) return undefined
-  if (event.ctrlKey === true || event.altKey === true || event.metaKey === true || event.shiftKey === true) return undefined
-  // 按住不放的重复:选择与翻页可以连按,取消与确认不行(避免一次长按连开好几个会话)。
-  if (event.repeat === true && (event.key === 'Enter' || event.key === 'Escape')) return undefined
-  if (event.key === 'Escape') return 'close'
-  if (event.key === 'Enter') return 'confirm'
-  if (event.key === 'ArrowDown') return 'next'
-  if (event.key === 'ArrowUp') return 'previous'
-  if (event.key === 'ArrowRight') return 'page-next'
-  if (event.key === 'ArrowLeft') return 'page-previous'
-  return undefined
-}
+/** 测试与产物检查用的再导出：组件、样式与纯函数仍从入口取。 */
+export { PaletteOverlay } from './overlay.tsx'
+export { PALETTE_CSS, CLASS, installStyleTag } from './style.ts'
+export {
+  PALETTE_OPTION_ATTR,
+  PALETTE_ROOT_ATTR,
+  SESSION_OPTION_ATTR,
+  SESSION_ROOT_ATTR,
+  SESSION_VIEW,
+  WORKSPACE_VIEW,
+  countLabel,
+  optionDomId,
+  sessionView,
+  workspaceView,
+} from './views.ts'
+export {
+  activate,
+  confirmActive,
+  installPaletteKeys,
+  installPaletteWheel,
+  keepOptionVisible,
+  paletteAction,
+  wheelPixels,
+  wheelStep,
+} from './keys.ts'
 
 /** 主视图会话所属的工作区 id;两处读数都不全时不返回(浮层就不标「当前」)。 */
 function currentWorkspaceId(
@@ -505,247 +102,17 @@ function currentWorkspaceId(
   return workspaces.find((workspace) => workspace.sessionIds?.includes(current) === true)?.workspaceId
 }
 
-/** 捕获阶段的按键目标(document 结构上满足它)。 */
-export interface PaletteKeyTarget {
-  addEventListener(type: 'keydown', listener: (event: KeyboardEvent) => void, capture?: boolean): void
-  removeEventListener(type: 'keydown', listener: (event: KeyboardEvent) => void, capture?: boolean): void
-}
+/** 会话目录服务面:上游 `ctx.sessions`(候选来源与「主视图会话」标记)。 */
+type Sessions = Context['sessions']
 
-/**
- * 在捕获阶段接管浮层的六个键。
- *
- * 捕获监听先于任何本地控件看到按键,所以浮层一开,`Esc`/`Enter`/`↑`/`↓`/`←`/`→` 就归它;
- * 关掉之后立刻回到原来的归属。浮层没开时一个键都不动(两张浮层各挂一份,只认自己那个
- * store 是否打开)。
- * @param store - 浮层状态。
- * @param target - 按键目标,浏览器里是 `document`。
- * @returns 卸载函数。
- */
-export function installPaletteKeys(store: PaletteStore, target: PaletteKeyTarget): () => void {
-  if (target === undefined || target === null) return () => {}
-  const onKeyDown = (event: KeyboardEvent): void => {
-    if (!store.getSnapshot().open) return
-    const action = paletteAction(event)
-    if (action === undefined) return
-    // 这六个键归浮层:不让页面上任何本地控件拿到同一次按键。
-    event.preventDefault()
-    event.stopPropagation()
-    if (action === 'close') store.close()
-    else if (action === 'confirm') confirmActive(store)
-    else if (action === 'page-next') store.turn(1)
-    else if (action === 'page-previous') store.turn(-1)
-    else store.move(action === 'next' ? 1 : -1)
-  }
-  target.addEventListener('keydown', onKeyDown, true)
-  return () => target.removeEventListener('keydown', onKeyDown, true)
-}
-
-/** 浮层组件的 props:业务 props 由容器注入,一个是 store,一个是这张浮层的文案。 */
-export interface OverlayProps {
-  readonly store: PaletteStore
-  readonly view: PaletteView
-}
-
-/** 浮层本体:只在 `open` 为真时渲染,开着的时候按捕获阶段收到的按键动作。 */
-export function PaletteOverlay(props: OverlayProps): React.ReactElement | null {
-  const { store, view } = props
-  const state = React.useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
-  const rootRef = React.useRef<HTMLDivElement | null>(null)
-  const panelRef = React.useRef<HTMLDivElement | null>(null)
-  const listRef = React.useRef<HTMLDivElement | null>(null)
-  const open = state.open
-  const entries = state.entries
-  const activeIndex = clampIndex(state.activeIndex, entries.length)
-  // 一屏只渲染 PAGE_SIZE 行;窗口起点越界(候选变短)按当前候选收敛,渲染与按键读的是同一个值。
-  // 窗口是连续滑动的:起点可以是任意行,所以滚一下就是 1–10 → 2–11,而不是整屏跳。
-  const offset = clampOffset(state.offset, entries.length)
-  const visible = windowSlice(entries, offset)
-
-  React.useEffect(() => {
-    if (!open) return
-    panelRef.current?.focus()
-  }, [open])
-
-  // 选中行必须留在可见范围:窗口不够高时列表只在内部滚动,键盘把选中行移出视口等于「看不见」。
-  // 打开时(初始选中行可能就是第 10 行)与每次 ↑/↓ 之后都把它滚进来。
-  React.useEffect(() => {
-    if (!open) return
-    const list = listRef.current
-    keepOptionVisible(activeIndex < 0 ? null : list?.querySelector(`#${optionDomId(view, activeIndex)}`))
-  }, [open, activeIndex, view])
-
-  React.useEffect(() => installPaletteKeys(store, document), [store])
-
-  // 滚轮按行滑动窗口(一格一行,1–10 → 2–11),不改选中行(选中行只由键盘与点击改)。
-  // 挂在整个浮层上而不是面板上:指针偏到遮罩那片留白里时,滚轮也该归浮层,不该穿到背后
-  // 正文。浮层只在打开时才渲染,所以跟着 `open` 走。
-  React.useEffect(() => {
-    if (!open) return
-    return installPaletteWheel(rootRef.current, (rows) => store.slide(rows))
-  }, [open, store])
-
-  if (!open) return null
-
-  const children: React.ReactNode[] = [
-    React.createElement('div', { key: 'backdrop', className: 'dsh-workspace-quick-switch-backdrop' }),
-    React.createElement(
-      'div',
-      {
-        key: 'panel',
-        ref: panelRef,
-        className: 'dsh-workspace-quick-switch-panel',
-        tabIndex: -1,
-        role: 'dialog',
-        'aria-modal': 'true',
-        'aria-label': view.title,
-      },
-      React.createElement(
-        'div',
-        { key: 'head', className: 'dsh-workspace-quick-switch-head' },
-        React.createElement('span', { key: 'title', className: 'dsh-workspace-quick-switch-title' }, view.title),
-        React.createElement(
-          'span',
-          { key: 'count', className: 'dsh-workspace-quick-switch-count' },
-          entries.length === 0 ? view.emptyCount : countLabel(view, entries.length, offset),
-        ),
-      ),
-      entries.length === 0
-        ? React.createElement(
-            'div',
-            { key: 'empty', className: 'dsh-workspace-quick-switch-empty' },
-            view.emptyHint,
-          )
-        : React.createElement(
-            'div',
-            {
-              key: 'list',
-              ref: listRef,
-              className: 'dsh-workspace-quick-switch-list',
-              role: 'listbox',
-              'aria-label': view.listLabel,
-              'aria-activedescendant': optionDomId(view, activeIndex),
-            },
-            visible.map((entry, index) => optionElement(store, view, entry, offset + index, offset + index === activeIndex)),
-          ),
-      React.createElement(
-        'div',
-        { key: 'foot', className: 'dsh-workspace-quick-switch-foot' },
-        React.createElement('span', { key: 'move' }, '↑ ↓ 选择'),
-        entries.length > PAGE_SIZE
-          ? React.createElement('span', { key: 'page' }, '← → 翻一屏')
-          : null,
-        React.createElement('span', { key: 'enter' }, view.enterHint),
-        React.createElement('span', { key: 'esc' }, 'Esc 关闭'),
-      ),
-    ),
-  ]
-
-  return React.createElement(
-    'div',
-    { ref: rootRef, className: 'dsh-workspace-quick-switch-overlay', [view.rootAttr]: '' },
-    children,
-  )
-}
-
-/**
- * 标题右侧的计数文案:一屏装得下时报总数,否则报当前看到的行范围。
- * @param view - 这张浮层的文案(决定计数单位)。
- * @param total - 候选总数。
- * @param offset - 窗口第一行的下标(0 起)。
- */
-export function countLabel(view: PaletteView, total: number, offset: number): string {
-  if (total <= PAGE_SIZE) return `${total} ${view.unit}`
-  const from = offset + 1
-  const to = Math.min(offset + PAGE_SIZE, total)
-  return `${total} ${view.unit} · 显示 ${from}–${to}`
-}
-
-/**
- * 一行候选项的 DOM id(与 `aria-activedescendant` 配对,滚进可见区也按它定位)。
- * @param view - 这张浮层的文案(决定 id 前缀,两张浮层的行 id 因此不会撞车)。
- * @param index - 候选在整个列表里的下标。
- * @returns DOM id。
- */
-export function optionDomId(view: PaletteView, index: number): string {
-  return `${view.domId}-option-${index}`
-}
-
-/** 一行候选项。 */
-function optionElement(
-  store: PaletteStore,
-  view: PaletteView,
-  entry: PaletteRow,
-  index: number,
-  active: boolean,
-): React.ReactElement {
-  const label = entry.title === '' ? entry.key : entry.title
-  const badges = entry.badges ?? []
-  return React.createElement(
-    'button',
-    {
-      key: entry.key,
-      type: 'button',
-      id: optionDomId(view, index),
-      role: 'option',
-      className: 'dsh-workspace-quick-switch-option',
-      'aria-selected': active ? 'true' : 'false',
-      [PALETTE_OPTION_ATTR]: '',
-      // 稳定身份(工作区 id / 会话 id):人工排查与自动化验证按它定位行,不依赖文案或序号。
-      'data-palette-key': entry.key,
-      // 悬停与键盘选中共用同一套高亮(见样式表),但只有键盘/点击会改选中行。
-      'data-active': active ? 'true' : 'false',
-      onClick: () => activate(store, index),
-    },
-    React.createElement('span', { key: 'index', className: 'dsh-workspace-quick-switch-index' }, `${index + 1}`),
-    React.createElement(
-      'span',
-      { key: 'texts', className: 'dsh-workspace-quick-switch-texts' },
-      React.createElement(
-        'span',
-        { key: 'label', className: 'dsh-workspace-quick-switch-label' },
-        React.createElement('span', { key: 'name', className: 'dsh-workspace-quick-switch-name' }, label),
-        entry.current === true
-          ? React.createElement('span', { key: 'current', className: 'dsh-workspace-quick-switch-current' }, '当前')
-          : null,
-        badges.map((badge) => React.createElement(
-          'span',
-          { key: `badge:${badge}`, className: 'dsh-workspace-quick-switch-badge', 'data-badge': badge },
-          badge,
-        )),
-      ),
-      React.createElement('span', { key: 'path', className: 'dsh-workspace-quick-switch-path' }, entry.subtitle),
-    ),
-    active
-      ? React.createElement('span', { key: 'enter', className: 'dsh-workspace-quick-switch-enter' }, 'Enter')
-      : null,
-  )
-}
-
-/** 确认当前选中行(Enter)。 */
-function confirmActive(store: PaletteStore): void {
-  activate(store, store.getSnapshot().activeIndex)
-}
-
-/**
- * 确认一行(点击或 Enter):先把选中行定到它,再关掉浮层,最后让容器执行动作。
- *
- * 顺序是有意的:动作(新建 / 打开会话)会切走主视图,先关浮层就不会留下一个悬在切换之上的遮罩。
- * @param store - 浮层状态。
- * @param index - 被确认的行(可以是越界值,由 store 收敛)。
- */
-function activate(store: PaletteStore, index: number): void {
-  store.select(index)
-  const binding = store.getSnapshot().binding
-  store.close()
-  if (binding === null) return
-  binding()
-}
+/** 宿主工作区服务面:上游 `ctx.workspaces`(候选来源与置顶/归档集合)。 */
+type Workspaces = Context['workspaces']
 
 /** 工作区浮层的固定行:占据 `primary+alt+M`,键帽按平台格式化。 */
-function workspaceFixedCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
+function workspaceFixedCommand(platform: ShortcutPlatform, t: PaletteTranslate): ShortcutFixedCommand {
   return {
     id: QUICK_SWITCH_ID as ShortcutCommandId,
-    label: () => '工作区快速切换',
+    label: () => t('workspaceFixedLabel'),
     keys: quickSwitchKeys(platform),
     bindings: [QUICK_SWITCH_BINDING],
     group: 'application',
@@ -753,24 +120,16 @@ function workspaceFixedCommand(platform: ShortcutPlatform): ShortcutFixedCommand
 }
 
 /** 会话浮层的固定行:占据 `primary+alt+I`,键帽按平台格式化。 */
-function sessionFixedCommand(platform: ShortcutPlatform): ShortcutFixedCommand {
+function sessionFixedCommand(platform: ShortcutPlatform, t: PaletteTranslate): ShortcutFixedCommand {
   return {
     id: SESSION_SWITCH_ID as ShortcutCommandId,
-    label: () => '会话快速切换',
+    label: () => t('sessionFixedLabel'),
     keys: sessionSwitchKeys(platform),
     bindings: [SESSION_SWITCH_BINDING],
     group: 'application',
   }
 }
 
-/**
- * 安装两张浮层:注册两条固定行、把两个浮层挂进 `shell.overlay`、接上固定输入通道。
- *
- * 本插件只等 `slots` / `shortcuts`:它们一就绪,两组键与两张浮层就都在了。工作区与会话
- * 服务(都走远程链路,比这里晚)由等待子 fiber 接上,缺席时浮层按空候选打开并提示;
- * `uiWorkspace` 缺席时固定行照旧在(快捷键目录里可见),按键不做动作。
- * @param ctx - 客户端上下文。
- */
 export function apply(ctx: Context): void {
   ctx.inject(inject, (scope) => {
     const slots = readSlots(scope)
@@ -780,6 +139,17 @@ export function apply(ctx: Context): void {
       warn('shortcuts 服务不可用:固定行与快捷键输入未安装')
       return
     }
+
+    // 可见文案走 Client locale；字典登记在 scope 上，随插件 fiber 卸载一起撤回。
+    // locale 服务缺席（受限环境 / 测试桩）时退回简体中文字典。
+    const locale = readLocale(scope)
+    if (locale !== undefined) {
+      scope.effect(() => locale.register(NS, { zh, en }), `${name}: dictionaries`)
+    }
+    const t = locale === undefined ? translateZh : locale.bind(NS)
+    const workspacePaletteView = workspaceView(t)
+    const sessionPaletteView = sessionView(t)
+    const sessionTexts = sessionTextsOf(t)
 
     const workspaceStore = createPaletteStore()
     const sessionStore = createPaletteStore()
@@ -806,6 +176,7 @@ export function apply(ctx: Context): void {
           archivedSessionIds: snapshot?.archivedSessionIds ?? [],
           pinnedSessionIds: snapshot?.pinnedSessionIds ?? [],
         },
+        texts: sessionTexts,
       }))
     }
 
@@ -824,8 +195,8 @@ export function apply(ctx: Context): void {
     scope.effect(installStyleTag, `${name}: palette styles`)
     // 固定行要先挂载,固定输入观察者才读得到它;三者同属一个 scope,卸载时按登记逆序跑清理函数。
     scope.effect(() => {
-      const disposeWorkspace = registerFixedRow(shortcuts, workspaceFixedCommand(platform))
-      const disposeSession = registerFixedRow(shortcuts, sessionFixedCommand(platform))
+      const disposeWorkspace = registerFixedRow(shortcuts, workspaceFixedCommand(platform, t))
+      const disposeSession = registerFixedRow(shortcuts, sessionFixedCommand(platform, t))
       return () => {
         disposeWorkspace?.()
         disposeSession?.()
@@ -899,16 +270,16 @@ export function apply(ctx: Context): void {
             id: name,
             order: 60,
             // 业务 props 只能由 inject 交出来:渲染器对条目做的是 jsx(entry.component, props)。
-            inject: () => ({ store: workspaceStore, view: WORKSPACE_VIEW }),
+            inject: () => ({ store: workspaceStore, view: workspacePaletteView, t }),
           },
           PaletteOverlay,
         )
         disposeSession = slots.register(
           {
             name: 'shell.overlay',
-            id: SESSION_VIEW.id,
+            id: sessionPaletteView.id,
             order: 61,
-            inject: () => ({ store: sessionStore, view: SESSION_VIEW }),
+            inject: () => ({ store: sessionStore, view: sessionPaletteView, t }),
           },
           PaletteOverlay,
         )
@@ -1160,6 +531,14 @@ function readSessions(scope: Context): Sessions | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   if (value.list === undefined || typeof value.list.getSnapshot !== 'function') return undefined
   return value
+}
+
+/** 从注入面读 locale 服务(字典注册与翻译)。 */
+function readLocale(scope: Context): Context['locale'] | undefined {
+  const value = scope.get('locale')
+  if (typeof value !== 'object' || value === null) return undefined
+  if (typeof value.bind !== 'function' || typeof value.register !== 'function') return undefined
+  return value as Context['locale']
 }
 
 /** 输出一行带插件前缀的诊断。 */

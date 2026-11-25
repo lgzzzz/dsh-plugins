@@ -19,7 +19,7 @@
  * 行直接用会话面板给 `[data-session-panel-row]` / `[data-row-part]` 铺的通用规则：
  * 每行一个 16px 字形，标签在 content、数值在 trailing。
  */
-import { createElement, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // 空类型导入：加载 session-panel 对分区槽的声明（只影响类型）。
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
@@ -57,95 +57,109 @@ function useTodayUsage(): TodayUsagePayload | undefined {
 /**
  * 一个 16px 线框字形：所有指标行共用同一套笔画（1.2px、圆头圆角、颜色随行文字），
  * 与面板其它行的 16px 图标同尺寸，明暗主题自动跟随。
- * @param children - 字形内部的图元。
+ * @param props.children - 字形内部的图元。
  * @returns 图标元素。
  */
-function glyph(children: ReactNode) {
-  return createElement(
-    'svg',
-    {
-      width: 16,
-      height: 16,
-      viewBox: '0 0 16 16',
-      fill: 'none',
-      stroke: 'currentColor',
-      strokeWidth: 1.2,
-      strokeLinecap: 'round',
-      strokeLinejoin: 'round',
-      'aria-hidden': 'true',
-    },
-    children,
+function Glyph({ children }: { readonly children: ReactNode }) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
   )
 }
 
 /** 总用量：数据库/账本，与输入框下方「用量」按钮同一个字形。 */
 function DatabaseGlyph() {
-  return glyph([
-    createElement('ellipse', { key: 'top', cx: 8, cy: 4.5, rx: 5, ry: 2 }),
-    createElement('path', { key: 'body', d: 'M3 4.5v7c0 1.1 2.24 2 5 2s5-.9 5-2v-7' }),
-    createElement('path', { key: 'line', d: 'M3 8c0 1.1 2.24 2 5 2s5-.9 5-2' }),
-  ])
+  return (
+    <Glyph>
+      <ellipse cx={8} cy={4.5} rx={5} ry={2} />
+      <path d="M3 4.5v7c0 1.1 2.24 2 5 2s5-.9 5-2v-7" />
+      <path d="M3 8c0 1.1 2.24 2 5 2s5-.9 5-2" />
+    </Glyph>
+  )
 }
 
 /** 请求数：井号——一次请求计一笔。 */
 function CountGlyph() {
-  return glyph([
-    createElement('path', { key: 'left', d: 'M6 2.5 4.5 13.5' }),
-    createElement('path', { key: 'right', d: 'M11.5 2.5 10 13.5' }),
-    createElement('path', { key: 'top', d: 'M3 6h10' }),
-    createElement('path', { key: 'bottom', d: 'M2.5 10h10' }),
-  ])
+  return (
+    <Glyph>
+      <path d="M6 2.5 4.5 13.5" />
+      <path d="M11.5 2.5 10 13.5" />
+      <path d="M3 6h10" />
+      <path d="M2.5 10h10" />
+    </Glyph>
+  )
 }
 
 /** 缓存命中：靶心（命中目标的那一环）。 */
 function TargetGlyph() {
-  return glyph([
-    createElement('circle', { key: 'outer', cx: 8, cy: 8, r: 5.5 }),
-    createElement('circle', { key: 'inner', cx: 8, cy: 8, r: 2.2 }),
-    createElement('circle', { key: 'hit', cx: 8, cy: 8, r: 0.6, fill: 'currentColor', stroke: 'none' }),
-  ])
+  return (
+    <Glyph>
+      <circle cx={8} cy={8} r={5.5} />
+      <circle cx={8} cy={8} r={2.2} />
+      <circle cx={8} cy={8} r={0.6} fill="currentColor" stroke="none" />
+    </Glyph>
+  )
 }
 
 /** 未缓存输入：箭头朝下入框——从外面进模型的那一份。 */
 function InputGlyph() {
-  return glyph([
-    createElement('path', { key: 'shaft', d: 'M8 2.5v7' }),
-    createElement('path', { key: 'head', d: 'M5 6.5 8 9.5l3-3' }),
-    createElement('path', { key: 'tray', d: 'M2.5 11.5v1.5c0 .55.45 1 1 1h9c.55 0 1-.45 1-1v-1.5' }),
-  ])
+  return (
+    <Glyph>
+      <path d="M8 2.5v7" />
+      <path d="M5 6.5 8 9.5l3-3" />
+      <path d="M2.5 11.5v1.5c0 .55.45 1 1 1h9c.55 0 1-.45 1-1v-1.5" />
+    </Glyph>
+  )
 }
 
 /** 缓存读取：箭头从缓存柱指出——从缓存里取回的那一份。 */
 function CacheReadGlyph() {
-  return glyph([
-    createElement('ellipse', { key: 'top', cx: 4.8, cy: 4.6, rx: 3.2, ry: 1.3 }),
-    createElement('path', { key: 'body', d: 'M1.6 4.6v6.4c0 .72 1.43 1.3 3.2 1.3s3.2-.58 3.2-1.3V4.6' }),
-    createElement('path', { key: 'shaft', d: 'M9.2 8h4.8' }),
-    createElement('path', { key: 'head', d: 'M11.5 5.5 14 8l-2.5 2.5' }),
-  ])
+  return (
+    <Glyph>
+      <ellipse cx={4.8} cy={4.6} rx={3.2} ry={1.3} />
+      <path d="M1.6 4.6v6.4c0 .72 1.43 1.3 3.2 1.3s3.2-.58 3.2-1.3V4.6" />
+      <path d="M9.2 8h4.8" />
+      <path d="M11.5 5.5 14 8l-2.5 2.5" />
+    </Glyph>
+  )
 }
 
 /** 缓存写入：箭头指回缓存柱——写进缓存的那一份。 */
 function CacheWriteGlyph() {
-  return glyph([
-    createElement('ellipse', { key: 'top', cx: 4.8, cy: 4.6, rx: 3.2, ry: 1.3 }),
-    createElement('path', { key: 'body', d: 'M1.6 4.6v6.4c0 .72 1.43 1.3 3.2 1.3s3.2-.58 3.2-1.3V4.6' }),
-    createElement('path', { key: 'shaft', d: 'M14 8H9.2' }),
-    createElement('path', { key: 'head', d: 'M11.5 5.5 9 8l2.5 2.5' }),
-  ])
+  return (
+    <Glyph>
+      <ellipse cx={4.8} cy={4.6} rx={3.2} ry={1.3} />
+      <path d="M1.6 4.6v6.4c0 .72 1.43 1.3 3.2 1.3s3.2-.58 3.2-1.3V4.6" />
+      <path d="M14 8H9.2" />
+      <path d="M11.5 5.5 9 8l2.5 2.5" />
+    </Glyph>
+  )
 }
 
 /** 输出：箭头朝上出框——离开模型的回答。 */
 function OutputGlyph() {
-  return glyph([
-    createElement('path', { key: 'shaft', d: 'M8 10.5v-7' }),
-    createElement('path', { key: 'head', d: 'M5 6.5 8 3.5l3 3' }),
-    createElement('path', { key: 'tray', d: 'M2.5 11.5v1.5c0 .55.45 1 1 1h9c.55 0 1-.45 1-1v-1.5' }),
-  ])
+  return (
+    <Glyph>
+      <path d="M8 10.5v-7" />
+      <path d="M5 6.5 8 3.5l3 3" />
+      <path d="M2.5 11.5v1.5c0 .55.45 1 1 1h9c.55 0 1-.45 1-1v-1.5" />
+    </Glyph>
+  )
 }
 
 /** 指标 → 字形。缓存读写共用缓存柱、靠箭头方向区分；输入输出共用托盘、靠箭头方向区分。 */
-const GLYPHS: Record<MetricRow['key'], () => ReactNode> = {
+const GLYPHS: Record<MetricRow['key'], () => ReactElement> = {
   total: DatabaseGlyph,
   requests: CountGlyph,
   'cache-hit': TargetGlyph,
@@ -157,20 +171,21 @@ const GLYPHS: Record<MetricRow['key'], () => ReactNode> = {
 
 /**
  * 渲染一行指标：图标、标签、右对齐的数值。
- * @param row - 指标行。
+ * @param props.row - 指标行。
  * @returns 面板行元素。
  */
-function metricRow(row: MetricRow) {
-  return createElement(
-    'div',
-    { key: row.key, 'data-session-panel-row': '', 'data-today-token-usage': row.key },
-    createElement(
-      'span',
-      { 'data-row-part': 'body' },
-      createElement('span', { 'data-row-part': 'icon', 'aria-hidden': 'true' }, createElement(GLYPHS[row.key])),
-      createElement('span', { 'data-row-part': 'content' }, row.label),
-    ),
-    createElement('span', { 'data-row-part': 'trailing' }, row.value),
+function MetricRowView({ row }: { readonly row: MetricRow }) {
+  const Icon = GLYPHS[row.key]
+  return (
+    <div data-session-panel-row="" data-today-token-usage={row.key}>
+      <span data-row-part="body">
+        <span data-row-part="icon" aria-hidden="true">
+          <Icon />
+        </span>
+        <span data-row-part="content">{row.label}</span>
+      </span>
+      <span data-row-part="trailing">{row.value}</span>
+    </div>
   )
 }
 
@@ -209,7 +224,7 @@ function rowsOf(totals: TodayTotals, t: TodayUsageSectionProps['t']): MetricRow[
  */
 export function TodayUsageRows({ totals, t }: { totals: TodayTotals; t: TodayUsageSectionProps['t'] }): ReactNode {
   if (totals.total === 0) return null
-  return rowsOf(totals, t).map(metricRow)
+  return <>{rowsOf(totals, t).map(row => <MetricRowView key={row.key} row={row} />)}</>
 }
 
 /**
@@ -223,5 +238,5 @@ export function TodayUsageSection({ t }: TodayUsageSectionProps): ReactNode {
   const payload = useTodayUsage()
   const totals = useMemo(() => (payload === undefined ? undefined : totalsOf(payload)), [payload])
   if (totals === undefined) return null
-  return TodayUsageRows({ totals, t })
+  return <TodayUsageRows totals={totals} t={t} />
 }

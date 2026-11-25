@@ -13,6 +13,19 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createPaletteStore, paletteEntries } from '../src/palette.ts'
 import { sessionPaletteEntries } from '../src/sessions.ts'
 import {
+  check,
+  checkTrue,
+  finish,
+  installDom,
+  loadClientBundle,
+  optionNodes,
+  workspace,
+} from './helpers.mjs'
+
+const dom = installDom()
+
+// JSX 组件不能由 Node 直接执行：浮层与它的文案/纯函数都从构建产物取。
+const {
   installPaletteKeys,
   installPaletteWheel,
   keepOptionVisible,
@@ -26,10 +39,7 @@ import {
   wheelPixels,
   wheelStep,
   WORKSPACE_VIEW,
-} from '../src/client.ts'
-import { check, checkTrue, finish, installDom, optionNodes, workspace } from './helpers.mjs'
-
-const dom = installDom()
+} = loadClientBundle()
 
 const HOSTS = [
   workspace('ws-1', 'Alpha'),

@@ -10,7 +10,7 @@
  * 上游的确认条件（`modelSelection.lastUsed !== null`）正常路径不会成立；
  * 菜单里的原入口仍保留，会话中停用走上游那一条。
  */
-import { createElement, useState } from 'react'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { GlobalStandardProps, SessionStandardProps, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -88,27 +88,25 @@ export function TeamModeHeroToggle(props: HeroToggleProps): ReactNode {
   }
 
   const failureText = error === null ? null : t('failed', { message: error })
-  return createElement(
-    'button',
-    {
-      type: 'button',
-      role: 'switch',
-      'aria-checked': enabled,
-      'aria-label': t('ariaLabel'),
-      title: failureText ?? t('description'),
-      className: CLASS.chip,
-      disabled: pending,
-      'data-error': failureText === null ? undefined : '',
-      onClick: change,
-    },
-    createElement(
-      'span',
-      { className: CLASS.track, 'aria-hidden': 'true' },
-      createElement('span', { className: CLASS.thumb }),
-    ),
-    createElement('span', null, t('label')),
-    failureText === null
-      ? null
-      : createElement('span', { className: CLASS.error, role: 'img', 'aria-label': failureText }, '!'),
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={t('ariaLabel')}
+      title={failureText ?? t('description')}
+      className={CLASS.chip}
+      disabled={pending}
+      data-error={failureText === null ? undefined : ''}
+      onClick={change}
+    >
+      <span className={CLASS.track} aria-hidden="true">
+        <span className={CLASS.thumb} />
+      </span>
+      <span>{t('label')}</span>
+      {failureText === null
+        ? null
+        : <span className={CLASS.error} role="img" aria-label={failureText}>!</span>}
+    </button>
   )
 }

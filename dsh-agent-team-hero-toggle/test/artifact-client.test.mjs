@@ -18,6 +18,23 @@ const reactStub = {
   },
 }
 
+/** 自动 JSX 运行时的桩：子节点按 createElement 的形态摊平，断言两种写法都读得到。 */
+function jsxElement(type, props) {
+  const { children, ...rest } = props ?? {}
+  return {
+    type,
+    props: rest,
+    children: children === undefined ? [] : (Array.isArray(children) ? children.flat() : [children]),
+  }
+}
+
+const jsxRuntimeStub = {
+  Fragment: Symbol.for('react.fragment'),
+  jsx: jsxElement,
+  jsxs: jsxElement,
+  jsxDEV: jsxElement,
+}
+
 const styleTags = []
 const documentStub = {
   querySelector: () => null,
@@ -42,6 +59,7 @@ function loadPlugin() {
   if (registration === null) throw new Error('bundle 没有注册到 __ModuleLoader__')
   return registration.factory((id) => {
     if (id === 'react') return reactStub
+    if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return jsxRuntimeStub
     throw new Error(`产物要求了未声明的外部模块:${id}`)
   })
 }

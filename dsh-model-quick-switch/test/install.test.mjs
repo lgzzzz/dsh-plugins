@@ -26,11 +26,12 @@ import {
   fixedKeydown,
   fixedMacKeydown,
   installDom,
+  loadClientBundle,
   renderSlotEntry,
   tick,
 } from './helpers.mjs'
 
-const { apply, inject, name, PALETTE_ROOT_ATTR, SETTINGS_ROOT_ATTR, MODEL_VIEW } = await import('../src/client.ts')
+const { apply, inject, name, PALETTE_ROOT_ATTR, SETTINGS_ROOT_ATTR, MODEL_VIEW } = loadClientBundle()
 const { installPaletteKeys, MODEL_SWITCH_ID } = await import('../src/palette.ts')
 
 /** 默认的两个候选：一个在目录里，一个带推理强度。 */
@@ -120,8 +121,8 @@ function rowsOf(html) {
 console.log('--- C① 固定行、浮层与设置页都挂上了 ---')
 {
   const { ctx, slots, shortcuts, overlay, section, dom } = setup()
-  check('声明了依赖', inject, ['slots', 'shortcuts'])
-  check('请求的依赖', ctx.requested, ['slots', 'shortcuts'])
+  check('声明了依赖', inject, ['slots', 'shortcuts', 'locale'])
+  check('请求的依赖', ctx.requested, ['slots', 'shortcuts', 'locale'])
   check('没有缺失的依赖', ctx.missing, [])
   check('一条固定行', shortcuts.commands.map((command) => command.id), [MODEL_SWITCH_ID])
   check('固定行分组', shortcuts.commands.map((command) => command.group), ['application'])
@@ -134,8 +135,8 @@ console.log('--- C① 固定行、浮层与设置页都挂上了 ---')
   check('设置页注册项', [section.options.id, section.options.order], [name, 70])
   check('设置页导航标题', typeof section.options.label, 'function')
   check('交出去的是组件本体', [typeof overlay.component, typeof section.component], ['function', 'function'])
-  check('浮层业务 props', Object.keys(overlay.options.inject()), ['store', 'data', 'view', 'effortView', 'onBack'])
-  check('设置页业务 props', Object.keys(section.options.inject()), ['data', 'actions'])
+  check('浮层业务 props', Object.keys(overlay.options.inject()), ['store', 'data', 'view', 'effortView', 'onBack', 't'])
+  check('设置页业务 props', Object.keys(section.options.inject()), ['data', 'actions', 't'])
   check('设置页标题渲染', section.options.label(), '模型快速切换')
   check('未打开时浮层不渲染', renderSlotEntry(overlay), '')
 }

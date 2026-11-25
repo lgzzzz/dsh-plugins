@@ -14,6 +14,7 @@ const reactStub = {
   createElement(type, props, ...children) {
     return { type, props: props ?? {}, children: children.flat() }
   },
+  Fragment: Symbol.for('react.fragment'),
   useRef(initial) {
     return { current: initial }
   },
@@ -23,6 +24,18 @@ const reactStub = {
   /** 上一次渲染注册的 effect；`props()` 每次渲染前清空。 */
   effectList: [],
 }
+
+/** 自动 JSX 运行时的桩：子节点按 createElement 的形态摊平。 */
+function jsxElement(type, props) {
+  const { children, ...rest } = props ?? {}
+  return {
+    type,
+    props: rest,
+    children: children === undefined ? [] : (Array.isArray(children) ? children.flat() : [children]),
+  }
+}
+
+const jsxRuntimeStub = { Fragment: reactStub.Fragment, jsx: jsxElement, jsxs: jsxElement, jsxDEV: jsxElement }
 
 const styleTags = []
 const documentStub = {
@@ -48,6 +61,7 @@ function loadPlugin() {
   if (registration === null) throw new Error('bundle 没有注册到 __ModuleLoader__')
   return registration.factory((id) => {
     if (id === 'react') return reactStub
+    if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return jsxRuntimeStub
     throw new Error(`产物要求了未声明的外部模块:${id}`)
   })
 }

@@ -8,6 +8,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as reactNamespace from 'react'
+import * as jsxRuntime from 'react/jsx-runtime'
 
 import {
   catalogOf,
@@ -51,8 +52,9 @@ function loadArtifact() {
   }
   const plugin = registration.factory((specifier) => {
     requested.push(specifier)
-    if (specifier !== 'react') throw new Error(`产物要求了未提供的模块：${specifier}`)
-    return reactModule
+    if (specifier === 'react') return reactModule
+    if (specifier === 'react/jsx-runtime' || specifier === 'react/jsx-dev-runtime') return jsxRuntime
+    throw new Error(`产物要求了未提供的模块：${specifier}`)
   })
   return { registration, plugin, requested }
 }
@@ -115,9 +117,9 @@ const { registration, plugin, requested } = loadArtifact()
 {
   checkTrue('有注册项', registration !== null)
   check('模块 id', registration.id, 'dsh-model-quick-switch')
-  check('只向模块表要 react', requested, ['react'])
+  check('只向模块表要 react 与 JSX 运行时', requested, ['react', 'react/jsx-runtime'])
   check('插件名', plugin.name, 'dsh-model-quick-switch')
-  check('inject 声明', plugin.inject, ['slots', 'shortcuts'])
+  check('inject 声明', plugin.inject, ['slots', 'shortcuts', 'locale'])
   check('导出了浮层文案', plugin.MODEL_VIEW.title, '快捷菜单')
   check('导出了按键解码', plugin.paletteAction({ key: 'Enter' }), 'confirm')
 }

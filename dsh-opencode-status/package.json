@@ -29,7 +29,7 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "check:css": "node check-css.mjs",
-    "check": "node --check lib/client.js && node --check index.ts && node --check src/wire.ts && node --check src/upstream.ts && node --check src/route.ts && node --check src/install.ts && node --check src/web-types.ts && node --check src/locales.ts && node --check src/format.ts && node --check src/rows.ts && node --check src/status-client.ts && node --check src/status-store.ts && node --check src/component.ts && node --check src/client.ts && node --check src/registration.ts",
+    "check": "node --check lib/client.js && node --check index.ts && node --check src/wire.ts && node --check src/upstream.ts && node --check src/route.ts && node --check src/install.ts && node --check src/web-types.ts && node --check src/locales.ts && node --check src/format.ts && node --check src/rows.ts && node --check src/status-client.ts && node --check src/status-store.ts && node --check src/client.ts && node --check src/registration.ts",
     "test": "node test/run-all.mjs"
   },
   "devDependencies": {

@@ -19,6 +19,7 @@
  * 本文件不 import React、不碰 DOM、也不读任何服务:与 `palette.ts` 一样只做规则。
  */
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+import { ZH_SESSION_TEXTS, type SessionPaletteTexts } from './locales.ts'
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { PaletteRow } from './palette.ts'
@@ -47,19 +48,21 @@ export interface SessionCandidateSource {
   readonly sessions: SessionListState
   readonly workspaces: readonly WorkspaceView[]
   readonly rowState: SessionRowState
+  /** 候选可见文案；省略时用简体中文（纯逻辑测试与 locale 缺席时）。 */
+  readonly texts?: SessionPaletteTexts
 }
 
-/** 左侧栏里空白会话的文案(与上游 `session.new` 一致)。 */
-export const BLANK_SESSION_TITLE = '新会话'
+/** 左侧栏里空白会话的文案（简体中文默认值，与上游 `session.new` 一致）。 */
+export const BLANK_SESSION_TITLE = ZH_SESSION_TEXTS.blankTitle
 
-/** 左侧栏里没有标题的会话文案(与上游 `session.untitled` 一致)。 */
-export const UNTITLED_SESSION_TITLE = '未命名'
+/** 左侧栏里没有标题的会话文案（简体中文默认值，与上游 `session.untitled` 一致）。 */
+export const UNTITLED_SESSION_TITLE = ZH_SESSION_TEXTS.untitledTitle
 
-/** 置顶角标(左侧栏同一行的置顶标记)。 */
-export const PINNED_BADGE = '置顶'
+/** 置顶角标（简体中文默认值；左侧栏同一行的置顶标记）。 */
+export const PINNED_BADGE = ZH_SESSION_TEXTS.pinnedBadge
 
-/** 进行中角标(左侧栏那一颗状态点)。 */
-export const RUNNING_BADGE = '进行中'
+/** 进行中角标（简体中文默认值；左侧栏那一颗状态点）。 */
+export const RUNNING_BADGE = ZH_SESSION_TEXTS.runningBadge
 
 /**
  * 主视图正在显示的会话 id。
@@ -81,10 +84,13 @@ export function mainViewSessionId(list: SessionListState): SessionId | undefined
  * @param session - 会话摘要。
  * @returns 「新会话」/「未命名」或持久标题。
  */
-export function sessionDisplayTitle(session: SessionSummary): string {
-  if (session.blank === true) return BLANK_SESSION_TITLE
+export function sessionDisplayTitle(
+  session: SessionSummary,
+  texts: SessionPaletteTexts = ZH_SESSION_TEXTS,
+): string {
+  if (session.blank === true) return texts.blankTitle
   const title = session.title?.trim() ?? ''
-  return title === '' ? UNTITLED_SESSION_TITLE : title
+  return title === '' ? texts.untitledTitle : title
 }
 
 /**
@@ -189,19 +195,12 @@ export function pathBasename(path: string | undefined): string {
  * @param now - 当前时间(毫秒)。
  * @returns 「刚刚」「3分钟前」之类的文案。
  */
-export function relativeTimeLabel(updatedAt: number, now: number): string {
-  if (!Number.isFinite(updatedAt) || !Number.isFinite(now)) return ''
-  const distance = now - updatedAt
-  if (distance < 60_000) return '刚刚'
-  const minutes = Math.floor(distance / 60_000)
-  if (minutes < 60) return `${minutes}分钟前`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}天前`
-  const months = Math.floor(days / 30)
-  if (months < 12) return `${months}个月前`
-  return `${Math.floor(months / 12)}年前`
+export function relativeTimeLabel(
+  updatedAt: number,
+  now: number,
+  texts: SessionPaletteTexts = ZH_SESSION_TEXTS,
+): string {
+  return texts.relative(updatedAt, now)
 }
 
 /**
@@ -214,6 +213,7 @@ export function relativeTimeLabel(updatedAt: number, now: number): string {
  */
 export function sessionPaletteEntries(source: SessionCandidateSource, now: number = Date.now()): SessionPaletteEntry[] {
   const { sessions, workspaces, rowState } = source
+  const texts = source.texts ?? ZH_SESSION_TEXTS
   const archived = new Set(rowState.archivedSessionIds ?? [])
   const pinned = new Set(rowState.pinnedSessionIds ?? [])
   const current = mainViewSessionId(sessions)
@@ -222,15 +222,15 @@ export function sessionPaletteEntries(source: SessionCandidateSource, now: numbe
   const visible = ordered.filter((session) => !archived.has(session.id))
   return sectionMembers(visible, pinned, archived).map((session) => {
     const label = workspaceLabel(workspaces, session)
-    const time = relativeTimeLabel(session.updatedAt, now)
+    const time = relativeTimeLabel(session.updatedAt, now, texts)
     const pinnedRow = pinned.has(session.id) && !archived.has(session.id)
     const badges: string[] = []
-    if (pinnedRow) badges.push(PINNED_BADGE)
-    if (session.running === true) badges.push(RUNNING_BADGE)
+    if (pinnedRow) badges.push(texts.pinnedBadge)
+    if (session.running === true) badges.push(texts.runningBadge)
     return {
       key: session.id,
       sessionId: session.id,
-      title: sessionDisplayTitle(session),
+      title: sessionDisplayTitle(session, texts),
       workspace: label,
       updatedAt: session.updatedAt,
       subtitle: label === '' ? time : time === '' ? label : `${label} · ${time}`,

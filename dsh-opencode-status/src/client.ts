@@ -16,7 +16,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
-import { OpencodeStatusSection } from './component.ts'
+import { OpencodeStatusSection } from './component.tsx'
+
+// 纯展示的行组件从入口再导出：产物测试（render.test.mjs）按真实 bundle 加载后用真 React 渲染。
+export { StatusRows } from './component.tsx'
 import { NS, en, zh } from './locales.ts'
 import { SECTION_SLOT, sectionRegisterOptions } from './registration.ts'
 import { statusStore } from './status-store.ts'

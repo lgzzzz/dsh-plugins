@@ -38,6 +38,7 @@ function loadPlugin() {
   if (registration === null) throw new Error('bundle 没有注册到 __ModuleLoader__')
   return registration.factory((id) => {
     if (id === 'react') return require('react')
+    if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return require(id)
     throw new Error(`产物要求了未声明的外部模块:${id}`)
   })
 }

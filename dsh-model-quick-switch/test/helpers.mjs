@@ -7,10 +7,13 @@
  *
  * 跑全部请用 `node test/run-all.mjs`。
  */
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { translateZh } from '../src/locales.ts'
 
 /** 本插件的包根目录（测试文件在 test/ 下）。 */
 export const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -449,6 +452,36 @@ export function fakeSlots() {
   return face
 }
 
+const require = createRequire(import.meta.url)
+
+/**
+ * 加载构建产物 `lib/client.js`，返回它的导出面。
+ *
+ * JSX 组件不能由 Node 直接执行，涉及组件渲染的测试统一从产物取；`react` 与 JSX 运行时
+ * 都用真的。
+ * @returns 客户端入口的导出对象。
+ */
+export function loadClientBundle() {
+  let registration = null
+  globalThis.window = {
+    __ModuleLoader__: {
+      load: (value) => { registration = value },
+    },
+  }
+  try {
+    // eslint-disable-next-line no-eval
+    ;(0, eval)(readFileSync(join(pluginRoot, 'lib', 'client.js'), 'utf8'))
+  } finally {
+    delete globalThis.window
+  }
+  if (registration === null) throw new Error('bundle 没有注册到 __ModuleLoader__（先跑 pnpm build）')
+  return registration.factory((id) => {
+    if (id === 'react') return require('react')
+    if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return require(id)
+    throw new Error(`产物要求了未声明的外部模块:${id}`)
+  })
+}
+
 /**
  * 造一个假 Cordis 上下文：与真实 fiber 一致地处理 `inject` / `effect` / 等待子 fiber。
  *
@@ -456,7 +489,11 @@ export function fakeSlots() {
  * @param services - 一开始就存在的服务表。
  */
 export function fakeCtx(services) {
-  const registry = { ...services }
+  // locale 是宿主核心服务：测试里默认给一份简体中文翻译座位，个别用例可覆盖。
+  const registry = {
+    locale: { register: () => () => {}, bind: () => translateZh },
+    ...services,
+  }
   const effects = []
   const cleanups = []
   const children = []

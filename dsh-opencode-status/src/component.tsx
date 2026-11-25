@@ -17,7 +17,7 @@
  * 每行一个 16px 字形，标签在 content、读数在 trailing。
  */
 
-import { createElement, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // 空类型导入：加载 session-panel 对分区槽的声明（只影响类型）。
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
@@ -54,80 +54,89 @@ function useStatusReply(): OpencodeStatusReply | undefined {
 /**
  * 一个 16px 线框字形：所有行共用同一套笔画（1.2px、圆头圆角、颜色随行文字），
  * 与面板其它行的 16px 图标同尺寸，明暗主题自动跟随。
- * @param children - 字形内部的图元。
+ * @param props.children - 字形内部的图元。
  * @returns 图标元素。
  */
-function glyph(children: ReactNode) {
-  return createElement(
-    'svg',
-    {
-      width: 16,
-      height: 16,
-      viewBox: '0 0 16 16',
-      fill: 'none',
-      stroke: 'currentColor',
-      strokeWidth: 1.2,
-      strokeLinecap: 'round',
-      strokeLinejoin: 'round',
-      'aria-hidden': 'true',
-    },
-    children,
+function Glyph({ children }: { readonly children: ReactNode }) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
   )
 }
 
 /** Go 服务：云——外部提供方。 */
 function CloudGlyph() {
-  return glyph([
-    createElement('path', {
-      key: 'cloud',
-      d: 'M4.6 12h6.8a2.2 2.2 0 0 0 .15-4.39 3.2 3.2 0 0 0-6.12-.8A2.3 2.3 0 0 0 4.6 12Z',
-    }),
-  ])
+  return (
+    <Glyph>
+      <path d="M4.6 12h6.8a2.2 2.2 0 0 0 .15-4.39 3.2 3.2 0 0 0-6.12-.8A2.3 2.3 0 0 0 4.6 12Z" />
+    </Glyph>
+  )
 }
 
 /** 模型：六边形——一个被观测的模型条目。 */
 function ModelGlyph() {
-  return glyph([
-    createElement('path', { key: 'outline', d: 'M8 2.2 13.1 5.1v5.8L8 13.8 2.9 10.9V5.1Z' }),
-    createElement('circle', { key: 'core', cx: 8, cy: 8, r: 1.2 }),
-  ])
+  return (
+    <Glyph>
+      <path d="M8 2.2 13.1 5.1v5.8L8 13.8 2.9 10.9V5.1Z" />
+      <circle cx={8} cy={8} r={1.2} />
+    </Glyph>
+  )
 }
 
 /** 状态：脉冲线——服务健康的惯用画法。 */
 function PulseGlyph() {
-  return glyph([
-    createElement('path', { key: 'line', d: 'M2.2 8h2.6l1.4-3.4L9.2 11.4 10.6 8h3.2' }),
-  ])
+  return (
+    <Glyph>
+      <path d="M2.2 8h2.6l1.4-3.4L9.2 11.4 10.6 8h3.2" />
+    </Glyph>
+  )
 }
 
 /** 首 Token：时钟——等到第一个字的时长。 */
 function ClockGlyph() {
-  return glyph([
-    createElement('circle', { key: 'face', cx: 8, cy: 8, r: 5.2 }),
-    createElement('path', { key: 'hands', d: 'M8 4.8V8l2.3 1.4' }),
-  ])
+  return (
+    <Glyph>
+      <circle cx={8} cy={8} r={5.2} />
+      <path d="M8 4.8V8l2.3 1.4" />
+    </Glyph>
+  )
 }
 
 /** 吞吐：仪表盘——每秒出多少字。 */
 function GaugeGlyph() {
-  return glyph([
-    createElement('path', { key: 'dial', d: 'M3 11.2a5 5 0 0 1 10 0' }),
-    createElement('path', { key: 'needle', d: 'M8 11.2 10.6 7.6' }),
-    createElement('circle', { key: 'pivot', cx: 8, cy: 11.2, r: 0.8 }),
-  ])
+  return (
+    <Glyph>
+      <path d="M3 11.2a5 5 0 0 1 10 0" />
+      <path d="M8 11.2 10.6 7.6" />
+      <circle cx={8} cy={11.2} r={0.8} />
+    </Glyph>
+  )
 }
 
 /** 失败：警告三角——暂时拿不到数据。 */
 function AlertGlyph() {
-  return glyph([
-    createElement('path', { key: 'outline', d: 'M8 2.6 14.1 13H1.9Z' }),
-    createElement('path', { key: 'stem', d: 'M8 6.3v3.1' }),
-    createElement('circle', { key: 'dot', cx: 8, cy: 11.4, r: 0.6, fill: 'currentColor', stroke: 'none' }),
-  ])
+  return (
+    <Glyph>
+      <path d="M8 2.6 14.1 13H1.9Z" />
+      <path d="M8 6.3v3.1" />
+      <circle cx={8} cy={11.4} r={0.6} fill="currentColor" stroke="none" />
+    </Glyph>
+  )
 }
 
 /** 行 → 字形。 */
-const GLYPHS: Record<StatusRowKey, () => ReactNode> = {
+const GLYPHS: Record<StatusRowKey, () => ReactElement> = {
   service: CloudGlyph,
   model: ModelGlyph,
   status: PulseGlyph,
@@ -138,20 +147,21 @@ const GLYPHS: Record<StatusRowKey, () => ReactNode> = {
 
 /**
  * 渲染一行读数：图标、标签、右对齐的读数。
- * @param row - 面板行。
+ * @param props.row - 面板行。
  * @returns 面板行元素。
  */
-function statusRow(row: StatusRow) {
-  return createElement(
-    'div',
-    { key: row.key, 'data-session-panel-row': '', 'data-opencode-status': row.key },
-    createElement(
-      'span',
-      { 'data-row-part': 'body' },
-      createElement('span', { 'data-row-part': 'icon', 'aria-hidden': 'true' }, createElement(GLYPHS[row.key])),
-      createElement('span', { 'data-row-part': 'content' }, row.label),
-    ),
-    createElement('span', { 'data-row-part': 'trailing' }, row.value),
+function StatusRowView({ row }: { readonly row: StatusRow }) {
+  const Icon = GLYPHS[row.key]
+  return (
+    <div data-session-panel-row="" data-opencode-status={row.key}>
+      <span data-row-part="body">
+        <span data-row-part="icon" aria-hidden="true">
+          <Icon />
+        </span>
+        <span data-row-part="content">{row.label}</span>
+      </span>
+      <span data-row-part="trailing">{row.value}</span>
+    </div>
   )
 }
 
@@ -161,7 +171,7 @@ function statusRow(row: StatusRow) {
  * @returns 依次渲染的行。
  */
 export function StatusRows({ rows }: { readonly rows: readonly StatusRow[] }): ReactNode {
-  return rows.map(statusRow)
+  return <>{rows.map(row => <StatusRowView key={row.key} row={row} />)}</>
 }
 
 /**
@@ -175,5 +185,5 @@ export function OpencodeStatusSection({ t }: OpencodeStatusSectionProps): ReactN
   const reply = useStatusReply()
   const rows = useMemo(() => statusRows(reply, t), [reply, t])
   if (rows === null) return null
-  return StatusRows({ rows })
+  return <StatusRows rows={rows} />
 }

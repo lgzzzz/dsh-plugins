@@ -4,7 +4,7 @@
  * 每行一个按钮：状态点报告该会话是否在运行，点一行就把主视图切到那个会话并收起面板浮层。
  * 根会话没有上级，整节渲染为空——面板会连标题一起隐藏，所以根会话的面板与现在完全一样。
  */
-import { createElement, useMemo } from 'react'
+import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
@@ -35,21 +35,19 @@ export type SubagentParentSectionProps =
 
 /** 行尾的跳转箭头：与产品 chevron 同一路径、同一 14px 字形，只作视觉提示。 */
 function Arrow() {
-  return createElement(
-    'svg',
-    { width: 14, height: 14, viewBox: '1 1 14 14', fill: 'none', 'aria-hidden': 'true' },
-    createElement('path', {
-      d: 'M6 12L9.29289 8.70711C9.68342 8.31658 9.68342 7.68342 9.29289 7.29289L6 4',
-      stroke: 'currentColor',
-      strokeWidth: 1,
-    }),
+  return (
+    <svg width={14} height={14} viewBox="1 1 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M6 12L9.29289 8.70711C9.68342 8.31658 9.68342 7.68342 9.29289 7.29289L6 4"
+        stroke="currentColor"
+        strokeWidth={1}
+      />
+    </svg>
   )
 }
 
 /**
  * 一行上级：状态点、标题、角色标签与跳转箭头。
- *
- * 直接返回元素而不是组件：这里没有状态与生命周期，平铺调用让产物测试能按元素树断言。
  *
  * @param props - 这一行的数据、是否显示角色标签、点击回调与文案。
  * @returns 列表项。
@@ -61,31 +59,29 @@ function ancestorItem({ row, showRole, onOpen, t }: {
   readonly t: SubagentParentSectionProps['t']
 }) {
   const label = row.running ? t('row.jumpRunning', { title: row.title }) : t('row.jump', { title: row.title })
-  return createElement(
-    'li',
-    { key: row.sessionId, className: CLASS.item },
-    createElement(
-      'button',
-      {
-        type: 'button',
-        className: CLASS.row,
+  return (
+    <li key={row.sessionId} className={CLASS.item}>
+      <button
+        type="button"
+        className={CLASS.row}
         // 标题可能被省略号截断，原生 title 是面板窄行里成本最低的看全名方式。
-        title: row.title,
-        'aria-label': label,
-        ...(row.running ? { 'data-running': '' } : {}),
-        onClick: () => { onOpen(row.sessionId) },
-      },
-      createElement(
-        'span',
-        { className: CLASS.dotSlot, 'aria-hidden': 'true' },
-        createElement('span', { className: CLASS.dot }),
-      ),
-      createElement('span', { className: CLASS.title }, row.title),
-      showRole && !row.root
-        ? createElement('span', { className: CLASS.role }, t('row.parent'))
-        : null,
-      createElement('span', { className: CLASS.arrow, 'aria-hidden': 'true' }, createElement(Arrow)),
-    ),
+        title={row.title}
+        aria-label={label}
+        {...(row.running ? { 'data-running': '' } : {})}
+        onClick={() => { onOpen(row.sessionId) }}
+      >
+        <span className={CLASS.dotSlot} aria-hidden="true">
+          <span className={CLASS.dot} />
+        </span>
+        <span className={CLASS.title}>{row.title}</span>
+        {showRole && !row.root
+          ? <span className={CLASS.role}>{t('row.parent')}</span>
+          : null}
+        <span className={CLASS.arrow} aria-hidden="true">
+          <Arrow />
+        </span>
+      </button>
+    </li>
   )
 }
 
@@ -110,10 +106,14 @@ export function SubagentParentSection({
     // 跳转失败时面板留在原地：关掉浮层却不换会话，只会让人以为点丢了。
     if (open(target)) dismissOverlay()
   }
-  return createElement(
-    'ul',
-    // 面板的列表样式是 `list-style: none`，Safari / VoiceOver 会因此丢掉列表语义，显式补回。
-    { className: CLASS.list, role: 'list', 'data-subagent-parent-nav': '' },
-    rows.map(row => ancestorItem({ row, showRole: rows.length > 1, onOpen: jump, t })),
+  return (
+    <ul
+      // 面板的列表样式是 `list-style: none`，Safari / VoiceOver 会因此丢掉列表语义，显式补回。
+      className={CLASS.list}
+      role="list"
+      data-subagent-parent-nav=""
+    >
+      {rows.map(row => ancestorItem({ row, showRole: rows.length > 1, onOpen: jump, t }))}
+    </ul>
   )
 }

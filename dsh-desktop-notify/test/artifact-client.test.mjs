@@ -13,7 +13,20 @@ const fakeReact = {
   createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
   useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
   useEffect: () => {},
+  useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
 }
+
+/** 自动 JSX 运行时的桩：子节点按 createElement 的形态摊平。 */
+function jsxElement(type, props) {
+  const { children, ...rest } = props ?? {}
+  return {
+    type,
+    props: rest,
+    children: children === undefined ? [] : (Array.isArray(children) ? children.flat() : [children]),
+  }
+}
+
+const jsxRuntimeStub = { Fragment: Symbol.for('react.fragment'), jsx: jsxElement, jsxs: jsxElement, jsxDEV: jsxElement }
 
 function loadBundle(options = {}) {
   const calls = { inject: [], register: [], effects: [], removedFocus: 0, addedFocus: 0 }
@@ -105,6 +118,7 @@ function loadBundle(options = {}) {
   const module = loaded.factory((id) => {
     required.push(id)
     if (id === 'react') return fakeReact
+    if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return jsxRuntimeStub
     throw new Error(`产物要求了未声明的外部模块:${id}`)
   })
 
@@ -136,12 +150,13 @@ console.log('--- D. 构建产物装配(lib/client.js + ModuleLoader 桩)---')
   const bundle = loadBundle({ permission: 'granted' })
   check('产物 id', bundle.loaded.id, 'dsh-desktop-notify')
   check('客服入口包名', bundle.module.name, 'dsh-desktop-notify')
-  check('inject 声明', bundle.module.inject, ['sessions', 'uiSession', 'uiSession.sessionStatus', 'slots'])
-  check('react 是唯一外部依赖', bundle.required, ['react'])
+  check('inject 声明', bundle.module.inject, ['sessions', 'uiSession', 'uiSession.sessionStatus', 'slots', 'locale'])
+  check('外部依赖只有 react 与 jsx 运行时', bundle.required, ['react', 'react/jsx-runtime'])
   check('挂到设置-通用条目区', bundle.calls.inject, ['settings.general.item'])
   check('注册项 id', bundle.calls.register[0]?.options.id, 'desktop-notify')
   check('注册项 name', bundle.calls.register[0]?.options.name, 'settings.general.item')
   check('注册项 order', bundle.calls.register[0]?.options.order, 30)
+  check('注册项 locale', bundle.calls.register[0]?.options.locale, 'dsh-desktop-notify')
   checkTrue('注册项有组件', typeof bundle.calls.register[0]?.component === 'function')
   check('注册了一个 fiber disposer', bundle.calls.effects.length, 1)
   check('已在窗口上登记 focus 监听', bundle.calls.addedFocus, 1)

@@ -12,7 +12,7 @@
  *
  * 普通会话上整行渲染为空，面板与没有本插件时完全一致。
  */
-import { createElement, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -43,11 +43,13 @@ export function ForgePanelGuard({ sessionId, useSession, useSessions }: ForgePan
     return markSectionOfRow(ref.current)
   }, [subagent, sessionId])
   if (!subagent) return null
-  return createElement('span', {
-    ref,
-    // React 对布尔属性只认布尔值：字符串 '' 会被当成 false 丢掉。
-    hidden: true,
-    'aria-hidden': 'true',
-    'data-forge-subagent-guard': '',
-  })
+  return (
+    <span
+      ref={ref}
+      // React 对布尔属性只认布尔值：字符串 '' 会被当成 false 丢掉。
+      hidden
+      aria-hidden="true"
+      data-forge-subagent-guard=""
+    />
+  )
 }

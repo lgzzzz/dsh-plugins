@@ -9,7 +9,7 @@
 
     "noEmit": true,
 
-    // 本插件用 React.createElement 而非 JSX,jsx 选项只为将来改写成 JSX 时立即生效。
+    // 客户端组件用 JSX(.tsx),自动运行时;其余源码仍是 .ts。
     "jsx": "react-jsx",
 
     // 相对 import 带显式 .ts 扩展名(Node Type Stripping 与 tsdown 均支持)
@@ -24,6 +24,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["index.ts", "src/**/*.ts"],
+  "include": ["index.ts", "src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "lib"]
 }

@@ -6,10 +6,14 @@
  * 命中策略时把通知交给 `createBrowserDelivery` 产出的投递器。设置行注册进
  * `settings.general.item` 槽,样式由 `ensureNotifySettingsStyles` 自己挂一张 `<style>`。
  *
+ * 可见文案(设置行与系统通知)走 Client locale;locale 服务缺席时退回简体中文。
  * 没有 window / document(非浏览器环境)时直接返回,不注册任何东西。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { createNotifySettingsRow, ensureNotifySettingsStyles } from './notify-settings.ts'
+// 空类型导入(不引入任何名字):加载 `ctx.locale` 的服务声明与槽位 `locale:` 座位的字典类型。
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+import { NS, en, notifyTextsOf, translateZh, zh } from './locales.ts'
+import { createNotifySettingsRow, ensureNotifySettingsStyles } from './notify-settings.tsx'
 import { createBrowserDelivery } from './notify-delivery.ts'
 import { createBrowserNotifyEnv } from './notify-env.ts'
 import { startNotifyRuntime } from './notify-runtime.ts'
@@ -20,7 +24,7 @@ export const name = 'dsh-desktop-notify'
 
 // 会话状态表是 `uiSession` 下的独立服务(`uiSession.sessionStatus`):读取它的属性须在注入里
 // 单独声明这个服务名,否则 cordis 拒绝该属性读取。
-export const inject = ['sessions', 'uiSession', 'uiSession.sessionStatus', 'slots']
+export const inject = ['sessions', 'uiSession', 'uiSession.sessionStatus', 'slots', 'locale']
 
 const SETTINGS_ITEM_SLOT = 'settings.general.item'
 const SETTINGS_ITEM_ID = 'desktop-notify'
@@ -42,11 +46,19 @@ export function apply(ctx: Context): void {
     slots: getService(ctx, 'slots'),
   }
 
+  // 可见文案:locale 服务缺席(受限环境 / 测试桩)时退回简体中文。
+  const locale = typeof ctx.get === 'function' ? ctx.get('locale') : undefined
+  if (locale !== undefined && locale !== null) {
+    ctx.effect(() => locale.register(NS, { zh, en }), `${name}: dictionaries`)
+  }
+  const t = locale === undefined || locale === null ? translateZh : locale.bind(NS)
+
   const store = createNotifyStore(createBrowserNotifyEnv(window))
   const delivery = createBrowserDelivery(window, document)
   const disposeRuntime = startNotifyRuntime({
     services,
     store,
+    texts: notifyTextsOf(t),
     isPageActive: () => delivery.isPageActive(),
     deliver: (plan) => {
       delivery.deliver(plan)
@@ -63,7 +75,12 @@ export function apply(ctx: Context): void {
   if (slots?.inject !== undefined && slots.register !== undefined) {
     slots.inject(SETTINGS_ITEM_SLOT, () =>
       slots.register?.(
-        { name: SETTINGS_ITEM_SLOT, id: SETTINGS_ITEM_ID, order: SETTINGS_ITEM_ORDER },
+        {
+          name: SETTINGS_ITEM_SLOT,
+          id: SETTINGS_ITEM_ID,
+          order: SETTINGS_ITEM_ORDER,
+          locale: NS,
+        },
         createNotifySettingsRow(store),
       ),
     )

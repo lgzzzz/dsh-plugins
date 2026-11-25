@@ -14,7 +14,7 @@ import {
   sessionSwitchKeys,
   sessionSwitchPress,
 } from '../src/palette.ts'
-import { paletteAction } from '../src/client.ts'
+import { paletteAction } from '../src/keys.ts'
 import { check, checkTrue, checkUndefined, finish } from './helpers.mjs'
 
 const key = (name, overrides = {}) => ({ key: name, ...overrides })

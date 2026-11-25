@@ -16,15 +16,15 @@ export const PALETTE_CSS = `
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: max(24px, var(--dsh-frame-overlay-top, 24px)) 24px 24px;
+  padding: max(24px, var(--dsh-frame-overlay-top)) 24px 24px;
   font-family: var(--dsw-font-family);
 }
 .dsh-model-quick-switch-backdrop {
   pointer-events: auto;
   position: absolute;
   inset: 0;
-  background: var(--dsw-alias-bg-mask-1, rgba(0, 0, 0, 0.24));
-  backdrop-filter: var(--dsw-mask-blur, none);
+  background: var(--dsw-alias-bg-mask-1);
+  backdrop-filter: var(--dsw-mask-blur);
 }
 .dsh-model-quick-switch-panel {
   pointer-events: auto;
@@ -36,9 +36,9 @@ export const PALETTE_CSS = `
   width: min(560px, 100%);
   max-height: 100%;
   overflow: hidden;
-  border-radius: var(--dsw-radius-lg, 16px);
-  background: var(--dsw-alias-bg-layer-2, #ffffff);
-  box-shadow: var(--dsw-elevation-prominent, 0 10px 30px rgba(0, 0, 0, 0.18));
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 .dsh-model-quick-switch-panel:focus {
   outline: none;
@@ -54,18 +54,18 @@ export const PALETTE_CSS = `
 .dsh-model-quick-switch-title {
   font-size: 14px;
   font-weight: 500;
-  color: var(--dsw-alias-label-primary, #1b1b1c);
+  color: var(--dsw-alias-label-primary);
 }
 .dsh-model-quick-switch-subhead {
   flex: none;
   padding: 0 18px 8px;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-count {
   font-size: 12px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-list {
   flex: 1 1 auto;
@@ -86,24 +86,24 @@ export const PALETTE_CSS = `
   box-sizing: border-box;
   padding: 8px 10px;
   border: none;
-  border-radius: var(--dsw-radius-sm, 8px);
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  color: var(--dsw-alias-label-primary, #1b1b1c);
+  color: var(--dsw-alias-label-primary);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 .dsh-model-quick-switch-option[data-active='true'] {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 .dsh-model-quick-switch-option[data-action] .dsh-model-quick-switch-name {
   font-weight: 500;
 }
-.dsh-model-quick-switch-option[data-action] .dsh-model-quick-switch-badge[data-badge='操作'] {
-  color: var(--dsw-alias-state-business-primary, #3d6ce7);
+.dsh-model-quick-switch-option[data-action] .dsh-model-quick-switch-badge {
+  color: var(--dsw-alias-state-business-primary);
 }
 .dsh-model-quick-switch-option:hover:not([data-active='true']) {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 .dsh-model-quick-switch-option:focus {
   outline: none;
@@ -113,7 +113,7 @@ export const PALETTE_CSS = `
   width: 20px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-texts {
   display: flex;
@@ -138,8 +138,8 @@ export const PALETTE_CSS = `
   flex: none;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   line-height: 18px;
 }
@@ -147,8 +147,8 @@ export const PALETTE_CSS = `
   flex: none;
   padding: 0 6px;
   border-radius: 999px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
-  color: var(--dsw-alias-state-warn-primary, #a9761b);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-state-warn-primary);
   font-size: 11px;
   line-height: 17px;
 }
@@ -157,18 +157,18 @@ export const PALETTE_CSS = `
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-enter {
   flex: none;
   font-size: 11px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-empty {
   padding: 8px 18px 18px;
   font-size: 13px;
   line-height: 20px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-status {
   flex: none;
@@ -179,19 +179,19 @@ export const PALETTE_CSS = `
   line-height: 18px;
 }
 .dsh-model-quick-switch-error {
-  color: var(--dsw-alias-state-error-primary, #c8342f);
+  color: var(--dsw-alias-state-error-primary);
 }
 .dsh-model-quick-switch-pending {
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-foot {
   flex: none;
   display: flex;
   gap: 14px;
   padding: 10px 18px 14px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
   font-size: 11px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 /*
  * 视口高度不足 860px 时收紧内部留白与行高,保证一屏 10 行在常见笔记本窗口(视口 ≥ 800px)
@@ -223,7 +223,7 @@ export const SETTINGS_CSS = `
   display: flex;
   flex-direction: column;
   gap: 18px;
-  color: var(--dsw-alias-label-primary, #1b1b1c);
+  color: var(--dsw-alias-label-primary);
   font-size: 14px;
   line-height: 22px;
 }
@@ -237,7 +237,7 @@ export const SETTINGS_CSS = `
   margin: 6px 0 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-secondary, #5f6368);
+  color: var(--dsw-alias-label-secondary);
 }
 .dsh-model-quick-switch-settings-heading {
   display: flex;
@@ -254,20 +254,20 @@ export const SETTINGS_CSS = `
 .dsh-model-quick-switch-settings-hint {
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-settings-list {
   margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 .dsh-model-quick-switch-settings-row {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 12px 0;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 .dsh-model-quick-switch-settings-texts {
   display: flex;
@@ -288,7 +288,7 @@ export const SETTINGS_CSS = `
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--dsw-alias-label-primary, #1b1b1c);
+  color: var(--dsw-alias-label-primary);
 }
 .dsh-model-quick-switch-settings-id {
   overflow: hidden;
@@ -296,14 +296,14 @@ export const SETTINGS_CSS = `
   white-space: nowrap;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-settings-badge {
   flex: none;
   padding: 0 6px;
   border-radius: 999px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
-  color: var(--dsw-alias-state-warn-primary, #a9761b);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-state-warn-primary);
   font-size: 11px;
   line-height: 17px;
 }
@@ -311,8 +311,8 @@ export const SETTINGS_CSS = `
   flex: none;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   line-height: 18px;
 }
@@ -321,27 +321,27 @@ export const SETTINGS_CSS = `
   box-sizing: border-box;
   min-height: 28px;
   padding: 0 10px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
-  border-radius: var(--dsw-radius-sm, 8px);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  color: var(--dsw-alias-label-primary, #1b1b1c);
+  color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 .dsh-model-quick-switch-settings-button:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(38, 49, 72, 0.06));
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 .dsh-model-quick-switch-settings-button:disabled {
   cursor: default;
   opacity: 0.5;
 }
 .dsh-model-quick-switch-settings-button:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary, #4b6bfb);
+  outline: 2px solid var(--dsw-alias-brand-primary);
   outline-offset: 1px;
 }
 .dsh-model-quick-switch-settings-button-danger {
-  color: var(--dsw-alias-state-error-primary, #c8342f);
+  color: var(--dsw-alias-state-error-primary);
 }
 .dsh-model-quick-switch-settings-actions {
   display: flex;
@@ -355,19 +355,19 @@ export const SETTINGS_CSS = `
   padding: 12px 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-model-quick-switch-settings-error {
   margin: 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-state-error-primary, #c8342f);
+  color: var(--dsw-alias-state-error-primary);
 }
 .dsh-model-quick-switch-settings-catalog {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.08));
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
   padding-top: 14px;
 }
 .dsh-model-quick-switch-settings-group {
@@ -380,7 +380,7 @@ export const SETTINGS_CSS = `
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
-  color: var(--dsw-alias-label-secondary, #5f6368);
+  color: var(--dsw-alias-label-secondary);
 }
 .dsh-model-quick-switch-settings-model {
   display: flex;
@@ -407,7 +407,7 @@ export const SETTINGS_CSS = `
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--dsw-alias-label-primary, #1b1b1c);
+  color: var(--dsw-alias-label-primary);
 }
 .dsh-model-quick-switch-settings-model-id {
   overflow: hidden;
@@ -415,6 +415,6 @@ export const SETTINGS_CSS = `
   white-space: nowrap;
   font-size: 11px;
   line-height: 16px;
-  color: var(--dsw-alias-label-tertiary, #81858c);
+  color: var(--dsw-alias-label-tertiary);
 }
 `

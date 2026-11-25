@@ -47,7 +47,7 @@
 | 文件 | 职责 |
 |---|---|
 | [`src/client.ts`](../dsh-subagent-parent-nav/src/client.ts) | 浏览器入口：注册字典、挂样式、等分区槽、注册分区；跳转失败只告警 |
-| [`src/component.ts`](../dsh-subagent-parent-nav/src/component.ts) | 分区组件：读标准 props 的 `useSession` / `useSessions`，渲染上级行，点击切主视图 |
+| [`src/component.tsx`](../dsh-subagent-parent-nav/src/component.tsx) | 分区组件：读标准 props 的 `useSession` / `useSessions`，渲染上级行，点击切主视图 |
 | [`src/lineage.ts`](../dsh-subagent-parent-nav/src/lineage.ts) | 纯逻辑：三条取父依据的优先级、逐级向上、成环与深度上限 |
 | [`src/registration.ts`](../dsh-subagent-parent-nav/src/registration.ts) | 槽键 / 注册 id / `order` 与注册选项（纯模块，测试可直接 import） |
 | [`src/styles.ts`](../dsh-subagent-parent-nav/src/styles.ts) | 插件前缀的行样式（挂一张 `<style>`，不依赖上游 primitives） |

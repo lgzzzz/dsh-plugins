@@ -143,7 +143,7 @@ ctx.llm.stream(options)
 | [`src/aggregate.ts`](../dsh-today-token-usage/src/aggregate.ts) | 纯计算：读数 → 面板合计、紧凑格式、缓存命中百分比 |
 | [`src/usage-client.ts`](../dsh-today-token-usage/src/usage-client.ts) | 浏览器收推送：SSE 订阅、坏帧守卫、卸载关闭 |
 | [`src/client.ts`](../dsh-today-token-usage/src/client.ts) | 浏览器入口：注册字典、等分区槽、注册分区 |
-| [`src/component.ts`](../dsh-today-token-usage/src/component.ts) | 分区组件：SSE 订阅、七个字形、按行渲染、空数据隐藏 |
+| [`src/component.tsx`](../dsh-today-token-usage/src/component.tsx) | 分区组件：SSE 订阅、七个字形、按行渲染、空数据隐藏 |
 | [`src/registration.ts`](../dsh-today-token-usage/src/registration.ts) | 槽键 / 注册 id / `order` 与注册选项（纯模块） |
 | [`src/locales.ts`](../dsh-today-token-usage/src/locales.ts) | 本插件字典（zh / en） |
 | [`check-css.mjs`](../dsh-today-token-usage/check-css.mjs) + [`contract.json`](../dsh-today-token-usage/contract.json) | 上游槽、行标记、`llm/stream`、`usage` 块、路由与鉴权、SSE 不被 gzip 缓冲、读数口径的静态契约（16 条） |

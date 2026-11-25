@@ -4,7 +4,7 @@
  * 三个条件同时成立才投递:策略产出了通知、开关处于激活状态(`store.isActive()`)、页面不在前台。
  * uiSession 或其 `sessionStatus` 不可用时返回空卸载函数 —— 本插件静默降级,不影响插件激活。
  */
-import { createNotifyPolicy, type PlannedNotification, type PolicySnapshot } from './notify-policy.ts'
+import { createNotifyPolicy, type NotifyTexts, type PlannedNotification, type PolicySnapshot } from './notify-policy.ts'
 import type { NotifyStore } from './notify-store.ts'
 import type { NotifyServices } from './types.ts'
 
@@ -13,6 +13,8 @@ export interface NotifyRuntimeDeps {
   store: Pick<NotifyStore, 'isActive'>
   isPageActive(): boolean
   deliver(plan: PlannedNotification): void
+  /** 可见文案；省略时判定器用简体中文。 */
+  texts?: NotifyTexts
 }
 
 export function readPolicySnapshot(services: NotifyServices): PolicySnapshot {
@@ -31,7 +33,7 @@ export function startNotifyRuntime(deps: NotifyRuntimeDeps): () => void {
   const subscribe = source.subscribe
   if (getSnapshot === undefined || subscribe === undefined) return () => {}
 
-  const policy = createNotifyPolicy()
+  const policy = createNotifyPolicy(deps.texts)
   const onStatusChange = (): void => {
     const plans = policy.observe(readPolicySnapshot(deps.services))
     if (plans.length === 0) return

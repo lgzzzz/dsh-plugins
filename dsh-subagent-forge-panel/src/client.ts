@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // session-panel 对行槽的 SlotMap 声明;全部是类型层,不产生运行时导入。
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
-import { ForgePanelGuard } from './guard.ts'
+import { ForgePanelGuard } from './guard.tsx'
 import { ROW_SLOT, rowRegisterOptions } from './registration.ts'
 import { ensureStyles } from './styles.ts'
 

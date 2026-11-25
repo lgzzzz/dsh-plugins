@@ -4,7 +4,7 @@
  * 独立成纯模块，测试可以直接 import，不必拉进 React 或浏览器环境。
  */
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { HeroToggleInjected } from './component.ts'
+import type { HeroToggleInjected } from './component.tsx'
 import type { HeroLocaleNS } from './locales.ts'
 
 /** 新会话行右侧的插件选项槽（forge 的「新建工作树」也在这里）。 */

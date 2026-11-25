@@ -6,17 +6,42 @@
  *
  * 运行：`node test/render.test.mjs`（或 pnpm test 跑全部）。
  */
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { StatusRows } from '../src/component.ts'
 import { zh } from '../src/locales.ts'
 import { statusRows } from '../src/rows.ts'
 import { extractSnapshot } from '../src/wire.ts'
-import { check, checkTrue, finish, translator, upstreamFixture } from './helpers.mjs'
+import { check, checkTrue, finish, pluginRoot, translator, upstreamFixture } from './helpers.mjs'
 
 const require = createRequire(import.meta.url)
 const React = require('react')
+
+/** 加载构建产物：组件用真 React 渲染，源码里不再提供可被 Node 直接执行的 JSX 模块。 */
+function loadBundle() {
+  let registration = null
+  globalThis.window = {
+    __ModuleLoader__: {
+      load: (value) => { registration = value },
+    },
+  }
+  try {
+    // eslint-disable-next-line no-eval
+    ;(0, eval)(readFileSync(join(pluginRoot, 'lib', 'client.js'), 'utf8'))
+  } finally {
+    delete globalThis.window
+  }
+  if (registration === null) throw new Error('bundle 没有注册到 __ModuleLoader__（先跑 pnpm build）')
+  return registration.factory((id) => {
+    if (id === 'react') return React
+    if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return require(id)
+    throw new Error(`产物要求了未声明的外部模块:${id}`)
+  })
+}
+
+const { StatusRows } = loadBundle()
 const t = translator(zh)
 
 /** 上游 fixture → 浏览器看到的响应。 */

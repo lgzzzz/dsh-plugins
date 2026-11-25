@@ -47,7 +47,7 @@
 | 文件 | 职责 |
 |---|---|
 | [`src/client.ts`](../dsh-agent-team-hero-toggle/src/client.ts) | 浏览器入口：注册字典、挂样式、等 `remote.agentTeams`、注册 hero 槽 |
-| [`src/component.ts`](../dsh-agent-team-hero-toggle/src/component.ts) | `role="switch"` 芯片组件；读投影、pending 锁、失败标记 |
+| [`src/component.tsx`](../dsh-agent-team-hero-toggle/src/component.tsx) | `role="switch"` 芯片组件；读投影、pending 锁、失败标记 |
 | [`src/registration.ts`](../dsh-agent-team-hero-toggle/src/registration.ts) | 槽键 / 注册 id / `order` 与注册选项（纯模块，测试可直接 import） |
 | [`src/logic.ts`](../dsh-agent-team-hero-toggle/src/logic.ts) | 可见性、失败文案、异常收敛 |
 | [`src/styles.ts`](../dsh-agent-team-hero-toggle/src/styles.ts) | 插件前缀的芯片样式（挂一张 `<style>`，不依赖上游 primitives） |

@@ -14,6 +14,7 @@ import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-sessi
 import type { SessionStatus, SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { ZH_TEXTS } from './locales.ts'
 
 export type NotifyReason = 'turn-complete' | 'approval' | 'question' | 'plan-review'
 
@@ -39,11 +40,16 @@ export interface NotifyPolicy {
 
 const BODY_LIMIT = 96
 
-const TITLES: Readonly<Record<NotifyReason, string>> = {
-  'turn-complete': 'DSH · 回合完成',
-  approval: 'DSH · 需要你审批',
-  question: 'DSH · 需要你回答',
-  'plan-review': 'DSH · 计划待确认',
+/** 判定器产出的可见文案；默认简体中文，浏览器半部按当前 locale 换成译文。 */
+export interface NotifyTexts {
+  /** 某一类通知的标题。 */
+  title(reason: NotifyReason): string
+  /** 审批提示没有工具名/原因时的兜底正文。 */
+  approvalDetail(): string
+  /** 提问没有正文时的兜底。 */
+  questionDetail(): string
+  /** 计划确认没有正文时的兜底。 */
+  planReviewDetail(): string
 }
 
 function clip(text: string, limit: number = BODY_LIMIT): string {
@@ -65,21 +71,27 @@ function reasonOf(interaction: SessionPendingInteraction): NotifyReason {
   return 'question'
 }
 
-function detailOf(interaction: SessionPendingInteraction): string {
+function detailOf(interaction: SessionPendingInteraction, texts: NotifyTexts): string {
   if (interaction.kind === 'approval') {
     const tool = interaction.toolName
     const reason = interaction.reason
     if (tool !== undefined && tool !== '' && reason !== undefined && reason !== '') return `${tool} · ${reason}`
     if (tool !== undefined && tool !== '') return tool
-    return '有一条工具调用等你决定'
+    return texts.approvalDetail()
   }
   const first = interaction.questions?.[0]
   const question = first?.question ?? first?.header ?? first?.detail
   if (question !== undefined && question !== '') return question
-  return interaction.kind === 'plan-review' ? '计划已就绪,等你确认' : '有一个提问等你回答'
+  return interaction.kind === 'plan-review' ? texts.planReviewDetail() : texts.questionDetail()
 }
 
-export function createNotifyPolicy(): NotifyPolicy {
+/**
+ * 建一个判定器。
+ *
+ * @param texts - 可见文案；省略时用简体中文（纯逻辑测试与 locale 缺席时）。
+ * @returns 逐帧比较的判定器。
+ */
+export function createNotifyPolicy(texts: NotifyTexts = ZH_TEXTS): NotifyPolicy {
   let baseline: SessionStatusSnapshot | undefined
   return {
     observe(snapshot) {
@@ -98,7 +110,7 @@ export function createNotifyPolicy(): NotifyPolicy {
             plans.push({
               sessionId,
               reason: 'turn-complete',
-              title: TITLES['turn-complete'],
+              title: texts.title('turn-complete'),
               body: clip(label),
               tag: `dsh-notify:${sessionId}:turn-complete`,
             })
@@ -107,11 +119,11 @@ export function createNotifyPolicy(): NotifyPolicy {
           const interaction = status.pendingInteraction
           if (interaction !== undefined && interaction.key !== previous?.pendingInteraction?.key) {
             const reason = reasonOf(interaction)
-            const detail = detailOf(interaction)
+            const detail = detailOf(interaction, texts)
             plans.push({
               sessionId,
               reason,
-              title: TITLES[reason],
+              title: texts.title(reason),
               body: clip(detail === '' ? label : `${label} · ${detail}`),
               tag: `dsh-notify:${sessionId}:${reason}`,
             })

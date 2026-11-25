@@ -80,10 +80,8 @@ export function withTTFTDuration(Inner: unknown): unknown {
       [t, segment],
     )
 
-    return React.createElement(
-      Inner as React.ComponentType<Record<string, unknown>>,
-      { ...props, t: merged },
-    )
+    const InnerComponent = Inner as React.ComponentType<Record<string, unknown>>
+    return <InnerComponent {...props} t={merged} />
   }
   return ActivityWithTTFTDuration
 }

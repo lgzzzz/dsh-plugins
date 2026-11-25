@@ -8,7 +8,13 @@
  */
 import * as React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import {
+import { createPaletteStore, installPaletteKeys, installPaletteWheel, wheelStep } from '../src/palette.ts'
+import { choiceKey, choiceRows, flattenCatalog, orderCatalogGroups } from '../src/model.ts'
+import { createModelDataStore } from '../src/model-data.ts'
+import { check, checkTrue, finish, installDom, loadClientBundle } from './helpers.mjs'
+
+// JSX 组件不能由 Node 直接执行：组件与浮层文案/计数函数都从构建产物取。
+const {
   MODEL_VIEW,
   ModelOverlay,
   ModelSettingsSection,
@@ -17,11 +23,7 @@ import {
   SETTINGS_ROOT_ATTR,
   countLabel,
   optionDomId,
-} from '../src/client.ts'
-import { createPaletteStore, installPaletteKeys, installPaletteWheel, wheelStep } from '../src/palette.ts'
-import { choiceKey, choiceRows, flattenCatalog, orderCatalogGroups } from '../src/model.ts'
-import { createModelDataStore } from '../src/model-data.ts'
-import { check, checkTrue, finish, installDom } from './helpers.mjs'
+} = loadClientBundle()
 
 const GROUPS = [
   { id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }] } }] },

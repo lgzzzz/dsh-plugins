@@ -22,6 +22,7 @@ import {
   fixedSessionKeydown,
   fixedSessionMacKeydown,
   installDom,
+  loadClientBundle,
   renderSlotEntry,
   workspace,
 } from './helpers.mjs'
@@ -34,7 +35,7 @@ const {
   name,
   PALETTE_ROOT_ATTR,
   SESSION_ROOT_ATTR,
-} = await import('../src/client.ts')
+} = loadClientBundle()
 
 /**
  * 起一份装着假服务的上下文并装配插件;返回浮层的读数与动作。
@@ -116,8 +117,8 @@ function openSessionsViaShortcut(shortcuts) {
 console.log('--- C① 固定行与浮层都挂上了 ---')
 {
   const { ctx, slots, shortcuts, list, overlay, sessionOverlay, html } = setup({ current: 'ws-2' })
-  check('声明了依赖', inject, ['slots', 'shortcuts'])
-  check('请求的依赖', ctx.requested, ['slots', 'shortcuts'])
+  check('声明了依赖', inject, ['slots', 'shortcuts', 'locale'])
+  check('请求的依赖', ctx.requested, ['slots', 'shortcuts', 'locale'])
   check('没有缺失的依赖', ctx.missing, [])
   check('两条固定行', shortcuts.commands.map((command) => command.id), [
     'dsh-workspace-quick-switch.quick-switch',
@@ -143,8 +144,8 @@ console.log('--- C① 固定行与浮层都挂上了 ---')
     ],
   )
   check('交出去的是组件本体(不是元素)', slots.registered.map((entry) => typeof entry.component), ['function', 'function'])
-  check('工作区浮层的业务 props', Object.keys(overlay.options.inject()), ['store', 'view'])
-  check('会话浮层的业务 props', Object.keys(sessionOverlay.options.inject()), ['store', 'view'])
+  check('工作区浮层的业务 props', Object.keys(overlay.options.inject()), ['store', 'view', 't'])
+  check('会话浮层的业务 props', Object.keys(sessionOverlay.options.inject()), ['store', 'view', 't'])
   check('订阅了工作区快照', list.listenerCount(), 1)
   check('未打开时不渲染浮层', html(), '')
 }
@@ -445,8 +446,8 @@ console.log('--- C⑩ macOS:固定行占 ⌘⌥M,键帽与按键归属都按平�
 console.log('--- C⑨ 卸载时清干净 ---')
 {
   const { ctx, slots, shortcuts, list, sessions } = setup({ current: 'ws-1' })
-  check('六个 scope effect 都登记了', ctx.effects.length, 6)
-  check('effect 各自交了清理函数', ctx.effects.filter((effect) => typeof effect.cleanup === 'function').length, 6)
+  check('七个 scope effect 都登记了（多一条字典注册）', ctx.effects.length, 7)
+  check('effect 各自交了清理函数', ctx.effects.filter((effect) => typeof effect.cleanup === 'function').length, 7)
   check('两个等待子 fiber 都挂上了', ctx.children.map((child) => child.running), [true, true])
   ctx.dispose()
   check('固定行撤掉', shortcuts.commands, [])
@@ -583,7 +584,7 @@ console.log('--- C⑫ 终端内按 ⌘⌥M / Ctrl+Alt+M:捕获阶段拦下并开
     check('没有 window 时照常注册固定行', bare.shortcuts.commands.length, 2)
     openViaShortcut(bare.shortcuts)
     check('没有 window 时固定通道照常打开', bare.peek().open, true)
-    check('没有 window 时也登记了那些 effect', bare.ctx.effects.length, 6)
+    check('没有 window 时也登记了那些 effect', bare.ctx.effects.length, 7)
   } finally {
     globalThis.window = noWindowDom.window
   }

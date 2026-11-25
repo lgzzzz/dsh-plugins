@@ -23,7 +23,22 @@
  */
 import type { ForgeCheckoutState } from '@deepseek-ai/dsh-experimental-client-ui-forge/types'
 import type { TeamProjection } from '@deepseek-ai/dsh-agent-team/types'
+import { ZH_QUICK_ACTION_TEXTS } from './locales.ts'
 import type { PaletteRow } from './palette.ts'
+
+/** 快捷操作行的可见文案；默认取简体中文字典。 */
+export interface QuickActionTexts {
+  /** 工作树行的标题。 */
+  readonly worktreeTitle: string
+  readonly worktreeOn: string
+  readonly worktreeOff: string
+  /** 团队协作行的标题。 */
+  readonly teamTitle: string
+  readonly teamOn: string
+  readonly teamOff: string
+  /** 行右侧角标。 */
+  readonly actionBadge: string
+}
 
 /** 工作树那一行的稳定 key（不会和模型行的 JSON 数组 key 撞车）。 */
 export const ACTION_WORKTREE_KEY = 'action:worktree'
@@ -235,22 +250,25 @@ function teamOn(input: QuickActionRowsInput): boolean {
  * @param input - 会话、服务与投影事实。
  * @returns 快捷操作行（工作树在前且可能缺席，团队协作在后）。
  */
-export function quickActionRows(input: QuickActionRowsInput): PaletteRow[] {
+export function quickActionRows(
+  input: QuickActionRowsInput,
+  texts: QuickActionTexts = ZH_QUICK_ACTION_TEXTS,
+): PaletteRow[] {
   const rows: PaletteRow[] = []
   if (showWorktreeRow(input)) {
     rows.push({
       key: ACTION_WORKTREE_KEY,
-      title: '新建工作树',
-      subtitle: worktreeOn(input) ? '已开启' : '已关闭',
-      badges: ['操作'],
+      title: texts.worktreeTitle,
+      subtitle: worktreeOn(input) ? texts.worktreeOn : texts.worktreeOff,
+      badges: [texts.actionBadge],
     })
   }
   if (showTeamRow(input)) {
     rows.push({
       key: ACTION_TEAM_KEY,
-      title: '团队协作',
-      subtitle: teamOn(input) ? '已开启' : '已关闭',
-      badges: ['操作'],
+      title: texts.teamTitle,
+      subtitle: teamOn(input) ? texts.teamOn : texts.teamOff,
+      badges: [texts.actionBadge],
     })
   }
   return rows

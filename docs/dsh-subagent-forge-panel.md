@@ -59,7 +59,7 @@ forge 面板需要一个 `Session` 参数，Host 通过普通会话路由把它�
 | 文件 | 职责 |
 |---|---|
 | [`src/client.ts`](../dsh-subagent-forge-panel/src/client.ts) | 浏览器入口：挂样式、等行槽、注册守卫 |
-| [`src/guard.ts`](../dsh-subagent-forge-panel/src/guard.ts) | 守卫组件：判定子会话，渲染不可见的标记元素并给分区打标记 |
+| [`src/guard.tsx`](../dsh-subagent-forge-panel/src/guard.tsx) | 守卫组件：判定子会话，渲染不可见的标记元素并给分区打标记 |
 | [`src/detect.ts`](../dsh-subagent-forge-panel/src/detect.ts) | 纯判定：快照地址（必须点名本会话）与会话列表行 `origin` 两条依据 |
 | [`src/mark.ts`](../dsh-subagent-forge-panel/src/mark.ts) | 给最近的 `[data-session-panel-section]` 打标记，卸载时只摘一次 |
 | [`src/styles.ts`](../dsh-subagent-forge-panel/src/styles.ts) | 唯一一条规则：在带标记的分区里隐藏 forge 连接行 |
