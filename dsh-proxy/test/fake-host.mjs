@@ -80,23 +80,33 @@ function makeResponse() {
 export function createFakeHost(options = {}) {
   const routes = []
   const tools = new Map()
+  const toolOptions = new Map()
   const skills = []
   const disposers = []
+  const listeners = new Map()
+  const agents = new Map()
   const ctx = {
     // cordis 的 effect 会立刻执行回调并记住返回的 disposer。
     effect(callback) {
       disposers.push(callback())
     },
-    on() {
-      return () => {}
+    // 只实现插件用到的 `emit` 形态：`ctx.on(name, listener)` 返回退订函数。
+    on(name, listener) {
+      if (!listeners.has(name)) listeners.set(name, new Set())
+      listeners.get(name).add(listener)
+      return () => listeners.get(name)?.delete(listener)
     },
-    get() {
-      return undefined
+    get(name) {
+      return name === 'agents' ? agents : undefined
     },
     tools: {
-      register(definition) {
+      register(definition, registrationOptions) {
         tools.set(definition.name, definition)
-        return () => tools.delete(definition.name)
+        if (registrationOptions !== undefined) toolOptions.set(definition.name, registrationOptions)
+        return () => {
+          tools.delete(definition.name)
+          toolOptions.delete(definition.name)
+        }
       },
     },
     webServer: {
@@ -133,5 +143,10 @@ export function createFakeHost(options = {}) {
     return { status: res.statusCode, json: res.body === '' ? undefined : JSON.parse(res.body) }
   }
 
-  return { ctx, routes, tools, skills, disposers, call }
+  /** 同步触发一个事件；监听器抛错时原样冒出来，和 cordis 的 emit 一样。 */
+  const emit = (name, ...args) => {
+    for (const listener of listeners.get(name) ?? []) listener(...args)
+  }
+
+  return { ctx, routes, tools, toolOptions, skills, disposers, listeners, agents, call, emit }
 }

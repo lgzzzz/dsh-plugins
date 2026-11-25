@@ -4,6 +4,9 @@ import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+/** 工具的暴露策略：`skill` 在 `proxy-routing` 技能加载后才给出改写类工具，`always` 全部常驻。 */
+export type ToolExposure = 'skill' | 'always'
+
 /** `cordis.patch.yml` 里这一行的 config。全部可省略。 */
 export interface ProxyConfig {
   /** xray 可执行文件的绝对路径或 PATH 上的名字；空字符串 = 自动探测 `xray`。 */
@@ -12,6 +15,8 @@ export interface ProxyConfig {
   httpPort?: number
   /** `geosite.dat` / `geoip.dat` 所在目录；空 = `<dataDir>/geo`。 */
   geoDir?: string
+  /** 工具暴露策略；默认 `skill`。 */
+  toolExposure?: ToolExposure
 }
 
 /** 解析后的配置：路径都是绝对路径，端口都有默认值。 */
@@ -23,6 +28,8 @@ export interface ResolvedConfig {
   dataDir: string
   /** geo 数据目录。 */
   geoDir: string
+  /** 工具暴露策略：`skill` 或 `always`。 */
+  toolExposure: ToolExposure
 }
 
 function portOr(value: unknown, fallback: number): number {
@@ -50,6 +57,8 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
     httpPort: portOr(input.httpPort, 10809),
     dataDir,
     geoDir,
+    // 认识的只有 'always'；拼错或省略都落到默认的按需暴露。
+    toolExposure: input.toolExposure === 'always' ? 'always' : 'skill',
   }
 }
 

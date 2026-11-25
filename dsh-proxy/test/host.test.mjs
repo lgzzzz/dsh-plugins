@@ -19,7 +19,7 @@ const { apply } = await import('../index.ts')
 const host = createFakeHost()
 await apply(host.ctx, { socksPort: 18080, httpPort: 18081, geoDir: join(home, 'geo') })
 
-const { routes, tools, skills, call } = host
+const { routes, tools, toolOptions, skills, call } = host
 
 /* --------------------------------------------------------------- 断言 */
 
@@ -34,9 +34,15 @@ checkEqual(
   ['proxy_latency_test', 'proxy_nodes_list', 'proxy_route_explain', 'proxy_routing_check', 'proxy_routing_read', 'proxy_routing_write', 'proxy_status', 'proxy_subscription_add'],
   '工具名齐全',
 )
+checkEqual(
+  [...toolOptions.keys()].sort(),
+  ['proxy_route_explain', 'proxy_routing_check', 'proxy_routing_write', 'proxy_subscription_add'],
+  '只有改写类工具带激活条件',
+)
 checkEqual(skills.length, 1, '注册了一个技能')
 checkEqual(skills[0].name, 'proxy-routing', '技能名')
 check(skills[0].content.includes('geosite:'), '技能正文讲了值约定')
+checkEqual(skills[0].invocation, { modelInvocable: true, userInvocable: true }, '技能对模型与用户都可见')
 
 console.log('host: 读接口')
 

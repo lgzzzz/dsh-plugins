@@ -328,17 +328,37 @@ type Match = {
 
 ### 7.3 随插件分发的 skill（`routing`）
 
-工具描述保持短，规则语义和常见模板放进按需加载的 skill：
+工具描述保持短，规则语义和常见模板放进按需加载的 skill；同时**这个 skill 也是四个改写类工具的解锁条件**：
 
 ```js
 ctx.skills.register({
   name: 'proxy-routing',
-  description: 'Write and verify proxy routing rules for the proxy_routing_* tools',
+  description: '调整代理分流规则、给某些域名/IP 加例外、解释某条流量为什么走了某个出口、…',
   whenToUse: '当用户要调整分流、添加域名/IP 例外、或解释某条流量为什么走了某个出口时',
   content: routingSkillMarkdown,   // IR 字段说明 + 常见模板 + 陷阱（顺序遮蔽、protocol 需嗅探、geo 数据）
   source: 'runtime',
+  invocation: { modelInvocable: true, userInvocable: true },
 })
 ```
+
+**为什么分两组暴露。** 8 个工具的 schema 合计约 11.2k 字符（≈2.8k token），其中 `check` 与 `write`
+各带一份内联的整份规则 schema，两者占 9.2k 字符。这些内联是按 §7.2 的决定做的（不用 `$ref`），
+所以换不来更便宜的写法；但它们的结论只有读完 skill 才解释得清：`uncertain` / `opaque` / `missing`
+的区别、`patch` 的语义、什么时候回滚。于是：
+
+| 组 | 工具 | 暴露时机 | schema 成本 |
+|---|---|---|---|
+| 常驻 | `proxy_status`、`proxy_routing_read`、`proxy_nodes_list`、`proxy_latency_test` | 一直 | ≈0.4k token |
+| 受控 | `proxy_routing_check`、`proxy_route_explain`、`proxy_routing_write`、`proxy_subscription_add` | `proxy-routing` 加载后 | ≈2.4k token |
+
+实现见 `src/activation.ts`：`ctx.tools.register(definition, { when })` 每步求值一次，false 时工具从
+schema、PTC 绑定与执行里一起消失。解锁有四条路径 —— 模型 `skill` 调用成功（`tools/result`）、
+用户 `/proxy-routing` 显式调用（`session/event` 的 `skill-invocation`）、请求头里已有声明
+（native 模式的 resume / fork）、以及 `toolExposure: 'always'` 关掉整套机制。PTC 的请求头只有
+`run_code`，所以分叉后要重新加载 skill，正文里写明了这点。
+
+分类边界不是"读与写"，而是"schema 是否便宜 + 用法是否要先读文档"：`proxy_routing_read` 是只读的但常驻，
+因为它最常被先问到；`proxy_route_explain` 也是只读的但受控，因为它的四种结论需要 skill 解释。
 
 ### 7.4 一次真实闭环
 

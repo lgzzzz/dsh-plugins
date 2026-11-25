@@ -33,16 +33,30 @@ has no `.dat` files.
 
 ## Tools
 
-| Tool | Effect |
-|---|---|
-| `proxy_status` | Core state, ports, rule count, last error |
-| `proxy_nodes_list` | Configured exits (redacted) and subscriptions |
-| `proxy_subscription_add` | Import a subscription URI list, once or updated |
-| `proxy_latency_test` | TCP handshake latency to one node or all exits |
-| `proxy_routing_read` | Current rule set, compiled preview, available exits |
-| `proxy_routing_check` | Validate a candidate rule set without saving |
-| `proxy_route_explain` | Simulate one flow against the saved rules |
-| `proxy_routing_write` | Save a rule change; applies it with rollback |
+Four read-only tools are always available; the four that change or prove rules
+appear only after the `proxy-routing` skill loads. Those four carry the bulk of
+the rule JSON schema — roughly 2.4k tokens between `check` and `write` alone —
+and their results (the difference between `uncertain`, `opaque`, and `missing`,
+what `patch` means, when a write rolls back) only make sense once the skill's
+instructions are in context.
+
+| Tool | Available | Effect |
+|---|---|---|
+| `proxy_status` | always | Core state, ports, rule count, last error |
+| `proxy_nodes_list` | always | Configured exits (redacted) and subscriptions |
+| `proxy_latency_test` | always | TCP handshake latency to one node or all exits |
+| `proxy_routing_read` | always | Current rule set, compiled preview, available exits |
+| `proxy_routing_check` | after `proxy-routing` | Validate a candidate rule set without saving |
+| `proxy_route_explain` | after `proxy-routing` | Simulate one flow against the saved rules |
+| `proxy_routing_write` | after `proxy-routing` | Save a rule change; applies it with rollback |
+| `proxy_subscription_add` | after `proxy-routing` | Import a subscription URI list, once or updated |
+
+Activation comes from either entry point: a model `skill` call, or the user's
+own `/proxy-routing` message. A native-mode session keeps the declarations in
+its request header, so resume and fork stay unlocked; a PTC session records
+only `run_code`, and the skill says to load it again when the tools are
+missing. Set `toolExposure: 'always'` in the plugin config to expose all eight
+tools unconditionally.
 
 ## Panel
 

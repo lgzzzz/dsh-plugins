@@ -9,3 +9,6 @@
         httpPort: 10809
         # Extra domain list data (`geosite.dat` / `geoip.dat`) for `ext:` values.
         geoDir: ''
+        # Tool exposure: 'skill' gives the four rule-changing tools only after the
+        # `proxy-routing` skill loads; 'always' exposes all eight from the start.
+        toolExposure: skill

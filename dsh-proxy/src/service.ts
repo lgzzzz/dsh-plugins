@@ -84,7 +84,7 @@ export interface StatusView {
   exits: string[]
   geo: { dir: string; hasGeosite: boolean; hasGeoip: boolean }
   ports: { socks: number; http: number }
-  /** 只有显式连接这些端口的应用才会走代理。 */
+  /** 面板底部的一行端口说明。 */
   note: string
 }
 
@@ -161,7 +161,7 @@ export class ProxyService {
       exits: this.exits(),
       geo: { dir: this.config.geoDir, hasGeosite: geo.hasGeosite === true, hasGeoip: geo.hasGeoip === true },
       ports: { socks: this.config.socksPort, http: this.config.httpPort },
-      note: `只代理显式连接 127.0.0.1:${this.config.socksPort}（SOCKS）或 127.0.0.1:${this.config.httpPort}（HTTP）的应用；不改系统代理，也不代理 DSH 自己访问模型 API 的流量。`,
+      note: `监听 127.0.0.1:${this.config.socksPort}（SOCKS）与 127.0.0.1:${this.config.httpPort}（HTTP）。`,
     }
   }
 

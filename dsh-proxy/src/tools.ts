@@ -5,16 +5,27 @@
  * 模型可以反复试错而不重启内核；真正落盘只有一个 `proxy_routing_write`。
  * 参数与 `/proxy-api/*` 的请求体同构，所以「先校验再写」的两次调用输入一致。
  *
+ * 工具分两组暴露（见 `src/activation.ts`）：状态与读取常驻，校验 / 解释 / 写入 / 订阅
+ * 只在 `proxy-routing` 技能加载后出现。两组的分界不是"读与写"，而是"schema 是否便宜"：
+ * `check` 与 `write` 各带一份内联的整份规则 schema，两者合计约占全部工具 schema 的八成。
+ *
  * 参数 schema 手写而不是走 `defineTool` 的 DSL：规则结构需要内联进 `routing` / `upsert`
  * 的 items（不用 `$ref`，不同 provider 对 `$defs` 支持不一致），手写才能控制到字段级。
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { JsonSchemaNode, ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { ActivationCondition } from './activation.ts'
 import type { Flow } from './explain.ts'
 import { ID_PATTERN, MATCH_KEYS, NETWORK_VALUES, PROTOCOL_VALUES } from './ir.ts'
 import { MatchKeysHint, RuleSchemaHint } from './skill.ts'
 import type { ProxyService } from './service.ts'
+
+/** 一直可用的工具：状态与现状读取，schema 很小，而且最先被问到。 */
+export const ALWAYS_ON_TOOLS = ['proxy_status', 'proxy_routing_read', 'proxy_nodes_list', 'proxy_latency_test'] as const
+
+/** 加载 `proxy-routing` 技能后才出现的工具：schema 贵，且用法要读完技能才清楚。 */
+export const SKILL_GATED_TOOLS = ['proxy_routing_check', 'proxy_route_explain', 'proxy_routing_write', 'proxy_subscription_add'] as const
 
 /** `match` 的 JSON Schema：字段内联，模型在工具边界就能拿到字段级约束。 */
 function matchSchema(): JsonSchemaNode {
@@ -145,9 +156,10 @@ const output = { schema: {} as JsonSchemaNode, render: renderJson }
  * 注册全部工具。
  * @param ctx - 宿主 Context。
  * @param service - 应用逻辑。
+ * @param activation - 改写类工具的启动条件；省略时 8 个工具全部常驻。
  * @returns 注销全部工具的 disposer。
  */
-export function registerTools(ctx: Context, service: ProxyService): () => void {
+export function registerTools(ctx: Context, service: ProxyService, activation?: ActivationCondition): () => void {
   const disposers: (() => void)[] = []
 
   const status: ToolDefinition = {
@@ -285,8 +297,14 @@ export function registerTools(ctx: Context, service: ProxyService): () => void {
     },
   }
 
+  // 前半组常驻，后半组等技能加载；`activation` 省略时两组都常驻。
+  const gated = new Set<string>(SKILL_GATED_TOOLS)
   for (const definition of [status, read, check, explain, write, nodes, subscription, latency]) {
-    disposers.push(ctx.tools.register(definition))
+    disposers.push(
+      activation === undefined || !gated.has(definition.name)
+        ? ctx.tools.register(definition)
+        : ctx.tools.register(definition, { when: activation }),
+    )
   }
 
   return () => {

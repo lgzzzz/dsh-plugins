@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Split routing",
-    "description": "Edits proxy split-routing rules as structured data, proves them before they go live, and runs them through an upstream Xray-core binary. Ask the agent to change routing; it calls proxy_routing_check and proxy_route_explain first, then proxy_routing_write. The panel shows rules, nodes, and a traffic simulator. Only applications that connect to 127.0.0.1:10808 (SOCKS) or 127.0.0.1:10809 (HTTP) use it: it never changes the system proxy and never routes DSH's own model traffic. Requires an xray binary you install yourself; nothing is downloaded."
+    "description": "Edits proxy split-routing rules as structured data, proves them before they go live, and runs them through an upstream Xray-core binary. Ask the agent to change routing; it calls proxy_routing_check and proxy_route_explain first, then proxy_routing_write. The panel shows rules, nodes, and a traffic simulator. Proxy ports: 127.0.0.1:10808 (SOCKS) and 127.0.0.1:10809 (HTTP). Requires an xray binary you install yourself; nothing is downloaded."
   }
 }

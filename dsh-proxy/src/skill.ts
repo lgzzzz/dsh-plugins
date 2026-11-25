@@ -37,6 +37,15 @@ const CONTENT = `# 分流路由规则
 }
 \`\`\`
 
+## 加载本技能才会出现四个工具
+
+\`proxy_routing_check\`、\`proxy_route_explain\`、\`proxy_routing_write\`、\`proxy_subscription_add\`
+只在 \`proxy-routing\` 技能加载成功之后才进入工具列表。所以在**上一个**步骤里看不到它们是正常的 ——
+本轮加载之后，下一步就会看到。\`proxy_status\`、\`proxy_routing_read\`、\`proxy_nodes_list\`、
+\`proxy_latency_test\` 一直都在。
+
+如果已经把本技能加载过、却仍然看不到那四个工具（例如会话被恢复或分叉过），重新加载一次本技能即可。
+
 ## 一条规则怎么读
 
 - \`match\` 里**同一字段的多个值之间是「或」**（数组里任一命中即算命中），**不同字段之间是「且」**。
@@ -95,8 +104,13 @@ const CONTENT = `# 分流路由规则
 /** 注册用的技能定义。 */
 export const routingSkill = {
   name: 'proxy-routing',
-  description: 'Write and verify proxy split-routing rules for the proxy_routing_* tools',
+  // 目录里模型只看得到 description，所以触发词必须写在这里，而不是只写进 whenToUse。
+  description:
+    '调整代理分流规则、给某些域名/IP 加例外、解释某条流量为什么走了某个出口、测节点延迟或导入代理订阅时使用。'
+    + '加载后会给出 proxy_routing_check / proxy_route_explain / proxy_routing_write / proxy_subscription_add 四个工具，'
+    + '以及规则语义、常见模板和陷阱。',
   whenToUse: '当用户要调整分流、给某些域名/IP 加例外、解释某条流量为什么走了某个出口，或导入代理订阅时',
   content: CONTENT,
   source: 'runtime',
+  invocation: { modelInvocable: true, userInvocable: true },
 } as const
