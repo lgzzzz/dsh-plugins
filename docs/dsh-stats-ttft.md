@@ -59,7 +59,7 @@ document.querySelector('[role="dialog"] [data-session-stats-details]')?.textCont
 
 - 第一条返回没有时长 → 先在 Console 找 `[dsh-stats-ttft]` 的告警：「遮蔽 activity 失败」是注册
   被拒，「未找到 …#activity」是上游条目始终没出现；再跑 `pnpm --filter dsh-stats-ttft check:css`，
-  对照 `contract.json` 逐条核对上游锚点。刚重启过 Host 时硬刷新页面。
+  对照 `contract.json` 逐条核对上游锚点。刚重启过 Host、页面还没收到更新时，刷新一次兜底。
 - 第一条有时长、但点开气泡后读数是 `0秒` 或缺失 → 看 TTFT 样本是否存在（`ttftSteps > 0`）；
   没有记录到首 token 的步骤不会让按钮显示 0。
 - 把「设置 → 通用设置 → 性能与用量」切到**简洁**后，按钮只剩输出速度（没有气泡）；这是上游
@@ -104,9 +104,9 @@ pnpm --filter dsh-stats-ttft build
 dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-stats-ttft
 ```
 
-挂载后 Host 会重新合成客户端 roster，**刷新页面**即可加载本插件（页面的 `__DSH_BOOT__`
-里能看到 `dsh-stats-ttft` 条目）。Host 若在启动时冻结了 profile 与产物字节，刷新后页面仍未
-带本条目，再重启 `dsh web` 并刷新。构建后的静态契约校验：
+挂载后不需要重启 `dsh web` 或刷新页面：HMR 重组合后已打开的页面随客户端图加载本插件（页面的 `__DSH_BOOT__`
+里能看到 `dsh-stats-ttft` 条目）。页面若在挂载前就开着且没有收到更新，刷新一次兜底；只有 DSH 升级后仍停在
+旧 release 的页面才必须刷新。构建后的静态契约校验：
 
 ```bash
 pnpm --filter dsh-stats-ttft check:css
@@ -114,7 +114,8 @@ pnpm --filter dsh-stats-ttft check:css
 node dsh-stats-ttft/check-css.mjs --dsh-root /opt/homebrew/lib/node_modules
 ```
 
-恢复原读数：从 profile 移除本包（`dsh plugin --profile web remove dsh-stats-ttft`），刷新页面。
+恢复原读数：从 profile 移除本包（在「设置 → 插件」里卸载，或 `dsh plugin --profile web remove dsh-stats-ttft`）；
+HMR 会移除插件的行并清理，页面不需要刷新。
 
 -----
 

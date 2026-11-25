@@ -117,9 +117,9 @@ const singleFile=void 0;/*dsh-changes-single-card*/
 ### 为什么必须写在启动期
 
 - 卡片是上游 bundle 里的 React 代码，浏览器插件改不了它的渲染；
-- `@deepseek-ai/dsh-client-modules` 在启动组网（seed）时就把每个 entry 的 `lib/client.js` 读进内存，之后 `/plugins/...` 的 GET 直接发这份缓冲。只写文件不够，必须再调 `clientModules.rebuilt(id)` 让服务重读、发布新的 rev，刷新页面才会拿到补丁后的 bundle；
+- `@deepseek-ai/dsh-client-modules` 在启动组网（seed）时就把每个 entry 的 `lib/client.js` 读进内存，之后 `/plugins/...` 的 GET 直接发这份缓冲。只写文件不够，必须再调 `clientModules.rebuilt(id)` 让服务重读、发布新的 rev；已打开的页面随 HMR 的 `rebuilt` 帧替换该插件，不需要刷新（`client-hmr` 的产物轮询也会在文件变化后自动补一次 `rebuilt`）；
 - 产物路径不靠猜：`clientModules.clientPath('@deepseek-ai/dsh-client-ui-deliverables')` 给出组网时登记的绝对路径；
-- 页面若在补丁前已经拉过 bundle，`rebuilt()` 发布的新 rev 会让下一次刷新拿到补丁版；首次切换后刷新一次即可。
+- 页面若在补丁前已经拉过 bundle，`rebuilt()` 发布的新 rev 会让已打开的页面在下一帧换到补丁版，无需刷新。
 
 ### 幂等、失败与恢复
 
@@ -270,7 +270,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') //
      .getAttribute('data-sidebar-right-panel')   // 'fullscreen'
    ```
 
-- 标记为 `false` → 浏览器这一页没有加载到本插件，先硬刷新；仍为 `false` 说明 Host 还没有重新合成 profile，需要重启 `dsh web`（或在「设置 → 插件」里关掉再打开本插件）。
+- 标记为 `false` → 浏览器这一页没有加载到本插件：在「设置 → 插件」里关掉再打开本插件，让 HMR 重组合并把行送进页面；仍为 `false` 再硬刷新。只有 profile 未启用 HMR 时才需要重启 `dsh web`。
 - 标记为 `true`、行为不对 → 对照 [`contract.json`](../dsh-changes-behavior/contract.json) 运行 `pnpm --filter dsh-changes-behavior check:css`，清单会指出是哪条上游锚点失效。
 
 -----
@@ -346,6 +346,8 @@ pnpm --filter dsh-changes-behavior check:css
 
 ## 挂载与启用
 
+装卸与生效的通用规则见[插件挂载、卸载与生效](plugin-mounting.md)；本节只列本包的步骤。
+
 本包替代原先五个插件。升级时先从 profile 移除旧包，再加入本包（或直接重新运行仓库根的 `add-plugins` / `remove-plugins` 脚本）：
 
 ```bash
@@ -359,9 +361,9 @@ dsh plugin --profile web remove dsh-forge-changes-font-14
 dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-changes-behavior
 ```
 
-然后刷新 GUI 页面。客户端半部改动后要重新构建；Host 在页面加载时重新读产物，通常刷新即可，若仍拿到旧字节，用「设置 → 插件」关掉再打开本插件，或重启 `dsh web`。
+挂载后不需要重启 `dsh web` 或刷新页面：HMR 会重组合，已打开的页面随客户端图加载本插件。客户端半部改动后重新构建；宿主按产物 stat 轮询发布新的 rev 并替换已打开的插件。
 
-本包现在带宿主半部：**单文件卡片补丁在 `dsh web` 启动时执行**，所以改完宿主代码或第一次装上本包后需要重启 `dsh web` 才生效（重启后刷新页面）。从 profile 移除本插件时，卸载钩子会把上游产物恢复原样；若进程被强杀未走到卸载，产物会保持打过补丁的形态，下次启动会被识别为「已打过」而直接跳过（不会重复写）。
+本包带宿主半部：**单文件卡片补丁在宿主重组合、本插件启动时执行**，第一次装上本包即生效。改完宿主代码后，下一次重组合（在「设置 → 插件」里关掉再打开本插件，或编辑 profile 的 `cordis.patch.yml`）会重启本插件并重新应用补丁；HMR 默认不监视源码，保存文件本身不会重载。从 profile 移除本插件时，卸载钩子会把上游产物恢复原样，客户端产物的轮询随即让已打开的页面换回原版；若进程被强杀未走到卸载，产物会保持打过补丁的形态，下次启动会被识别为「已打过」而直接跳过（不会重复写）。
 
 -----
 

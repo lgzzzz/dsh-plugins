@@ -122,7 +122,7 @@ node --check lib/client.js && node --check index.ts
 dsh plugin --profile web add /home/lgzzz/dsh-plugins/dsh-keyboard-shortcuts
 ```
 
-重启 `dsh web`（或按仓库 README 的插件开关流程重新载入）后刷新 GUI。客户端产物改动后必须重新构建并让 Host 重新读取 `lib/client.js`。
+启用后不需要重启 `dsh web` 或刷新页面：HMR 会重组合，已打开的页面随客户端图加载本插件。客户端产物改动后必须重新构建 `lib/client.js`；宿主按产物 stat 轮询替换已打开的插件（约半秒），无需刷新或重启。详见[插件挂载、卸载与生效](plugin-mounting.md)。
 
 撤销：
 

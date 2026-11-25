@@ -127,7 +127,9 @@ pnpm install
 - **宿主半部** `index.ts` 与 `src/bump.ts` 由 Node Type Stripping 直接加载，没有构建产物。
 - **浏览器半部** `src/client.ts` 由 tsdown 打成 `lib/client.js`，由 `package.json` 的 `dsh.client.platform = web` 与 `exports["./client"]` 声明。仓库根的 `add-plugins.ps1` / `add-plugins.sh` 发现 `exports` 里写明、磁盘上还没有的 `lib/*.js` 时会先跑 `pnpm --filter dsh-workspace-activity-sort build`。
 
-改浏览器半部后：`pnpm --filter dsh-workspace-activity-sort build` 重新构建，再重启 `dsh web` 让宿主重新合成启动图，页面刷新后加载新产物。宿主半部改动重启 `dsh web` 即生效。
+改浏览器半部后：`pnpm --filter dsh-workspace-activity-sort build` 重新构建；宿主按产物 stat 轮询替换，页面无需
+刷新（约半秒）。改宿主半部（`index.ts`、`src/bump.ts`）后，下一次重组合时替换：在「设置 → 插件」里关掉再
+打开本插件，或编辑 profile 的 `cordis.patch.yml`；HMR 默认不监视源码。详见[插件挂载、卸载与生效](plugin-mounting.md)。
 
 没有配置项：插件不导出 `Config`，行为只有「会话活跃（含任务终点、等待用户）即上浮」与「有工作区被排到第一位即滚回最上面」两条。
 

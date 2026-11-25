@@ -3,8 +3,8 @@
 # example/ 等非 dsh-* 目录不参与整仓挂载。
 #
 # 挂载前先把客户端半部的产物补齐:profile 以 link: 指向本目录,DSH 直接读 package.json 里
-# exports 写明的 lib/*.js(这些产物在 .gitignore 里)。缺产物时插件照样挂得上,只是浏览器里
-# 是个空壳,启动日志里只有一行 ENOENT —— 所以在挂载前构建,失败就不挂。
+# exports 写明的 lib/*.js(这些产物在 .gitignore 里)。缺产物时客户端模块的激活会失败并报出
+# 缺失的包与路径 —— 所以在挂载前构建,失败就不挂。
 $ErrorActionPreference = 'Stop'
 
 $Base = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }

@@ -62,7 +62,7 @@ pnpm build            # 或 ../node_modules/.bin/tsdown
 dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-model-quick-switch
 ```
 
-挂载后**重启 `dsh web` 并刷新浏览器**：`dsh.client.platform=web` + `immediately` 让客户端 roster 随页面加载，但 Host 在启动时读 profile；新增插件不会热挂进已运行的实例。
+挂载后不需要重启 `dsh web`，也不用刷新浏览器：web profile 默认启用 HMR，装载会立即重组合，已打开的页面随客户端图更新加载本插件（`dsh.client.platform=web` + `immediately` 只决定页面启动时的预取，不决定能否热挂）。生效链路与例外见[插件挂载、卸载与生效](plugin-mounting.md)。
 
 第一次打开时列表为空。进入「设置 → 模型快速切换 → 添加模型」，从当前模型目录里挑几个；之后 `⌘⌥U`（Windows / Linux 上是 `Ctrl+Alt+U`）就能切换。菜单顶部的快捷操作要求 profile 里同时装有 forge bundle（`remote.forgePanel`）与带 `agentTeams` 的远程链路；缺哪一条，对应行就直接不显示。
 
@@ -141,5 +141,5 @@ node test/palette.test.mjs && node test/model.test.mjs && node test/actions.test
 - **不做搜索、不做拖拽排序**：列表顺序就是添加顺序；要调整顺序只能改 profile 里的 `models` 数组。候选多时靠滚轮 / `←` / `→` 滑动。
 - **一次只列 10 行、不做虚拟滚动**：窗口一次渲染连续 10 行；视口矮于约 800px 时列表内部滚动，键盘选中行会自动滚进可见区。
 - **设置页只在 Web 客户端出现**：它注册进 `settings.section`，由 ui-settings-general 渲染；没有该外壳的组合里浮层仍可用，但列表只能通过 profile patch 编辑。
-- **改键位要改源码**：固定行不可在快捷键设置里改。键位声明在 [`src/palette.ts`](../dsh-model-quick-switch/src/palette.ts) 的 `MODEL_SWITCH_BINDING` / `modelSwitchKeys`，改完重建并重启。这里用的是逻辑 `primary`（与 `dsh-workspace-quick-switch`、`dsh-keyboard-shortcuts` 的固定键同一套规则）：macOS 上落成 `⌘⌥U`，Windows / Linux 上是 `Ctrl+Alt+U`。注意 `⌘⌥U` 同时是 Safari / Chrome 的「查看网页源代码」：在浏览器里它可能先被浏览器截走、页面收不到；在 DSH 桌面端里没有这个冲突。
+- **改键位要改源码**：固定行不可在快捷键设置里改。键位声明在 [`src/palette.ts`](../dsh-model-quick-switch/src/palette.ts) 的 `MODEL_SWITCH_BINDING` / `modelSwitchKeys`，改完重建即可（宿主按产物 stat 轮询替换，无需重启）。这里用的是逻辑 `primary`（与 `dsh-workspace-quick-switch`、`dsh-keyboard-shortcuts` 的固定键同一套规则）：macOS 上落成 `⌘⌥U`，Windows / Linux 上是 `Ctrl+Alt+U`。注意 `⌘⌥U` 同时是 Safari / Chrome 的「查看网页源代码」：在浏览器里它可能先被浏览器截走、页面收不到；在 DSH 桌面端里没有这个冲突。
 - **不消费其它组合键**：只有 `primary+alt+U` 被本插件接管；别的组合键（含 `⌘⌥M`、`⌘⌥I`、`⌘H`）照旧归平台与浏览器。

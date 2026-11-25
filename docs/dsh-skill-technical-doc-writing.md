@@ -28,9 +28,9 @@
 dsh plugin --profile web add /path/to/dsh-plugins/dsh-skill-technical-doc-writing
 ```
 
-`./add-plugins.sh`（Windows：`./add-plugins.ps1`）会自动发现并挂载本插件目录，整仓挂载时会被一起装进去。插件是宿主半部，**挂载后要重启 `dsh web` 才生效**，刷新页面不够——新插件没有热加载路径。
+`./add-plugins.sh`（Windows：`./add-plugins.ps1`）会自动发现并挂载本插件目录，整仓挂载时会被一起装进去。插件是宿主半部：web profile 的 HMR 会在挂载后重组合并启动它，不需要重启 `dsh web` 或刷新页面；profile 未启用 HMR 时才需要重启。
 
-重启后：
+生效后：
 
 - 模型侧：技能目录里出现 `technical-doc`，涉及 README、Markdown、代码注释、提示词、CLI/UI 文案的编写与审查时按需加载；
 - 用户侧：在自己的消息里写 `/technical-doc`，正文随后作为 instructions 形式的上下文注入。
@@ -48,8 +48,8 @@ dsh plugin --profile web add /path/to/dsh-plugins/dsh-skill-technical-doc-writin
 | 要改的东西 | 改哪里 | 生效时机 |
 | --- | --- | --- |
 | 正文（标准本身） | `assets/technical-doc-writing.md` | 下一次加载技能即读到新字节，不需要重启：`get()` 每次调用都重新读文件 |
-| 技能名、路由描述、调用策略 | `index.ts` 顶部的 `SKILL_NAME` / `SKILL_DESCRIPTION` / `CANDIDATE` | 需要重启 `dsh web`：这些字段在插件模块加载时就定下来了 |
-| 注册来源或兜底优先级 | `index.ts` 里候选的 `source` / `rank` | 需要重启 `dsh web` |
+| 技能名、路由描述、调用策略 | `index.ts` 顶部的 `SKILL_NAME` / `SKILL_DESCRIPTION` / `CANDIDATE` | 下一次重组合后生效：这些字段在插件模块加载时定下，重组合会重新导入模块（在「设置 → 插件」里关掉再打开本插件即可触发）。HMR 默认不监视源码，保存文件本身不会重载 |
+| 注册来源或兜底优先级 | `index.ts` 里候选的 `source` / `rank` | 同上 |
 
 **同名覆盖**：技能注册表按 rank 升序决胜，越小的 rank 越优先。bundled 档（600）排在工程目录（100/200）与用户目录（400/500）之后，所以任何一处放着 `technical-doc`，加载到的都是那一份，插件的正文只在名字没有本地来源时生效。要让插件这份成为唯一来源，就不能在 `.agents/skills/` 或 `$DSH_HOME/skills` 下再放同名技能。
 

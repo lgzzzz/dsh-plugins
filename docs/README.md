@@ -44,6 +44,7 @@
 | [DSH 组件 CSS 架构](dsh-css-architecture.md) | 上游的 CSS Modules / CSS 变量 / `data-*` 三种机制与静态 `<link>`、运行时 `<style>` 两条注册路径；构建期三个虚拟模块；三类作用域与设计令牌的 8 个全局 sheet；与插件 `dsh-ui-css-patches` 的关系；已验证的关键锚点与术语表（共 5 册） |
 | [`dsh.client.inject` 完整说明](dsh-client-inject.md) | 字段形状与语义(三个同名 `inject` 的区别)、宿主半部 → 线上传输 → 浏览器半部的完整数据流、同步 `require` 的边界与三种依赖缺失时的表现、术语表（共 4 册） |
 | [DSH 插件五种「名字」](plugin-naming.md) | 包名 / patch `id` / patch `name` / 导出 `name` / 服务名五者的速查表与逐个展开、从 patch 文件到名字落地的数据流与三个易混点、本仓库的命名约定、术语表（共 4 册） |
+| [插件挂载、卸载与生效](plugin-mounting.md) | 三条装卸路径（设置 → 插件、仓库脚本、`dsh plugin`）、关闭与移除的区别、宿主与浏览器两端的生效链路、改代码后的重载方式，以及仍要重启进程或刷新页面的情况（共 2 册） |
 
 ## 上游契约校验
 
@@ -100,9 +101,9 @@ pnpm check:css               # 上游 CSS / DOM 契约校验
   目录，删除插件只要删掉目录。
 - `add-plugins` 在挂载每个插件前先补齐客户端半部产物：仓库根的 `node_modules/.bin/tsdown` 缺失时先跑一次
   `pnpm install`，然后对 `package.json` 的 `exports` 里写明、但磁盘上不存在的 `.js`（即 `.gitignore` 里的
-  `lib/*.js`）跑 `pnpm --filter <name> build`。缺产物时插件照样挂得上，只是浏览器里是个空壳、启动日志里
-  只有一行 `ENOENT`，所以这一步失败就不挂该插件。只按 `exports` 判定，没有 `build` 脚本、`exports` 里也不写
-  `.js` 产物的插件（如 `dsh-git-guard`）不会被误构建；已有产物的插件也不会被重复构建。
+  `lib/*.js`）跑 `pnpm --filter <name> build`。缺产物时客户端模块的激活会失败，并给出一条构建说明及缺失的
+  包与路径，不是「挂上了但页面空壳」，所以这一步失败就不挂该插件。只按 `exports` 判定，没有 `build` 脚本、
+  `exports` 里也不写 `.js` 产物的插件（如 `dsh-git-guard`）不会被误构建；已有产物的插件也不会被重复构建。
 - `remove-plugins` 从 profile 的 `dependencies` 中挑出指向本仓库的 `link:` / `file:` 条目来卸载，因此插件目录
   删除后遗留的注册项也能清掉。它不碰 `lib/` 产物：卸下不会让产物失效，再挂回去不必重新构建。
 
@@ -117,10 +118,15 @@ DSH 终端、AMSI 不可用的机器上，未签名的本地 `.ps1` 即使有效
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\remove-plugins.ps1`（当前会话临时放开：
 `Set-ExecutionPolicy -Scope Process Bypass -Force`）。
 
-`remove-plugins` 假定 `dsh` 未在运行：先退出 `dsh web`，跑完再重新启动（运行中的实例不会读到 profile 变更）。
+`remove-plugins` 假定 `dsh` 未在运行：先退出 `dsh web`，跑完再重新启动。运行中的宿主也会感知 profile 变更
+并重组合（见[插件挂载、卸载与生效](plugin-mounting.md)），但脚本与宿主同时写 profile 会争用 pnpm 的
+`package.json` 锁；运行中装卸请走「设置 → 插件」。
 脚本会先探测一次运行中的 `dsh web`（按 argv 词元判定，只认 `node <…/dsh> web` 与
 `node <…/dsh> --profile <name> web`），命中时打印警告但**不阻断**——同一台机器上可能还有别的 profile 或别的
 dsh home 在跑，而写入冲突本身会由 pnpm 的 `EACCES … package.json.lock` 暴露出来。它只改 profile
 （`dependencies` 与 `dsh.profile.bundles` 由 pnpm 和 `dsh` 重算），不删除本仓库里的插件目录。
 
-新插件挂载后刷新浏览器即可生效。**客户端半部(`lib/client.js`)改动后必须重新构建**；Host 在合成那一刻就把产物字节读进快照(`dsh-client-modules` 的 `initialBundleSnapshot`)，所以重新构建后仅刷新页面可能仍拿到旧字节——还要重启 `dsh web`，或在「设置 → 插件」里关掉再打开本插件，再刷新页面(完整说明见 [`dsh-changes-behavior.md`](dsh-changes-behavior.md#挂载与启用))。
+新插件挂载后不需要重启 `dsh web`：web profile 默认启用 HMR，装载会重组合并让已打开的页面随客户端图更新，
+不用刷新。**客户端半部(`lib/client.js`)改动后必须重新构建**；宿主按产物 stat 轮询发布新的 revision，已打开的
+页面自动替换本插件。只有 DSH 升级后仍停在旧 release 的页面才必须刷新（完整说明见
+[插件挂载、卸载与生效](plugin-mounting.md)）。

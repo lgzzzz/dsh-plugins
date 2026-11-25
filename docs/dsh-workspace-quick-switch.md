@@ -58,7 +58,7 @@ pnpm build            # 或 ../node_modules/.bin/tsdown
 dsh plugin --profile web add C:\Users\LGZ\dsh-plugins\dsh-workspace-quick-switch
 ```
 
-挂载后**刷新浏览器**即可(`dsh.client.platform=web` + `immediately`，客户端 roster 会随页面加载)。
+挂载后不需要刷新浏览器：HMR 重组合后已打开的页面随客户端图加载本插件（`dsh.client.platform=web` + `immediately` 只决定页面启动时的预取）。
 
 -----
 
@@ -84,7 +84,7 @@ dsh plugin --profile web add C:\Users\LGZ\dsh-plugins\dsh-workspace-quick-switch
 | 浮层高度 | 面板**不设固定上限**，只吃满浮层层留给它的高度（`max-height: 100%`：浮层是 `inset: 0` 的定长容器，上下各留内边距，百分比有确定参照）；视口高度不足 860px 时由末尾的 `@media` 收紧内边距**并把两行文字的行高写死**（`normal` 会随字体回退变化，中文字体比拉丁字体高 2~3px/行，10 行累计足以让第 10 行掉出视口），压到约 551px —— 视口 ≥ 800px 就能一次看全 10 行；更矮的窗口才由**列表内部滚动**兜底，此时选中行靠 `scrollIntoView({ block: 'nearest' })` 跟随（打开时与每次 ↑/↓ 之后都补一次） |
 | 依赖 | `inject: ['slots', 'shortcuts']` —— 只等这两个，所以两组键与两张浮层从启动起就在；`workspaces` / `sessions` 用**等待子 fiber**(`scope.inject`)接上：服务到位才跑、换实现时先卸载再重跑，缺席就只是空候选（不告警，那不是故障）；`uiWorkspace` 缺席则固定行照旧在、按键不做动作 |
 
-宿主半部是空实现(没有 `dsh.client` 之外的东西需要宿主做)，所以**改客户端代码必须重建 `lib/client.js`**。Host 在合成那一刻就把产物字节读进快照，所以重新构建后仅刷新页面可能仍拿到旧字节 —— 重启 `dsh web`，或在「设置 → 插件」里关掉再打开本插件，然后刷新页面。
+宿主半部是空实现(没有 `dsh.client` 之外的东西需要宿主做)，所以**改客户端代码必须重建 `lib/client.js`**。重建后宿主按产物 stat 轮询发布新的 revision，已打开的页面自动替换本插件（状态重置），不需要刷新或重启；详见[插件挂载、卸载与生效](plugin-mounting.md)。
 
 -----
 

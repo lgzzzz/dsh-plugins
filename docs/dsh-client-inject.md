@@ -15,6 +15,6 @@
 
 ## 进一步探索
 
-- [docs/README.md](README.md) —— 本仓库的构建与挂载命令，以及客户端半部改动后要让 Host 重新合成的那一步。
+- [docs/README.md](README.md) —— 本仓库的构建与挂载命令，以及装载后如何生效。
 - [客户端半部的名字](plugin-naming/03-data-flow-and-pitfalls.md) —— 浏览器模块 id 为什么等于包名，`src/client.ts` 的 `export const name` 只是日志标签。
 - [构建期 CSS 流水线](dsh-css-architecture/02-build-time-css-pipeline.md) —— 同一个 `tsdown.client.mjs` 预设里的三个 CSS 虚拟模块与它们的注入器。

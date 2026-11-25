@@ -75,7 +75,7 @@ node check-css.mjs --manifest <清单>      # 换一份清单（默认同目录�
 dsh plugin --profile web add <本仓库路径>/dsh-keyboard-shortcuts
 ```
 
-重启 / 刷新 GUI 后验证：
+启用后验证（HMR 重组合后即可，不需要重启 `dsh web` 或刷新页面；机制见[插件挂载、卸载与生效](../plugin-mounting.md)）：
 
 - 焦点在输入框，按 `⌘⌥Enter` / `Ctrl+Alt+Enter` → 右侧栏直接全屏；再按一次还原；
 - 焦点在输入框，按 `⌘⌥,` / `Ctrl+Alt+,` → 关掉右侧栏**当前**那一页，键盘不用先点进右栏；焦点已在面板内按同一键 → 官方命令关页（插件让位），效果相同；

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 把本仓库的插件从 web profile 卸下:按 profile 的 dependencies 里指向本仓库的 link:/file: 路径识别,
 # 目录已删除后遗留的条目也能清理;不维护插件名单。
-# 默认在 dsh 未运行时执行:先退出 dsh web,再跑本脚本,完成后重新启动 dsh web(运行中的实例不会读到 profile 的变更)。
+# 默认在 dsh 未运行时执行:先退出 dsh web,再跑本脚本,完成后重新启动 dsh web。运行中的宿主也会感知
+# profile 变更并重组合,但脚本与宿主同时写 profile 会争用 pnpm 的 package.json 锁,所以仍按停机流程使用。
 # 只改 profile(pnpm 重算 dependencies 与 dsh.profile.bundles),不删除本仓库里的插件目录。
 # 也不碰 .gitignore 里的 lib/ 构建产物:卸下不会让产物失效,再挂回去不必重新构建。
 # 本脚本可以重复执行:没有可卸载的条目时直接结束。

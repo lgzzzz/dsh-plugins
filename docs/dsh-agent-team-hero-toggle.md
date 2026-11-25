@@ -97,7 +97,7 @@ document.querySelector('style[data-plugin-css="dsh-agent-team-hero-toggle/hero-t
 ```
 
 - 页面没有开关、Console 也没有本插件告警 → 先看 `__DSH_BOOT__` 里有没有
-  `dsh-agent-team-hero-toggle`，没有就是没装进 profile / 没刷新页面。
+  `dsh-agent-team-hero-toggle`，没有就是没装进 profile（或页面在插件装载前就已打开、没收到图更新）。
 - 开关出现但点击无反应 → 看 Console 是否有 `[dsh-agent-team-hero-toggle] 保存团队协作设置失败`，
   以及 Host 侧 `agentTeams/setEnabled` 是否可达。
 - 首轮后开关消失是预期行为，不是 bug；去模型菜单改。
@@ -120,8 +120,9 @@ pnpm --filter dsh-agent-team-hero-toggle check:css
 dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-agent-team-hero-toggle
 ```
 
-然后刷新 GUI 页面。客户端半部改动后要重新 `build`；Host 在页面加载时重新读产物，通常刷新即可。
-从 profile 移除本包并刷新即恢复原状。
+挂载后不需要重启 `dsh web` 或刷新页面：HMR 会重组合，已打开的页面随客户端图加载本插件。客户端半部改动后要
+重新 `build`；宿主按产物 stat 轮询替换已打开的插件。从 profile 移除本包同样实时恢复原状（注册项与样式随
+fiber 回收）。详见[插件挂载、卸载与生效](plugin-mounting.md)。
 
 > 在 `.agents/worktrees/*` 会话里预览时，`dsh plugin add` 会把这个临时 worktree 路径写进
 > profile；合并回主 checkout 后应 `remove` 再按主仓库路径 `add` 一次，避免 worktree 删除后
