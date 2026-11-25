@@ -1,0 +1,77 @@
+{
+  "description": "dsh-jobs-detail-reveal 依赖的 DSH 前端稳定契约：会话面板根 `data-session-panel` 是 `overflow-y: auto` + `max-height` 的滚动口、它的限高算式（视口高度 − 输入区高度 − 24px），后台任务列表 `data-jobs-section`、任务行 `data-job-row`、行内唯一带 `aria-expanded` 的展开按钮、它的「收起」语义（`row.collapseAria`），以及详情里的终端卡片 `[data-terminal]`。check-css.mjs 逐条验证这些事实仍存在于上游构建产物中：面板或行锚点改名时滚动目标找不到；限高算式变了加高的上限就算错；`aria-expanded` 不在行内按钮上时认不出开合；终端卡片缺席时认不出详情是否挂载；「收起」不再挂在行上时这条行为失去前提。",
+  "checks": [
+    {
+      "id": "panel-root",
+      "plugin": "dsh-jobs-detail-reveal",
+      "token": "data-session-panel",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "会话面板根不再打 data-session-panel：插件找不到滚动口，点开命令详情后仍要自己往下滚"
+    },
+    {
+      "id": "panel-scroller",
+      "plugin": "dsh-jobs-detail-reveal",
+      "pattern": "overflow-y:\\s*auto",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "会话面板不再是 overflow-y:auto 的滚动口：改 scrollTop 没有效果，滚动条可能挂在别的元素上"
+    },
+    {
+      "id": "panel-max-height",
+      "plugin": "dsh-jobs-detail-reveal",
+      "pattern": "max-height:\\s*calc\\(var\\(--dsh-conversation-viewport-height",
+      "paths": [
+        "dsh-client-ui-session-panel/lib"
+      ],
+      "hint": "面板的 max-height 不再从 --dsh-conversation-viewport-height 算起：加高的上限会算错，可能把面板顶出视口"
+    },
+    {
+      "id": "jobs-list-anchor",
+      "plugin": "dsh-jobs-detail-reveal",
+      "token": "data-jobs-section",
+      "paths": [
+        "dsh-client-ui-jobs/lib"
+      ],
+      "hint": "后台任务列表不再打 data-jobs-section：会话面板里认不出这个分区（滚动目标本身还在，但分区排查与契约描述都失效）"
+    },
+    {
+      "id": "jobs-row-anchor",
+      "plugin": "dsh-jobs-detail-reveal",
+      "token": "data-job-row",
+      "paths": [
+        "dsh-client-ui-jobs/lib"
+      ],
+      "hint": "任务行不再打 data-job-row：找不到要顶到面板顶部的行，滚动不触发"
+    },
+    {
+      "id": "jobs-row-toggle",
+      "plugin": "dsh-jobs-detail-reveal",
+      "pattern": "\"aria-expanded\":expanded",
+      "paths": [
+        "dsh-client-ui-jobs/lib"
+      ],
+      "hint": "行内展开按钮不再带 aria-expanded：认不出这一下是点开还是收起，加高与滚动都不触发"
+    },
+    {
+      "id": "jobs-row-collapse-label",
+      "plugin": "dsh-jobs-detail-reveal",
+      "token": "row.collapseAria",
+      "paths": [
+        "dsh-client-ui-jobs/lib"
+      ],
+      "hint": "「收起命令输出」不再是点这一行：把行顶到面板顶部的前提（收起按钮就在行里）不成立"
+    },
+    {
+      "id": "jobs-detail-terminal",
+      "plugin": "dsh-jobs-detail-reveal",
+      "pattern": "\\[data-terminal\\]",
+      "paths": [
+        "dsh-client-ui-jobs/lib"
+      ],
+      "hint": "详情里不再用 [data-terminal] 标命令输出块：认不出详情是否已经挂载，等待循环到点就放弃"
+    }
+  ]
+}

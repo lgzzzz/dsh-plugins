@@ -1,0 +1,40 @@
+{
+  "name": "dsh-jobs-detail-reveal",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
+  "description": "点开后台上任务的命令输出后，会话面板自动把这条任务行滚到面板顶部（收起它的按钮就停在顶部），并按需加高面板：详情在本面板里装不下时把 max-height 提到装得下（不超过视口），关掉详情立刻恢复；详情流式变高时跟着加高，不重新滚动、不打断阅读位置。",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "check:css": "node check-css.mjs",
+    "check": "node --check lib/client.js && node --check index.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "tsdown": "^0.23.5",
+    "typescript": "^5.9.3"
+  }
+}

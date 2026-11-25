@@ -25,6 +25,7 @@
 | `dsh-opencode-status` | 会话面板里加「OpenCode Go」一栏：宿主半部代理 `https://opencode.ai/status/api/status`（主站不带 CORS 头，页面不能直连），取出 `go` 服务下 `deepseek-v4.1-flash` 的状态、原因与速度，后台每 5 秒保活刷新、把快照常驻内存，经同源、owner-only 的 `GET /opencode-status/status` 立即交给页面（并发合流，失败时 10 分钟内用缓存兜底）；浏览器半部在页面装载时启动唯一一个 5 秒轮询并把读数存内存，切换会话直接复用（后台标签页跳过），按行显示模型、状态（如「降级 · 延迟」）、首 Token 与吞吐，Go 整体状态与模型不同时多一行 | [说明](dsh-opencode-status.md) |
 | `dsh-today-token-usage` | 会话面板里加「今日 Token 用量」一栏：一项指标一行（总用量 / 缓存命中 / 未缓存输入 / 缓存读取 / 缓存写入 / 输出），数值只用无单位 / K / M，是**今天全部会话**加起来的用量；宿主半部按宿主本地日期把每个会话自己的 assistant 用量折成 `todayTokenUsage` 投影（不含 fork 继承前缀，替换/重试语义对齐上游 `tokenUsage`）；浏览器半部把各会话今天的那一份相加，数值口径与输入框下方「用量」按钮一致 | [说明](dsh-today-token-usage.md) |
 | `dsh-subagent-forge-panel` | 子智能体会话的会话面板里**直接不显示** forge 那条注定失败的 Git 与变更请求连接行（「状态已停止更新」与「重试」一起消失，不留说明、不留占位）：借行槽拿会话作用域，用不可见的标记元素定位分区，一条 CSS 规则隐藏上游那一行；普通会话一行不动 | [说明](dsh-subagent-forge-panel.md) |
+| `dsh-jobs-detail-reveal` | 点开「后台任务」里某条命令的输出后，会话面板自动把这条任务行滚到顶部（收起它的按钮停在面板顶部、命令输出在下面整块露出），并按需加高：行 + 详情比上游 `max-height` 还高时把面板加高到刚好装下（封顶在视口内），关掉详情立刻恢复；详情流式变高时跟着加高但不重新滚动。只动面板元素的 `scrollTop` 与内联 `max-height`，不改上游产物 | [说明](dsh-jobs-detail-reveal.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
 | `dsh-changes-behavior` | 改动视图统一行为：改动卡片标题、`⌘⌥Y` 与会话面板那行「本地变更」打开 changes 页面时默认全屏，其余任何打开右栏的入口（文件行、过程链接、上下文菜单、其它插件）默认非全屏；审查标签页按呈现方式默认分栏并默认换行；关掉卡片 500ms 悬停浮层；「本地变更」「变更请求」字号统一 14px、文件列表宽度固定为上游默认值（隐藏拖动把手，宽度不再可调）；`⌘⌥Y` 也由本插件注册；宿主启动时给上游产物打一行补丁，让单文件改动卡片也按「已编辑 1 个文件 + 文件行」的汇总形制渲染 | [说明](dsh-changes-behavior.md) |
 | `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
@@ -68,12 +69,13 @@
 | `dsh-subagent-parent-nav` | [`css-contract.json`](../dsh-subagent-parent-nav/css-contract.json) | `conversation.session.panel.section` 槽 + 标准 props 的 `useSessions` + `uiWorkspace.openSession` + 9 个 `--dsw-*` 令牌 |
 | `dsh-today-token-usage` | [`contract.json`](../dsh-today-token-usage/contract.json) | 会话面板分区槽与渲染 + 通用行标记（`data-session-panel-row` / `data-row-part`）+ 标准 props 的 `useSessions` + 投影登记表（`sessionProjections` / `summaryKeys`）+ `inheritedEventCount` + `assistant/message` 与 `llm/retry-started` + 「用量」按钮的数值口径（总用量算式、`number.thousand` / `number.million`、`formatCacheHitPercent`） |
 | `dsh-subagent-forge-panel` | [`css-contract.json`](../dsh-subagent-forge-panel/css-contract.json) | `conversation.session.panel.environment.row` 槽 + 标准 props 的 `useSession` / `useSessions` + 会话身份字段 `subagent` / `origin: 'subagent'` + 面板的 `data-session-panel-section` / `data-session-panel-row` / `data-row-part` + forge 的 `data-forge-connection` / `forgeChanges` |
+| `dsh-jobs-detail-reveal` | [`css-contract.json`](../dsh-jobs-detail-reveal/css-contract.json) | 会话面板根 `data-session-panel` 与它的 `overflow-y: auto` + `max-height` 算式（`--dsh-conversation-viewport-height` − `--dsh-composer-height` − 24px）+ 后台任务列表 / 任务行 `data-jobs-section` / `data-job-row` + 行内展开按钮的 `aria-expanded` 与「收起」语义 `row.collapseAria` + 详情里的终端卡片 `[data-terminal]` |
 | `dsh-desktop-notify` | [`css-contract.json`](../dsh-desktop-notify/css-contract.json) | `settings.general.item` 槽 + `--dsw-alias-*` 设计令牌 |
 | `dsh-workspace-quick-switch` | [`css-contract.json`](../dsh-workspace-quick-switch/css-contract.json) | `shell.overlay` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-model-quick-switch` | [`css-contract.json`](../dsh-model-quick-switch/css-contract.json) | `shell.overlay` / `settings.section` 槽 + `--dsw-*` / `--dsh-*` 主题令牌 |
 | `dsh-workspace-activity-sort` | [`css-contract.json`](../dsh-workspace-activity-sort/css-contract.json) | 侧栏区块滚动容器 `data-sidebar-list-area` + 工作区分组行 `data-row-key` 的 `workspace:` 前缀（排除单列表 / 搜索 / 收起成 rail） |
 
-根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 13 份契约清单
+根目录 `pnpm check` 跑各插件产物的 lib 语法检查，`pnpm check:css` 跑上面 14 份契约清单
 （`pnpm -r --no-bail`：某个插件失败也照样跑完其余插件）。单个插件内也可 `pnpm check:css` 只跑契约。
 校验器会把清单里的每条规则都跑完再退出：单条缺失不中断其余规则，失败项在末尾以「失效规则 N/M」统一列出。
 

@@ -28,6 +28,7 @@ dsh-model-quick-switch/lib/
 dsh-agent-team-hero-toggle/lib/
 dsh-subagent-parent-nav/lib/
 dsh-subagent-forge-panel/lib/
+dsh-jobs-detail-reveal/lib/
 dsh-today-token-usage/lib/
 dsh-opencode-status/lib/
 dsh-proxy/lib/
