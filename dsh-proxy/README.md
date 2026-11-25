@@ -68,3 +68,19 @@ the sidebar entry and the `main` panel, `src/ui/` holds the components, styles
 (CSS Modules), fetch layer and dictionaries, and `src/ui/use-proxy-panel.ts`
 owns polling and writes. Text goes through `ctx.locale`; controls are written
 against the `--dsw-alias-*` tokens rather than importing host primitives.
+
+## Exit names and tags
+
+Each node carries two strings. The **tag** is the exit name: an ASCII slug
+derived from the node name, unique across the inventory, and the value rules
+store in `out` (and the value compiled into the Xray outbound tag). The **name**
+is what the subscription called the node, in whatever script and emoji it used.
+Nodes are matched by `protocol + server + port + credential`, so re-importing a
+subscription keeps both.
+
+Everything that a person reads shows the name: the exit dropdowns, the rule and
+default rows, the selected node in the status bar, the node list, and the
+simulator's matched/skipped lines. Diagnostics and logs name the offending exit
+the same way. The tag stays the stable identifier because the tag is what
+`geosite:`-class values cannot be, what survives a name edit, and what the
+kernel config refers to; renaming the node changes the label, not the rule.

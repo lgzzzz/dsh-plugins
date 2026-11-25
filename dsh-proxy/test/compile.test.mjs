@@ -34,6 +34,31 @@ checkNoError(missingGeo, '缺 geosite.dat 不阻止保存（真正的裁决是 x
 check(missingGeo.every((entry) => entry.severity === 'warning'), '缺 geo 数据的诊断都是 warning')
 checkNoError(checkSemantics(routing, { exits: ['proxy', 'direct', 'block', 'us'], geo: geoReady }), 'geo 就位时不再报警')
 
+console.log('compile: 出口展示名')
+
+const exitLabels = { us: '🇺🇸 美国 01', hk: '🇭🇰 香港 01' }
+const badExit = checkSemantics(
+  { default: 'hk', rules: [{ id: 'nope', match: { domain: ['domain:a.example'] }, out: 'missing-node' }] },
+  { exits: ['proxy', 'direct', 'block', 'us', 'hk'], labels: exitLabels, geo: geoReady },
+)
+checkEqual(badExit.length, 1, '只有写错的出口报错')
+check(badExit[0].message.includes('missing-node'), '诊断指向用户实际写的出口名')
+check(
+  badExit[0].message.includes('🇺🇸 美国 01') && badExit[0].message.includes('🇭🇰 香港 01'),
+  '可用出口列表显示节点名字',
+)
+check(!badExit[0].message.includes('"us"') && !badExit[0].message.includes('"hk"'), '可用出口列表不再暴露出口名')
+checkEqual(
+  checkSemantics({ default: 'us', rules: [] }, { exits: ['proxy', 'us'], labels: exitLabels, geo: geoReady }),
+  [],
+  '映射过的出口不算错误',
+)
+const unlabelled = checkSemantics(
+  { default: 'us', rules: [] },
+  { exits: ['proxy'], labels: {}, geo: geoReady },
+)
+check(unlabelled[0].message.includes('"us"'), '没有映射时诊断退回出口名')
+
 const extRouting = { default: 'proxy', rules: [{ id: 'x', match: { domain: ['ext:custom.dat:tag'] }, out: 'direct' }] }
 checkHasCode(
   checkSemantics(extRouting, { exits: ['proxy', 'direct'], geo: { ...geoReady, extFile: () => 'outside' } }),

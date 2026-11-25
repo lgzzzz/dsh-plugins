@@ -51,7 +51,9 @@ const CONTENT = `# 分流路由规则
 - \`match\` 里**同一字段的多个值之间是「或」**（数组里任一命中即算命中），**不同字段之间是「且」**。
   所以 \`{ "domain": ["geosite:cn"], "ip": ["geoip:cn"] }\` 表示「域名命中 cn 且 IP 命中 cn」，很少是你想要的；
   想表达「域名或 IP 任一在国内」，写两条规则。
-- \`out\` 只能写 \`proxy\`、\`direct\`、\`block\` 或某个节点 tag。可用出口名以 \`proxy_routing_read\` 返回的 \`exits\` 为准。
+- \`out\` 只能写 \`proxy\`、\`direct\`、\`block\` 或某个节点 tag。可用出口名以 \`proxy_routing_read\` 返回的 \`exits\` 为准；
+  同一次返回里的 \`exitLabels\` 给出每个出口的展示名（节点出口显示节点名字），界面上看到的就是它。
+  出口名与展示名不是一回事：写进 \`out\` 的必须是出口名。
 - \`enabled: false\` 的规则留在库里但不参与编译与仿真。
 - \`default\` 是默认出口，必须存在。
 

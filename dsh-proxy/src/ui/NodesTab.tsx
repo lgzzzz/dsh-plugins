@@ -6,7 +6,8 @@
 
 import { useState } from 'react'
 import type { NodeSummary, SubscriptionSummary } from './api.ts'
-import { Actions, Button, Chip, Empty, Field, Form, Hint, Tag, TextInput } from './Controls.tsx'
+import { Actions, Button, Chip, Empty, Field, Form, Hint, TextInput } from './Controls.tsx'
+import { nodeLabelOf } from './labels.ts'
 import { useTranslate } from './locale-context.tsx'
 import css from './Panel.module.css'
 
@@ -77,10 +78,11 @@ export function NodesTab(props: NodesTabProps) {
       {props.nodes.length === 0 ? <Empty>{t('nodes.empty')}</Empty> : null}
       {props.nodes.map((node) => (
         <div key={node.id} className={css['row']}>
-          <Tag>{node.tag}</Tag>
           <span className={css['ruleMain']}>
-            <span className={css['ruleName']}>{node.name}</span>
-            <span className={css['ruleMatch']}>{node.protocol} · {node.server}:{node.port}</span>
+            <span className={css['ruleName']}>{nodeLabelOf(node)}</span>
+            <span className={css['ruleMatch']}>
+              {node.protocol} · {node.server}:{node.port} · {t('nodes.tag')} {node.tag}
+            </span>
           </span>
           {props.selectedNode === node.id ? (
             <Chip>{t('nodes.selected')}</Chip>

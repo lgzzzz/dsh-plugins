@@ -84,7 +84,11 @@ function StatusBar({ state, busy, onStart, onStop, onRestart }: StatusBarProps) 
         <span>
           {t('status.binary')}：{core.version ?? (core.binary === null ? t('status.binaryMissing') : core.binary)}
         </span>
-        <span>{state.status.selectedNode === null ? t('status.noNode') : `→ ${state.status.selectedNode.tag}`}</span>
+        <span>
+          {state.status.selectedNode === null
+            ? t('status.noNode')
+            : `→ ${state.status.selectedNode.label ?? state.status.selectedNode.name ?? state.status.selectedNode.tag}`}
+        </span>
       </span>
       <span className={css['spacer']} />
       {core.running ? (
@@ -156,6 +160,7 @@ export function ProxyPanel() {
             dirty={panel.dirty}
             busy={panel.busy}
             exits={state.routing.exits}
+            exitLabels={state.routing.exitLabels ?? {}}
             diagnostics={panel.diagnostics}
             storedDiagnostics={state.routing.diagnostics}
             onChange={panel.edit}

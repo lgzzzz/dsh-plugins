@@ -27,6 +27,7 @@ import type { RingLog } from './log.ts'
 import {
   assignIdentities,
   measureLatency,
+  nodeLabel,
   parseSubscription,
   redactNode,
   type LatencyResult,
@@ -80,8 +81,10 @@ export interface StatusView {
   ruleCount: number
   enabledRuleCount: number
   nodeCount: number
-  selectedNode: { id: string; tag: string; name: string } | null
+  selectedNode: { id: string; tag: string; name: string; label: string } | null
   exits: string[]
+  /** 出口名 → 展示名；节点出口显示节点名字。 */
+  exitLabels: Record<string, string>
   geo: { dir: string; hasGeosite: boolean; hasGeoip: boolean }
   ports: { socks: number; http: number }
   /** 面板底部的一行端口说明。 */
@@ -93,6 +96,8 @@ export interface RoutingView {
   default: string
   rules: Rule[]
   exits: string[]
+  /** 出口名 → 展示名；节点出口显示节点名字。 */
+  exitLabels: Record<string, string>
   compiled: { ruleCount: number; skipped: { id: string; reason: string }[] }
   diagnostics: Diagnostic[]
 }
@@ -102,6 +107,8 @@ export interface CheckResult {
   valid: boolean
   diagnostics: Diagnostic[]
   exits: string[]
+  /** 出口名 → 展示名；节点出口显示节点名字。 */
+  exitLabels: Record<string, string>
   compiled: { rules: unknown[]; skipped: { id: string; reason: string }[] } | null
 }
 
@@ -127,6 +134,19 @@ export class ProxyService {
   /** 当前可用出口：内置三个 + 节点 tag。 */
   exits(): string[] {
     return [...EXIT_BUILTIN, ...this.store.nodes().map((node) => node.tag)]
+  }
+
+  /**
+   * 出口名 → 展示名。节点出口显示节点的名字，内置出口显示自己。
+   *
+   * 只用于展示：规则里的 `out` 与内核配置里的 outbound tag 始终是出口名本身。
+   */
+  exitLabels(): Record<string, string> {
+    const labels: Record<string, string> = {}
+    for (const node of this.store.nodes()) labels[node.tag] = nodeLabel(node)
+    // 内置出口最后写入：节点名字再像 proxy，也不该盖掉它作为默认出口的含义。
+    for (const exit of EXIT_BUILTIN) labels[exit] = exit
+    return labels
   }
 
   /** geo 数据文件事实；用于语义检查的 `ext:` 与 `geosite:` 判定。 */
@@ -157,8 +177,12 @@ export class ProxyService {
       ruleCount: snapshot.routing.rules.length,
       enabledRuleCount,
       nodeCount: snapshot.nodes.length,
-      selectedNode: selected === undefined ? null : { id: selected.id, tag: selected.tag, name: selected.name },
+      selectedNode:
+        selected === undefined
+          ? null
+          : { id: selected.id, tag: selected.tag, name: selected.name, label: nodeLabel(selected) },
       exits: this.exits(),
+      exitLabels: this.exitLabels(),
       geo: { dir: this.config.geoDir, hasGeosite: geo.hasGeosite === true, hasGeoip: geo.hasGeoip === true },
       ports: { socks: this.config.socksPort, http: this.config.httpPort },
       note: `监听 127.0.0.1:${this.config.socksPort}（SOCKS）与 127.0.0.1:${this.config.httpPort}（HTTP）。`,
@@ -169,12 +193,17 @@ export class ProxyService {
   read(): RoutingView {
     const routing = this.store.routing()
     const compiled = compileRouting(routing, { nodes: this.store.nodes() })
+    const exits = this.exits()
     return {
       default: routing.default,
       rules: routing.rules,
-      exits: this.exits(),
+      exits,
+      exitLabels: this.exitLabels(),
       compiled: { ruleCount: compiled.rules.length, skipped: compiled.skipped },
-      diagnostics: checkSemantics(routing, { exits: this.exits(), geo: this.geoFacts(), sniffing: true }),
+      diagnostics: checkSemantics(
+        routing,
+        { exits, labels: this.exitLabels(), geo: this.geoFacts(), sniffing: true },
+      ),
     }
   }
 
@@ -189,19 +218,23 @@ export class ProxyService {
     const shape = validateRoutingShape(candidate)
     const shapeOk = shape.every((entry) => entry.severity !== 'error')
     const exits = this.exits()
-    const diagnostics = [...shape, ...checkSemantics(candidate, { exits, geo: this.geoFacts(), sniffing: true })]
+    const labels = this.exitLabels()
+    const diagnostics = [...shape, ...checkSemantics(candidate, { exits, labels, geo: this.geoFacts(), sniffing: true })]
     const routing = asRouting(candidate)
     // 编译要求结构完整（规则一定有 match），所以形状没过就不编译。
-    if (routing === undefined || !shapeOk) return { valid: false, diagnostics, exits, compiled: null }
+    if (routing === undefined || !shapeOk) return { valid: false, diagnostics, exits, exitLabels: labels, compiled: null }
     const compiled = compileRouting(routing, { nodes: this.store.nodes() })
-    return { valid: diagnostics.every((entry) => entry.severity !== 'error'), diagnostics, exits, compiled }
+    return { valid: diagnostics.every((entry) => entry.severity !== 'error'), diagnostics, exits, exitLabels: labels, compiled }
   }
 
   /** 仿真一条流量。 */
   explain(flow: Flow): ExplainResult {
     const built = this.buildConfig()
     const routing = built.config['routing'] as { domainStrategy?: string } | undefined
-    return explainFlow(this.store.routing(), flow, { domainStrategy: routing?.domainStrategy ?? 'IPIfNonMatch' })
+    return explainFlow(this.store.routing(), flow, {
+      domainStrategy: routing?.domainStrategy ?? 'IPIfNonMatch',
+      labels: this.exitLabels(),
+    })
   }
 
   /**
@@ -450,10 +483,13 @@ export class ProxyService {
     }
   }
 
-  /** 测延迟；不给 id 就测全部节点。 */
+  /** 测延迟；不给 id 就测全部节点。`ids` 里可以写节点 id、出口名或名字。 */
   async latency(ids?: string[]): Promise<{ results: LatencyResult[]; message: string }> {
     const nodes = this.store.nodes()
-    const targets = ids === undefined || ids.length === 0 ? nodes : nodes.filter((node) => ids.includes(node.id) || ids.includes(node.tag))
+    const targets =
+      ids === undefined || ids.length === 0
+        ? nodes
+        : nodes.filter((node) => ids.includes(node.id) || ids.includes(node.tag) || ids.includes(nodeLabel(node)))
     if (targets.length === 0) return { results: [], message: nodes.length === 0 ? '还没有节点' : '没有匹配的节点' }
     const results: LatencyResult[] = []
     for (const node of targets.slice(0, 50)) {
@@ -463,13 +499,16 @@ export class ProxyService {
     return { results, message: `${results.length} 个节点：${ok} 个 TCP 握手成功` }
   }
 
-  /** 选节点；会写入状态，但不自动重启内核。 */
+  /** 选节点；`id` 可以写节点 id、出口名或名字。会写入状态，但不自动重启内核。 */
   async selectNode(id: string): Promise<{ ok: boolean; message: string }> {
-    const node = this.store.nodes().find((entry) => entry.id === id || entry.tag === id)
+    const node = this.store.nodes().find(
+      (entry) => entry.id === id || entry.tag === id || nodeLabel(entry) === id,
+    )
     if (node === undefined) return { ok: false, message: `没有这个节点：${id}` }
+    const label = nodeLabel(node)
     await this.store.selectNode(node.id)
-    this.log.push('action', `选中节点：${node.tag}`)
-    return { ok: true, message: `已选中 ${node.tag}；重启内核后生效` }
+    this.log.push('action', `选中节点：${label}`)
+    return { ok: true, message: `已选中 ${label}；重启内核后生效` }
   }
 
   /** 启停内核。 */

@@ -102,6 +102,7 @@ export function registerApi(ctx: Context, service: ProxyService, log: RingLog): 
             valid: false,
             diagnostics: [candidate.error],
             exits: service.exits(),
+            exitLabels: service.exitLabels(),
             compiled: null,
             changes: null,
           })

@@ -114,10 +114,11 @@ export function SelectInput({ className, ...rest }: SelectHTMLAttributes<HTMLSel
 /**
  * 表示「出口」这类短标识的胶囊标签。
  * @param props.children - 标签文字。
+ * @param props.title - 悬停提示，通常是标签背后的稳定标识（出口名）。
  * @returns 标签元素。
  */
-export function Tag({ children }: { children: ReactNode }) {
-  return <span className={ctl['tag']}>{children}</span>
+export function Tag({ children, title }: { children: ReactNode; title?: string }) {
+  return <span className={ctl['tag']} title={title}>{children}</span>
 }
 
 /**

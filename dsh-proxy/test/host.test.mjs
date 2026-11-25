@@ -161,5 +161,49 @@ const toolOutput = checkTool.output.render({}, statusResult)
 checkEqual(toolOutput[0].type, 'text', '渲染出文本块')
 check(toolOutput[0].text.includes('"ruleCount"'), '渲染内容是 JSON')
 
+console.log('host: 节点显示名字')
+
+const namedSub = await call('POST', '/subscription', {
+  text: 'vless://11111111-2222-3333-4444-555555555555@127.0.0.1:8443?security=tls&sni=example.com#节点一',
+  name: '香港',
+})
+checkEqual(namedSub.json.added, 1, '导入带中文名的节点')
+const node = namedSub.json.sample[0]
+checkEqual(node.name, '节点一', '节点保留原始名字')
+check(node.tag !== node.name, '非 ASCII 名字折成了 ASCII 出口名')
+checkEqual(node.label, '节点一', '视图里的展示名是节点名字')
+
+const namedState = await call('GET', '/state')
+checkEqual(namedState.json.status.selectedNode?.label, '节点一', '状态栏用节点名字')
+checkEqual(namedState.json.status.exitLabels[node.tag], '节点一', 'exitLabels 映射到节点名字')
+checkEqual(namedState.json.status.exitLabels.direct, 'direct', '内置出口的展示名是自己')
+checkEqual(namedState.json.routing.exitLabels[node.tag], '节点一', '规则视图也带 exitLabels')
+
+const selectByName = await call('POST', '/select', { id: '节点一' })
+checkEqual(selectByName.json.ok, true, '可以按名字选中节点')
+check(selectByName.json.message.includes('节点一'), '选中消息用节点名字')
+
+const latencyByTag = await call('POST', '/latency', { nodes: [node.tag] })
+checkEqual(latencyByTag.json.results.length, 1, '按出口名能定位到节点')
+checkEqual(latencyByTag.json.results[0].name, '节点一', '延迟结果带节点名字')
+
+const explainNamed = await call('POST', '/explain', { domain: 'api.openai.com' })
+checkEqual(explainNamed.json.fallbackOut, 'direct', '默认出口仍是出口名')
+
+// 把默认出口改成节点：契约是 fallbackOut 存出口名，fallbackOutLabel 才是名字。
+const namedFallback = await call('POST', '/write', {
+  mode: 'patch',
+  default: node.tag,
+  apply: false,
+})
+checkEqual(namedFallback.json.saved, true, '默认出口可以指向节点出口')
+const explainFallback = await call('POST', '/explain', { domain: 'api.openai.com' })
+checkEqual(explainFallback.json.fallbackOut, node.tag, '默认出口存的是出口名')
+checkEqual(explainFallback.json.fallbackOutLabel, '节点一', '默认出口的展示名是节点名字')
+
+const namedRead = await call('GET', '/state')
+checkEqual(namedRead.json.routing.exits.includes(node.tag), true, 'exits 里是出口名而不是名字')
+checkEqual(namedRead.json.routing.default, node.tag, '规则里存的仍是出口名')
+
 rmSync(home, { recursive: true, force: true })
 finish('host')

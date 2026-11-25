@@ -104,7 +104,8 @@ export function SimulateTab(props: SimulateTabProps) {
           {result.matched === null ? null : (
             <div>
               {t('simulate.matched')}：#{result.matched.id}
-              {result.matched.name === undefined ? '' : `（${result.matched.name}）`} → <strong>{result.matched.out}</strong>
+              {result.matched.name === undefined ? '' : `（${result.matched.name}）`} →{' '}
+              <strong>{result.matched.outLabel ?? result.matched.out}</strong>
             </div>
           )}
           {result.matched !== null && !result.certain ? (
@@ -113,7 +114,11 @@ export function SimulateTab(props: SimulateTabProps) {
           {result.matched === null ? (
             <div>
               {result.uncertain.length === 0 ? `${t('simulate.fallback')} → ` : `${t('simulate.indeterminate')} → `}
-              <strong>{result.uncertain.length === 0 ? result.fallbackOut : result.uncertain[0]?.id}</strong>
+              <strong>
+                {result.uncertain.length === 0
+                  ? (result.fallbackOutLabel ?? result.fallbackOut)
+                  : result.uncertain[0]?.id}
+              </strong>
             </div>
           ) : null}
           {result.uncertain.length === 0 ? null : (
@@ -121,7 +126,7 @@ export function SimulateTab(props: SimulateTabProps) {
               <div className={ctl['kv']}>{t('simulate.uncertain')}</div>
               {result.uncertain.map((entry) => (
                 <div key={`${entry.position}-${entry.id}`} className={css['ruleMatch']}>
-                  #{entry.id} → {entry.out}（{entry.kind === 'opaque' ? t('simulate.opaque') : t('simulate.missing')}）{entry.reason}
+                  #{entry.id} → {entry.outLabel ?? entry.out}（{entry.kind === 'opaque' ? t('simulate.opaque') : t('simulate.missing')}）{entry.reason}
                 </div>
               ))}
             </div>

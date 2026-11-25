@@ -40,6 +40,8 @@ export interface ExplainHit {
   id: string
   name?: string
   out: string
+  /** `out` 的展示名：节点出口显示节点名字；旧宿主不给时按出口名显示。 */
+  outLabel?: string
   position: number
 }
 
@@ -60,6 +62,8 @@ export interface ExplainResult {
   uncertain: ExplainUncertain[]
   skipped: ExplainSkipped[]
   fallbackOut: string
+  /** 默认出口的展示名；旧宿主不给时按出口名显示。 */
+  fallbackOutLabel?: string
   certain: boolean
   warnings: string[]
   assumptions: string[]
@@ -70,6 +74,8 @@ export interface NodeSummary {
   id: string
   name: string
   tag: string
+  /** 展示名（宿主半部按名字算好）；缺席时按 `name`、`tag` 依次退让。 */
+  label?: string
   protocol: string
   server: string
   port: number
@@ -96,13 +102,22 @@ export interface PanelState {
     ruleCount: number
     enabledRuleCount: number
     nodeCount: number
-    selectedNode: { id: string; tag: string; name: string } | null
+    selectedNode: { id: string; tag: string; name: string; label?: string } | null
     exits: string[]
+    /** 出口名 → 展示名；节点出口是节点名字。旧宿主不给这个字段时按出口名显示。 */
+    exitLabels?: Record<string, string>
     geo: { dir: string; hasGeosite: boolean; hasGeoip: boolean }
     ports: { socks: number; http: number }
     note: string
   }
-  routing: { default: string; rules: Rule[]; exits: string[]; diagnostics: Diagnostic[] }
+  routing: {
+    default: string
+    rules: Rule[]
+    exits: string[]
+    /** 出口名 → 展示名；旧宿主不给这个字段时按出口名显示。 */
+    exitLabels?: Record<string, string>
+    diagnostics: Diagnostic[]
+  }
   nodes: {
     nodes: NodeSummary[]
     selectedNode: string | null

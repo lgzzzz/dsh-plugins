@@ -9,6 +9,8 @@ import { useState } from 'react'
 import type { Diagnostic, Routing } from './api.ts'
 import { Actions, Button, Chip, Empty, Field, Form, Hint, SelectInput, Tag, TextInput } from './Controls.tsx'
 import { DiagnosticList } from './Diagnostics.tsx'
+import { exitLabel } from './labels.ts'
+import type { ExitLabels } from './labels.ts'
 import { useTranslate } from './locale-context.tsx'
 import css from './Panel.module.css'
 
@@ -36,6 +38,8 @@ export interface RulesTabProps {
   busy: boolean
   /** 可用出口名（默认出口 + 节点 tag + 内置出口）。 */
   exits: readonly string[]
+  /** 出口名 → 展示名：选择框与规则行显示节点名字，`value` / `out` 仍是出口名。 */
+  exitLabels: ExitLabels
   /** 本次校验 / 应用产生的诊断。 */
   diagnostics: readonly Diagnostic[]
   /** 服务端当前生效规则库的诊断。 */
@@ -69,7 +73,7 @@ function splitField(text: string): string[] {
  */
 export function RulesTab(props: RulesTabProps) {
   const t = useTranslate()
-  const { draft, dirty, busy, exits, diagnostics, storedDiagnostics } = props
+  const { draft, dirty, busy, exits, exitLabels, diagnostics, storedDiagnostics } = props
   const [form, setForm] = useState<RuleForm>({
     id: '', name: '', out: 'proxy', domain: '', ip: '', port: '', protocol: '',
   })
@@ -150,7 +154,7 @@ export function RulesTab(props: RulesTabProps) {
                 .join('  ·  ')}
             </span>
           </span>
-          <Tag>{rule.out}</Tag>
+          <Tag title={rule.out}>{exitLabel(rule.out, exitLabels)}</Tag>
           <Button variant="icon" title={t('rules.up')} disabled={index === 0} onClick={() => { move(index, -1) }}>
             ↑
           </Button>
@@ -189,7 +193,7 @@ export function RulesTab(props: RulesTabProps) {
             onChange={(event) => { setForm({ ...form, out: event.target.value }) }}
           >
             {exits.map((exit) => (
-              <option key={exit} value={exit}>{exit}</option>
+              <option key={exit} value={exit}>{exitLabel(exit, exitLabels)}</option>
             ))}
           </SelectInput>
         </Field>
@@ -234,7 +238,7 @@ export function RulesTab(props: RulesTabProps) {
             onChange={(event) => { update({ ...draft, default: event.target.value }) }}
           >
             {exits.map((exit) => (
-              <option key={exit} value={exit}>{exit}</option>
+              <option key={exit} value={exit}>{exitLabel(exit, exitLabels)}</option>
             ))}
           </SelectInput>
         </Field>

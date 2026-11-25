@@ -178,7 +178,7 @@ type Rule = {
   name?: string                   // 人类可读的名字，UI 与 explain 用
   enabled?: boolean               // 默认 true
   match: Match
-  out: string                     // 出口名：proxy / direct / block / 分组
+  out: string                     // 出口名：proxy / direct / block / 节点 tag
 }
 
 type Match = {
@@ -469,6 +469,7 @@ const proxyDomain = defineDomain({
 - **日志 tab**：`/proxy-api/logs` SSE 推尾部日志，最多 500 行。
 - 客户端取数走 `fetch('/proxy-api/state')`（同源 cookie，`auth: 'required'`），不引 typert 代码生成；状态轮询 2s，页面隐藏时暂停。
 - **实现**：`src/client.tsx` 只做注册，`src/ui/Panel.tsx` 摆骨架、四个页签各自成文件，数据与副作用收在 `src/ui/use-proxy-panel.ts`；样式写在 `.module.css`（构建期换哈希类名、物化时自注入，见 `docs/dsh-css-architecture/02-build-time-css-pipeline.md`），文案走 `ctx.locale` 并由 `locale-context.tsx` 接成 React 上下文。控件按插件规范自写（不 import `dsh-client-ui-primitives`），只消费 `--dsw-alias-*` 令牌。
+- **显示名**：界面上一律显示节点名字，`out` / `<option value>` 仍是出口名；两套兜底（宿主 `nodeLabel()`、浏览器 `src/ui/labels.ts`）保证半部不同批更新时也不渲染成空白。
 
 ## 11. 安全与权限
 
