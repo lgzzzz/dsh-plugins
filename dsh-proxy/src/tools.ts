@@ -102,11 +102,11 @@ function ruleSchema(): JsonSchemaNode {
 function routingSchema(): JsonSchemaNode {
   return {
     type: 'object',
-    description: '{ default: 兜底出口名, rules: [规则…] }。rules 的顺序就是匹配顺序，首条命中即停。',
+    description: '{ default: 默认出口名, rules: [规则…] }。rules 的顺序就是匹配顺序，首条命中即停。',
     additionalProperties: false,
     required: ['default', 'rules'],
     properties: {
-      default: { type: 'string', description: '兜底出口名。' },
+      default: { type: 'string', description: '默认出口名。' },
       rules: {
         type: 'array',
         description: '规则列表，最多 200 条。',
@@ -139,7 +139,7 @@ function writeParameters(extra: Record<string, JsonSchemaNode>): Record<string, 
         description: 'mode=patch：要删除的规则 id。',
         items: { type: 'string' },
       },
-      default: { type: 'string', description: 'mode=patch：改写兜底出口名。' },
+      default: { type: 'string', description: 'mode=patch：改写默认出口名。' },
       ...extra,
     },
   }

@@ -62,3 +62,9 @@ tools unconditionally.
 
 Sidebar entry「分流路由」 → rules list with enable toggles and reordering,
 node inventory, traffic simulator, and a log tail.
+
+The panel is React 18 rendered inside the host slots: `src/client.tsx` registers
+the sidebar entry and the `main` panel, `src/ui/` holds the components, styles
+(CSS Modules), fetch layer and dictionaries, and `src/ui/use-proxy-panel.ts`
+owns polling and writes. Text goes through `ctx.locale`; controls are written
+against the `--dsw-alias-*` tokens rather than importing host primitives.

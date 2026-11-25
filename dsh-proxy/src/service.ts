@@ -525,7 +525,7 @@ function describeChanges(changes: { added: string[]; replaced: string[]; removed
   if (changes.added.length > 0) parts.push(`新增 ${changes.added.join(', ')}`)
   if (changes.replaced.length > 0) parts.push(`修改 ${changes.replaced.join(', ')}`)
   if (changes.removed.length > 0) parts.push(`删除 ${changes.removed.join(', ')}`)
-  if (changes.defaultChanged) parts.push('切换兜底出口')
+  if (changes.defaultChanged) parts.push('切换默认出口')
   if (parts.length === 0) parts.push('无实际变化')
   return `${parts.join('；')}（共 ${changes.total} 条）`
 }

@@ -94,7 +94,7 @@ checkEqual(compiled.rules[3].port, '80,443,1000-2000', 'port 数组用逗号连�
 checkEqual(compiled.rules[3].network, 'tcp,udp', 'network 数组用逗号连接')
 checkEqual(compiled.rules[4].protocol, ['tls'], 'protocol 保持数组')
 checkEqual(compiled.rules[4].outboundTag, 'us', 'out 映射成 outboundTag')
-checkEqual(compiled.rules[compiled.rules.length - 1], { type: 'field', network: 'tcp,udp', outboundTag: 'proxy' }, '末尾是兜底规则（带匹配字段，xray 不接受裸 outboundTag）')
+checkEqual(compiled.rules[compiled.rules.length - 1], { type: 'field', network: 'tcp,udp', outboundTag: 'proxy' }, '末尾是默认出口规则（带匹配字段，xray 不接受裸 outboundTag）')
 checkEqual(compiled.skipped.map((entry) => entry.id), ['off'], '禁用规则不进产物但记录在 skipped')
 checkEqual(compiled.stats.enabled, 2, '统计启用的规则数')
 check(!compiled.rules.some((rule) => rule.outboundTag === 'block'), '禁用规则没有进产物')

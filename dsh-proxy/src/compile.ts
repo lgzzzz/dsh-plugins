@@ -32,7 +32,7 @@ export interface SkippedRule {
 
 /** 编译结果。 */
 export interface CompiledRouting {
-  /** 交给 xray 的 `routing.rules[]`，已含注入规则与兜底规则。 */
+  /** 交给 xray 的 `routing.rules[]`，已含注入规则与默认出口规则。 */
   rules: XrayFieldRule[]
   skipped: SkippedRule[]
   stats: { enabled: number; disabled: number; injected: number }
@@ -50,7 +50,7 @@ export interface CompileOptions {
  * 编译整份规则集。
  *
  * 产物顺序固定：先注入「访问代理服务器自身地址 → direct」（防环）与 Apple Push → direct，
- * 再按顺序放用户规则，最后一条无条件的兜底规则指向 `routing.default`。
+ * 再按顺序放用户规则，最后一条无条件的默认出口规则指向 `routing.default`。
  * 关闭的规则不进产物，但也不从库里删。
  */
 export function compileRouting(routing: Routing, options: CompileOptions = {}): CompiledRouting {
@@ -102,7 +102,7 @@ export function compileRouting(routing: Routing, options: CompileOptions = {}): 
     rules.push(compiled)
   }
 
-  // 兜底规则必须带一个有效的匹配字段：xray 会以 "this rule has no effective
+  // 默认出口规则必须带一个有效的匹配字段：xray 会以 "this rule has no effective
   // fields" 拒绝只有 outboundTag 的 field 规则。`network: tcp,udp` 匹配所有流量。
   rules.push({ type: 'field', network: 'tcp,udp', outboundTag: routing.default })
 

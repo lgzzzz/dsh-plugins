@@ -49,13 +49,13 @@ export interface SkippedRule {
 
 /** 仿真结果。 */
 export interface ExplainResult {
-  /** 第一条**确定**命中的规则；没有则为 null（此时走兜底出口）。 */
+  /** 第一条**确定**命中的规则；没有则为 null（此时走默认出口）。 */
   matched: { id: string; name?: string; out: string; position: number } | null
   /** 命中规则之前那些无法排除的规则；它们可能抢先。 */
   uncertain: UncertainRule[]
   /** 命中规则之前被确定否定的规则。 */
   skipped: SkippedRule[]
-  /** 兜底出口（没有任何规则命中时使用）。 */
+  /** 默认出口（没有任何规则命中时使用）。 */
   fallbackOut: string
   /** `matched` 是否已经确定：有 `uncertain` 时它不是必然结果。 */
   certain: boolean

@@ -18,7 +18,7 @@
 | 事实 | 来源 |
 |---|---|
 | v2rayA = Go 服务 + Vue GUI，用自定义规则语言 RoutingA，编译成 xray `routing.rules[]` | `v2rayA/service/kernel/v2ray/template_routing.go:parseRoutingA` |
-| RoutingA 的映射：`domain`/`ip`/`port`/`sourcePort`/`network`/`protocol`/`source`/`inboundTag`/`user` + `outboundTag`；`default:` 变末尾兜底规则 | 同上 |
+| RoutingA 的映射：`domain`/`ip`/`port`/`sourcePort`/`network`/`protocol`/`source`/`inboundTag`/`user` + `outboundTag`；`default:` 变末尾默认出口规则 | 同上 |
 | v2rayA 保存规则 = 写库 → 重启内核 → 失败恢复旧规则再重启 | `service/server/service/core_config.go:ApplyCoreConfig` |
 | v2rayA 是 AGPL-3.0（本方案不再引用其代码，仅作行为参考） | `v2rayA/LICENSE` |
 | v2rayA 的 fork 额外提供：独立 DNS 模块（:52353）、`tun-mips` TUN、anytls/juicity/tuic、MultiObservatory | `core/dns`、`core/hint/proxy/*`、`core/main/distro/all` |
@@ -96,7 +96,9 @@ dsh-proxy-plugin/
 │   ├── nodes/            # 订阅解析、outbound 生成
 │   ├── core/             # 配置生成、-test、进程管理、回滚
 │   └── http.js           # /proxy-api 路由
-├── client.js             # 面板 UI（无构建步骤，__ModuleLoader__）
+├── src/client.tsx        # 面板入口：注册侧栏图标与主面板（React）
+├── src/ui/               # 面板组件、CSS Modules、取数、词条
+├── lib/client.js         # ↑ 由 tsdown 打包出的浏览器半部（__ModuleLoader__）
 ├── docs/DETAIL.md        # 插件详情页
 ├── locale/{zh,en}.json
 └── icon.svg
@@ -167,7 +169,7 @@ export async function apply(ctx, config) {
 
 ```ts
 type Routing = {
-  default: string                 // 兜底出口
+  default: string                 // 默认出口
   rules: Rule[]                   // 顺序即匹配顺序，首条命中
 }
 
@@ -466,6 +468,7 @@ const proxyDomain = defineDomain({
 - **模拟 tab**：域名/IP/端口/网络四个输入 → 结果卡（命中规则名 + 出口 + 跳过原因），与 `proxy_route_explain` 共用后端函数。
 - **日志 tab**：`/proxy-api/logs` SSE 推尾部日志，最多 500 行。
 - 客户端取数走 `fetch('/proxy-api/state')`（同源 cookie，`auth: 'required'`），不引 typert 代码生成；状态轮询 2s，页面隐藏时暂停。
+- **实现**：`src/client.tsx` 只做注册，`src/ui/Panel.tsx` 摆骨架、四个页签各自成文件，数据与副作用收在 `src/ui/use-proxy-panel.ts`；样式写在 `.module.css`（构建期换哈希类名、物化时自注入，见 `docs/dsh-css-architecture/02-build-time-css-pipeline.md`），文案走 `ctx.locale` 并由 `locale-context.tsx` 接成 React 上下文。控件按插件规范自写（不 import `dsh-client-ui-primitives`），只消费 `--dsw-alias-*` 令牌。
 
 ## 11. 安全与权限
 

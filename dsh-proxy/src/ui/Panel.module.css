@@ -1,0 +1,151 @@
+/*
+ * 面板骨架与列表布局：状态条、页签、滚动区、规则/节点行、日志区。
+ *
+ * 与 Controls.module.css 分工：这里只放「页面结构」，原子控件在那边。
+ * 所有颜色 / 描边 / 字体沿用 `--dsw-alias-*` 令牌，跟随宿主明暗主题。
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+}
+
+.status {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: .5px solid var(--dsw-alias-border-l2);
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-idle-primary);
+}
+
+.dot[data-state='running'] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.dot[data-state='starting'] {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.dot[data-state='error'] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.state {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.tabs {
+  display: flex;
+  flex: none;
+  gap: 20px;
+  padding: 0 20px;
+  border-bottom: .5px solid var(--dsw-alias-border-l2);
+}
+
+.tab {
+  padding: 10px 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tab[data-active='true'] {
+  border-bottom-color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-primary);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 32px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border: .5px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.row[data-disabled='true'] {
+  opacity: .55;
+}
+
+.index {
+  flex: none;
+  width: 18px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  text-align: right;
+}
+
+.ruleMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ruleName {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ruleMatch {
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section {
+  margin-top: 8px;
+}
+
+.logs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

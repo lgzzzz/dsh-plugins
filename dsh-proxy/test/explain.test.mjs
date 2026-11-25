@@ -1,5 +1,5 @@
 /**
- * 仿真：确定命中、可能抢先、确定跳过、兜底，以及各种值约定。
+ * 仿真：确定命中、可能抢先、确定跳过、默认出口，以及各种值约定。
  */
 
 import { explainFlow } from '../src/explain.ts'
@@ -72,14 +72,14 @@ checkEqual(explainFlow(andRule, { domain: 'x.a.example', port: 80 }).matched, nu
 const orRule = { default: 'proxy', rules: [{ id: 'or', match: { domain: ['domain:a.example', 'domain:b.example'] }, out: 'block' }] }
 checkEqual(explainFlow(orRule, { domain: 'x.b.example' }).matched?.id, 'or', '同一字段内多个值是「或」')
 
-console.log('explain: 无法排除与兜底')
+console.log('explain: 无法排除与默认出口')
 
 checkEqual(explainFlow(routing, { domain: 'disabled.example' }).matched, null, '禁用规则不参与仿真')
 check(explainFlow(routing, { domain: 'disabled.example' }).uncertain.every((entry) => entry.id !== 'off'), '禁用规则不出现在可能命中里')
 
 const fallback = explainFlow({ default: 'direct', rules: [] }, { domain: 'example.com' })
 checkEqual(fallback.matched, null, '空规则集没有命中')
-checkEqual(fallback.fallbackOut, 'direct', '空规则集用兜底出口')
+checkEqual(fallback.fallbackOut, 'direct', '空规则集用默认出口')
 checkEqual(fallback.certain, false, '没有命中时结论不是「确定走了某条规则」')
 
 const geoOnly = explainFlow({ default: 'proxy', rules: [{ id: 'geo', match: { domain: ['geosite:cn'] }, out: 'direct' }] }, { domain: 'a.cn' })

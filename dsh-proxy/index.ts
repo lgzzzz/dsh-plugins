@@ -1,6 +1,6 @@
 /**
  * 宿主半部：注册工具、`/proxy-api`、技能与存储域，并管理 xray 内核进程。
- * 浏览器半部在 `src/client.ts`，由 tsdown 打包成 `lib/client.js`。
+ * 浏览器半部在 `src/client.tsx`（组件在 `src/ui/`），由 tsdown 打包成 `lib/client.js`。
  *
  * 插件不 import 任何其它 Harness 包的**值**：类型从 `@deepseek-ai/dsh-*` 借用，
  * 运行时只碰 Node 内置模块与两个纯工具函数包（存储域声明、工具定义）。

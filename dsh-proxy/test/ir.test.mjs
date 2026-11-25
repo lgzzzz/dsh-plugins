@@ -92,7 +92,7 @@ checkEqual(deleted.routing.rules.map((rule) => rule.id), ['b'], '删除按 id �
 checkEqual(deleted.changes.removed, ['a'], 'changes 记录删除')
 
 const defaultChanged = applyRoutingPatch(base, { default: 'direct' })
-checkEqual(defaultChanged.routing.default, 'direct', 'patch 可以改兜底出口')
+checkEqual(defaultChanged.routing.default, 'direct', 'patch 可以改默认出口')
 check(deleted.routing.rules !== base.rules && base.rules.length === 2, '补丁不修改原对象')
 
 const moved = moveRule(base, 0, 1)

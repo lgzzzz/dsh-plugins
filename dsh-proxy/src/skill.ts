@@ -19,7 +19,7 @@ export const RuleSchemaHint =
 
 /** 整份规则集的结构，工具参数描述直接引用。 */
 export const RoutingWriteSchemaHint =
-  '{ default: 出口名, rules: [规则…] }：rules 的顺序就是匹配顺序，首条命中即停，default 是最后的兜底。'
+  '{ default: 出口名, rules: [规则…] }：rules 的顺序就是匹配顺序，首条命中即停，没有规则命中时走 default（默认出口）。'
 
 /** 技能正文。 */
 const CONTENT = `# 分流路由规则
@@ -53,7 +53,7 @@ const CONTENT = `# 分流路由规则
   想表达「域名或 IP 任一在国内」，写两条规则。
 - \`out\` 只能写 \`proxy\`、\`direct\`、\`block\` 或某个节点 tag。可用出口名以 \`proxy_routing_read\` 返回的 \`exits\` 为准。
 - \`enabled: false\` 的规则留在库里但不参与编译与仿真。
-- \`default\` 是兜底出口，必须存在。
+- \`default\` 是默认出口，必须存在。
 
 ## 值的写法（沿用 xray 的约定）
 
@@ -97,7 +97,7 @@ const CONTENT = `# 分流路由规则
    这个目录里有 \`.dat\` 时会作为 \`XRAY_LOCATION_ASSET\` 传给内核，没有则沿用内核自己的数据目录。
 3. **\`protocol\` 依赖嗅探**，而且嗅探会改写目标地址；仿真只能在你显式提供 protocol 时判定。
 4. **\`ip\` 条件与 domainStrategy 有关**：默认 \`IPIfNonMatch\`，域名目标会先解析再重试，所以 ip 规则对域名也可能命中。
-5. **不要写没有条件的规则**：那会匹配全部流量，兜底请用 \`default\`。
+5. **不要写没有条件的规则**：那会匹配全部流量，默认出口请用 \`default\`。
 6. 规则多不等于好：每条规则都要参与匹配，200 条以上会被规模上限拒绝。
 `
 

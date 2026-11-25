@@ -1,0 +1,176 @@
+/*
+ * 面板共用控件：按钮、字段、表单格、标签、提示条。
+ *
+ * 类名由 CSS Modules 在构建期换成哈希名（见 docs/dsh-css-architecture/02-build-time-css-pipeline.md），
+ * 所以这里的样式只命中本插件自己的元素；颜色 / 边框一律取 `--dsw-alias-*` 令牌，跟随明暗主题。
+ * 状态用 `data-*` 属性选择器表达（DSH UI 的状态开关惯例），不额外拼类名。
+ */
+
+.button {
+  padding: 4px 10px;
+  border: .5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l1);
+}
+
+.button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.button[data-variant='primary'] {
+  border-color: transparent;
+  background: var(--dsw-alias-brand-primary);
+  color: #fff;
+}
+
+.button[data-variant='danger'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.button[data-variant='icon'] {
+  padding: 2px 6px;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px;
+  border: .5px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.field[data-span='wide'] {
+  flex: 2 1 260px;
+}
+
+/* 动作行里的小选择器：标签与控件同一行，宽度跟内容走，不撑成整列。 */
+.field[data-layout='inline'] {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.field[data-layout='inline'] select {
+  width: 180px;
+}
+
+.input {
+  min-width: 0;
+  padding: 5px 8px;
+  border: .5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+}
+
+.chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.hint {
+  margin: 0 0 12px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.hint[data-space='none'] {
+  margin: 0;
+}
+
+.hint[data-space='spaced'] {
+  margin-top: 16px;
+}
+
+.hint[data-space='note'] {
+  margin-top: 24px;
+}
+
+.empty {
+  padding: 24px 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.diag {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--dsw-alias-state-warn-primary);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diag[data-severity='error'] {
+  border-left-color: var(--dsw-alias-state-error-primary);
+}
+
+.card {
+  margin-top: 12px;
+  padding: 12px;
+  border: .5px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.kv {
+  display: flex;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}

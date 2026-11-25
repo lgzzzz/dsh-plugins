@@ -56,7 +56,7 @@ export interface Rule {
 
 /** 整份规则。 */
 export interface Routing {
-  /** 兜底出口。 */
+  /** 默认出口。 */
   default: string
   /** 顺序即匹配顺序，首条命中即停。 */
   rules: Rule[]
@@ -148,7 +148,7 @@ export function validateRoutingShape(candidate: unknown): Diagnostic[] {
 
   const fallback = candidate.default
   if (typeof fallback !== 'string' || fallback.trim() === '') {
-    push('error', 'routing/default-invalid', 'routing.default', 'default 必须是非空字符串，写兜底出口的名字')
+    push('error', 'routing/default-invalid', 'routing.default', 'default 必须是非空字符串，写默认出口的名字')
   } else if (fallback !== fallback.trim()) {
     push('error', 'routing/default-invalid', 'routing.default', 'default 两侧不能有空白')
   }
@@ -219,7 +219,7 @@ function validateMatch(match: unknown, at: string, ruleId: string | undefined, p
   }
   const keys = Object.keys(match)
   if (keys.length === 0) {
-    push('error', 'rule/match-empty', at, 'match 至少需要一个条件；没有条件的规则会匹配所有流量，兜底请用 default 表达', ruleId)
+    push('error', 'rule/match-empty', at, 'match 至少需要一个条件；没有条件的规则会匹配所有流量，默认出口请用 default 表达', ruleId)
   }
   for (const key of keys) {
     if (!(MATCH_KEYS as readonly string[]).includes(key)) {
