@@ -22,6 +22,7 @@
 | `dsh-stats-ttft` | 在输入框下方的性能统计按钮上直接显示会话平均首 token 时长（只显示 `2.3秒` 这样的裸时长，不带标签）：按 id 遮蔽 `activity` 条目并只改写按钮第一段的译文 | [说明](dsh-stats-ttft.md) |
 | `dsh-agent-team-hero-toggle` | 空白新会话行的「新建工作树」右侧加「团队协作」开关：读 `agentTeam` 投影、写 `remote.agentTeams.setEnabled`，模型菜单旧入口保留（A2）；首轮后随 hero 行消失 | [说明](dsh-agent-team-hero-toggle.md) |
 | `dsh-subagent-parent-nav` | 子智能体会话的会话面板里加「主智能体」一栏：按从上到下的上级链列出主智能体与各级上级（标题、运行状态），点一行把主视图切到该会话；三条依据认父会话，根会话整节隐藏 | [说明](dsh-subagent-parent-nav.md) |
+| `dsh-opencode-status` | 会话面板里加「OpenCode Go」一栏：宿主半部代理 `https://opencode.ai/status/api/status`（主站不带 CORS 头，页面不能直连），取出 `go` 服务下 `deepseek-v4.1-flash` 的状态、原因与速度，经同源、owner-only 的 `GET /opencode-status/status` 交给页面（5 秒 TTL 缓存 + 并发合流，失败时 10 分钟内用缓存兜底）；浏览器半部每 5 秒轮询一次（后台标签页跳过），按行显示模型、状态（如「降级 · 延迟」）、首 Token 与吞吐，Go 整体状态与模型不同时多一行 | [说明](dsh-opencode-status.md) |
 | `dsh-today-token-usage` | 会话面板里加「今日 Token 用量」一栏：一项指标一行（总用量 / 缓存命中 / 未缓存输入 / 缓存读取 / 缓存写入 / 输出），数值只用无单位 / K / M，是**今天全部会话**加起来的用量；宿主半部按宿主本地日期把每个会话自己的 assistant 用量折成 `todayTokenUsage` 投影（不含 fork 继承前缀，替换/重试语义对齐上游 `tokenUsage`）；浏览器半部把各会话今天的那一份相加，数值口径与输入框下方「用量」按钮一致 | [说明](dsh-today-token-usage.md) |
 | `dsh-subagent-forge-panel` | 子智能体会话的会话面板里**直接不显示** forge 那条注定失败的 Git 与变更请求连接行（「状态已停止更新」与「重试」一起消失，不留说明、不留占位）：借行槽拿会话作用域，用不可见的标记元素定位分区，一条 CSS 规则隐藏上游那一行；普通会话一行不动 | [说明](dsh-subagent-forge-panel.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
@@ -57,6 +58,7 @@
 
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
+| `dsh-opencode-status` | [`contract.json`](../dsh-opencode-status/contract.json) | 会话面板分区槽与渲染 + 通用行标记（`data-session-panel-row` / `data-row-part`）+ `ctx.webServer.register(route)`、`webserver/authorize` 与浏览器 cookie 鉴权提供方 |
 | `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + `role` / `aria-label` 文案（含一条反向的 `forbid`）+ CSS 变量 + 槽位键 + 主对话正文宽度与面板停靠阈值 + 会话面板开关 / 探针 / pinned 键 |
 | `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
 | `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点（含 `aria-expanded` 同元素）+ 标题右侧箭头的图标与 `chevron` 局部类名 + fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话槽位与会话作用域 + 折叠目标 / 聊天行 / 轮次 / 跟随尾部 / 上游动画 / 封口锚点 |
