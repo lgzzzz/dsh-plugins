@@ -29,7 +29,7 @@ export interface ProxyPanelController {
   readonly busy: boolean
   /** 最近一次 `/check` 或 `/write` 的诊断。 */
   readonly diagnostics: readonly Diagnostic[]
-  /** 最近一次成功动作的消息。 */
+  /** 最近一次成功动作的消息；内核启停成功后为空（状态条已经说明结果）。 */
   readonly message: string
   /** 最近一次失败的原因。 */
   readonly error: string
@@ -151,7 +151,12 @@ export function useProxyPanel(t: (key: LocaleKey) => string): ProxyPanelControll
 
   const coreAction = useCallback(
     (action: 'start' | 'stop' | 'restart') => {
-      void run(async () => (await api<MessageResult>('/core', { action })).message)
+      void run(async () => {
+        const result = await api<MessageResult>('/core', { action })
+        // 启停结果状态条上已经写着了（状态点、按钮、lastError），成功的「内核已启动 /
+        // 已停止」只是重复播报，不弹横幅；失败的说明（如还没选节点）没有别的出口，保留。
+        return result.ok === false ? result.message : ''
+      })
     },
     [run],
   )

@@ -61,7 +61,7 @@ interface StatusBarProps {
 }
 
 /**
- * 面板顶部的状态条：状态点、端口、规则/节点计数、内核版本、当前默认节点，以及启停按钮。
+ * 面板顶部的状态条：状态点、端口、规则/节点计数、内核版本，以及启停按钮。
  * @param props - 快照与启停回调。
  * @returns 状态条元素。
  */
@@ -83,11 +83,6 @@ function StatusBar({ state, busy, onStart, onStop, onRestart }: StatusBarProps) 
         <span>{fill(t('status.nodes'), { count: String(state.status.nodeCount) })}</span>
         <span>
           {t('status.binary')}：{core.version ?? (core.binary === null ? t('status.binaryMissing') : core.binary)}
-        </span>
-        <span>
-          {state.status.selectedNode === null
-            ? t('status.noNode')
-            : `→ ${state.status.selectedNode.label ?? state.status.selectedNode.name ?? state.status.selectedNode.tag}`}
         </span>
       </span>
       <span className={css['spacer']} />

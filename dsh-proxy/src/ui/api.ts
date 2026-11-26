@@ -154,6 +154,8 @@ export interface WriteResult {
 
 /** 返回一句人话的动作结果（内核启停、订阅导入、选节点、测延迟）。 */
 export interface MessageResult {
+  /** `/core` 与 `/select` 会带成败标记；订阅导入、测延迟只给 message。 */
+  ok?: boolean
   message: string
 }
 
