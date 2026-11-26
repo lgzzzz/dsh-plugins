@@ -101,6 +101,23 @@
   padding: 16px 20px 32px;
 }
 
+/* 规则页签顶部的默认出口选择条：默认出口在左，动作按钮靠右，与下方列表留出间距。 */
+.rulesHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rulesActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -116,17 +133,10 @@
   opacity: .55;
 }
 
-.index {
-  flex: none;
-  width: 18px;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 14px;
-  text-align: right;
-}
-
 .ruleMain {
   display: flex;
-  flex: 1;
+  /* 宽度跟内容走：其后的代理节点名紧跟规则名，而不是被推到行末。 */
+  flex: 0 1 auto;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
@@ -155,7 +165,7 @@
   overflow-wrap: anywhere;
 }
 
-/* 「连接」页签：过滤条 + 每条连接一行（时间 / 入站 / 目的 / 分类 / 出口）。 */
+/* 「连接」页签：过滤条 + 每条连接一行（分类 / 时间 / 入站 / 目的 / 出口），从左起依次排列。 */
 .trafficBar {
   display: flex;
   flex-wrap: wrap;
@@ -207,7 +217,7 @@
 }
 
 .trafficDest {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

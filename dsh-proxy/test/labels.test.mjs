@@ -5,7 +5,7 @@
  * 也不能把出口名（稳定标识）当成展示名以外的东西。
  */
 
-import { exitLabel, nodeLabelOf } from '../src/ui/labels.ts'
+import { exitLabel, exitText, nodeLabelOf } from '../src/ui/labels.ts'
 import { checkEqual, finish } from './helpers.mjs'
 
 console.log('labels: 出口展示名')
@@ -17,6 +17,17 @@ checkEqual(exitLabel('proxy', labels), 'proxy', '展示名与出口名相同时�
 checkEqual(exitLabel('direct', labels), 'direct', '没有登记的内置出口原样显示')
 checkEqual(exitLabel('hk-01'), 'hk-01', '没有标签表时退回出口名')
 checkEqual(exitLabel('hk-01', { 'hk-01': '' }), 'hk-01', '空字符串的标签按缺席处理')
+
+console.log('labels: 内置出口描述')
+
+/** 测试用翻译函数。 */
+const t = (key) => ({ 'exit.proxy': '代理', 'exit.direct': '直连', 'exit.block': '拦截' })[key] ?? key
+
+checkEqual(exitText('proxy', labels, t), '代理', 'proxy 显示为代理')
+checkEqual(exitText('direct', labels, t), '直连', 'direct 显示为直连')
+checkEqual(exitText('block', labels, t), '拦截', 'block 显示为拦截')
+checkEqual(exitText('hk-01', labels, t), '🇭🇰 香港01', '节点出口仍显示节点名字')
+checkEqual(exitText('unknown', {}, t), 'unknown', '未知出口退回出口名')
 
 console.log('labels: 节点展示名')
 

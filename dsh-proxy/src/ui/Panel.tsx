@@ -9,6 +9,7 @@ import { useState } from 'react'
 import type { PanelState } from './api.ts'
 import { Button } from './Controls.tsx'
 import { Banner } from './Diagnostics.tsx'
+import { nodeLabelOf } from './labels.ts'
 import { fill } from './locale.ts'
 import type { LocaleKey } from './locale.ts'
 import { useTranslate } from './locale-context.tsx'
@@ -19,8 +20,8 @@ import { TrafficTab } from './TrafficTab.tsx'
 import { useProxyPanel } from './use-proxy-panel.ts'
 import css from './Panel.module.css'
 
-/** 页签顺序；同时决定 `tab.<id>` 这组词条的键。 */
-const TABS = ['rules', 'nodes', 'traffic', 'logs'] as const
+/** 页签顺序；同时决定 `tab.<id>` 这组词条的键。连接放首位，打开面板先落到它。 */
+const TABS = ['traffic', 'rules', 'nodes', 'logs'] as const
 
 /** 页签 id。 */
 type TabId = (typeof TABS)[number]
@@ -105,7 +106,8 @@ function StatusBar({ state, busy, onStart, onStop, onRestart }: StatusBarProps) 
 export function ProxyPanel() {
   const t = useTranslate()
   const panel = useProxyPanel(t)
-  const [tab, setTab] = useState<TabId>('rules')
+  // 打开面板先看「连接」：排障时最常确认的就是某条流量实际走了哪个出口。
+  const [tab, setTab] = useState<TabId>('traffic')
   const state = panel.state
 
   if (state === null) {
@@ -119,6 +121,8 @@ export function ProxyPanel() {
   }
 
   const core = state.status.core
+  // 「规则」页里 out 为 proxy 的行会在行末显示这个节点名。
+  const proxyLabel = state.status.selectedNode === null ? null : nodeLabelOf(state.status.selectedNode)
 
   return (
     <div className={css['panel']}>
@@ -156,6 +160,7 @@ export function ProxyPanel() {
             busy={panel.busy}
             exits={state.routing.exits}
             exitLabels={state.routing.exitLabels ?? {}}
+            proxyLabel={proxyLabel}
             diagnostics={panel.diagnostics}
             storedDiagnostics={state.routing.diagnostics}
             onChange={panel.edit}
@@ -167,11 +172,9 @@ export function ProxyPanel() {
         {tab === 'nodes' ? (
           <NodesTab
             nodes={state.nodes.nodes}
-            selectedNode={state.nodes.selectedNode}
             subscriptions={state.nodes.subscriptions}
             busy={panel.busy}
             onImport={panel.importSubscription}
-            onSelect={panel.selectNode}
             onLatency={panel.testLatency}
           />
         ) : null}

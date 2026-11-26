@@ -484,24 +484,25 @@ const proxyDomain = defineDomain({
 ```
 ┌ 代理 ────────────────────────────────────────────────────┐
 │ ● 运行中  xray 26.11   10808 socks / 10809 http  [重启]    │
-├ 规则 ─┬ 节点 ─┬ 连接 ─┬ 日志 ──────────────────────────┤
-│  1  [x] 拦截广告      domain geosite:category-ads-all  block│
-│  2  [x] 国内直连      domain geosite:cn + ip geoip:cn  direct│
-│  3  [x] AI 走美国     domain geosite:openai, …           us │
-│  4  [ ] 公司内网      domain domain:corp.example       direct│
-│                                        [+ 新增] [校验] [应用]│
+├ 连接 ─┬ 规则 ─┬ 节点 ─┬ 日志 ──────────────────────────┤
+│ 默认出口 [直连 ▾]                       [校验] [应用] [重置]│
+│ [x] 拦截   拦截广告   domain geosite:category-ads-all      │
+│ [x] 直连   国内直连   domain geosite:cn + ip geoip:cn      │
+│ [x] 代理   AI 走美国  domain geosite:openai, …             │
+│ [ ] 直连   公司内网   domain domain:corp.example           │
 └──────────────────────────────────────────────────────────┘
 ```
 
-- **规则 tab**：列表 + 行的启用开关 + 行内编辑（条件用标签输入，不用自由文本）；拖拽或"上移/下移"调整顺序。不做带行号的文本编辑器。
+- **规则 tab**：默认出口在左、校验 / 应用 / 重置靠右，同一行位于列表上方，并与列表留出间距；列表每行依次是启用开关、上移 / 下移、删除、出口描述与规则名，`out` 为 `proxy` 的规则在规则名后紧跟着显示当前代理节点名字（不推到行尾）。内置出口显示为代理 / 直连 / 拦截；默认出口不提供 `proxy`（它只是当前选中节点的别名），只列具体节点与 `direct` / `block`。新增规则只由模型通过工具完成，面板不提供新增表单。
 - **应用**：先 `check`，有 error 禁用；有 warning 允许但二次确认；应用后 toast 显示变更条数。
 - **仿真**只保留 agent 工具 `proxy_route_explain`（与 `service.explain` 同一实现）；HTTP `POST /proxy-api/explain` 仍在，供排查时直接查一条流量。面板不再提供「模拟」页签。
-- **连接 tab**：`GET /proxy-api/traffic` 返回访问日志里的最近连接（最新在前），顶部按域名/IP 与出口分类过滤，汇总覆盖整个环形窗口；徽标区分代理 / 直连 / 拦截，并显示实际出口的展示名。内核停止后仍显示本次会话的历史，并把 `live` 置 false 说明原因。
+- **节点 tab**：导入订阅、节点库存（名字、协议、地址与端口）与测延迟；节点页不提供「选为默认」，默认出口与规则出口都在规则 tab 选择。
+- **连接 tab**：排在页签第一位，也是面板打开时默认落到的页签；`GET /proxy-api/traffic` 返回访问日志里的最近连接（最新在前），顶部按域名/IP 与出口分类过滤，汇总覆盖整个环形窗口；徽标区分代理 / 直连 / 拦截，代理记录在行末显示实际节点名字，直连与拦截不显示出口。内核停止后仍显示本次会话的历史，并把 `live` 置 false 说明原因。
 - **日志 tab**：`/state` 带回内核与动作日志的尾部（最多 500 行），点明每条连接的出口去「连接」页签看。
 - 客户端取数走 `fetch('/proxy-api/state')`（同源 cookie，`auth: 'required'`），不引 typert 代码生成；状态轮询 2s，页面隐藏时暂停。
 - **按钮**：所有操作按钮统一黑底白字（主操作 / 危险 / 图标形态只保留语义与尺寸差异），悬停提亮、禁用半透明；页签是导航，仍用下划线选中样式。
 - **实现**：`src/client.tsx` 只做注册，`src/ui/Panel.tsx` 摆骨架、四个页签各自成文件，规则/节点的数据与副作用收在 `src/ui/use-proxy-panel.ts`，「连接」页签在 `src/ui/use-traffic.ts`；样式写在 `.module.css`（构建期换哈希类名、物化时自注入，见 `docs/dsh-css-architecture/02-build-time-css-pipeline.md`），文案走 `ctx.locale` 并由 `locale-context.tsx` 接成 React 上下文。控件按插件规范自写（不 import `dsh-client-ui-primitives`）：颜色取 `--dsw-alias-*` 令牌跟随主题，按钮固定黑底白字。
-- **显示名**：界面上一律显示节点名字，`out` / `<option value>` 仍是出口名；两套兜底（宿主 `nodeLabel()`、浏览器 `src/ui/labels.ts`）保证半部不同批更新时也不渲染成空白。
+- **显示名**：节点出口显示节点名字，内置出口 `proxy` / `direct` / `block` 显示为代理 / 直连 / 拦截；`out` / `<option value>` 仍是出口名；两套兜底（宿主 `nodeLabel()`、浏览器 `src/ui/labels.ts`）保证半部不同批更新时也不渲染成空白。
 
 ## 11. 安全与权限
 

@@ -49,8 +49,6 @@ export interface ProxyPanelController {
   readonly restart: () => void
   /** 导入一条订阅。 */
   readonly importSubscription: (url: string, name: string) => void
-  /** 选定默认节点。 */
-  readonly selectNode: (id: string) => void
   /** 对所有节点测一轮 TCP 延迟。 */
   readonly testLatency: () => void
 }
@@ -171,13 +169,6 @@ export function useProxyPanel(t: (key: LocaleKey) => string): ProxyPanelControll
     [run],
   )
 
-  const selectNode = useCallback(
-    (id: string) => {
-      void run(async () => (await api<MessageResult>('/select', { id })).message)
-    },
-    [run],
-  )
-
   const testLatency = useCallback(() => {
     void run(async () => (await api<MessageResult>('/latency', {})).message)
   }, [run])
@@ -204,7 +195,6 @@ export function useProxyPanel(t: (key: LocaleKey) => string): ProxyPanelControll
       coreAction('restart')
     },
     importSubscription,
-    selectNode,
     testLatency,
   }
 }

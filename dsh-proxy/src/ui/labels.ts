@@ -7,6 +7,8 @@
  * 退回名字，名字也缺席时退回出口名，面板不会因为字段缺席渲染成空白。
  */
 
+import type { LocaleKey } from './locale.ts'
+
 /** 出口名 → 展示名；旧宿主不给 `exitLabels` 时是空表。 */
 export type ExitLabels = Readonly<Record<string, string>>
 
@@ -21,6 +23,29 @@ export type ExitLabels = Readonly<Record<string, string>>
 export function exitLabel(exit: string, labels: ExitLabels = {}): string {
   const label = labels[exit]
   return label === undefined || label === '' || label === exit ? exit : label
+}
+
+/**
+ * 出口在界面上的展示文本：内置出口换成当前语言的描述，节点出口仍显示节点名字。
+ *
+ * `proxy` 是「当前选中节点」的别名，但它在规则里仍是一个出口名；这里只翻译展示层，
+ * 不改变 `out` / `<option value>` 里的稳定标识。
+ * @param exit - 出口名。
+ * @param labels - 节点出口名 → 节点展示名。
+ * @param t - 当前语言的翻译函数。
+ * @returns 展示文本。
+ */
+export function exitText(
+  exit: string,
+  labels: ExitLabels,
+  t: (key: LocaleKey) => string,
+): string {
+  switch (exit) {
+    case 'proxy': return t('exit.proxy')
+    case 'direct': return t('exit.direct')
+    case 'block': return t('exit.block')
+    default: return exitLabel(exit, labels)
+  }
 }
 
 /**

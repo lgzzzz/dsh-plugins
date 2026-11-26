@@ -71,12 +71,18 @@ tools unconditionally.
 
 ## Panel
 
-Sidebar entry「分流路由」 → rules list with enable toggles and reordering,
-node inventory, connection records, and a log tail.
+Sidebar entry「分流路由」 opens on the Connections tab, which is first in the
+tab bar; the other tabs hold the rules list, the node inventory, and a log
+tail. In the rules tab the default-exit dropdown sits on the left of a row
+above the list, with check / apply / reset pushed to the right; rules that use
+the `proxy` exit also show the current proxy node right after the rule
+dropdown lists concrete nodes plus `direct` / `block`, not the `proxy` alias.
+Built-in exits are rendered as localized labels (代理 / 直连 / 拦截 in Chinese).
 
 The Connections tab reads `GET /proxy-api/traffic` and lists one row per
-access-log line: time, inbound, destination, verdict (proxied / direct /
-blocked) and the exit that was used. Filtering runs on the host, so the summary
+access-log line: time, inbound, destination and verdict (proxied / direct /
+blocked). Proxied rows also show the node that was used; direct and blocked
+rows show no exit. Filtering runs on the host, so the summary
 covers the whole in-memory window rather than the visible page. Records survive
 a kernel restart for the life of the plugin; the file itself is capped at 8MiB
 and truncated before the kernel starts only when it exceeds that.
@@ -97,9 +103,10 @@ is what the subscription called the node, in whatever script and emoji it used.
 Nodes are matched by `protocol + server + port + credential`, so re-importing a
 subscription keeps both.
 
-Everything that a person reads shows the name: the exit dropdowns, the rule and
-default rows, the selected node in the status bar, and the node list. Diagnostics
-and logs name the offending exit
-the same way. The tag stays the stable identifier because the tag is what
-`geosite:`-class values cannot be, what survives a name edit, and what the
-kernel config refers to; renaming the node changes the label, not the rule.
+Everything that a person reads shows a friendly label: the exit dropdowns and
+rule rows show node names for node exits and localized descriptions for the
+built-in exits (代理 / 直连 / 拦截 in Chinese), and the node list shows names.
+Diagnostics and logs name the offending exit the same way. The tag stays the
+stable identifier because the tag is what `geosite:`-class values cannot be,
+what survives a name edit, and what the kernel config refers to; renaming the
+node changes the label, not the rule.

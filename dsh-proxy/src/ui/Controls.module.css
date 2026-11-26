@@ -30,9 +30,15 @@
   cursor: default;
 }
 
-/* 图标按钮：同一套黑底白字，只收窄内边距、去掉描边。 */
+/* 图标按钮：同一套黑底白字，固定正方形，字形不同也保持同尺寸。 */
 .button[data-variant='icon'] {
-  padding: 2px 6px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border: none;
 }
 

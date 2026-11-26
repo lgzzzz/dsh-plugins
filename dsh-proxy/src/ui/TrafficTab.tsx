@@ -1,12 +1,13 @@
 /**
  * 「连接」页签：内核访问日志的结构化视图。
  *
- * 每条记录一行：时间、入站、目的、分类徽标与实际出口。过滤在服务端做，所以汇总覆盖
- * 整个环形窗口，而不是只统计当前页。数据与副作用在 {@link useTraffic} 里。
+ * 每条记录一行，从左到右：分类徽标、时间、入站、目的、实际出口。过滤在服务端做，所以
+ * 汇总覆盖整个环形窗口，而不是只统计当前页。数据与副作用在 {@link useTraffic} 里。
  */
 
 import type { TrafficEntry, TrafficView, TrafficVerdict } from './api.ts'
 import { Button, Empty, Hint, SelectInput, TextInput } from './Controls.tsx'
+import { exitText } from './labels.ts'
 import { fill } from './locale.ts'
 import type { LocaleKey } from './locale.ts'
 import { useTranslate } from './locale-context.tsx'
@@ -21,14 +22,30 @@ const VERDICT_KEYS: Record<TrafficVerdict, LocaleKey> = {
 }
 
 /**
+ * 行末的出口展示：只有代理记录需要显示实际节点名字，直连 / 拦截留空。
+ *
+ * `proxy` 出口的 `outLabel` 是宿主在连接入队时快照的节点名；没有快照（旧记录或节点
+ * 名字与出口名相同）时退回「代理」这类内置出口描述。
+ * @param entry - 一条连接记录。
+ * @param t - 翻译函数。
+ * @returns 展示文本；直连 / 拦截为空串。
+ */
+function outText(entry: TrafficEntry, t: (key: LocaleKey) => string): string {
+  if (entry.verdict !== 'proxy') return ''
+  return entry.outLabel === entry.out ? exitText(entry.out, {}, t) : entry.outLabel
+}
+
+/**
  * 渲染一行连接记录。
  * @param props.entry - 一条连接。
  * @returns 行元素。
  */
 function TrafficRow({ entry }: { entry: TrafficEntry }) {
   const t = useTranslate()
+  const out = outText(entry, t)
   return (
     <div className={css['trafficRow']}>
+      <span className={css['verdict']} data-verdict={entry.verdict}>{t(VERDICT_KEYS[entry.verdict])}</span>
       <span className={css['trafficTime']}>{new Date(entry.time).toLocaleTimeString()}</span>
       <span className={css['trafficInbound']}>{entry.inbound}</span>
       <span className={css['trafficDest']} title={`${entry.source} → ${entry.out}`}>
@@ -38,8 +55,7 @@ function TrafficRow({ entry }: { entry: TrafficEntry }) {
         </span>
         {entry.path === undefined ? null : <span className={css['trafficPath']}>{` ${entry.path}`}</span>}
       </span>
-      <span className={css['verdict']} data-verdict={entry.verdict}>{t(VERDICT_KEYS[entry.verdict])}</span>
-      <span className={css['trafficOut']} title={entry.out}>{entry.outLabel}</span>
+      {out === '' ? null : <span className={css['trafficOut']} title={entry.out}>{out}</span>}
     </div>
   )
 }
@@ -57,7 +73,12 @@ function conclusionOf(view: TrafficView, host: string, t: (key: LocaleKey) => st
   if (proxied === matched) {
     // 命中项可能来自不同节点：只有一个出口时才把节点名写进结论。
     const outs = Object.keys(view.summary.byOut)
-    const exit = outs.length === 1 ? (view.entries.find((entry) => entry.out === outs[0])?.outLabel ?? outs[0]) : ''
+    const out = outs.length === 1 ? outs[0] : undefined
+    const entry = out === undefined ? undefined : view.entries.find((candidate) => candidate.out === out)
+    // `proxy` 出口拿不到对应记录时省略括号里的名字，免得写出「经过代理（代理）」。
+    const exit = out === undefined || (entry === undefined && out === 'proxy')
+      ? ''
+      : entry === undefined ? exitText(out, {}, t) : outText(entry, t)
     return exit === ''
       ? fill(t('traffic.conclusionProxyAny'), { host, count: String(matched) })
       : fill(t('traffic.conclusionProxy'), { host, count: String(matched), exit })
