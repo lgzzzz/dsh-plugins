@@ -5,7 +5,7 @@
  * 也不能把出口名（稳定标识）当成展示名以外的东西。
  */
 
-import { exitLabel, exitText, nodeLabelOf } from '../src/ui/labels.ts'
+import { exitLabel, exitText, nodeLabelOf, verdictOf } from '../src/ui/labels.ts'
 import { checkEqual, finish } from './helpers.mjs'
 
 console.log('labels: 出口展示名')
@@ -28,6 +28,13 @@ checkEqual(exitText('direct', labels, t), '直连', 'direct 显示为直连')
 checkEqual(exitText('block', labels, t), '拦截', 'block 显示为拦截')
 checkEqual(exitText('hk-01', labels, t), '🇭🇰 香港01', '节点出口仍显示节点名字')
 checkEqual(exitText('unknown', {}, t), 'unknown', '未知出口退回出口名')
+
+console.log('labels: 规则出口归一化')
+
+checkEqual(verdictOf('direct'), 'direct', 'direct 归为直连')
+checkEqual(verdictOf('block'), 'block', 'block 归为拦截')
+checkEqual(verdictOf('proxy'), 'proxy', 'proxy 归为代理')
+checkEqual(verdictOf('hk-01'), 'proxy', '节点出口也算代理，行内出口列只显示策略')
 
 console.log('labels: 节点展示名')
 

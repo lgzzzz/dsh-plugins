@@ -72,12 +72,17 @@ tools unconditionally.
 ## Panel
 
 Sidebar entry「分流路由」 opens on the Connections tab, which is first in the
-tab bar; the other tabs hold the rules list, the node inventory, and a log
-tail. In the rules tab the default-exit dropdown sits on the left of a row
-above the list, with check / apply / reset pushed to the right; rules that use
-the `proxy` exit also show the current proxy node right after the rule
-dropdown lists concrete nodes plus `direct` / `block`, not the `proxy` alias.
-Built-in exits are rendered as localized labels (代理 / 直连 / 拦截 in Chinese).
+tab bar; the other tabs hold the rules list, the node inventory, and the log
+tail, newest line first. In the rules tab the default-exit dropdown sits on the
+left of a row above the list, with check / apply / reset pushed to the right.
+Every rule row has the same order: enable, up / down, remove, policy badge
+(代理 / 直连 / 拦截), rule name with its match, then the node name — the node
+always follows the rule name, whether the rule pins a node in `out` or goes
+through the `proxy` alias. The default-exit dropdown lists concrete nodes plus
+`direct` / `block`, not the `proxy` alias. Rule names follow
+`<subject> → <policy>` (e.g. `GitHub → 代理`, `国内域名 → 直连`); the policy word
+is never a node name or a latency, so renaming or switching a node leaves the
+rule label untouched.
 
 The Connections tab reads `GET /proxy-api/traffic` and lists one row per
 access-log line: time, inbound, destination and verdict (proxied / direct /
@@ -103,9 +108,9 @@ is what the subscription called the node, in whatever script and emoji it used.
 Nodes are matched by `protocol + server + port + credential`, so re-importing a
 subscription keeps both.
 
-Everything that a person reads shows a friendly label: the exit dropdowns and
-rule rows show node names for node exits and localized descriptions for the
-built-in exits (代理 / 直连 / 拦截 in Chinese), and the node list shows names.
+Everything that a person reads shows a friendly label: the rule row's exit
+column shows the policy (代理 / 直连 / 拦截) and the node name comes after the
+rule name, exit dropdowns list node names, and the node list shows names.
 Diagnostics and logs name the offending exit the same way. The tag stays the
 stable identifier because the tag is what `geosite:`-class values cannot be,
 what survives a name edit, and what the kernel config refers to; renaming the

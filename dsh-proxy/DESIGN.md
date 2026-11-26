@@ -199,10 +199,10 @@ type Match = {
 {
   "default": "proxy",
   "rules": [
-    { "id": "ads",  "name": "拦截广告",   "match": { "domain": ["geosite:category-ads-all"] }, "out": "block" },
-    { "id": "cn",   "name": "国内直连",   "match": { "domain": ["geosite:cn"], "ip": ["geoip:cn"] }, "out": "direct" },
-    { "id": "ai",   "name": "AI 走美国",  "match": { "domain": ["geosite:openai", "domain:anthropic.com"], "network": ["tcp"] }, "out": "us" },
-    { "id": "corp", "name": "公司内网",   "match": { "domain": ["domain:corp.example"], "port": ["443"] }, "out": "direct" }
+    { "id": "ads",  "name": "广告 → 拦截",     "match": { "domain": ["geosite:category-ads-all"] }, "out": "block" },
+    { "id": "cn",   "name": "国内域名 → 直连", "match": { "domain": ["geosite:cn"] }, "out": "direct" },
+    { "id": "ai",   "name": "AI → 代理",       "match": { "domain": ["geosite:openai", "domain:anthropic.com"], "network": ["tcp"] }, "out": "us" },
+    { "id": "corp", "name": "公司域名 → 直连", "match": { "domain": ["domain:corp.example"], "port": ["443"] }, "out": "direct" }
   ]
 }
 ```
@@ -246,7 +246,7 @@ type Match = {
 
 ```json
 {
-  "matched": { "id": "ai", "name": "AI 走美国", "out": "us" },
+  "matched": { "id": "ai", "name": "AI → 代理", "out": "us" },
   "skipped": [
     { "id": "ads", "reason": "domain 不匹配：api.openai.com 不在 geosite:category-ads-all" },
     { "id": "cn",  "reason": "domain 不匹配：geosite:cn" }
@@ -486,24 +486,25 @@ const proxyDomain = defineDomain({
 │ ● [重启] [停止] 运行中 xray 26.11 10808 socks / 10809 http │
 ├ 连接 ─┬ 规则 ─┬ 节点 ─┬ 日志 ──────────────────────────┤
 │ 默认出口 [直连 ▾] [校验] [应用] [重置]                     │
-│ [x] 拦截   拦截广告   domain geosite:category-ads-all      │
-│ [x] 直连   国内直连   domain geosite:cn + ip geoip:cn      │
-│ [x] 代理   AI 走美国  domain geosite:openai, …             │
-│ [ ] 直连   公司内网   domain domain:corp.example           │
+│ [x] 拦截   广告 → 拦截         domain geosite:category-ads-all │
+│ [x] 直连   国内域名 → 直连     domain geosite:cn             │
+│ [x] 代理   AI → 代理           domain geosite:openai …  🇺🇸 美国01 │
+│ [ ] 直连   公司域名 → 直连     domain domain:corp.example    │
 └──────────────────────────────────────────────────────────┘
 ```
 
 - **状态条**：状态点固定在行首，启停按钮紧跟状态点（运行中是重启 / 停止，停止时是主操作「启动」），其后才是状态词与端口 / 规则 / 节点 / 内核版本；不再用弹性空白把按钮推到行末。
-- **规则 tab**：默认出口与校验 / 应用 / 重置在同一行、位于列表上方，按钮紧跟在选择框右侧，该行与列表留出间距；列表每行依次是启用开关、上移 / 下移、删除、出口描述与规则名，`out` 为 `proxy` 的规则在规则名后紧跟着显示当前代理节点名字（不推到行尾）。内置出口显示为代理 / 直连 / 拦截；默认出口不提供 `proxy`（它只是当前选中节点的别名），只列具体节点与 `direct` / `block`。新增规则只由模型通过工具完成，面板不提供新增表单。
+- **规则 tab**：默认出口与校验 / 应用 / 重置在同一行、位于列表上方，按钮紧跟在选择框右侧，该行与列表留出间距；列表每行依次是启用开关、上移 / 下移、删除、出口列、规则名与匹配条件、节点名。出口列固定显示策略（代理 / 直连 / 拦截），节点名统一排在规则名**之后**：`out` 是节点出口时显示该节点，是 `proxy` 时显示当前选中节点，直连 / 拦截不显示。顺序在每一行都一致，规则名里也不再重复写节点名或延迟。默认出口不提供 `proxy`（它只是当前选中节点的别名），只列具体节点与 `direct` / `block`。新增规则只由模型通过工具完成，面板不提供新增表单。
+- **规则命名**：`name` 统一写「<对象> → <去处>」，去处只写直连 / 代理 / 拦截，不带节点名、延迟与 emoji；对象用产品本名（`GitHub`、`V2EX`），多个对象用 ` / ` 分隔。约定同时写进随插件分发的 `proxy-routing` skill，模型新增规则时照此命名，避免出现「拦截广告」「GitHub 走代理」「OpenCode 走韩国 01（最快 405ms）」三种句式并存。
 - **应用**：先 `check`，有 error 禁用；有 warning 允许但二次确认；应用后 toast 显示变更条数。
 - **仿真**只保留 agent 工具 `proxy_route_explain`（与 `service.explain` 同一实现）；HTTP `POST /proxy-api/explain` 仍在，供排查时直接查一条流量。面板不再提供「模拟」页签。
 - **节点 tab**：导入订阅与测延迟两个按钮在订阅表单的行首、即订阅地址与名字的左侧，按输入框下沿对齐；其下是节点库存（名字、协议、地址与端口）。节点页不提供「选为默认」，默认出口与规则出口都在规则 tab 选择。
 - **连接 tab**：排在页签第一位，也是面板打开时默认落到的页签；`GET /proxy-api/traffic` 返回访问日志里的最近连接（最新在前），顶部按域名/IP 与出口分类过滤，汇总覆盖整个环形窗口；徽标区分代理 / 直连 / 拦截，代理记录在行末显示实际节点名字，直连与拦截不显示出口。内核停止后仍显示本次会话的历史，并把 `live` 置 false 说明原因。
-- **日志 tab**：`/state` 带回内核与动作日志的尾部（最多 500 行），点明每条连接的出口去「连接」页签看。
+- **日志 tab**：`/state` 带回内核与动作日志的尾部（最多 500 行），**最新的在最上面**：接口仍按时间正序返回（`tailText()` 拼内核 stderr 要的是原顺序），只在渲染时倒过来，最新一条不用滚到底才看得到。点明每条连接的出口去「连接」页签看。
 - 客户端取数走 `fetch('/proxy-api/state')`（同源 cookie，`auth: 'required'`），不引 typert 代码生成；状态轮询 2s，页面隐藏时暂停。
 - **按钮**：所有操作按钮统一黑底白字（主操作 / 危险 / 图标形态只保留语义与尺寸差异），悬停提亮、禁用半透明；页签是导航，仍用下划线选中样式。
 - **实现**：`src/client.tsx` 只做注册，`src/ui/Panel.tsx` 摆骨架、四个页签各自成文件，规则/节点的数据与副作用收在 `src/ui/use-proxy-panel.ts`，「连接」页签在 `src/ui/use-traffic.ts`；样式写在 `.module.css`（构建期换哈希类名、物化时自注入，见 `docs/dsh-css-architecture/02-build-time-css-pipeline.md`），文案走 `ctx.locale` 并由 `locale-context.tsx` 接成 React 上下文。控件按插件规范自写（不 import `dsh-client-ui-primitives`）：颜色取 `--dsw-alias-*` 令牌跟随主题，按钮固定黑底白字。
-- **显示名**：节点出口显示节点名字，内置出口 `proxy` / `direct` / `block` 显示为代理 / 直连 / 拦截；`out` / `<option value>` 仍是出口名；两套兜底（宿主 `nodeLabel()`、浏览器 `src/ui/labels.ts`）保证半部不同批更新时也不渲染成空白。
+- **显示名**：规则行的出口列固定显示策略（代理 / 直连 / 拦截，由浏览器侧 `verdictOf()` 归一化，与宿主 `classifyOut()` 同口径），具体节点名放在规则名之后的徽标里；默认出口下拉仍直接列节点名字，内置出口显示为代理 / 直连 / 拦截。`out` / `<option value>` 仍是出口名；两套兜底（宿主 `nodeLabel()`、浏览器 `src/ui/labels.ts`）保证半部不同批更新时也不渲染成空白。
 
 ## 11. 安全与权限
 

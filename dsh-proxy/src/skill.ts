@@ -30,9 +30,9 @@ const CONTENT = `# 分流路由规则
 {
   "default": "proxy",
   "rules": [
-    { "id": "ads", "name": "拦截广告", "match": { "domain": ["geosite:category-ads-all"] }, "out": "block" },
-    { "id": "cn",  "name": "国内直连", "match": { "domain": ["geosite:cn"], "ip": ["geoip:cn"] }, "out": "direct" },
-    { "id": "ai",  "name": "AI 走美国", "match": { "domain": ["geosite:openai", "domain:anthropic.com"] }, "out": "us" }
+    { "id": "ads", "name": "广告 → 拦截", "match": { "domain": ["geosite:category-ads-all"] }, "out": "block" },
+    { "id": "cn",  "name": "国内域名 → 直连", "match": { "domain": ["geosite:cn"] }, "out": "direct" },
+    { "id": "ai",  "name": "AI → 代理", "match": { "domain": ["geosite:openai", "domain:anthropic.com"] }, "out": "us" }
   ]
 }
 \`\`\`
@@ -69,6 +69,19 @@ const CONTENT = `# 分流路由规则
 | \`keyword:google\` | 包含子串 |
 | \`ext:site.dat:tag\` | 自定义 .dat 里的分类，文件必须放在 geo 目录 |
 | 裸字符串 \`example.com\` | 子串匹配 |
+
+## 规则命名
+
+\`name\` 是给人看的标签，整份规则库用同一个格式：\`<对象> → <去向>\`。
+
+- **对象在前，去向在后**，中间是空格 + \`→\` + 空格；去向只写 \`直连\` / \`代理\` / \`拦截\`，
+  不写具体节点名，也不写延迟。规则到底落到哪个节点由 \`out\` 决定，面板会在名字之后单独显示节点名；
+  把节点名写进 \`name\` 会随换节点一起过时。
+- 对象用产品本名、大小写照原样（\`GitHub\`、\`V2EX\`、\`OpenCode\`、\`Command Code\`）；多个对象用 \` / \` 分隔
+  （\`Google / YouTube\`）；泛指一组站点时用中文词（\`广告\`、\`内网域名\`、\`国内 IP\`）。
+- 不要倒装（不要写「拦截广告」）、不要夹 emoji、版本号、「最快 405ms」这类会变的词。
+- 例：\`广告 → 拦截\`、\`内网域名 → 直连\`、\`Google / YouTube → 代理\`、\`OpenCode → 代理\`。
+- \`name\` 可省略（界面退回显示 \`id\`），最长 80 字符。
 
 ## 推荐流程
 

@@ -48,6 +48,23 @@ export function exitText(
   }
 }
 
+/** 规则出口的归一化分类，与宿主 `classifyOut()` 同一口径。 */
+export type ExitVerdict = 'proxy' | 'direct' | 'block'
+
+/**
+ * 规则的出口归到哪一类：`direct` / `block` 原样，其余（`proxy` 与任意节点出口）都算代理。
+ *
+ * 规则行左边固定显示这个分类，具体节点统一放到规则名之后，避免有的规则节点名在名字前面、
+ * 有的在名字后面。
+ * @param out - 规则的出口名。
+ * @returns 归一化分类。
+ */
+export function verdictOf(out: string): ExitVerdict {
+  if (out === 'direct') return 'direct'
+  if (out === 'block') return 'block'
+  return 'proxy'
+}
+
 /**
  * 节点的展示名：`label` → `name` → `tag` 依次退让。
  * @param node - 带可选 `label` 的节点摘要。
