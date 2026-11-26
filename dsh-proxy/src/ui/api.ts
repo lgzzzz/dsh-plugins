@@ -120,7 +120,6 @@ export interface PanelState {
     exitLabels?: Record<string, string>
     geo: { dir: string; hasGeosite: boolean; hasGeoip: boolean }
     ports: { socks: number; http: number }
-    note: string
   }
   routing: {
     default: string

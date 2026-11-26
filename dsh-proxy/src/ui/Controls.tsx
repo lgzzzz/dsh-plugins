@@ -137,10 +137,10 @@ export function Chip({ children }: { children: ReactNode }) {
 /**
  * 说明文字。
  * @param props.children - 文案。
- * @param props.space - 上边距档位：默认贴在下文之上、`none` 清零、`spaced` / `note` 依次加大。
+ * @param props.space - 上边距档位：默认贴在下文之上、`none` 清零、`spaced` 加大。
  * @returns 段落元素。
  */
-export function Hint({ children, space }: { children: ReactNode; space?: 'none' | 'spaced' | 'note' }) {
+export function Hint({ children, space }: { children: ReactNode; space?: 'none' | 'spaced' }) {
   return (
     <p className={ctl['hint']} data-space={space}>
       {children}

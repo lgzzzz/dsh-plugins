@@ -88,8 +88,6 @@ export interface StatusView {
   exitLabels: Record<string, string>
   geo: { dir: string; hasGeosite: boolean; hasGeoip: boolean }
   ports: { socks: number; http: number }
-  /** 面板底部的一行端口说明。 */
-  note: string
 }
 
 /** 只读视图。 */
@@ -192,7 +190,6 @@ export class ProxyService {
       exitLabels: this.exitLabels(),
       geo: { dir: this.config.geoDir, hasGeosite: geo.hasGeosite === true, hasGeoip: geo.hasGeoip === true },
       ports: { socks: this.config.socksPort, http: this.config.httpPort },
-      note: `监听 127.0.0.1:${this.config.socksPort}（SOCKS）与 127.0.0.1:${this.config.httpPort}（HTTP）。`,
     }
   }
 

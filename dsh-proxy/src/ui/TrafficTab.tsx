@@ -129,8 +129,6 @@ export function TrafficTab() {
           ))}
         </div>
       )}
-
-      <Hint space="note">{t('traffic.hint')}</Hint>
     </div>
   )
 }

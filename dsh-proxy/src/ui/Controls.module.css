@@ -16,7 +16,7 @@
   background: #000;
   color: #fff;
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
 }
 
@@ -54,7 +54,7 @@
   gap: 4px;
   min-width: 120px;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .field[data-span='wide'] {
@@ -83,7 +83,7 @@
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .actions {
@@ -100,7 +100,7 @@
   border-radius: 999px;
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .chip {
@@ -108,13 +108,13 @@
   border-radius: 999px;
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .hint {
   margin: 0 0 12px;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .hint[data-space='none'] {
@@ -125,14 +125,10 @@
   margin-top: 16px;
 }
 
-.hint[data-space='note'] {
-  margin-top: 24px;
-}
-
 .empty {
   padding: 24px 0;
   color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -142,7 +138,7 @@
   border-left: 3px solid var(--dsw-alias-state-warn-primary);
   border-radius: 6px;
   background: var(--dsw-alias-bg-layer-1);
-  font-size: 12px;
+  font-size: 14px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

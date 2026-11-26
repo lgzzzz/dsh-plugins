@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import type { PanelState } from './api.ts'
-import { Button, Hint } from './Controls.tsx'
+import { Button } from './Controls.tsx'
 import { Banner } from './Diagnostics.tsx'
 import { fill } from './locale.ts'
 import type { LocaleKey } from './locale.ts'
@@ -177,8 +177,6 @@ export function ProxyPanel() {
         ) : null}
         {tab === 'traffic' ? <TrafficTab /> : null}
         {tab === 'logs' ? <LogsTab logs={state.logs} /> : null}
-
-        <Hint space="note">{state.status.note}</Hint>
       </div>
     </div>
   )

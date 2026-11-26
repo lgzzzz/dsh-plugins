@@ -12,14 +12,15 @@
   min-height: 0;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
+  font-size: 14px;
 }
 
 .status {
   display: flex;
   flex: none;
   flex-wrap: wrap;
-  /* 按文字基线对齐而不是按盒子居中：这一行混着 13px 的状态词、12px 的元信息、
-     中文与 emoji，各字体的上行/下行高度不同，居中会把它们错开一两个像素。 */
+  /* 按文字基线对齐而不是按盒子居中：这一行混着状态词、元信息、中文与 emoji，
+     各字体的上行/下行高度不同，居中会把它们错开一两个像素。 */
   align-items: baseline;
   gap: 12px;
   padding: 12px 20px;
@@ -49,7 +50,7 @@
 }
 
 .state {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 }
 
@@ -60,7 +61,7 @@
   align-items: baseline;
   gap: 12px;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .spacer {
@@ -84,7 +85,7 @@
   background: none;
   color: var(--dsw-alias-label-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
 }
 
@@ -119,7 +120,7 @@
   flex: none;
   width: 18px;
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -133,7 +134,7 @@
 
 .ruleName {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -141,14 +142,14 @@
 .ruleMatch {
   overflow: hidden;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .logs {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -173,7 +174,7 @@
 
 .trafficSummary {
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .traffic {
@@ -196,13 +197,13 @@
   flex: none;
   color: var(--dsw-alias-label-secondary);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .trafficInbound {
   flex: none;
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .trafficDest {
@@ -210,7 +211,7 @@
   min-width: 0;
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -225,7 +226,7 @@
   border: .5px solid var(--dsw-alias-border-l2);
   border-radius: 999px;
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .verdict[data-verdict='proxy'] {
@@ -243,7 +244,7 @@
   max-width: 180px;
   overflow: hidden;
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
