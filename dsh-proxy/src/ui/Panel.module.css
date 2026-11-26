@@ -1,5 +1,5 @@
 /*
- * 面板骨架与列表布局：状态条、页签、滚动区、规则/节点行、日志区。
+ * 面板骨架与列表布局：状态条、页签、滚动区、规则/节点行、连接行、日志区。
  *
  * 与 Controls.module.css 分工：这里只放「页面结构」，原子控件在那边。
  * 所有颜色 / 描边 / 字体沿用 `--dsw-alias-*` 令牌，跟随宿主明暗主题。
@@ -138,14 +138,104 @@
   white-space: nowrap;
 }
 
-.section {
-  margin-top: 8px;
-}
-
 .logs {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* 「连接」页签：过滤条 + 每条连接一行（时间 / 入站 / 目的 / 分类 / 出口）。 */
+.trafficBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.trafficFilter {
+  width: 220px;
+}
+
+.trafficSelect {
+  width: 120px;
+}
+
+.trafficSummary {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.traffic {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trafficRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.trafficTime {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.trafficInbound {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.trafficDest {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trafficPath {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.verdict {
+  flex: none;
+  padding: 1px 7px;
+  border: .5px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.verdict[data-verdict='proxy'] {
+  border-color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-brand-primary);
+}
+
+.verdict[data-verdict='block'] {
+  border-color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.trafficOut {
+  flex: none;
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

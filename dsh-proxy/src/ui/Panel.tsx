@@ -1,8 +1,8 @@
 /**
  * 主面板：状态条 + 四个页签 + 滚动区。
  *
- * 只有布局与事件转发；数据、轮询与写操作都在 {@link useProxyPanel} 里，
- * 每个页签也只管自己的表单状态。对外文案统一走 {@link useTranslate}。
+ * 只有布局与事件转发；规则/节点的数据、轮询与写操作都在 {@link useProxyPanel} 里，
+ * 「连接」页签的取数在 `use-traffic.ts`。对外文案统一走 {@link useTranslate}。
  */
 
 import { useState } from 'react'
@@ -15,12 +15,12 @@ import { useTranslate } from './locale-context.tsx'
 import { LogsTab } from './LogsTab.tsx'
 import { NodesTab } from './NodesTab.tsx'
 import { RulesTab } from './RulesTab.tsx'
-import { SimulateTab } from './SimulateTab.tsx'
+import { TrafficTab } from './TrafficTab.tsx'
 import { useProxyPanel } from './use-proxy-panel.ts'
 import css from './Panel.module.css'
 
 /** 页签顺序；同时决定 `tab.<id>` 这组词条的键。 */
-const TABS = ['rules', 'nodes', 'simulate', 'logs'] as const
+const TABS = ['rules', 'nodes', 'traffic', 'logs'] as const
 
 /** 页签 id。 */
 type TabId = (typeof TABS)[number]
@@ -180,7 +180,7 @@ export function ProxyPanel() {
             onLatency={panel.testLatency}
           />
         ) : null}
-        {tab === 'simulate' ? <SimulateTab busy={panel.busy} onExplain={panel.explain} /> : null}
+        {tab === 'traffic' ? <TrafficTab /> : null}
         {tab === 'logs' ? <LogsTab logs={state.logs} /> : null}
 
         <Hint space="note">{state.status.note}</Hint>

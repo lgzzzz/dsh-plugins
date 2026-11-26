@@ -65,16 +65,27 @@ export async function echoServer(body) {
 }
 
 /**
+ * 通过 SOCKS 代理请求一个 HTTP 服务（域名交给代理解析）。
+ * @param socksPort - 代理的 SOCKS 端口。
+ * @param host - 目的主机名或 IP。
+ * @param targetPort - 目的 HTTP 端口。
+ * @returns 响应体。
+ */
+export async function curlThroughSocksHost(socksPort, host, targetPort) {
+  const result = await execFile(
+    'curl',
+    ['-m', '6', '-sS', '--socks5-hostname', `127.0.0.1:${socksPort}`, `http://${host}:${targetPort}/`],
+    { encoding: 'utf8' },
+  )
+  return result.stdout
+}
+
+/**
  * 通过 SOCKS 代理请求本机 HTTP 服务。
  * @param socksPort - 代理的 SOCKS 端口。
  * @param targetPort - 本机 HTTP 服务的端口。
  * @returns 响应体。
  */
 export async function curlThroughSocks(socksPort, targetPort) {
-  const result = await execFile(
-    'curl',
-    ['-m', '6', '-sS', '--socks5-hostname', `127.0.0.1:${socksPort}`, `http://127.0.0.1:${targetPort}/`],
-    { encoding: 'utf8' },
-  )
-  return result.stdout
+  return await curlThroughSocksHost(socksPort, '127.0.0.1', targetPort)
 }

@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { createFakeHost } from './fake-host.mjs'
 import { check, checkEqual, finish } from './helpers.mjs'
 import { localSubprocess } from './local-subprocess.mjs'
-import { curlThroughSocks, echoServer, findOnPath, freePorts } from './net-utils.mjs'
+import { curlThroughSocks, curlThroughSocksHost, echoServer, findOnPath, freePorts } from './net-utils.mjs'
 
 const xrayBinary = findOnPath('xray')
 
@@ -68,6 +68,27 @@ if (xrayBinary === null) {
     checkEqual(running.json.routing.rules.map((rule) => rule.id), ['ads', 'corp'], '规则读回')
     checkEqual(await curlThroughSocks(socksPort, target.port), 'hello-from-e2e', '流量穿过内核到达本机服务')
 
+    console.log('e2e: 访问日志记录实际出口')
+
+    let traffic = await call('GET', '/traffic?host=127.0.0.1&limit=20')
+    for (let attempt = 0; attempt < 40 && traffic.json.entries.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      traffic = await call('GET', '/traffic?host=127.0.0.1&limit=20')
+    }
+    checkEqual(traffic.status, 200, '/traffic 返回 200')
+    checkEqual(traffic.json.live, true, '内核运行时访问日志 live')
+    check(traffic.json.entries.length >= 1, '访问日志里有一条经 SOCKS 的连接')
+    checkEqual(traffic.json.entries[0]?.host, '127.0.0.1', '记录的目的地址')
+    checkEqual(traffic.json.entries[0]?.inbound, 'socks', '记录的入站 tag')
+    checkEqual(traffic.json.entries[0]?.out, 'direct', '记录的实际出口')
+    checkEqual(traffic.json.entries[0]?.verdict, 'direct', '记录归一化为直连')
+    check(traffic.json.summary.matched >= 1, '汇总统计到命中项')
+
+    const trafficTool = tools.get('proxy_traffic_read')
+    const toolTraffic = await trafficTool.execute({ host: '127.0.0.1' })
+    check(toolTraffic.summary.matched >= 1, 'proxy_traffic_read 读到同一条连接')
+    checkEqual(toolTraffic.entries[0]?.out, 'direct', '工具返回的出口一致')
+
     console.log('e2e: 内核拒绝后回滚')
 
     const broken = await call('POST', '/write', {
@@ -95,9 +116,37 @@ if (xrayBinary === null) {
     checkEqual(status.ruleCount, 2, 'proxy_status 读到规则数')
     checkEqual(status.core.running, true, 'proxy_status 看到内核在跑')
 
+    console.log('e2e: 走 proxy 出口的连接')
+
+    const proxied = await call('POST', '/write', {
+      mode: 'replace',
+      routing: { default: 'proxy', rules: [] },
+      reason: 'e2e 走 proxy 出口',
+    })
+    checkEqual(proxied.json.applied, true, '切到默认 proxy 出口并应用')
+    try {
+      // 目的用域名：目标 IP 是 127.0.0.1 时会命中「代理服务器自身地址 → direct」的防环规则。
+      await curlThroughSocksHost(socksPort, 'localhost', target.port)
+    } catch {
+      // 假节点不可达：curl 失败是预期结果，访问日志仍会在接受连接时写一行。
+    }
+    let proxyTraffic = await call('GET', '/traffic?verdict=proxy&limit=20')
+    for (let attempt = 0; attempt < 40 && proxyTraffic.json.entries.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      proxyTraffic = await call('GET', '/traffic?verdict=proxy&limit=20')
+    }
+    check(proxyTraffic.json.entries.length >= 1, '访问日志记录到发往 proxy 出口的连接')
+    checkEqual(proxyTraffic.json.entries[0]?.host, 'localhost', '记录的目的域名')
+    checkEqual(proxyTraffic.json.entries[0]?.out, 'proxy', '实际出口 tag 是 proxy')
+    checkEqual(proxyTraffic.json.entries[0]?.outLabel, 'e2e-node', 'proxy 出口显示入队时快照的节点名')
+
     const stopped = await call('POST', '/core', { action: 'stop' })
     checkEqual(stopped.json.ok, true, '停止内核')
     checkEqual(stopped.json.status.state, 'stopped', '停止后状态为 stopped')
+
+    const afterStop = await call('GET', '/traffic')
+    checkEqual(afterStop.json.live, false, '停止后访问日志不再 live')
+    check(afterStop.json.entries.length > 0, '停止后仍能看本次会话的历史记录')
   } finally {
     await target.close()
     for (const dispose of host.disposers.reverse()) {

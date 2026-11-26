@@ -17,6 +17,8 @@ export interface ProxyConfig {
   geoDir?: string
   /** 工具暴露策略；默认 `skill`。 */
   toolExposure?: ToolExposure
+  /** 是否写访问日志（每条连接的目的与出口）。默认 `true`；关闭后「连接」页签没有记录。 */
+  accessLog?: boolean
 }
 
 /** 解析后的配置：路径都是绝对路径，端口都有默认值。 */
@@ -30,6 +32,10 @@ export interface ResolvedConfig {
   geoDir: string
   /** 工具暴露策略：`skill` 或 `always`。 */
   toolExposure: ToolExposure
+  /** 是否写访问日志。 */
+  accessLog: boolean
+  /** 访问日志路径；`accessLog: false` 时不会被使用。 */
+  accessLogPath: string
 }
 
 function portOr(value: unknown, fallback: number): number {
@@ -59,6 +65,9 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
     geoDir,
     // 认识的只有 'always'；拼错或省略都落到默认的按需暴露。
     toolExposure: input.toolExposure === 'always' ? 'always' : 'skill',
+    // 只有显式 false 才关闭：默认要能回答「刚才走没走代理」。
+    accessLog: input.accessLog !== false,
+    accessLogPath: join(dataDir, 'access.log'),
   }
 }
 

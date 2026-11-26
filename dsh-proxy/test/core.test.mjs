@@ -6,10 +6,11 @@
  * 很难稳定制造的分支。
  */
 
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { AccessLog } from '../src/access.ts'
 import { buildXrayConfig } from '../src/compile.ts'
 import { CoreManager, probePort } from '../src/core.ts'
 import { RingLog } from '../src/log.ts'
@@ -29,8 +30,12 @@ function resolvedConfig(overrides) {
   }
 }
 
-/** 建 CoreManager + 替身 Context；`capture` 可截获 spawn 规格。 */
-function makeCore(config) {
+/**
+ * 建 CoreManager + 替身 Context；`capture` 可截获 spawn 规格。
+ * @param config - 解析后的插件配置。
+ * @param access - 可选的访问日志；省略表示这条链路不采集连接记录。
+ */
+function makeCore(config, access) {
   const runtime = localSubprocess()
   const spawned = []
   const originalSpawn = runtime.spawn.bind(runtime)
@@ -40,7 +45,7 @@ function makeCore(config) {
   }
   const log = new RingLog()
   const ctx = { subprocess: runtime }
-  return { core: new CoreManager(ctx, config, log), log, spawned }
+  return { core: new CoreManager(ctx, config, log, access), log, spawned }
 }
 
 /* --------------------------------------------------------------- 节点与规则 */
@@ -239,6 +244,74 @@ mkdirSync(fakeDataDir, { recursive: true })
 mkdirSync(fakeGeoDir, { recursive: true })
 const fakeConfig = resolvedConfig({ coreBinary: fakeBinary, socksPort: fakeSocks, httpPort: fakeHttp, dataDir: fakeDataDir, geoDir: fakeGeoDir })
 const { core: fakeCore, log: fakeLog } = makeCore(fakeConfig)
+
+console.log('core: 访问日志跟随')
+
+const [accessSocks, accessHttp] = await freePorts(2)
+const accessDataDir = join(workDir, 'access-data')
+const accessGeoDir = join(workDir, 'access-geo')
+mkdirSync(accessDataDir, { recursive: true })
+mkdirSync(accessGeoDir, { recursive: true })
+const accessPath = join(accessDataDir, 'access.log')
+const access = new AccessLog(new RingLog(), { path: accessPath, enabled: true, pollMs: 50 })
+const accessView = (query = {}) => access.query(query, { labels: {}, live: access.stats().following })
+const accessBuilt = buildXrayConfig({
+  routing: { default: 'direct', rules: [] },
+  nodes: [],
+  selectedNode: null,
+  socksPort: accessSocks,
+  httpPort: accessHttp,
+  accessLogPath: accessPath,
+})
+checkEqual(accessBuilt.config.log.access, accessPath, '生成配置带上访问日志路径')
+const { core: accessCore } = makeCore(
+  resolvedConfig({
+    coreBinary: fakeBinary,
+    socksPort: accessSocks,
+    httpPort: accessHttp,
+    dataDir: accessDataDir,
+    geoDir: accessGeoDir,
+    accessLog: true,
+    accessLogPath: accessPath,
+  }),
+  access,
+)
+
+/** 轮询等待访问日志里出现至少 count 条记录。 */
+async function waitEntries(count) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    if (accessView().entries.length >= count) break
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return accessView()
+}
+
+await accessCore.start(accessBuilt.config, '测试节点')
+let traffic = await waitEntries(1)
+checkEqual(traffic.entries.length, 1, 'tailer 读到假内核写的访问日志')
+checkEqual(traffic.entries[0]?.host, 'example.com', '访问日志记下目的域名')
+checkEqual(traffic.entries[0]?.out, 'direct', '访问日志记下实际出口')
+checkEqual(traffic.entries[0]?.proxyLabel, '测试节点', 'proxy 节点名在入队时快照')
+checkEqual(traffic.live, true, '内核运行时 live=true')
+
+await accessCore.stop()
+checkEqual(access.stats().following, false, 'stop 后停止尾随')
+await accessCore.start(accessBuilt.config, '测试节点')
+traffic = await waitEntries(2)
+checkEqual(traffic.entries.length, 2, '重启后继续追加，不重复旧行')
+await accessCore.stop()
+
+const disabledPath = join(accessDataDir, 'disabled.log')
+const disabledAccess = new AccessLog(new RingLog(), { path: disabledPath, enabled: false })
+disabledAccess.prepare()
+disabledAccess.follow()
+checkEqual(existsSync(disabledPath), false, 'enabled:false 时 prepare/follow 不创建文件')
+checkEqual(disabledAccess.stats().following, false, 'enabled:false 时不启动尾随')
+checkEqual(
+  buildXrayConfig({ routing: { default: 'direct', rules: [] }, nodes: [], selectedNode: null, socksPort: accessSocks, httpPort: accessHttp, accessLogPath: null }).config.log.access,
+  undefined,
+  'accessLogPath=null 时配置里没有 access 字段',
+)
 
 const first = buildXrayConfig({ routing: { default: 'direct', rules: [] }, nodes: [], selectedNode: null, socksPort: fakeSocks, httpPort: fakeHttp })
 const second = buildXrayConfig({

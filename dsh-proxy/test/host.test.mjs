@@ -28,10 +28,10 @@ console.log('host: 装配')
 checkEqual(routes.length, 1, '注册了一个 HTTP 路由')
 checkEqual(routes[0].path, '/proxy-api', '路由前缀')
 check(routes[0].kind === 'prefix', '路由是 prefix 类型')
-checkEqual(tools.size, 8, '注册了 8 个工具')
+checkEqual(tools.size, 9, '注册了 9 个工具')
 checkEqual(
   [...tools.keys()].sort(),
-  ['proxy_latency_test', 'proxy_nodes_list', 'proxy_route_explain', 'proxy_routing_check', 'proxy_routing_read', 'proxy_routing_write', 'proxy_status', 'proxy_subscription_add'],
+  ['proxy_latency_test', 'proxy_nodes_list', 'proxy_route_explain', 'proxy_routing_check', 'proxy_routing_read', 'proxy_routing_write', 'proxy_status', 'proxy_subscription_add', 'proxy_traffic_read'],
   '工具名齐全',
 )
 checkEqual(
@@ -57,6 +57,21 @@ check(Array.isArray(state.json.routing.exits) && state.json.routing.exits.includ
 const logs = await call('GET', '/logs')
 checkEqual(logs.status, 200, '/logs 返回 200')
 check(logs.json.lines.length > 0, '日志里有加载记录')
+
+const traffic = await call('GET', '/traffic?host=example.com')
+checkEqual(traffic.status, 200, '/traffic 返回 200')
+checkEqual(traffic.json.live, false, '内核未运行时访问日志不是 live')
+check(traffic.json.reason.includes('内核未运行'), '给出未运行的原因')
+checkEqual(traffic.json.entries, [], '内核未运行时没有记录')
+checkEqual(traffic.json.summary.matched, 0, '汇总为空')
+check(traffic.json.note.includes('HTTPS'), '返回访问日志边界说明')
+checkEqual(traffic.json.window.capacity, 1000, '环形窗口容量')
+
+const trafficTool = tools.get('proxy_traffic_read')
+check(trafficTool !== undefined, '注册了 proxy_traffic_read')
+const trafficToolResult = await trafficTool.execute({ host: 'example.com' })
+checkEqual(trafficToolResult.live, false, '工具同样看到内核未运行')
+checkEqual(trafficToolResult.entries.length, 0, '工具没有记录可返回')
 
 console.log('host: 校验接口')
 

@@ -1,5 +1,5 @@
 /**
- * 给模型用的工具集：读、校验、解释、写四类，共 8 个。
+ * 给模型用的工具集：读、校验、解释、写四类，共 9 个。
  *
  * 读与写分离是关键设计：`proxy_routing_check` 与 `proxy_route_explain` 没有副作用，
  * 模型可以反复试错而不重启内核；真正落盘只有一个 `proxy_routing_write`。
@@ -15,6 +15,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { JsonSchemaNode, ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { TrafficQuery } from './access.ts'
 import type { ActivationCondition } from './activation.ts'
 import type { Flow } from './explain.ts'
 import { ID_PATTERN, MATCH_KEYS, NETWORK_VALUES, PROTOCOL_VALUES } from './ir.ts'
@@ -22,7 +23,7 @@ import { MatchKeysHint, RuleSchemaHint } from './skill.ts'
 import type { ProxyService } from './service.ts'
 
 /** 一直可用的工具：状态与现状读取，schema 很小，而且最先被问到。 */
-export const ALWAYS_ON_TOOLS = ['proxy_status', 'proxy_routing_read', 'proxy_nodes_list', 'proxy_latency_test'] as const
+export const ALWAYS_ON_TOOLS = ['proxy_status', 'proxy_routing_read', 'proxy_nodes_list', 'proxy_latency_test', 'proxy_traffic_read'] as const
 
 /** 加载 `proxy-routing` 技能后才出现的工具：schema 贵，且用法要读完技能才清楚。 */
 export const SKILL_GATED_TOOLS = ['proxy_routing_check', 'proxy_route_explain', 'proxy_routing_write', 'proxy_subscription_add'] as const
@@ -156,7 +157,7 @@ const output = { schema: {} as JsonSchemaNode, render: renderJson }
  * 注册全部工具。
  * @param ctx - 宿主 Context。
  * @param service - 应用逻辑。
- * @param activation - 改写类工具的启动条件；省略时 8 个工具全部常驻。
+ * @param activation - 改写类工具的启动条件；省略时 9 个工具全部常驻。
  * @returns 注销全部工具的 disposer。
  */
 export function registerTools(ctx: Context, service: ProxyService, activation?: ActivationCondition): () => void {
@@ -305,9 +306,44 @@ export function registerTools(ctx: Context, service: ProxyService, activation?: 
     },
   }
 
+  const traffic: ToolDefinition = {
+    name: 'proxy_traffic_read',
+    description:
+      '读内核访问日志：某个域名/IP 的实际连接走了哪个出口、是否经过代理。'
+      + '只统计经本插件 SOCKS/HTTP 端口进入的连接；HTTPS 只能看到域名与端口，客户端自行解析 DNS 时只记录 IP。只读。',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        host: {
+          type: 'string',
+          description: '域名、IP 或明文 HTTP 的路径子串，大小写不敏感。例如 api.openai.com 或 1.2.3.4。',
+        },
+        out: {
+          type: 'string',
+          description: '只保留某个出口名的记录：proxy / direct / block 或节点 tag（见 proxy_routing_read 的 exits）。',
+        },
+        verdict: {
+          type: 'string',
+          enum: ['proxy', 'direct', 'block'],
+          description: '按归一化分类过滤：proxy 或节点出口=代理，direct=直连，block=拦截。',
+        },
+        limit: {
+          type: 'integer',
+          description: '最多返回多少条（1–200，默认 50），最新在前。',
+        },
+      },
+    },
+    output,
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      return service.traffic(args as TrafficQuery)
+    },
+  }
+
   // 前半组常驻，后半组等技能加载；`activation` 省略时两组都常驻。
   const gated = new Set<string>(SKILL_GATED_TOOLS)
-  for (const definition of [status, read, check, explain, write, nodes, subscription, latency]) {
+  for (const definition of [status, read, check, explain, write, nodes, subscription, latency, traffic]) {
     disposers.push(
       activation === undefined || !gated.has(definition.name)
         ? ctx.tools.register(definition)

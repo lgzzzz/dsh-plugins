@@ -148,9 +148,26 @@ checkEqual(config.config.outbounds[2].protocol, 'shadowsocks', 'proxy 别名复�
 checkEqual(config.config.outbounds[3].protocol, 'freedom', 'direct 是 freedom')
 checkEqual(config.config.outbounds[4].protocol, 'blackhole', 'block 是 blackhole')
 checkEqual(config.warnings, [], '有选中节点时没有警告')
+checkEqual(config.config.log, { loglevel: 'warning' }, '默认不写访问日志')
+checkEqual(config.proxyLabel, 'US', 'proxy 出口绑定选中节点的展示名')
+
+const withAccess = buildXrayConfig({
+  routing,
+  nodes: [],
+  selectedNode: null,
+  socksPort: 10808,
+  httpPort: 10809,
+  accessLogPath: '/tmp/dsh-proxy-access.log',
+})
+checkEqual(
+  withAccess.config.log,
+  { loglevel: 'warning', access: '/tmp/dsh-proxy-access.log' },
+  '给了路径就写 log.access，日志级别不变',
+)
 
 const noNode = buildXrayConfig({ routing, nodes: [], selectedNode: null, socksPort: 1, httpPort: 2 })
 check(noNode.warnings.length === 1, '没有选中节点时给出警告')
 check(!noNode.config.outbounds.some((entry) => entry.tag === 'proxy'), '没有选中节点时没有 proxy 出口')
+checkEqual(noNode.proxyLabel, null, '没有选中节点时 proxyLabel 为 null')
 
 finish('compile')

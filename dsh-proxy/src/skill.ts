@@ -42,7 +42,7 @@ const CONTENT = `# 分流路由规则
 \`proxy_routing_check\`、\`proxy_route_explain\`、\`proxy_routing_write\`、\`proxy_subscription_add\`
 只在 \`proxy-routing\` 技能加载成功之后才进入工具列表。所以在**上一个**步骤里看不到它们是正常的 ——
 本轮加载之后，下一步就会看到。\`proxy_status\`、\`proxy_routing_read\`、\`proxy_nodes_list\`、
-\`proxy_latency_test\` 一直都在。
+\`proxy_latency_test\`、\`proxy_traffic_read\` 一直都在。
 
 如果已经把本技能加载过、却仍然看不到那四个工具（例如会话被恢复或分叉过），重新加载一次本技能即可。
 
@@ -80,6 +80,14 @@ const CONTENT = `# 分流路由规则
 增量改动用 \`mode: "patch"\`：\`upsert\` 里给完整规则（同 id 就地替换，新 id 追加到末尾），\`delete\` 里给 id。
 整份重写用 \`mode: "replace"\`。
 
+## 实际流量 vs 仿真
+
+- \`proxy_route_explain\` 是**预测**：按当前规则仿真一条流量会命中哪条规则。
+- \`proxy_traffic_read\` 是**事实**：读内核访问日志，回答「刚才的访问实际走了哪个出口」。
+  \`host\` 支持域名 / IP / 明文 HTTP 的路径子串，\`verdict\` 取 proxy / direct / block。
+- 访问日志只覆盖经本插件 SOCKS/HTTP 端口的连接；HTTPS 只能看到域名与端口；客户端自行
+  解析 DNS 时只记录 IP（哪怕嗅探出的 SNI 实际参与了路由）。绕过代理的流量不可见。
+
 ## 常见模板
 
 - 某类站点走指定节点：
@@ -108,10 +116,10 @@ export const routingSkill = {
   name: 'proxy-routing',
   // 目录里模型只看得到 description，所以触发词必须写在这里，而不是只写进 whenToUse。
   description:
-    '调整代理分流规则、给某些域名/IP 加例外、解释某条流量为什么走了某个出口、测节点延迟或导入代理订阅时使用。'
+    '调整代理分流规则、给某些域名/IP 加例外、解释某条流量为什么走了某个出口、查某个网址/IP 实际走没走代理、测节点延迟或导入代理订阅时使用。'
     + '加载后会给出 proxy_routing_check / proxy_route_explain / proxy_routing_write / proxy_subscription_add 四个工具，'
     + '以及规则语义、常见模板和陷阱。',
-  whenToUse: '当用户要调整分流、给某些域名/IP 加例外、解释某条流量为什么走了某个出口，或导入代理订阅时',
+  whenToUse: '当用户要调整分流、给某些域名/IP 加例外、解释某条流量为什么走了某个出口、查某次访问实际走没走代理，或导入代理订阅时',
   content: CONTENT,
   source: 'runtime',
   invocation: { modelInvocable: true, userInvocable: true },

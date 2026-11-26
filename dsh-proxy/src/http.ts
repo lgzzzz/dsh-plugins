@@ -82,6 +82,20 @@ export function registerApi(ctx: Context, service: ProxyService, log: RingLog): 
         sendJson(res, 200, { lines: log.tail(Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 500) : 200) })
         return
       }
+      if (route === '/traffic' && method === 'GET') {
+        // 过滤在服务端做：summary 要覆盖整个环形窗口，不能只统计当前页。
+        const host = url.searchParams.get('host') ?? ''
+        const out = url.searchParams.get('out') ?? ''
+        const verdict = url.searchParams.get('verdict')
+        const limit = url.searchParams.get('limit')
+        sendJson(res, 200, service.traffic({
+          ...(host === '' ? {} : { host }),
+          ...(out === '' ? {} : { out }),
+          ...(verdict === 'proxy' || verdict === 'direct' || verdict === 'block' ? { verdict } : {}),
+          ...(limit === null ? {} : { limit: Number(limit) }),
+        }))
+        return
+      }
       if (method !== 'POST') {
         sendJson(res, 405, { error: `不支持 ${method} ${route}` })
         return

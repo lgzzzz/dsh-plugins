@@ -7,7 +7,7 @@
 
 import type { Routing } from './ir.ts'
 import type { ProxyNode } from './nodes.ts'
-import { outboundForNode } from './nodes.ts'
+import { nodeLabel, outboundForNode } from './nodes.ts'
 import { isIpOrCidr } from './util.ts'
 
 /** 一条 xray 路由规则。 */
@@ -120,6 +120,8 @@ export interface XrayConfigInput {
   /** 路由的 domainStrategy；默认 `IPIfNonMatch`。 */
   domainStrategy?: 'AsIs' | 'IPIfNonMatch' | 'IPOnDemand'
   logLevel?: 'warning' | 'info' | 'debug'
+  /** 访问日志路径；省略或 null = 不写访问日志。 */
+  accessLogPath?: string | null
 }
 
 /** 生成的内核配置；`warnings` 说明降级行为。 */
@@ -128,6 +130,8 @@ export interface XrayConfig {
   /** 参与编译的入站 tag。 */
   inboundTags: string[]
   warnings: string[]
+  /** `proxy` 出口绑定的节点展示名；没有选中节点时为 null。 */
+  proxyLabel: string | null
 }
 
 /** 入站：只监听回环，两个端口都开嗅探（`protocol` 条件依赖它）。 */
@@ -182,8 +186,15 @@ export function buildXrayConfig(input: XrayConfigInput): XrayConfig {
     warnings.push('没有选中的节点：配置里没有 proxy 出口，内核无法启动')
   }
 
+  const log: Record<string, unknown> = { loglevel: input.logLevel ?? 'warning' }
+  // 访问日志是「连接」页签与 proxy_traffic_read 的唯一数据源：每接受一条连接写一行，
+  // 行尾方括号里就是实际命中的出站 tag。关闭时完全不写这个字段。
+  if (input.accessLogPath !== undefined && input.accessLogPath !== null && input.accessLogPath !== '') {
+    log['access'] = input.accessLogPath
+  }
+
   const config: Record<string, unknown> = {
-    log: { loglevel: input.logLevel ?? 'warning' },
+    log,
     inbounds,
     outbounds,
     routing: {
@@ -192,5 +203,10 @@ export function buildXrayConfig(input: XrayConfigInput): XrayConfig {
     },
   }
 
-  return { config, inboundTags: tags, warnings }
+  return {
+    config,
+    inboundTags: tags,
+    warnings,
+    proxyLabel: selected === undefined ? null : nodeLabel(selected),
+  }
 }

@@ -78,7 +78,7 @@
 | 系统代理 / PAC | ❌ | 阶段 4 | 改系统状态，必须显式确认 |
 | 多用户 / JWT | ❌ | | DSH 自带鉴权 |
 | GFWList 更新 | ❌ | 可选 | 依赖第三方数据源 |
-| 日志 | ✅ 尾部 N 行 | 过滤/搜索 | |
+| 日志 | ✅ 内核日志尾部 + 连接记录 | 按域名/IP 过滤连接 | |
 
 边界澄清：这个插件代理的是**用户应用的流量**（应用连 `127.0.0.1:10808`），不会改变 DSH 自己访问模型 API 的路径。如果目标是让 DSH 的模型请求也走代理，那是另一个集成点（进程级 `HTTPS_PROXY` 或 provider 自定义 fetch），会影响所有会话，必须单独设计、单独授权。
 
@@ -271,7 +271,7 @@ type Match = {
 
 ## 7. 让 DSH 编写路由：工具设计
 
-### 7.1 工具集（8 个）
+### 7.1 工具集（9 个）
 
 | 工具 | 类型 | 作用 | 关键返回 |
 |---|---|---|---|
@@ -280,6 +280,7 @@ type Match = {
 | `proxy_subscription_add` | 写 | 添加/更新订阅并同步 | `{added, updated, skipped, errors}` |
 | `proxy_latency_test` | 读 | 测指定节点/全部节点 TCP 握手 | `{nodeId, ms, ok}` |
 | `proxy_routing_read` | 读 | 当前 IR + 编译摘要 + 可用出口名 | `{default, rules, outbounds}` |
+| `proxy_traffic_read` | 读 | 内核访问日志：某域名/IP 实际走了哪个出口 | `{live, entries, summary}` |
 | `proxy_routing_check` | 读 | 只校验不落盘：schema、语义、编译、拟生成配置 | 诊断数组（带 ruleId）+ 出口名 |
 | `proxy_route_explain` | 读 | 仿真一条流命中哪条规则 | 见 §6.5 |
 | `proxy_routing_write` | 写 | 改规则并应用（含回滚） | diff + 应用结果 + 新状态 |
@@ -287,6 +288,7 @@ type Match = {
 设计取舍：
 
 - **读与写分离**：`check` 和 `explain` 无副作用，模型可以反复试错，不每次重启内核。
+- **预测与实际分开**：`proxy_route_explain` 仿真「应该走哪」，`proxy_traffic_read` 读访问日志回答「实际走了哪」；后者的出口是内核真正执行的 outboundTag。
 - **不做 `proxy_apply` 大工具**：写操作只有"改规则"和"改订阅"两类，参数少、语义清楚。
 - 工具名统一 `proxy_` 前缀，避免和未来内置工具撞名。
 - `proxy_routing_check` 与 `proxy_routing_write` 参数同构（`routing` 或 `upsert`/`delete`），只是不落盘；这样"先校验再写"两次调用的输入完全一致，模型不用换形状。
@@ -343,14 +345,14 @@ ctx.skills.register({
 })
 ```
 
-**为什么分两组暴露。** 8 个工具的 schema 合计约 11.2k 字符（≈2.8k token），其中 `check` 与 `write`
+**为什么分两组暴露。** 9 个工具的 schema 合计约 11.4k 字符（≈2.85k token），其中 `check` 与 `write`
 各带一份内联的整份规则 schema，两者占 9.2k 字符。这些内联是按 §7.2 的决定做的（不用 `$ref`），
 所以换不来更便宜的写法；但它们的结论只有读完 skill 才解释得清：`uncertain` / `opaque` / `missing`
 的区别、`patch` 的语义、什么时候回滚。于是：
 
 | 组 | 工具 | 暴露时机 | schema 成本 |
 |---|---|---|---|
-| 常驻 | `proxy_status`、`proxy_routing_read`、`proxy_nodes_list`、`proxy_latency_test` | 一直 | ≈0.4k token |
+| 常驻 | `proxy_status`、`proxy_routing_read`、`proxy_nodes_list`、`proxy_latency_test`、`proxy_traffic_read` | 一直 | ≈0.5k token |
 | 受控 | `proxy_routing_check`、`proxy_route_explain`、`proxy_routing_write`、`proxy_subscription_add` | `proxy-routing` 加载后 | ≈2.4k token |
 
 实现见 `src/activation.ts`：`ctx.tools.register(definition, { when })` 每步求值一次，false 时工具从
@@ -402,7 +404,7 @@ stopped ──start──► starting ──端口就绪──► running
 
 ```json
 {
-  "log": { "loglevel": "warning" },
+  "log": { "loglevel": "warning", "access": "<dataDir>/access.log" },
   "inbounds": [
     { "tag": "socks", "listen": "127.0.0.1", "port": 10808, "protocol": "socks", "settings": { "udp": true } },
     { "tag": "http",  "listen": "127.0.0.1", "port": 10809, "protocol": "http" },
@@ -419,6 +421,34 @@ stopped ──start──► starting ──端口就绪──► running
 ```
 
 `proxy` 一项由选中节点展开（vmess/vless/trojan/shadowsocks 各自结构见 `lib/nodes`）；没有选中节点时拒绝启动并返回明确错误，但规则校验与仿真不依赖内核，仍可用。
+
+### 8.1 连接记录（访问日志）
+
+`log.access` 是「某网址/IP 到底走没走代理」的唯一事实来源：内核每接受一条连接写一行，
+行尾方括号里就是实际参与的 tag。本机 xray 26.11.9 实测格式（不是推测）：
+
+```
+2026/11/26 09:32:47.495539 from tcp:127.0.0.1:56396 accepted tcp:127.0.0.1:18099 [socks -> direct]
+2026/11/26 09:34:54.691686 from udp:127.0.0.1:51067 accepted udp:127.0.0.1:18444 [socks -> proxy]
+2026/11/26 09:32:47.526721 from 127.0.0.1:56400 accepted http://localhost:18099/ [http -> proxy]
+2026/11/26 09:36:34.554696 from 127.0.0.1:56527 accepted //localhost:18099 [http -> direct]
+```
+
+生命周期：插件把 `access` 写进生成的配置 → `xray -test`（会顺带创建空文件）→ 启动前
+`prepare()`（超过 8MiB 截断，否则记下当前 EOF）→ spawn 后 400ms 轮询读增量 → 停止/退出时
+做最后一次 drain。文件是 O_APPEND 的、内核不轮转，所以偏移与上限都由插件自己管；内存里
+保留最近 1000 条，过滤与汇总在服务端做。
+
+边界（界面与工具都照实写）：
+
+- 只有经本插件 SOCKS/HTTP 端口的连接可见；绕过代理的流量不可见。
+- HTTPS 只能看到 `host:port`；明文 HTTP 的路径会被嗅探出来，展示前脱敏查询串。
+- 客户端自行解析 DNS 时只有 IP；嗅探出的 SNI 参与路由但**不进访问日志**（实测：规则
+  `domain:example.com` 命中并走 proxy，日志行仍是 `tcp:127.0.0.1:18443`）。
+- 无字节数、无规则 id；keep-alive 是一条连接一行，不是一次请求一行。
+- 后台的端口就绪探测不产生日志行（实测），不会污染列表。
+- 每个条目入队时快照 `proxy` 出口当前的节点名，重启换节点不会改写历史记录的展示名。
+
 
 内核可替换：`coreBinary` 指向任意兼容实现即可。上游 xray 已带 `proxy/tun`，阶段 4 做全局模式不需要换内核；只有要用 v2rayA fork 的 `dns_module`/`tun-mips` 私有字段时才需要分支，现在不预留。
 
@@ -454,7 +484,7 @@ const proxyDomain = defineDomain({
 ```
 ┌ 代理 ────────────────────────────────────────────────────┐
 │ ● 运行中  xray 26.11   10808 socks / 10809 http  [重启]    │
-├ 节点 ─┬ 规则 ─┬ 模拟 ─┬ 日志 ────────────────────────────┤
+├ 规则 ─┬ 节点 ─┬ 连接 ─┬ 日志 ──────────────────────────┤
 │  1  [x] 拦截广告      domain geosite:category-ads-all  block│
 │  2  [x] 国内直连      domain geosite:cn + ip geoip:cn  direct│
 │  3  [x] AI 走美国     domain geosite:openai, …           us │
@@ -465,10 +495,12 @@ const proxyDomain = defineDomain({
 
 - **规则 tab**：列表 + 行的启用开关 + 行内编辑（条件用标签输入，不用自由文本）；拖拽或"上移/下移"调整顺序。不做带行号的文本编辑器。
 - **应用**：先 `check`，有 error 禁用；有 warning 允许但二次确认；应用后 toast 显示变更条数。
-- **模拟 tab**：域名/IP/端口/网络四个输入 → 结果卡（命中规则名 + 出口 + 跳过原因），与 `proxy_route_explain` 共用后端函数。
-- **日志 tab**：`/proxy-api/logs` SSE 推尾部日志，最多 500 行。
+- **仿真**只保留 agent 工具 `proxy_route_explain`（与 `service.explain` 同一实现）；HTTP `POST /proxy-api/explain` 仍在，供排查时直接查一条流量。面板不再提供「模拟」页签。
+- **连接 tab**：`GET /proxy-api/traffic` 返回访问日志里的最近连接（最新在前），顶部按域名/IP 与出口分类过滤，汇总覆盖整个环形窗口；徽标区分代理 / 直连 / 拦截，并显示实际出口的展示名。内核停止后仍显示本次会话的历史，并把 `live` 置 false 说明原因。
+- **日志 tab**：`/state` 带回内核与动作日志的尾部（最多 500 行），点明每条连接的出口去「连接」页签看。
 - 客户端取数走 `fetch('/proxy-api/state')`（同源 cookie，`auth: 'required'`），不引 typert 代码生成；状态轮询 2s，页面隐藏时暂停。
-- **实现**：`src/client.tsx` 只做注册，`src/ui/Panel.tsx` 摆骨架、四个页签各自成文件，数据与副作用收在 `src/ui/use-proxy-panel.ts`；样式写在 `.module.css`（构建期换哈希类名、物化时自注入，见 `docs/dsh-css-architecture/02-build-time-css-pipeline.md`），文案走 `ctx.locale` 并由 `locale-context.tsx` 接成 React 上下文。控件按插件规范自写（不 import `dsh-client-ui-primitives`），只消费 `--dsw-alias-*` 令牌。
+- **按钮**：所有操作按钮统一黑底白字（主操作 / 危险 / 图标形态只保留语义与尺寸差异），悬停提亮、禁用半透明；页签是导航，仍用下划线选中样式。
+- **实现**：`src/client.tsx` 只做注册，`src/ui/Panel.tsx` 摆骨架、四个页签各自成文件，规则/节点的数据与副作用收在 `src/ui/use-proxy-panel.ts`，「连接」页签在 `src/ui/use-traffic.ts`；样式写在 `.module.css`（构建期换哈希类名、物化时自注入，见 `docs/dsh-css-architecture/02-build-time-css-pipeline.md`），文案走 `ctx.locale` 并由 `locale-context.tsx` 接成 React 上下文。控件按插件规范自写（不 import `dsh-client-ui-primitives`）：颜色取 `--dsw-alias-*` 令牌跟随主题，按钮固定黑底白字。
 - **显示名**：界面上一律显示节点名字，`out` / `<option value>` 仍是出口名；两套兜底（宿主 `nodeLabel()`、浏览器 `src/ui/labels.ts`）保证半部不同批更新时也不渲染成空白。
 
 ## 11. 安全与权限
@@ -490,7 +522,7 @@ const proxyDomain = defineDomain({
 | 0 骨架 | bundle 可安装、侧栏出现"代理"、页面渲染"内核未运行"、`/proxy-api/state` 返回 JSON | 0.5–1 人日 | 安装返回 `applied`；刷新页面看到入口；`curl /proxy-api/state` 200 |
 | 1 规则引擎 | IR schema、编译、语义检查、explain + 三个只读工具 | 1.5–2 人日 | ≥ 40 条单测（字段校验、前缀约定、顺序遮蔽、`ext` 逃逸、禁用规则）；explain 对 20 个样例流命中预期 id |
 | 2 节点与内核 | 订阅解析、outbound 生成、`-test`、启停、应用+回滚、`proxy_nodes_list`、`proxy_routing_write` | 2–3 人日 | 导入真实订阅 → 启动 → `curl --socks5-hostname 127.0.0.1:10808 https://example.com` 成功；写坏规则后旧规则仍生效 |
-| 3 体验 | 四个 tab、行内编辑、diff、状态点、日志流、zh/en 文案、图标、详情页 | 2 人日 | 按 DSH 的 UI 走查清单过一遍；错误态可复现 |
+| 3 体验 | 三个 tab、行内编辑、diff、状态点、日志流、zh/en 文案、图标、详情页 | 2 人日 | 按 DSH 的 UI 走查清单过一遍；错误态可复现 |
 | 4 可选 | geo 解析、模板库、TUN/全局模式、系统代理 | 3–5 人日 | 分平台验收 |
 
 MVP 合计约 **4–6 人日**。阶段 1 与阶段 2 可并行：前者是纯函数，后者依赖外部内核。

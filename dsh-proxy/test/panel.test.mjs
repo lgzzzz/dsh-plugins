@@ -194,7 +194,9 @@ function main() {
     Object.keys(dicts.en).sort(),
     '中英词条键集合一致',
   )
-  check(Object.keys(dicts.zh).length >= 60, '词条数量覆盖四个页签与状态条')
+  check(Object.keys(dicts.zh).length >= 56, '词条数量覆盖四个页签与状态条')
+  checkEqual(dicts.zh['tab.traffic'], '连接', '新增「连接」页签的中文词条')
+  checkEqual(dicts.en['tab.traffic'], 'Connections', '新增「连接」页签的英文词条')
   checkEqual(effects.length, 4, 'apply 只留四个 effect：两套字典 + 两个槽位（样式由构建产物自注入）')
 
   checkEqual(documentStub.tags.length, 2, '两份 CSS Modules 各自注入一条 <style>')
@@ -206,6 +208,9 @@ function main() {
     check(!/(^|[}\s])\.proxy-/.test(css), '样式里没有遗留的全局 .proxy-* 类名')
     check(/\.[A-Za-z0-9]+_(?:panel|button)\{/.test(css), '类名已换成构建哈希')
   }
+
+  const cssText = documentStub.tags.map((tag) => tag.textContent).join('')
+  check(cssText.includes('data-verdict'), '连接页签的徽标样式进了 bundle')
 
   const markup = renderToStaticMarkup(createElement(main.component))
   check(markup.includes('加载中…'), '首帧渲染出加载占位')

@@ -5,11 +5,13 @@
  *
  *   "__fake": { "failTest": true }   → -test 退出码 1
  *   "__fake": { "failStart": true }  → 启动时退出码 1（-test 仍通过）
+ *   "__fake": { "accessLine": "…" }  → 写进 `log.access` 的访问日志行（默认一条直连）
  *
- * 用来覆盖「-test 通过但启动失败 → 回滚」这条真实 xray 很难稳定制造的分支。
+ * 配置了 `log.access` 时，正常启动会追加一行访问日志，用来验证插件的文件尾随；
+ * 真实 xray 的访问日志格式见 src/access.ts 顶部注释。
  */
 
-import { readFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 
 const argv = process.argv.slice(2)
@@ -41,6 +43,20 @@ if (testing) {
 if (fake.failStart === true) {
   console.error(`fake xray: failed to start (${fake.reason ?? 'synthetic start failure'})`)
   process.exit(1)
+}
+
+// 访问日志：插件按 `log.access` 尾随这个文件。
+if (typeof config.log === 'object' && config.log !== null && typeof config.log.access === 'string' && config.log.access !== '') {
+  const rules = Array.isArray(config.routing?.rules) ? config.routing.rules : []
+  const outboundTag = rules[rules.length - 1]?.outboundTag ?? 'direct'
+  const line = typeof fake.accessLine === 'string'
+    ? fake.accessLine
+    : `2026/01/01 00:00:00.000000 from tcp:127.0.0.1:2 accepted tcp:example.com:443 [socks -> ${outboundTag}]`
+  try {
+    appendFileSync(config.log.access, `${line}\n`)
+  } catch (error) {
+    console.error(`fake xray: 写访问日志失败：${error.message}`)
+  }
 }
 
 const ports = Array.isArray(config.inbounds)

@@ -10,5 +10,9 @@
         # Extra domain list data (`geosite.dat` / `geoip.dat`) for `ext:` values.
         geoDir: ''
         # Tool exposure: 'skill' gives the four rule-changing tools only after the
-        # `proxy-routing` skill loads; 'always' exposes all eight from the start.
+        # `proxy-routing` skill loads; 'always' exposes all nine from the start.
         toolExposure: skill
+        # Access log: one line per connection with its actual exit, shown in the
+        # Connections tab and readable through `proxy_traffic_read`. Writes
+        # `<dataDir>/access.log`; set false to record nothing.
+        accessLog: true

@@ -2,23 +2,27 @@
  * 面板共用控件：按钮、字段、表单格、标签、提示条。
  *
  * 类名由 CSS Modules 在构建期换成哈希名（见 docs/dsh-css-architecture/02-build-time-css-pipeline.md），
- * 所以这里的样式只命中本插件自己的元素；颜色 / 边框一律取 `--dsw-alias-*` 令牌，跟随明暗主题。
+ * 所以这里的样式只命中本插件自己的元素；除按钮外，颜色 / 边框一律取 `--dsw-alias-*` 令牌，跟随明暗主题。
  * 状态用 `data-*` 属性选择器表达（DSH UI 的状态开关惯例），不额外拼类名。
+ *
+ * 按钮按产品约定统一黑底白字（固定色值，不随主题变色）：`data-variant` 只影响尺寸与语义，
+ * 悬停提亮、禁用半透明保留反馈。页签属于导航而非按钮，样式在 Panel.module.css。
  */
 
 .button {
   padding: 4px 10px;
-  border: .5px solid var(--dsw-alias-border-l2);
+  border: .5px solid #000;
   border-radius: 6px;
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-primary);
+  background: #000;
+  color: #fff;
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
 .button:hover:not(:disabled) {
-  border-color: var(--dsw-alias-border-l1);
+  border-color: #262626;
+  background: #262626;
 }
 
 .button:disabled {
@@ -26,21 +30,10 @@
   cursor: default;
 }
 
-.button[data-variant='primary'] {
-  border-color: transparent;
-  background: var(--dsw-alias-brand-primary);
-  color: #fff;
-}
-
-.button[data-variant='danger'] {
-  color: var(--dsw-alias-state-error-primary);
-}
-
+/* 图标按钮：同一套黑底白字，只收窄内边距、去掉描边。 */
 .button[data-variant='icon'] {
   padding: 2px 6px;
   border: none;
-  background: none;
-  color: var(--dsw-alias-label-secondary);
 }
 
 .form {
@@ -156,21 +149,4 @@
 
 .diag[data-severity='error'] {
   border-left-color: var(--dsw-alias-state-error-primary);
-}
-
-.card {
-  margin-top: 12px;
-  padding: 12px;
-  border: .5px solid var(--dsw-alias-border-l1);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-1);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.kv {
-  display: flex;
-  gap: 8px;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
 }

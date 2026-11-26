@@ -1,9 +1,9 @@
 /**
  * 改写类工具的按需暴露。
  *
- * 四个只读工具常驻；另外四个（`check` / `explain` / `write` / `subscription`）只在
+ * 五个只读工具常驻；另外四个（`check` / `explain` / `write` / `subscription`）只在
  * `proxy-routing` 技能成功加载之后才进入工具列表。这样做是因为这四项合计承担了
- * 全部 8 个工具 schema 里约 2.4k token 的大头，而它们的结论只有读完技能才解释得清：
+ * 全部 9 个工具 schema 里约 2.4k token 的大头，而它们的结论只有读完技能才解释得清：
  * `uncertain` / `opaque` / `missing` 的区别、`patch` 的语义、什么时候会回滚。
  *
  * 两个解锁来源，覆盖模型和用户两条入口：

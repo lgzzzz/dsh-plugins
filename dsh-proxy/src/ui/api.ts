@@ -11,6 +11,52 @@ export interface LogLine {
   text: string
 }
 
+/** 归一化后的出口分类：代理（proxy 或节点 tag）、直连、拦截。 */
+export type TrafficVerdict = 'proxy' | 'direct' | 'block'
+
+/** 一条连接记录（`/traffic` 的展示形状）。 */
+export interface TrafficEntry {
+  time: number
+  source: string
+  network: 'tcp' | 'udp'
+  inbound: string
+  /** 目的域名或 IP。 */
+  host: string
+  port: number | null
+  /** 仅明文 HTTP 有：已脱敏的路径。 */
+  path?: string
+  /** 实际命中的出站 tag。 */
+  out: string
+  /** 出口展示名；节点出口是节点名字。 */
+  outLabel: string
+  verdict: TrafficVerdict
+}
+
+/** `/traffic` 的响应。 */
+export interface TrafficView {
+  /** 访问日志是否正在写。 */
+  live: boolean
+  /** `live: false` 的原因。 */
+  reason?: string
+  /** 访问日志文件路径。 */
+  file: string
+  /** 命中项，最新在前。 */
+  entries: TrafficEntry[]
+  summary: {
+    matched: number
+    proxied: number
+    direct: number
+    blocked: number
+    byOut: Record<string, number>
+    first: number | null
+    last: number | null
+  }
+  window: { capacity: number; kept: number; dropped: number; parseErrors: number }
+  warnings: string[]
+  /** 固定的边界说明。 */
+  note: string
+}
+
 /** 一份规则库校验诊断。 */
 export interface Diagnostic {
   severity: 'error' | 'warning'
@@ -33,40 +79,6 @@ export interface Rule {
 export interface Routing {
   default: string
   rules: Rule[]
-}
-
-/** explain 结果里的一条候选规则。 */
-export interface ExplainHit {
-  id: string
-  name?: string
-  out: string
-  /** `out` 的展示名：节点出口显示节点名字；旧宿主不给时按出口名显示。 */
-  outLabel?: string
-  position: number
-}
-
-/** 一条可能命中但结论不必然的规则。 */
-export interface ExplainUncertain extends ExplainHit {
-  kind: 'opaque' | 'missing'
-  reason: string
-}
-
-/** 一条因前提不成立而被跳过的规则。 */
-export interface ExplainSkipped extends ExplainHit {
-  reason: string
-}
-
-/** `/explain` 的流匹配结论。 */
-export interface ExplainResult {
-  matched: ExplainHit | null
-  uncertain: ExplainUncertain[]
-  skipped: ExplainSkipped[]
-  fallbackOut: string
-  /** 默认出口的展示名；旧宿主不给时按出口名显示。 */
-  fallbackOutLabel?: string
-  certain: boolean
-  warnings: string[]
-  assumptions: string[]
 }
 
 /** 一个节点的库存信息（不含凭据）。 */

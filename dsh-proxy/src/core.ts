@@ -10,6 +10,7 @@ import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
 import { chmodSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { connect } from 'node:net'
 import { join } from 'node:path'
+import type { AccessLog } from './access.ts'
 import type { ResolvedConfig } from './config.ts'
 import type { RingLog } from './log.ts'
 
@@ -74,6 +75,8 @@ export class CoreManager {
   private readonly ctx: Context
   private readonly config: ResolvedConfig
   private readonly log: RingLog
+  /** 访问日志；省略表示这条链路不采集连接记录（测试里常见）。 */
+  private readonly access: AccessLog | undefined
   private handle: SubprocessHandle | undefined
   private state: CoreState = 'stopped'
   private binary: string | null = null
@@ -82,11 +85,14 @@ export class CoreManager {
   private lastError: string | null = null
   private startedAt: number | null = null
   private stopping = false
+  /** 上一份「真的起来过」的配置里 `proxy` 出口绑定的节点名，回滚时沿用。 */
+  private lastGoodProxyLabel: string | null = null
 
-  constructor(ctx: Context, config: ResolvedConfig, log: RingLog) {
+  constructor(ctx: Context, config: ResolvedConfig, log: RingLog, access?: AccessLog) {
     this.ctx = ctx
     this.config = config
     this.log = log
+    this.access = access
   }
 
   /** 生成配置的路径。 */
@@ -177,9 +183,10 @@ export class CoreManager {
    * 记下这份「真的起来过」的配置，供下一次启动失败时回滚。只在启动成功之后写：
    * 先写会让「从未启动成功的配置」成为回滚目标。
    */
-  private rememberGoodConfig(): void {
+  private rememberGoodConfig(proxyLabel: string | null): void {
     try {
       writeFileSync(this.lastGoodPath, readFileSync(this.configPath), { mode: 0o600 })
+      this.lastGoodProxyLabel = proxyLabel
     } catch (error) {
       this.log.push('error', `记录上一份好配置失败：${(error as Error).message}`)
     }
@@ -229,8 +236,12 @@ export class CoreManager {
     }
   }
 
-  /** 启动内核；已在运行时直接返回。 */
-  async start(body: Record<string, unknown>): Promise<void> {
+  /**
+   * 启动内核；已在运行时直接返回。
+   * @param body - 完整的内核配置。
+   * @param proxyLabel - `proxy` 出口当前绑定的节点展示名，写进访问日志的展示字段。
+   */
+  async start(body: Record<string, unknown>, proxyLabel: string | null = null): Promise<void> {
     if (this.state === 'running') return
     const resolved = await this.resolveBinary()
     if (resolved.path === null) {
@@ -239,6 +250,9 @@ export class CoreManager {
       throw new Error(this.lastError)
     }
     this.writeConfigFile(body)
+    // 访问日志顺序要求：`xray -test` 会创建空文件，所以偏移放在它之后、spawn 之前算。
+    this.access?.bindProxy(proxyLabel)
+    this.access?.prepare()
     this.state = 'starting'
     this.stopping = false
     this.lastError = null
@@ -255,6 +269,7 @@ export class CoreManager {
       })
       this.handle = handle
       void this.observe(handle)
+      this.access?.follow()
     } catch (error) {
       this.state = 'error'
       this.lastError = (error as Error).message
@@ -274,7 +289,7 @@ export class CoreManager {
     }
     this.state = 'running'
     this.startedAt = Date.now()
-    this.rememberGoodConfig()
+    this.rememberGoodConfig(proxyLabel)
     this.log.push('action', `内核已就绪：socks 127.0.0.1:${this.config.socksPort}，http 127.0.0.1:${this.config.httpPort}`)
   }
 
@@ -284,6 +299,7 @@ export class CoreManager {
       const outcome = await handle.done
       if (this.stopping) return
       if (this.handle !== handle) return
+      this.access?.unfollow()
       const stderr = `${handle.collected.stderr?.readFrom(0).text ?? ''}`.trim()
       if (stderr !== '') this.log.push('core', stderr)
       this.state = 'error'
@@ -293,6 +309,7 @@ export class CoreManager {
       this.handle = undefined
     } catch (error) {
       if (this.stopping) return
+      this.access?.unfollow()
       this.state = 'error'
       this.lastError = (error as Error).message
       this.log.push('error', `内核进程异常：${this.lastError}`)
@@ -311,10 +328,11 @@ export class CoreManager {
     return false
   }
 
-  /** 停止内核；没在运行时是空操作。 */
+  /** 停止内核；没在运行时是空操作。访问日志的尾随无论如何都要停。 */
   async stop(): Promise<void> {
     const handle = this.handle
     if (handle === undefined) {
+      this.access?.unfollow()
       this.state = 'stopped'
       this.startedAt = null
       return
@@ -327,6 +345,8 @@ export class CoreManager {
     } catch {
       // 进程已经不在，或提供方无法观察它 —— 都不该阻塞停用。
     }
+    // 进程退出后再停尾随：把停止前最后写入的几行也读进来。
+    this.access?.unfollow()
     this.state = 'stopped'
     this.startedAt = null
     this.log.push('action', '内核已停止')
@@ -336,8 +356,9 @@ export class CoreManager {
    * 应用一份新配置：先 `-test` 校验，通过才写盘并重启；启动失败时用上一份好配置
    * 再起一次，并把失败原因返回给调用方。
    * @param body - 完整的内核配置。
+   * @param proxyLabel - `proxy` 出口当前绑定的节点展示名。
    */
-  async apply(body: Record<string, unknown>): Promise<{ applied: boolean; tested: boolean; error?: string; rolledBack?: boolean }> {
+  async apply(body: Record<string, unknown>, proxyLabel: string | null = null): Promise<{ applied: boolean; tested: boolean; error?: string; rolledBack?: boolean }> {
     const testResult = await this.test(body)
     if (!testResult.ok) {
       return { applied: false, tested: false, error: testResult.output === '' ? '配置校验失败（xray -test 退出码非 0）' : testResult.output }
@@ -346,7 +367,7 @@ export class CoreManager {
     const wasRunning = this.state === 'running' || this.state === 'starting'
     try {
       if (wasRunning) await this.stop()
-      await this.start(body)
+      await this.start(body, proxyLabel)
       return { applied: true, tested: true }
     } catch (error) {
       const reason = (error as Error).message
@@ -354,7 +375,7 @@ export class CoreManager {
       this.log.push('error', `新配置启动失败，回滚到上一份：${reason}`)
       try {
         this.writeConfigFile(JSON.parse(previous) as Record<string, unknown>)
-        await this.start(JSON.parse(previous) as Record<string, unknown>)
+        await this.start(JSON.parse(previous) as Record<string, unknown>, this.lastGoodProxyLabel)
         return { applied: false, tested: true, error: reason, rolledBack: true }
       } catch (rollbackError) {
         this.state = 'error'

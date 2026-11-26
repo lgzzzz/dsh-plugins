@@ -54,15 +54,15 @@ const { tools, toolOptions, emit } = host
 
 checkEqual(
   [...ALWAYS_ON_TOOLS].sort(),
-  ['proxy_latency_test', 'proxy_nodes_list', 'proxy_routing_read', 'proxy_status'],
-  '常驻组是四个只读工具',
+  ['proxy_latency_test', 'proxy_nodes_list', 'proxy_routing_read', 'proxy_status', 'proxy_traffic_read'],
+  '常驻组是五个只读工具',
 )
 checkEqual(
   [...SKILL_GATED_TOOLS].sort(),
   ['proxy_route_explain', 'proxy_routing_check', 'proxy_routing_write', 'proxy_subscription_add'],
   '受控组是校验 / 解释 / 写入 / 订阅',
 )
-checkEqual(ALWAYS_ON_TOOLS.length + SKILL_GATED_TOOLS.length, tools.size, '两组之和就是全部 8 个工具')
+checkEqual(ALWAYS_ON_TOOLS.length + SKILL_GATED_TOOLS.length, tools.size, '两组之和就是全部 9 个工具')
 checkEqual(
   [...toolOptions.keys()].sort(),
   [...SKILL_GATED_TOOLS].sort(),
@@ -130,7 +130,7 @@ console.log('activation: toolExposure=always 全部常驻')
 const alwaysHost = createFakeHost()
 await apply(alwaysHost.ctx, { toolExposure: 'always', geoDir: join(home, 'geo') })
 checkEqual(alwaysHost.toolOptions.size, 0, 'always 策略下没有工具带条件')
-checkEqual(alwaysHost.tools.size, 8, 'always 策略下仍是 8 个工具')
+checkEqual(alwaysHost.tools.size, 9, 'always 策略下仍是 9 个工具')
 checkEqual(alwaysHost.skills.length, 1, 'always 策略下技能照常注册')
 
 rmSync(home, { recursive: true, force: true })

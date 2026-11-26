@@ -6,7 +6,7 @@
  *
  * 代码分层见 `src/ui/`：
  *
- * - `Panel.tsx` 面板骨架与状态条，`RulesTab` / `NodesTab` / `SimulateTab` / `LogsTab` 四个页签；
+ * - `Panel.tsx` 面板骨架与状态条，`RulesTab` / `NodesTab` / `TrafficTab` / `LogsTab` 四个页签；
  * - `use-proxy-panel.ts` 数据与副作用（轮询、草稿、写操作），页面组件只做渲染；
  * - `Controls.tsx` + `Controls.module.css` 面板自有控件，`Panel.module.css` 骨架与列表布局；
  * - `locale.ts` 中英词条，`locale-context.tsx` 把 `ctx.locale` 接成 React 上下文。

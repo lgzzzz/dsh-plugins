@@ -11,7 +11,11 @@ import type {
 } from 'react'
 import ctl from './Controls.module.css'
 
-/** 按钮的四种形态：默认描边、主操作、危险、纯图标的行内小按钮。 */
+/**
+ * 按钮的四种形态：默认、主操作、危险、纯图标的行内小按钮。
+ *
+ * 四者配色一致（黑底白字，见 `Controls.module.css`），形态只表达语义与尺寸差异。
+ */
 export type ButtonVariant = 'default' | 'primary' | 'danger' | 'icon'
 
 /** {@link Button} 的入参：原生按钮属性上加一个形态选择。 */

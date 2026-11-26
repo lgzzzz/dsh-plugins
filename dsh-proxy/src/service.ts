@@ -8,6 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { existsSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
+import { AccessLog, type TrafficQuery, type TrafficView } from './access.ts'
 import { buildXrayConfig, compileRouting } from './compile.ts'
 import { ensureDataDir, type ResolvedConfig } from './config.ts'
 import { CoreManager, type CoreStatus } from './core.ts'
@@ -119,6 +120,8 @@ export class ProxyService {
   readonly config: ResolvedConfig
   readonly store: ProxyStore
   readonly core: CoreManager
+  /** 内核访问日志：连接记录的来源。 */
+  readonly access: AccessLog
   private readonly ctx: Context
   private readonly log: RingLog
 
@@ -128,7 +131,11 @@ export class ProxyService {
     this.store = store
     this.log = log
     ensureDataDir(config)
-    this.core = new CoreManager(ctx, config, log)
+    this.access = new AccessLog(log, {
+      path: config.accessLogPath,
+      enabled: config.accessLog,
+    })
+    this.core = new CoreManager(ctx, config, log, this.access)
   }
 
   /** 当前可用出口：内置三个 + 节点 tag。 */
@@ -225,6 +232,31 @@ export class ProxyService {
     if (routing === undefined || !shapeOk) return { valid: false, diagnostics, exits, exitLabels: labels, compiled: null }
     const compiled = compileRouting(routing, { nodes: this.store.nodes() })
     return { valid: diagnostics.every((entry) => entry.severity !== 'error'), diagnostics, exits, exitLabels: labels, compiled }
+  }
+
+  /**
+   * 最近连接：查询内核访问日志，回答「某个域名/IP 实际走了哪个出口」。
+   * 内核停止后仍返回本次会话已有的记录，只把 `live` 置 false 并说明原因。
+   * @param query - 过滤条件；字段之间是「且」。
+   */
+  traffic(query: TrafficQuery = {}): TrafficView {
+    const stats = this.access.stats()
+    const running = this.core.status().running
+    const live = this.config.accessLog && running && stats.following
+    let reason: string | undefined
+    if (!live) {
+      if (!this.config.accessLog) reason = '访问日志已关闭（accessLog: false）'
+      else if (!running) reason = '内核未运行：以下是本次会话已有的记录'
+      else if (stats.lastError !== null) reason = `访问日志读取失败：${stats.lastError}`
+      else reason = '访问日志未在跟随'
+    }
+    return this.access.query(query, {
+      labels: this.exitLabels(),
+      exits: this.exits(),
+      live,
+      ...(reason === undefined ? {} : { reason }),
+      file: this.config.accessLogPath,
+    })
   }
 
   /** 仿真一条流量。 */
@@ -356,7 +388,7 @@ export class ProxyService {
     }
 
     const config = this.buildConfig(candidate)
-    const outcome = await this.core.apply(config.config)
+    const outcome = await this.core.apply(config.config, config.proxyLabel)
     if (outcome.applied) {
       this.log.push('action', '新规则已应用到内核')
       return {
@@ -392,6 +424,7 @@ export class ProxyService {
       selectedNode: this.store.selectedNode(),
       socksPort: this.config.socksPort,
       httpPort: this.config.httpPort,
+      accessLogPath: this.config.accessLog ? this.config.accessLogPath : null,
     })
   }
 
@@ -523,7 +556,7 @@ export class ProxyService {
     const built = this.buildConfig()
     try {
       if (action === 'restart' && this.core.status().running) await this.core.stop()
-      await this.core.start(built.config)
+      await this.core.start(built.config, built.proxyLabel)
       return { ok: true, message: action === 'restart' ? '内核已重启' : '内核已启动', status: this.core.status() }
     } catch (error) {
       return { ok: false, message: (error as Error).message, status: this.core.status() }

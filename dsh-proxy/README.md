@@ -18,6 +18,10 @@ Xray-core binary executes them.
   kernel actually loads.
 - Simulates one flow against the current rules, reporting the matching rule and
   why the earlier ones were skipped.
+- Appends one line per connection to `<dataDir>/access.log` — destination host
+  or IP plus the exit the kernel actually used — and exposes it in the panel's
+  Connections tab and through `proxy_traffic_read`. The log is local and can be
+  turned off with `accessLog: false`.
 - Never downloads a binary, never binds anything but `127.0.0.1`, never changes
   the system proxy, and never routes DSH's own model API traffic.
 
@@ -33,7 +37,7 @@ has no `.dat` files.
 
 ## Tools
 
-Four read-only tools are always available; the four that change or prove rules
+Five read-only tools are always available; the four that change or prove rules
 appear only after the `proxy-routing` skill loads. Those four carry the bulk of
 the rule JSON schema — roughly 2.4k tokens between `check` and `write` alone —
 and their results (the difference between `uncertain`, `opaque`, and `missing`,
@@ -46,28 +50,43 @@ instructions are in context.
 | `proxy_nodes_list` | always | Configured exits (redacted) and subscriptions |
 | `proxy_latency_test` | always | TCP handshake latency to one node or all exits |
 | `proxy_routing_read` | always | Current rule set, compiled preview, available exits |
+| `proxy_traffic_read` | always | Recent connections: which exit each host or IP actually used |
 | `proxy_routing_check` | after `proxy-routing` | Validate a candidate rule set without saving |
 | `proxy_route_explain` | after `proxy-routing` | Simulate one flow against the saved rules |
 | `proxy_routing_write` | after `proxy-routing` | Save a rule change; applies it with rollback |
 | `proxy_subscription_add` | after `proxy-routing` | Import a subscription URI list, once or updated |
 
+`proxy_route_explain` predicts; `proxy_traffic_read` reports what the kernel
+did. The access log only covers connections through the plugin's SOCKS/HTTP
+ports, reveals no HTTPS path, and records only an IP when the client resolves
+DNS itself — sniffing may still have routed on the SNI, but the log cannot show
+that domain.
+
 Activation comes from either entry point: a model `skill` call, or the user's
 own `/proxy-routing` message. A native-mode session keeps the declarations in
 its request header, so resume and fork stay unlocked; a PTC session records
 only `run_code`, and the skill says to load it again when the tools are
-missing. Set `toolExposure: 'always'` in the plugin config to expose all eight
+missing. Set `toolExposure: 'always'` in the plugin config to expose all nine
 tools unconditionally.
 
 ## Panel
 
 Sidebar entry「分流路由」 → rules list with enable toggles and reordering,
-node inventory, traffic simulator, and a log tail.
+node inventory, connection records, and a log tail.
+
+The Connections tab reads `GET /proxy-api/traffic` and lists one row per
+access-log line: time, inbound, destination, verdict (proxied / direct /
+blocked) and the exit that was used. Filtering runs on the host, so the summary
+covers the whole in-memory window rather than the visible page. Records survive
+a kernel restart for the life of the plugin; the file itself is capped at 8MiB
+and truncated before the kernel starts only when it exceeds that.
 
 The panel is React 18 rendered inside the host slots: `src/client.tsx` registers
 the sidebar entry and the `main` panel, `src/ui/` holds the components, styles
-(CSS Modules), fetch layer and dictionaries, and `src/ui/use-proxy-panel.ts`
-owns polling and writes. Text goes through `ctx.locale`; controls are written
-against the `--dsw-alias-*` tokens rather than importing host primitives.
+(CSS Modules), fetch layer and dictionaries, and `src/ui/use-proxy-panel.ts` /
+`src/ui/use-traffic.ts` own polling and writes. Text goes through `ctx.locale`; controls are written
+against the `--dsw-alias-*` tokens rather than importing host primitives, except
+buttons, which are uniformly black with white text.
 
 ## Exit names and tags
 
@@ -79,8 +98,8 @@ Nodes are matched by `protocol + server + port + credential`, so re-importing a
 subscription keeps both.
 
 Everything that a person reads shows the name: the exit dropdowns, the rule and
-default rows, the selected node in the status bar, the node list, and the
-simulator's matched/skipped lines. Diagnostics and logs name the offending exit
+default rows, the selected node in the status bar, and the node list. Diagnostics
+and logs name the offending exit
 the same way. The tag stays the stable identifier because the tag is what
 `geosite:`-class values cannot be, what survives a name edit, and what the
 kernel config refers to; renaming the node changes the label, not the rule.

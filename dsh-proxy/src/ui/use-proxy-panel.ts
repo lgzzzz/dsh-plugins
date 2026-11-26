@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, describeError } from './api.ts'
 import type {
-  CheckResult, Diagnostic, ExplainResult, MessageResult, PanelState, Routing, WriteResult,
+  CheckResult, Diagnostic, MessageResult, PanelState, Routing, WriteResult,
 } from './api.ts'
 import type { LocaleKey } from './locale.ts'
 
@@ -53,8 +53,6 @@ export interface ProxyPanelController {
   readonly selectNode: (id: string) => void
   /** 对所有节点测一轮 TCP 延迟。 */
   readonly testLatency: () => void
-  /** 仿真一条流量会命中哪条规则。 */
-  readonly explain: (flow: Record<string, unknown>) => Promise<ExplainResult>
 }
 
 /**
@@ -203,6 +201,5 @@ export function useProxyPanel(t: (key: LocaleKey) => string): ProxyPanelControll
     importSubscription,
     selectNode,
     testLatency,
-    explain: (flow) => api<ExplainResult>('/explain', flow),
   }
 }
