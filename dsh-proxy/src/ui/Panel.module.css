@@ -64,12 +64,6 @@
   font-size: 14px;
 }
 
-.spacer {
-  flex: 1;
-  /* 撑开用，没有文字；放在基线上会参与高度计算。 */
-  align-self: center;
-}
-
 .tabs {
   display: flex;
   flex: none;

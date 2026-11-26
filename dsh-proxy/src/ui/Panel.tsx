@@ -62,7 +62,9 @@ interface StatusBarProps {
 }
 
 /**
- * 面板顶部的状态条：状态点、端口、规则/节点计数、内核版本，以及启停按钮。
+ * 面板顶部的状态条：状态点、启停按钮、状态词、端口、规则/节点计数、内核版本。
+ *
+ * 按钮紧跟状态点，随状态点一起贴住行首；不再用弹性空白把它们推到行末。
  * @param props - 快照与启停回调。
  * @returns 状态条元素。
  */
@@ -72,6 +74,14 @@ function StatusBar({ state, busy, onStart, onStop, onRestart }: StatusBarProps) 
   return (
     <div className={css['status']}>
       <span className={css['dot']} data-state={core.state} />
+      {core.running ? (
+        <>
+          <Button disabled={busy} onClick={onRestart}>{t('action.restart')}</Button>
+          <Button disabled={busy} onClick={onStop}>{t('action.stop')}</Button>
+        </>
+      ) : (
+        <Button variant="primary" disabled={busy} onClick={onStart}>{t('action.start')}</Button>
+      )}
       <span className={css['state']}>{stateLabel(core.state, t)}</span>
       <span className={css['meta']}>
         <span>
@@ -86,15 +96,6 @@ function StatusBar({ state, busy, onStart, onStop, onRestart }: StatusBarProps) 
           {t('status.binary')}：{core.version ?? (core.binary === null ? t('status.binaryMissing') : core.binary)}
         </span>
       </span>
-      <span className={css['spacer']} />
-      {core.running ? (
-        <>
-          <Button disabled={busy} onClick={onRestart}>{t('action.restart')}</Button>
-          <Button disabled={busy} onClick={onStop}>{t('action.stop')}</Button>
-        </>
-      ) : (
-        <Button variant="primary" disabled={busy} onClick={onStart}>{t('action.start')}</Button>
-      )}
     </div>
   )
 }
