@@ -1,5 +1,5 @@
 /**
- * 改动面板行为的总装：把六条彼此独立的默认行为装到同一个客户端插件里。
+ * 改动面板行为的总装：把七条彼此独立的默认行为装到同一个客户端插件里。
  *
  *   1. **打开呈现策略**（`presentation.ts`）：指定入口（改动卡片标题、`⌘⌥Y`、会话面板那行
  *      「本地变更」）默认全屏，其余打开一律非全屏；会话面板那一行的判定在 `session-panel.ts`，
@@ -9,17 +9,20 @@
  *   4. **审查换行默认**（`wrap-default.ts`）：新审查标签页默认自动换行；
  *   5. **卡片悬停浮层关闭**（`hover-gate.ts`）与**字号 14px**（`font-14.ts`）；
  *   6. **文件树宽度固定**（`tree-fixed.ts`）：「本地变更」「变更请求」左侧文件列表的宽度固定为
- *      上游默认值，隐藏既是拖动入口也是键盘入口的那条分隔条。
+ *      上游默认值，隐藏既是拖动入口也是键盘入口的那条分隔条；
+ *   7. **行内评论框键盘约定**（`comment-keys.ts`）：Enter 添加到输入框、Shift+Enter 换行、
+ *      Esc 取消。
  *
- * 这些行为原先分在五个插件里（文件树宽度是后加的一条），彼此都只依赖上游 DOM 锚点与右栏
- * 公开面，没有共享服务或配置；合并后仍然各自独立安装、独立失败：某一条的锚点失效只影响它
- * 自己，不会阻止其余行为。总装上只多一个文档根标记 `data-dsh-changes-behavior`，卸载时逆序
- * 清理全部监听、观察器、样式与服务包层。
+ * 这些行为原先分在五个插件里（文件树宽度与评论框键盘是后加的两条），彼此都只依赖上游 DOM
+ * 锚点与右栏公开面，没有共享服务或配置；合并后仍然各自独立安装、独立失败：某一条的锚点失效
+ * 只影响它自己，不会阻止其余行为。总装上只多一个文档根标记 `data-dsh-changes-behavior`，
+ * 卸载时逆序清理全部监听、观察器、样式与服务包层。
  *
  * 上游锚点、覆盖边界与手工验证方式见 docs/dsh-changes-behavior.md。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { installCardBehavior, serviceOf } from './card.ts'
+import { installCommentKeys } from './comment-keys.ts'
 import { installFont14 } from './font-14.ts'
 import { installHoverGate } from './hover-gate.ts'
 import { installOpenPolicy } from './presentation.ts'
@@ -104,6 +107,7 @@ export function installChangesBehavior(
   add('hover gate', () => installHoverGate(doc as unknown as Parameters<typeof installHoverGate>[0]))
   add('font 14', () => installFont14(doc as unknown as Parameters<typeof installFont14>[0]))
   add('tree fixed', () => installFixedTreeWidth(doc as unknown as Parameters<typeof installFixedTreeWidth>[0]))
+  add('comment keys', () => installCommentKeys(doc as unknown as Parameters<typeof installCommentKeys>[0], { warn }))
 
   return () => {
     for (let index = disposers.length - 1; index >= 0; index -= 1) {

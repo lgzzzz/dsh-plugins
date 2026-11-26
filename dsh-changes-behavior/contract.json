@@ -1,5 +1,5 @@
 {
-  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、单文件卡片初始化（启动期补丁的锚点）、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟、forge 与审查页的字号锚点、固定文件列表宽度所依赖的分隔条锚点，以及会话面板根元素与会话面板行的打开动作。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
+  "description": "dsh-changes-behavior 依赖的上游事实：改动卡片 / 审查标签页 / 右栏面板的 DOM 锚点、单文件卡片初始化（启动期补丁的锚点）、右栏四个打开入口与全屏命令、review store 的分栏 / 换行默认值、悬停浮层的打开延迟、forge 与审查页的字号锚点、固定文件列表宽度所依赖的分隔条锚点、会话面板根元素与会话面板行的打开动作，以及行内评论框（`ReviewComposer`）的 section 锚点 / props 名 / textarea 结构 / 「添加到输入框」的文案 key、按钮文案与 onClick 路径。本目录的 check-css.mjs 逐条校验（由 pnpm check:css 触发，不挂在 pnpm build 上）。",
   "checks": [
     {
       "id": "changed-files-attr",
@@ -423,6 +423,69 @@
         "dsh-experimental-client-ui-forge/lib"
       ],
       "hint": "会话面板「本地变更」行的打开动作不再调用 openChanges(sessionId,{kind:`local`})：地址判定落空，点击退回推挤呈现"
+    },
+    {
+      "id": "composer-root",
+      "plugin": "dsh-changes-behavior",
+      "token": "\"data-forge-comment\":",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "行内评论框的 section 锚点消失：Enter / Esc 认不出评论框，按键全部退回浏览器默认"
+    },
+    {
+      "id": "composer-props",
+      "plugin": "dsh-changes-behavior",
+      "token": "function ReviewComposer({selection,actions,close",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "ReviewComposer 的 props 名变了：从 fiber 上取不到 selection / actions / close，评论框快捷键整条失效"
+    },
+    {
+      "id": "composer-input",
+      "plugin": "dsh-changes-behavior",
+      "token": "(`textarea`,{ref:input",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "评论框的输入区不再是原生 textarea：按「评论框里的 textarea」判定归属会落空"
+    },
+    {
+      "id": "composer-add-label",
+      "plugin": "dsh-changes-behavior",
+      "pattern": "INPUT_QUOTE_COPY=\\{add:`review\\.addToInput`",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "「添加到输入框」的默认文案 key 变了：Enter 按文案找不到那个按钮"
+    },
+    {
+      "id": "composer-add-button",
+      "plugin": "dsh-changes-behavior",
+      "token": "children:t(copy.add)",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "「添加到输入框」按钮不再用当前语言的 t(copy.add) 渲染文案：按文案认按钮会落空"
+    },
+    {
+      "id": "composer-add-flow",
+      "plugin": "dsh-changes-behavior",
+      "token": "settleQuote(actions.addToInput(selected)",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "「添加到输入框」的 onClick 不再走 settleQuote(actions.addToInput(…))：Enter 点到的可能不再是提交动作"
+    },
+    {
+      "id": "composer-cancel",
+      "plugin": "dsh-changes-behavior",
+      "token": "onClick:close,children:t(`review.cancel`)",
+      "paths": [
+        "dsh-experimental-client-ui-forge/lib"
+      ],
+      "hint": "取消按钮不再直接调 close：Esc 调用的 props.close 可能不再是「取消」"
     }
   ]
 }

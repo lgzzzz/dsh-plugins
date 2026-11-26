@@ -11,6 +11,7 @@ import { INSTALL_MARKER as WRAP_MARKER } from '../src/wrap-default.ts'
 import { MARKER_ATTRIBUTE as HOVER_MARKER } from '../src/hover-gate.ts'
 import { MARKER_ATTRIBUTE as FONT_MARKER } from '../src/font-14.ts'
 import { MARKER_ATTRIBUTE as TREE_MARKER } from '../src/tree-fixed.ts'
+import { MARKER_ATTRIBUTE as COMMENT_MARKER } from '../src/comment-keys.ts'
 import {
   FakeElement,
   attachSidebarPanel,
@@ -43,7 +44,7 @@ function setup({ sessionId = 'session-1', mode = 'push' } = {}) {
   return { doc, panel, sidebar, tabs, warns, dispose, originals }
 }
 
-console.log('--- I① 总装：一个标记、六条行为全部装上 ---')
+console.log('--- I① 总装：一个标记、七条行为全部装上 ---')
 {
   const { doc, sidebar, warns } = setup()
   check('总装标记', doc.documentElement.getAttribute(MARKER_ATTRIBUTE), '')
@@ -53,8 +54,9 @@ console.log('--- I① 总装：一个标记、六条行为全部装上 ---')
   check('悬停标记', doc.documentElement.getAttribute(HOVER_MARKER), '')
   check('字号标记', doc.documentElement.getAttribute(FONT_MARKER), '')
   check('固定宽度标记', doc.documentElement.getAttribute(TREE_MARKER), '')
+  check('评论框键盘标记', doc.documentElement.getAttribute(COMMENT_MARKER), '')
   // 固定宽度只注入样式，没有 document 监听；pointerup / keyup 随旧的文件树宽度记忆一起消失。
-  check('监听类型', doc.types.sort(), ['click', 'mouseenter', 'mouseover', 'pointerenter', 'pointerover'].sort())
+  check('监听类型', doc.types.sort(), ['click', 'keydown', 'mouseenter', 'mouseover', 'pointerenter', 'pointerover'].sort())
   const styles = doc.head.children
   check('注入两条样式', styles.length, 2)
   checkTrue('14px 样式', styles.some((style) => String(style.textContent).includes('font-size: 14px !important')))
@@ -111,6 +113,7 @@ console.log('--- I⑤ 卸载：监听、样式、标记、包层全部还原 ---
   check('卸载后移除卡片标记', doc.documentElement.getAttribute(CARD_MARKER), null)
   check('卸载后移除字号标记', doc.documentElement.getAttribute(FONT_MARKER), null)
   check('卸载后移除固定宽度标记', doc.documentElement.getAttribute(TREE_MARKER), null)
+  check('卸载后移除评论框键盘标记', doc.documentElement.getAttribute(COMMENT_MARKER), null)
   check('卸载后两条样式都被移除', doc.head.children.map((style) => style.removed), [true, true])
   check('卸载后还原 openResource', sidebar.openResource, originals.openResource)
   check('卸载后还原 openResourceIn', sidebar.openResourceIn, originals.openResourceIn)

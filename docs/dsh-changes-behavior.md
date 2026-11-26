@@ -8,6 +8,7 @@
 - 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层；
 - 「本地变更」「变更请求」标签页整棵子树字号统一 14px；
 - 固定「本地变更」「变更请求」左侧文件列表的宽度：隐藏那条既是拖动入口也是键盘入口的分隔条，宽度停在上游默认值，不再可调；
+- **行内评论框键盘**：「本地变更」「变更请求」的评论框里 `Enter` 与「添加到输入框」等价，`Shift+Enter` 换行，`Esc` 取消；
 - **单文件改动卡片也按汇总形制渲染**：标题是 `已编辑 1 个文件`，下面列出那一个文件（启动期给上游客户端产物打一行补丁，见下文）。
 
 宿主 + 客户端插件：宿主半部只在启动时做那行补丁，其余行为全在浏览器半部；不注册服务、不占 slot、没有配置项。装上即生效，从 profile 移除即恢复上游默认（补丁在卸载时也会还原）。原先的 `dsh-changes-card-local`、`dsh-changes-review-fullscreen`、`dsh-changes-review-wrap`、`dsh-changes-hover-off`、`dsh-forge-changes-font-14` 已全部并入本包；「变更请求」快捷键也从 `dsh-keyboard-shortcuts` 迁来。
@@ -195,6 +196,28 @@ const singleFile=void 0;/*dsh-changes-single-card*/
 
 -----
 
+## 行内评论框：Enter / Shift+Enter / Esc
+
+「本地变更」「变更请求」的 diff 里点行号、拖行号或选中代码，会开一个行内评论框（上游 `ReviewComposer`）：一个 textarea 加一排按钮——取消、添加到输入框，以及待审 / 发布。上游没有任何按键处理：Enter 只换行，Esc 什么都不做。本插件把这三个动作接过来：
+
+| 按键 | 结果 |
+|---|---|
+| `Enter` | 与点「添加到输入框」等价：评论文本作为引用进会话输入框，评论框关闭 |
+| `Shift+Enter` | 不拦，浏览器原生换行——评论可以写多行 |
+| `Esc` | 与点「取消」等价：评论框关闭，没交出去的草稿随组件卸载丢弃 |
+
+不接管（按键原样放行）：输入法组合中的 Enter（`isComposing` / `keyCode 229`，中文输入法回车选词不会把评论交出去）、长按重复、带 `⌘` / `Ctrl` / `Alt` 的 Enter 与 Esc，以及评论框里非 textarea 的节点（小标题、按钮）。
+
+**执行的是按钮本身**：Enter 找到「添加到输入框」那个按钮，调它在 fiber 上的 `onClick`（与默认分栏 / 换行同一手法），所以被拒绝的路径（会话输入框正被占用时）照样会在评论框里显示告警，而不是悄悄什么也不发生。认按钮不看顺序，按当前语言的按钮文案认：文案 key 从同一个组件的 props 上取（`actions.quoteCopy?.add ?? 'review.addToInput'`），再由它的 `t` 翻出来，所以换语言、上游调整按钮顺序都不影响。Esc 直接调评论框 props 上的 `close`——那正是取消按钮的 `onClick`。
+
+**为什么写在捕获阶段**：Enter 的默认动作（插入换行）要在 textarea 收到按键之前拦掉；Esc 还要赶在冒泡到 `window` 的全局快捷键之前收口。`dsh-client-shortcuts` 在 `window` 冒泡阶段读 `defaultPrevented`，被拦下的手势会自行让位，所以这里不会连带触发「连按 Esc 停止回复」这类固定键。
+
+**作用域**只按 `[data-forge-comment]` 限定：这个属性只由行内评论框的 section 输出，「本地变更」与「变更请求」共用同一个组件，所以两处都生效；会话输入框、变更请求的回复框、其它标签页的输入面都不受影响。section 是 `ReviewComposer` 直接返回的根节点，所以从它向上第一层组件 fiber 就是评论框的 props（`src/fiber.ts` 的 `findAncestorProps`）。
+
+**降级**：取不到评论框 props / 翻不出按钮文案 / 找不到按钮 / `onClick` 抛错时只告警（同一句只报一次，前缀 `[dsh-changes-behavior]`），并且这一次按键原样放行——Enter 退回换行，不会吞掉输入。`contract.json` 的七条 `composer-*` 契约盯住上面这些锚点，上游改名时在 `pnpm check:css` 里显式失败。
+
+-----
+
 ## 怎么确认它真的生效
 
 装上后，文档根元素会带一组标记：
@@ -208,6 +231,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-wrap')     // �
 document.documentElement.hasAttribute('data-dsh-changes-behavior-hover')    // 悬停闸门
 document.documentElement.hasAttribute('data-dsh-changes-behavior-font-14')  // 14px 样式
 document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') // 文件列表宽度固定
+document.documentElement.hasAttribute('data-dsh-changes-behavior-comment-keys') // 评论框键盘
 ```
 
 然后：
@@ -270,6 +294,20 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') //
      .getAttribute('data-sidebar-right-panel')   // 'fullscreen'
    ```
 
+11. 在「本地变更」的 diff 里选中几行 → 弹出评论框。输入文字后：
+
+    - 按 `Enter` → 评论框关闭，会话输入框里多出一段引用（输入框上方出现引用 chip）；
+    - 按 `Shift+Enter` → 只换行，评论框还在，不提交；
+    - 按 `Esc` → 评论框关闭（等于取消），会话输入框不变；
+    - 输入法里按回车选词 → 不提交。
+
+    ```js
+    const box = document.querySelector('[data-forge-comment]')
+    box?.querySelector('textarea')?.value                 // 当前评论草稿
+    [...(box?.querySelectorAll('button') ?? [])].map(button => button.textContent)
+      // ['取消', '添加到输入框', …]；Enter 点的就是第二个
+    ```
+
 - 标记为 `false` → 浏览器这一页没有加载到本插件：在「设置 → 插件」里关掉再打开本插件，让 HMR 重组合并把行送进页面；仍为 `false` 再硬刷新。只有 profile 未启用 HMR 时才需要重启 `dsh web`。
 - 标记为 `true`、行为不对 → 对照 [`contract.json`](../dsh-changes-behavior/contract.json) 运行 `pnpm --filter dsh-changes-behavior check:css`，清单会指出是哪条上游锚点失效。
 
@@ -306,6 +344,13 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') //
 | forge 的 `remote.forgePanel` 缺席 | `⌘⌥Y` 直接打开本地变更页，不读面板流、不等待 |
 | 面板流第一帧 1.5s 内没到 / 读取失败 / 没有绑定 | 按没有绑定处理，打开本地变更页 |
 | 分栏 / 换行按钮或 review store seed 变了 | 该标签页保持上游默认，告警一次；工具栏仍可手动开关 |
+| 「本地变更」「变更请求」行内评论框 `Enter` | 等价于点「添加到输入框」：引用进会话输入框，评论框关闭 |
+| 评论框 `Shift+Enter` | 不拦，浏览器原生换行 |
+| 评论框 `Esc` | 等价于点「取消」：评论框关闭，草稿丢弃 |
+| 输入法选词中的 Enter / `⌘` / `Ctrl` / `Alt` + Enter、Esc | 不接管，按键原样放行 |
+| 空文本或「添加到输入框」禁用时的 Enter | 只拦换行，不提交、不告警 |
+| 评论框结构对不上（props / 按钮 / 文案取不到） | 只告警一次，Enter 退回换行，Esc 不生效 |
+| 会话输入框、变更请求回复框、其它标签页的输入面 | 不处理 |
 
 -----
 
@@ -328,9 +373,10 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-tree-fixed') //
 | [`src/tree-fixed.ts`](../dsh-changes-behavior/src/tree-fixed.ts) | 文件列表宽度固定：隐藏文件树分隔条的 `<style>` 与安装 / 卸载 |
 | [`src/changes-open.ts`](../dsh-changes-behavior/src/changes-open.ts) | `⌘⌥Y` 固定行、固定输入观察者、终端捕获、按绑定关系选择变更页 |
 | [`src/change-request.ts`](../dsh-changes-behavior/src/change-request.ts) | 变更页地址、面板流第一帧解析（带超时与释放） |
-| [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`（分栏 / 换行共用） |
+| [`src/comment-keys.ts`](../dsh-changes-behavior/src/comment-keys.ts) | 行内评论框键盘：按键映射、归属判定、按文案认按钮、降级与捕获监听安装 / 卸载 |
+| [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`、向上查组件 props（分栏 / 换行 / 评论框共用） |
 | [`dsh-shortcut-utils`](dsh-shortcut-utils.md) | 快捷键判定与捕获层；共享纯函数包，客户端构建时内联 |
-| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（47 条） |
+| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（54 条） |
 | [`check-css.mjs`](../dsh-changes-behavior/check-css.mjs) | 构建后逐条校验上面的清单 |
 
 快捷键的共享纯函数（固定行绑定匹配、键帽格式化、捕获阶段手势 / 归属上下文）放在 [`dsh-shortcut-utils`](dsh-shortcut-utils.md)，由 `dsh-keyboard-shortcuts` 与 `dsh-changes-behavior` 共用；它是纯函数包，没有运行时状态，客户端构建时分别内联进两个 bundle。
@@ -382,6 +428,7 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-changes-behavior
 - 两个 forge 根锚点，以及上游没有用 `!important` 钉字号（反向）；
 - 文件树分隔条的 `role="separator"` 与 `aria-controls`（固定宽度依赖的隐藏锚点）；
 - 会话面板根的 `data-session-panel` 与会话面板「本地变更」行的打开动作 `openChanges(sessionId,{kind:`local`})`（点它切全屏依赖这两条）。
+- 行内评论框的 section 锚点 `data-forge-comment`、`ReviewComposer` 的 props 名、原生 textarea、「添加到输入框」的文案 key / 按钮文案 `t(copy.add)` / `settleQuote(actions.addToInput(…))` 路径、取消按钮的 `onClick:close`（评论框键盘依赖这些）。
 
 上游改名或删 token 时显式失败，而不是让某条行为静默失效。
 

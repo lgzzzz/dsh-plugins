@@ -22,6 +22,7 @@ const ORDER = [
   'wrap-default.test.mjs',
   'tree-fixed.test.mjs',
   'hover-gate.test.mjs',
+  'comment-keys.test.mjs',
   'artifact-client.test.mjs',
   'single-card.test.mjs',
 ]
