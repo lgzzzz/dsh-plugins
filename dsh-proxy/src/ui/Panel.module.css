@@ -101,7 +101,7 @@
   padding: 16px 20px 32px;
 }
 
-/* 规则页签顶部的默认出口选择条：默认出口在左，动作按钮靠右，与下方列表留出间距。 */
+/* 规则页签顶部的默认出口选择条：动作按钮紧跟默认出口选择框，与下方列表留出间距。 */
 .rulesHead {
   display: flex;
   flex-wrap: wrap;
@@ -115,7 +115,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
 }
 
 .row {

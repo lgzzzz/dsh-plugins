@@ -49,13 +49,28 @@ export function Form({ children }: { children: ReactNode }) {
   return <div className={ctl['form']}>{children}</div>
 }
 
+/** {@link Actions} 的入参。 */
+export interface ActionsProps {
+  /**
+   * 位置档位：默认独占一行（与 {@link Form} 同一套间距，也可独立用在列表下方）；
+   * `lead` 放在表单行首、与字段同处第一行，按钮按输入框下沿对齐。
+   */
+  place?: 'lead'
+  /** 按钮与状态说明。 */
+  children: ReactNode
+}
+
 /**
- * 动作行：与 {@link Form} 同一套间距，也可独立用在列表下方。
- * @param props.children - 按钮与状态说明。
+ * 动作行。
+ * @param props - 位置档位与按钮。
  * @returns 动作容器。
  */
-export function Actions({ children }: { children: ReactNode }) {
-  return <div className={ctl['actions']}>{children}</div>
+export function Actions({ place, children }: ActionsProps) {
+  return (
+    <div className={ctl['actions']} data-place={place}>
+      {children}
+    </div>
+  )
 }
 
 /** {@link Field} 的入参。 */

@@ -100,6 +100,13 @@
   margin-top: 12px;
 }
 
+/* 放在表单行首时：字段比按钮多一行标签，按底边把按钮对齐到输入框下沿；
+   与字段同处一行，也就不再需要另起一行的上边距。 */
+.actions[data-place='lead'] {
+  align-self: flex-end;
+  margin-top: 0;
+}
+
 .tag {
   flex: none;
   padding: 2px 8px;

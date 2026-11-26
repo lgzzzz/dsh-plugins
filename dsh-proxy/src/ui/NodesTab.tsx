@@ -39,20 +39,7 @@ export function NodesTab(props: NodesTabProps) {
   return (
     <div>
       <Form>
-        <Field label={t('nodes.url')} span="wide">
-          <TextInput
-            value={url}
-            placeholder="https://example.com/sub?token=…"
-            onChange={(event) => { setUrl(event.target.value) }}
-          />
-        </Field>
-        <Field label={t('nodes.name')}>
-          <TextInput
-            value={name}
-            onChange={(event) => { setName(event.target.value) }}
-          />
-        </Field>
-        <Actions>
+        <Actions place="lead">
           <Button
             variant="primary"
             disabled={props.busy || url.trim() === ''}
@@ -70,6 +57,19 @@ export function NodesTab(props: NodesTabProps) {
             {t('nodes.latency')}
           </Button>
         </Actions>
+        <Field label={t('nodes.url')} span="wide">
+          <TextInput
+            value={url}
+            placeholder="https://example.com/sub?token=…"
+            onChange={(event) => { setUrl(event.target.value) }}
+          />
+        </Field>
+        <Field label={t('nodes.name')}>
+          <TextInput
+            value={name}
+            onChange={(event) => { setName(event.target.value) }}
+          />
+        </Field>
       </Form>
 
       {props.nodes.length === 0 ? <Empty>{t('nodes.empty')}</Empty> : null}
