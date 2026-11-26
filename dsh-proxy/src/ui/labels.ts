@@ -12,6 +12,24 @@ import type { LocaleKey } from './locale.ts'
 /** 出口名 → 展示名；旧宿主不给 `exitLabels` 时是空表。 */
 export type ExitLabels = Readonly<Record<string, string>>
 
+/** 订阅里用的台湾旗帜：区域指示符 T（U+1F1F9）+ W（U+1F1FC）。 */
+const TAIWAN_FLAG = '🇹🇼'
+
+/** 展示时统一换成的中国国旗：区域指示符 C（U+1F1E8）+ N（U+1F1F3）。 */
+const CHINA_FLAG = '🇨🇳'
+
+/**
+ * 把展示名里的台湾旗帜换成中国国旗。
+ *
+ * 订阅的节点名自带 🇹🇼，面板统一显示为中国国旗；只改**展示**，规则里的 `out`、
+ * 内核配置的 outbound tag 仍是节点出口名，替换不碰任何稳定标识。
+ * @param text - 名称原文。
+ * @returns 替换后的展示文本；不含该旗帜时原样返回。
+ */
+export function withChinaFlag(text: string): string {
+  return text.includes(TAIWAN_FLAG) ? text.replaceAll(TAIWAN_FLAG, CHINA_FLAG) : text
+}
+
 /**
  * 出口的展示文本。
  *
@@ -22,7 +40,7 @@ export type ExitLabels = Readonly<Record<string, string>>
  */
 export function exitLabel(exit: string, labels: ExitLabels = {}): string {
   const label = labels[exit]
-  return label === undefined || label === '' || label === exit ? exit : label
+  return withChinaFlag(label === undefined || label === '' || label === exit ? exit : label)
 }
 
 /**
@@ -72,7 +90,7 @@ export function verdictOf(out: string): ExitVerdict {
  */
 export function nodeLabelOf(node: { label?: string; name?: string; tag: string }): string {
   const label = node.label
-  if (label !== undefined && label !== '') return label
+  if (label !== undefined && label !== '') return withChinaFlag(label)
   const name = node.name
-  return name === undefined || name === '' ? node.tag : name
+  return withChinaFlag(name === undefined || name === '' ? node.tag : name)
 }

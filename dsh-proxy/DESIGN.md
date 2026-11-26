@@ -505,6 +505,7 @@ const proxyDomain = defineDomain({
 - **按钮**：所有操作按钮统一黑底白字（主操作 / 危险 / 图标形态只保留语义与尺寸差异），悬停提亮、禁用半透明；页签是导航，仍用下划线选中样式。
 - **实现**：`src/client.tsx` 只做注册，`src/ui/Panel.tsx` 摆骨架、四个页签各自成文件，规则/节点的数据与副作用收在 `src/ui/use-proxy-panel.ts`，「连接」页签在 `src/ui/use-traffic.ts`；样式写在 `.module.css`（构建期换哈希类名、物化时自注入，见 `docs/dsh-css-architecture/02-build-time-css-pipeline.md`），文案走 `ctx.locale` 并由 `locale-context.tsx` 接成 React 上下文。控件按插件规范自写（不 import `dsh-client-ui-primitives`）：颜色取 `--dsw-alias-*` 令牌跟随主题，按钮固定黑底白字。
 - **显示名**：规则行的出口列固定显示策略（代理 / 直连 / 拦截，由浏览器侧 `verdictOf()` 归一化，与宿主 `classifyOut()` 同口径），具体节点名放在规则名之后的徽标里；默认出口下拉仍直接列节点名字，内置出口显示为代理 / 直连 / 拦截。`out` / `<option value>` 仍是出口名；两套兜底（宿主 `nodeLabel()`、浏览器 `src/ui/labels.ts`）保证半部不同批更新时也不渲染成空白。
+- **旗帜**：订阅的节点名带 🇹🇼 时，展示层（`src/ui/labels.ts` 的 `withChinaFlag()`）换成 🇨🇳；节点名、`out` 与内核 outbound tag 都不变，替换只发生在浏览器侧渲染时。
 
 ## 11. 安全与权限
 

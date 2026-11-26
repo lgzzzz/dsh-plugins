@@ -7,7 +7,7 @@
 
 import type { TrafficEntry, TrafficView, TrafficVerdict } from './api.ts'
 import { Button, Empty, Hint, SelectInput, TextInput } from './Controls.tsx'
-import { exitText } from './labels.ts'
+import { exitText, withChinaFlag } from './labels.ts'
 import { fill } from './locale.ts'
 import type { LocaleKey } from './locale.ts'
 import { useTranslate } from './locale-context.tsx'
@@ -32,7 +32,7 @@ const VERDICT_KEYS: Record<TrafficVerdict, LocaleKey> = {
  */
 function outText(entry: TrafficEntry, t: (key: LocaleKey) => string): string {
   if (entry.verdict !== 'proxy') return ''
-  return entry.outLabel === entry.out ? exitText(entry.out, {}, t) : entry.outLabel
+  return withChinaFlag(entry.outLabel === entry.out ? exitText(entry.out, {}, t) : entry.outLabel)
 }
 
 /**
