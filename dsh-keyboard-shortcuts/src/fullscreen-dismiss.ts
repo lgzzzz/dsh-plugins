@@ -26,6 +26,11 @@
  * 本桥只在全屏这一状态下抢先用掉它，不改那份预约表。待答审批与提问卡片同样不在这一按上
  * 作答——它们被这块浮层盖住，两条桥各自读本模块的 `fullscreenSidebarShown()` 让位。
  *
+ * 关栏之后的宽限（{@link DISMISS_GRACE_MS}）：面板有折叠动画，用户常会再按一下，而这一下
+ * 落在刚露出来的审批 / 提问卡片上就是「拒绝 / 取消」。所以关栏成功后的一小段时间内，裸
+ * `Esc` 仍归这一次关栏所有：本桥继续吞掉它，审批 / 提问 / 停止序列各自的固定通道也读
+ * {@link recentlyDismissedFullscreenSidebar} 让位。窗口之外的按键（`Enter`、组合键）不受影响。
+ *
  * 机制见 docs/dsh-keyboard-shortcuts/03-fixed-input-and-pane-keys.md；
  * 归属与边界见 docs/dsh-keyboard-shortcuts/02-ownership-resolution.md 与
  * docs/dsh-keyboard-shortcuts/06-boundaries-and-contracts.md。
@@ -39,6 +44,62 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 
 /** Cordis 增强声明的 Right-Sidebar 面：本桥只用 `isExpanded` 与 `toggleExpanded`。 */
 type Sidebar = Context['sidebarRight']
+
+/**
+ * 关栏宽限（毫秒）：关掉全屏右栏后，同一按的重复投递或紧接着的第二按仍归这次关栏，
+ * 不落到刚露出来的待答交互上。取与官方停止序列相同的 500ms 量级，够覆盖折叠动画
+ * 期间再按一下的习惯，又不至于让 `Esc` 长时间失灵。
+ */
+export const DISMISS_GRACE_MS = 500
+
+/** 最近一次关栏的时钟读数；没有关过栏时为 undefined。 */
+let dismissedAt: number | undefined
+
+/** 当前时钟：优先 `performance.now()`（单调），非浏览器环境退回 `Date.now()`。 */
+function clock(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now()
+}
+
+/**
+ * 记录一次关栏；测试可注入时钟读数。
+ * @param at - 关栏发生的时刻，默认当前时钟。
+ */
+export function markFullscreenDismissed(at: number = clock()): void {
+  dismissedAt = at
+}
+
+/** 清掉关栏记录（测试与重新装配用）。 */
+export function resetFullscreenDismissed(): void {
+  dismissedAt = undefined
+}
+
+/**
+ * 给定时刻是否落在最近一次关栏的宽限内。没有关栏记录、时钟回拨或已过期都返回 false。
+ * @param at - 要判定的时刻，默认当前时钟。
+ * @returns 仍在宽限内时为 true。
+ */
+export function recentlyDismissedFullscreenSidebar(at: number = clock()): boolean {
+  if (dismissedAt === undefined) return false
+  const elapsed = at - dismissedAt
+  return elapsed >= 0 && elapsed < DISMISS_GRACE_MS
+}
+
+/**
+ * 一次按键是否仍是「关栏之后的那一按」：裸 `Esc`（无修饰键、不在组字中），且落在宽限内。
+ * 长按重复也吞掉——按住 `Esc` 不该在折叠动画期间拒掉审批。调用处另按归属上下文收口：
+ * 终端与模态层保留自己的 `Esc`（见 `installFullscreenDismissBridge`）。
+ * @param gesture - 本次按键的物理事实。
+ * @returns 应继续由关栏桥吞掉时为 true。
+ */
+export function dismissalFollowUp(gesture: ShortcutGesture): boolean {
+  return gesture.code === 'Escape'
+    && !gesture.control
+    && !gesture.alt
+    && !gesture.shift
+    && !gesture.meta
+    && !gesture.composing
+    && recentlyDismissedFullscreenSidebar()
+}
 
 /** 全屏呈现且已展开的右栏面板根节点：呈现方式与开合状态都落在这一个元素上。 */
 const FULLSCREEN_PANEL_SELECTOR = '[data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]'
@@ -157,10 +218,24 @@ export function installFullscreenDismissBridge(ctx: Context): void {
       const onKeydown = (event: KeyboardEvent): void => {
         if (event.type !== 'keydown') return
         const element = pressElement(event)
-        if (!fullscreenDismissOwned(sidebar, captureGesture(event), captureContext(element))) return
+        const gesture = captureGesture(event)
+        const context = captureContext(element)
+        if (!fullscreenDismissOwned(sidebar, gesture, context)) {
+          // 关栏已经发生，这一按（重复投递或紧接着的第二按）仍归那一次关栏：吞掉它，
+          // 别让它落到刚露出来的审批 / 提问卡片或停止序列上。终端与模态层保留自己的
+          // `Esc`——它们不是「刚露出来的待答交互」，用户已经主动把焦点交给了它们。
+          if (dismissalFollowUp(gesture) && context.region !== 'terminal' && context.modal === null) {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+          }
+          return
+        }
         // 这一按到此为止：本地控件与固定通道（含两条停止序列）都不得再看到它。
+        // stopImmediatePropagation 同时挡住同一节点（window 捕获）上后注册的监听，
+        // 所以本桥先于本插件的其他捕获钩子安装（见 client.ts）。
         event.preventDefault()
-        event.stopPropagation()
+        event.stopImmediatePropagation()
+        markFullscreenDismissed()
         dismissFullscreenSidebar(sidebar)
       }
       window.addEventListener('keydown', onKeydown, true)

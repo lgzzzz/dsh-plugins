@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path'
 import { normalizeBinding } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 
 import { apply as applyPlugin } from '../src/client.ts'
+import { resetFullscreenDismissed } from '../src/fullscreen-dismiss.ts'
 
 /** 本插件的包根目录(测试文件在 test/ 下,即上一级)。 */
 export const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -475,12 +476,17 @@ export function fakeKeyEvent({
     getModifierState: (state) => state === 'AltGraph' ? altGraph : false,
     prevented: 0,
     stopped: 0,
+    immediateStopped: 0,
     composedPath: () => path,
     preventDefault() {
       event.prevented += 1
     },
     stopPropagation() {
       event.stopped += 1
+    },
+    stopImmediatePropagation() {
+      event.stopped += 1
+      event.immediateStopped += 1
     },
   }
   return event
@@ -821,6 +827,8 @@ export function harness({
   if (withUiSession) services.uiSession = uiSession
   if (withUiWorkspace) services.uiWorkspace = navigation
   const ctx = new FakeCtx(services)
+  // 关栏宽限是模块级状态：每个新场景从干净的状态开始，避免跨场景串味。
+  resetFullscreenDismissed()
   const warnings = captureWarnings(() => applyPlugin(ctx))
   return { ctx, shortcuts, sessions, sidebar, conversation, uiSession, navigation, warnings }
 }

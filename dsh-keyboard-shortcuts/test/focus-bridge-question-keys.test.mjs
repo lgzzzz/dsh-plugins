@@ -3,6 +3,7 @@
  * 不抢、准入否决、归属歧义、服务缺失即不装、关闭失败告警与卸载复位。
  */
 import { applyPlugin, approvalPending, captureWarnings, check, checkTrue, domBody, domComposer, domPlanReviewButton, domQuestionField, FakeElement, fakeDocument, fakeSessions, fakeShortcuts, fakeSidebar, fakeUiSession, FakeCtx, finish, gesture, harness, keydown, PLAN_REVIEW_KEY, QUESTION_KEY, questionPending, session, shortcutContext, sleep, statusWith } from './focus-helpers.mjs'
+import { markFullscreenDismissed } from '../src/fullscreen-dismiss.ts'
 
 /** 装配一个"主视图 s1 正挂着一条待答提问"的场景。 */
 function withPending(pending, options = {}) {
@@ -217,6 +218,25 @@ console.log('--- O⑩ 隐藏会话遗留的全屏面板不挡提问 Esc ---')
       else globalThis.document = previousDocument
     }
   }
+}
+
+console.log('--- O⑪ 关栏宽限:刚关掉全屏右栏后的 Esc 不取消提问 ---')
+{
+  const pending = questionPending()
+  const { shortcuts } = withPending(pending)
+  markFullscreenDismissed(performance.now())
+
+  const inside = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
+  shortcuts.emit(inside.input)
+  check('宽限内:卡片不关闭', pending.dismissals, 0)
+  check('宽限内:不消费', inside.consumed.count, 0)
+
+  // 宽限过期:同一次按键形状重新取消卡片。
+  markFullscreenDismissed(performance.now() - 1000)
+  const later = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
+  shortcuts.emit(later.input)
+  check('宽限过后:照常关闭', pending.dismissals, 1)
+  check('宽限过后:被消费', later.consumed.count, 1)
 }
 
 finish()

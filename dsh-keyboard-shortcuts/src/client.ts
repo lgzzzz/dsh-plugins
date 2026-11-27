@@ -10,6 +10,8 @@
  * `⌘⌥K` 聚焦右栏当前页面、`⌘⌥←/→` 切换右栏页面、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、
  * `⌘\` 分屏。它们各自打开固定输入观察者，
  * 在可配置派发之前消费按键；落在 `.xterm` 内的按键由各桥的捕获阶段监听接管。
+ * 全屏关栏桥最先安装：它要用 `stopImmediatePropagation()` 把这一按收口，必须排在本插件
+ * 其他 window 捕获钩子之前。
  *
  * 另装一条与固定键无关的 DOM 补偿：消息滚动口的 PageUp/PageDown 按“可见消息带”
  * 翻页，Space 的原生翻页在滚动口内被吞掉（见 `chat-paging.ts`）。
@@ -37,13 +39,15 @@ export const inject = ['shortcuts']
 
 /** 客户端插件主体：依次安装各分组。 */
 export function apply(ctx: Context): void {
+  // 全屏关栏桥最先装：它在 window 捕获阶段用 stopImmediatePropagation() 收口这一按，
+  // 必须排在本插件其他捕获钩子之前；关栏后的宽限期也由它记时（见 fullscreen-dismiss.ts）。
+  installFullscreenDismissBridge(ctx)
   // 消息滚动口的翻页补偿不依赖固定键服务，先装；它只接管裸 PageUp/PageDown/Space。
   installChatPaging(ctx)
-  // 免聚焦桥先装：它们各自消费自己的按键，固定键组只处理另外八条组合。
+  // 免聚焦桥：它们各自消费自己的按键，固定键组只处理另外八条组合。
   installStopBridge(ctx)
   installApprovalBridge(ctx)
   installQuestionBridge(ctx)
-  installFullscreenDismissBridge(ctx)
   installFocusComposerBridge(ctx)
   installFocusPageBridge(ctx)
   installPageCycleBridge(ctx)

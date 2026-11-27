@@ -32,7 +32,7 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 | `src/strip-scroll.ts` | 右栏页签行的滚动补偿：`scroll-behavior: auto` + 切页前后保持观察窗口；纯视图补偿，不消费按键 |
 | `src/question-keys.ts` | 提问卡片 `Esc` 取消 / 关闭（调面板自己的 `dismiss()`） |
 | `src/session-cycle.ts` | 会话导航 `primary+↑/↓`（全部候选）与 `primary+alt+↑/↓`（只走活跃会话） |
-| `src/fullscreen-dismiss.ts` | 全屏右栏上的裸 `Esc` 关栏；同时给审批桥与提问桥判让位（`fullscreenSidebarShown()`） |
+| `src/fullscreen-dismiss.ts` | 全屏右栏上的裸 `Esc` 关栏；关栏后 500ms 内的裸 `Esc` 仍归这次关栏（`DISMISS_GRACE_MS` / `recentlyDismissedFullscreenSidebar()`）；同时给审批、提问与停止桥判让位（`fullscreenSidebarShown()`） |
 | `src/binding.ts` | 多数桥共用：手势 / 绑定 / 两类快捷键目录行的匹配（纯函数） |
 | `src/capture.ts` | 捕获阶段共用：按键落点、原始手势、归属上下文、终端落点判定 |
 | `src/chat-paging.ts` | 消息滚动口的 PageUp/PageDown 可见带补偿与 Space 屏蔽；纯几何决策 + rAF 动画 + window 捕获监听 |
@@ -85,6 +85,7 @@ dsh plugin --profile web add <本仓库路径>/dsh-keyboard-shortcuts
 - 触发审批，**不要点卡片**：直接按 `Enter` → 允许一次；再触发一次，按 `Esc` → 拒绝；先把焦点点在一张过程卡片上再按 `Enter` → 允许一次，卡片不展开 / 不改变选中，也不留焦点边框；
 - 让 agent 提一个问题（`ask_user_question` 或 plan-review 卡片），**不要点卡片**：直接按 `Esc` → 卡片取消 / 关闭；焦点落在卡片自己的答案输入框里按 `Esc` → 同样关闭；焦点在侧栏搜索框或终端里按 `Esc` → 不关卡片；
 - 右栏全屏后，任意焦点位置按 `Esc` → 右栏收起；焦点在终端或右栏自己的文本控件里按 `Esc` → 不关栏；全屏 + 回合运行中按 `Esc` → 先关栏、不停止；关栏后再连按两下 → 停止；
+- 有待答审批时打开全屏右栏，连按两下 `Esc`（第二下在 500ms 内）→ 右栏收起，审批仍挂着；再按一下（宽限外）→ 审批被拒绝；
 - 任意焦点位置按 `⌘⌥J` / `Ctrl+Alt+J` → 聚焦底部输入框，光标回到上次位置；焦点在终端里按同一键 → 仍聚焦输入框，且这一按不进 shell；
 - 在终端里按 `⌘⌥N` / `Ctrl+Alt+N` → 新建会话并切过去，这一按不进 shell；焦点在页面 / 文本控件里按同一键 → 由官方命令处理；
 - 右侧栏有两张以上页面时，任意焦点位置按 `⌘⌥→` / `⌘⌥←` → 环状切页，键盘落到新页面（终端可直接打字）；焦点在终端里 → 仍能切页；

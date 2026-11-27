@@ -3,6 +3,7 @@
  * 各类否决(不在运行 / 有待答交互 / 会话歧义 / 带修饰键 / 超窗)、失败模式与卸载复位。
  */
 import { applyPlugin, captureWarnings, check, checkTrue, domBody, domComposer, fakeSessions, fakeShortcuts, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, sleep } from './focus-helpers.mjs'
+import { markFullscreenDismissed } from '../src/fullscreen-dismiss.ts'
 
 console.log('--- F① 焦点不在输入框:Esc Esc 仍能停止 ---')
 {
@@ -118,6 +119,26 @@ console.log('--- F⑥ 卸载:效果被释放,固定监听移除 ---')
     if (typeof effect.dispose === 'function') effect.dispose()
   }
   check('释放后监听清空', shortcuts.listenerCount(), 0)
+}
+
+console.log('--- F⑦ 关栏宽限:刚关掉全屏右栏后的 Esc 不起停止序列 ---')
+{
+  let cancelled = 0
+  const { shortcuts } = harness({ conversation: { cancel: () => { cancelled += 1; return Promise.resolve() } } })
+  markFullscreenDismissed(performance.now())
+  for (let index = 0; index < 2; index += 1) {
+    const press = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
+    shortcuts.emit(press.input)
+    check(`宽限内第 ${index + 1} 按不消费`, press.consumed.count, 0)
+  }
+  check('宽限内两按不停止', cancelled, 0)
+
+  // 宽限过后照常:第一按起序列,第二按停止。
+  markFullscreenDismissed(performance.now() - 1000)
+  shortcuts.emit(keydown(gesture('Escape'), shortcutContext({ target: domBody })).input)
+  check('宽限过后第一按不停止', cancelled, 0)
+  shortcuts.emit(keydown(gesture('Escape'), shortcutContext({ target: domBody })).input)
+  check('宽限过后第二按停止一次', cancelled, 1)
 }
 
 finish()

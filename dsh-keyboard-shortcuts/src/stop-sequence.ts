@@ -6,10 +6,13 @@
  * `UiSession.isMain` 读的事实)，再调用该 Session scope 上的 `conversation.cancel()`。
  *
  * 目标位于 `[data-conversation-session]` / `[data-conversation-region]` 内的按键归
- * 官方 fixed 序列所有，本桥不动作。不在快捷键目录中注册任何条目。
+ * 官方 fixed 序列所有，本桥不动作。刚用 `Esc` 关掉全屏右栏后的宽限期内也不起序列：
+ * 那一按（及同一按的重复投递）归那次关栏，见 `fullscreen-dismiss.ts`。
+ * 不在快捷键目录中注册任何条目。
  *
  * 机制与边界见 docs/dsh-keyboard-shortcuts/04-stop-sequence-bridge.md。
  */
+import { recentlyDismissedFullscreenSidebar } from './fullscreen-dismiss.ts'
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {ISessions, SessionBinding} from '@deepseek-ai/dsh-api-session-controller/client'
@@ -154,6 +157,12 @@ function handleStopInput(
   const gesture: ShortcutGesture = input.gesture
   const context = input.context
   if (!escapeEligible(gesture, context)) {
+    sequence.reset()
+    return
+  }
+  // 刚用 `Esc` 关掉全屏右栏：这一按（重复投递或紧接着的第二按）仍归那次关栏，
+  // 不启动也不完成停止序列（见 fullscreen-dismiss.ts）。
+  if (recentlyDismissedFullscreenSidebar()) {
     sequence.reset()
     return
   }

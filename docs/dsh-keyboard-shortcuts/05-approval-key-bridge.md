@@ -90,7 +90,7 @@ function handleApprovalInput(shortcuts, sessions, uiSession, input) {
   修饰键由 `bindingMatches`（第 7 册第 9 节的 A 组判定）判定：修饰键集合须完全相等（顺序无关）、双键和弦一律不匹配，所以 `Shift+Enter` 之类的组合不会命中 `{ code: 'Enter', modifiers: [] }` 这条固定行。
 - **④ 读已挂载的固定行 `approvalOutcomeFor`：** `shortcuts.fixedCatalog.getSnapshot()` 里存在 `approval.allow` / `approval.reject`，且物理组合正好是这一按，才判定为 `allowed-once` / `rejected`；审批插件未装载时没有这两行，桥为 no-op。
 - **⑤ 面板掌权就让位 `approvalPanelOwnsTarget`：** 目标落在 `[data-approval-key]` 内时不动作，交给面板的 `onKeyDown`。面板有两条不消费的路径会漏到 `window`——目标在输入控件内、`Enter` 落在被聚焦的按钮 / 链接上（保留按钮原生动作）；不判这条让位，`Tab` 到「拒绝」按钮再按 `Enter` 会变成「允许一次」。
-- **⑤′ 全屏右栏掌权也让位 `fullscreenSidebarShown`：** 右栏全屏呈现且已展开时，这块浮层盖住整块 composer，待答卡片在屏幕上看不见，这一按归 [第 5.11 节](05-approval-key-bridge.md) 的全屏关栏桥——先关栏，审批留到关栏之后再答。两条捕获监听互不消费对方（`stopPropagation()` 只挡别的节点，挡不住同一节点上的另一个监听），所以这条守卫是「一次按键只被一处处理」的唯一保证；提问桥（5.10.1）用同一个函数。若上游改了右栏的呈现标记，这条守卫失效、`Esc` 回到本节表格里的归属（有待答审批时答掉审批），而关栏桥自身也一并退化成 no-op。
+- **⑤′ 全屏右栏掌权也让位 `fullscreenSidebarShown`：** 右栏全屏呈现且已展开时，这块浮层盖住整块 composer，待答卡片在屏幕上看不见，这一按归 [第 5.11 节](05-approval-key-bridge.md) 的全屏关栏桥——先关栏，审批留到关栏之后再答。**关栏后的宽限期内（5.11 ⑨）也拒绝作答**：`Esc` 常被按下第二下，那一下不能落在刚露出来的审批上；两条路径各读一次 `recentlyDismissedFullscreenSidebar()`。提问桥（5.10.1）用同一组守卫。若上游改了右栏的呈现标记，`fullscreenSidebarShown()` 这条守卫失效、`Esc` 回到本节表格里的归属（有待答审批时答掉审批），而关栏桥自身也一并退化成 no-op。
 - **⑥ 无焦点解析目标 `mainViewSessionId`：** 读 `sessions.list.byId[id].retainedBy.mainView > 0`，即主视图保留的那个会话。持有数不为 1（切换瞬间）时返回 `undefined`，这一按不响应。
 - **⑦ 只答"可作答的审批" `presentedApproval` → `asAnswerableApproval`：** 要求这条待答交互同时满足：
   - `kind === 'approval'`：`pendingInteraction` 这个槽位是复用域，提问（`question`）等别的域不归这条桥；
@@ -112,6 +112,7 @@ function handleApprovalInput(shortcuts, sessions, uiSession, input) {
 | 焦点停在某张**过程卡片**上（工具卡 `div[role="button"][tabindex="0"]` / 轨迹行 `tr[tabindex="0"]`），有待答审批 | 审批桥（**捕获路径**） | 卡片的 React `keydown` 先 `preventDefault()` 再折叠 / 选中；捕获监听在它之前拦下并作答，卡片收不到这一按（见 5.9.4） |
 | 焦点在 `<body>`、`page` 区域，有待答审批 | 审批桥（捕获路径先拦，未拦到则由固定通道接手） | 面板收不到（目标不在其子树里）；两路共用同一判定，先命中者作答并消费 |
 | 右栏全屏呈现（浮层盖住整块 composer），有待答审批 | 全屏关栏桥（[第 5.11 节](05-approval-key-bridge.md)） | 两条桥各自 `fullscreenSidebarShown()` 让位（5.9.2 ⑤′）：这一按先关栏，审批留到关栏之后再答 |
+| 刚用 `Esc` 关掉全屏右栏后的 500ms 内（折叠动画期间又按了一下 / 同一按重复投递），有待答审批 | 全屏关栏桥（继续吞掉） | `recentlyDismissedFullscreenSidebar()` 让位（5.9.2 ⑤′、5.11 ⑨）：这仍是那次关栏的按键，审批不作答 |
 | 焦点在 `<body>`、`page` 区域，无待答审批 | 停止序列（`Esc`，内置固定序列 `response.stop`）或无人（`Enter`） | 审批桥在 ⑦ 返回 `undefined`，不消费；`Esc` 进入双按序列 |
 | 有待答审批时按 `Esc` | 审批桥（一下即拒绝） | 内置停止监听器（`currentTurn()`）与插件 `resolveStopSession` 都以 `pendingInteraction !== undefined` 为门槛返回"没有可停的轮次"，不消费 |
 | 焦点在输入控件（`editable`）/ 终端（`terminal`）/ 模态层（`modal !== null`）之上 | 那个控件自己 | ③ 的 `region` 与 `modal` 门槛否决，审批桥不消费 |
@@ -182,7 +183,7 @@ function installApprovalCapture(shortcuts, sessions, uiSession) {
 ```
 
 - **③④⑤ 复用同一套判定。** 捕获路不另立规则：固定行预约（④）、准入（③）、面板归属（⑤）全部复用。`captureGesture` 在捕获阶段构造的手势 `defaultPrevented` 恒为 `false`（此时还没有处理器运行），因此能通过 ③ 的"已被消费"门槛。
-- **⑤′ 全屏右栏的让位也在两路里。** 捕获路与固定通道路都读同一个 `fullscreenSidebarShown()`（5.9.2 ⑤′）：只写在一条路上时，另一条路仍会在浮层下面答掉一个看不见的审批。
+- **⑤′ 全屏右栏的让位也在两路里。** 捕获路与固定通道路都读同一个 `fullscreenSidebarShown()` 与 `recentlyDismissedFullscreenSidebar()`（5.9.2 ⑤′、5.11 ⑨）：只写在一条路上时，另一条路仍会在浮层下面、或关栏宽限内答掉一个看不见的审批。
 - **⑥ 先吞，再答。** `stopPropagation()` 让事件到不了目标，卡片的 React 处理器不执行；`preventDefault()` 拦掉浏览器默认动作。只答不吞时，按一次 `Enter` 会既批准又折叠卡片。
 - **两路互斥，不会双答。** 捕获路命中并吞掉事件 → 固定通道收不到；捕获路放行 → 事件照常冒泡，固定通道再决定一次（判定相同）。无论焦点在 `<body>` 还是某张卡片上，每按恰好一个 owner。未命中捕获（例如捕获监听被卸载、或目标区域整体让位）时，固定通道仍是正常投递路径。
 - **`src/capture.ts` 提供共用的读数。** 按键落点（`composedElement` / `pressElement`）、原始手势（`captureGesture`）、归属上下文（`captureContext`，含区域与模态）与终端落点判定（`terminalTarget`）都由 `src/capture.ts` 导出；审批桥、页面循环桥、会话导航桥、聚焦输入框桥与聚焦右栏页面桥的捕获钩子共用它（各桥的捕获钩子清单见第 7 册第 9 节的源码表）。
@@ -209,11 +210,11 @@ function installApprovalCapture(shortcuts, sessions, uiSession) {
 1. 准入 `questionEscapeEligible`：`Escape`、非长按、非组字、未被消费、无修饰键、`modal === null`、`region !== 'terminal'`；
 2. 用主视图会话取到可关闭卡片：`presentedQuestion` → `asDismissableQuestion`（`kind` 为 `question` / `plan-review`、`key` 为字符串、`dismiss` 为函数）；
 3. `editable` 收口：`context.region === 'editable'` 时要求 `questionCardOwnsTarget(context.target, question.key)` 成立；
-4. 全屏右栏让位：`fullscreenSidebarShown()` 为真时直接返回。卡片同样是 composer 顶替，浮层盖住后它在屏幕上看不见，这一按归全屏关栏桥（见 [第 5.11 节](05-approval-key-bridge.md)）；关栏之后再按 `Esc` 才取消卡片；
+4. 全屏右栏让位：`fullscreenSidebarShown()` 为真、或刚关栏的宽限期内（`recentlyDismissedFullscreenSidebar()`）直接返回。卡片同样是 composer 顶替，浮层盖住后它在屏幕上看不见，这一按归全屏关栏桥（见 [第 5.11 节](05-approval-key-bridge.md)）；关栏之后再按 `Esc` 才取消卡片；
 5. `input.consume()`，然后调用 `question.dismiss()`；失败时告警 `question <key> was not cancelled:`（消费不回退）。
 
 - **`editable` 在准入里放行，由卡片归属收口。** 审批桥要求 `context.region === 'page'`，提问桥的准入不设这一条：卡片自己的自由文本答案字段就是一个 `<textarea>`（`region` 正是 `editable`），自由文本问题还会自动聚焦它，而该字段的 `keydown` 只处理 `Enter`。归属判定要求 target 落在 `[data-question-key]` / `[data-plan-review-key]` 卡片内，且该元素自身的属性值恰好等于本次待答提问的 `key`。侧栏搜索框、重命名输入框这些卡片之外的文本控件因此保留自己的 `Esc`；已卸载的旧卡片、或另一次调用的 review 卡片因 key 对不上而匹配失败。
-- **全屏右栏优先于卡片。** 第 4 步的守卫与审批桥的 ⑤′ 同一个函数、同一条理由：浮层盖住卡片时 `Esc` 先关栏，不取消一个看不见的请求；关栏之后同一按再落到卡片上。
+- **全屏右栏优先于卡片。** 第 4 步的守卫与审批桥的 ⑤′ 同一组函数、同一条理由：浮层盖住卡片时 `Esc` 先关栏，不取消一个看不见的请求；关栏宽限内同一个物理按键也不会取消卡片。
 - **只调 `dismiss()`，从不调 `answer()`。** `dismiss()` 就是卡片关闭 / 取消按钮调用的同一个公开动词，插件不替用户作答。它的实际结果由上游卡片的形状决定——`kind` 只区分卡片属于哪个域，并不区分"活卡片 / 只读回看"：
   - **提问卡片（`kind === 'question'`）**：带工具调用线索的走 `hide`——只收起面板，请求继续等待、倒计时照跑，`ask_user_question` 的工具调用行能重新打开它；Host 未命名的阻塞式请求没有可返回的调用行，于是把整个等待拒绝为 `ASK_CANCELLED`（按钮自己的标签是「取消」/「放弃整组问题」/「Dismiss all questions」）。
   - **活着的 plan-review 卡片（`kind === 'plan-review'`，`exit_plan_mode` 的 Approve / Request changes）**：`dismiss()` 正是「Request changes（请求修改）」按钮的动词，结果与上面同一套——带工具调用线索时收起面板（计划仍在，可从工具调用行重开），Host 未命名时以 `ASK_CANCELLED` 结束等待并把 composer 交回给用户写反馈。
@@ -231,11 +232,18 @@ export function installFullscreenDismissBridge(ctx) {
     const sidebar = scope.sidebarRight
     scope.effect(() => {
       const onKeydown = (event) => {
-        const element = pressElement(event)
-        const owned = fullscreenDismissOwned(sidebar, captureGesture(event), captureContext(element))
-        if (!owned) return                                                     // ③
+        const gesture = captureGesture(event)
+        const owned = fullscreenDismissOwned(sidebar, gesture, captureContext(pressElement(event)))
+        if (!owned) {
+          if (dismissalFollowUp(gesture)) {                                    // ⑨
+            event.preventDefault()
+            event.stopImmediatePropagation()
+          }
+          return                                                               // ③
+        }
         event.preventDefault()
-        event.stopPropagation()                                                // ④
+        event.stopImmediatePropagation()                                       // ④
+        markFullscreenDismissed()                                              // ⑨
         dismissFullscreenSidebar(sidebar)                                      // ⑤
       }
       window.addEventListener('keydown', onKeydown, true)
@@ -252,11 +260,12 @@ function fullscreenDismissOwned(sidebar, gesture, context) {
 ```
 
 - **① 只依赖 `sidebarRight`。** 本桥不注册固定行、也不读快捷键目录，`ctx.inject` 的依赖列表里没有 `shortcuts`；右栏插件没挂时注入不解析，这段逻辑不运行。缺 `window`（非 DOM 环境）时不登记 effect。
-- **③ 未命中就什么都不做**：不吞事件、不动作，这一按原样交给当地控件与固定通道。
-- **④ 先吞，再动作。** `stopPropagation()` 让这一按到不了目标与冒泡阶段：本地控件收不到，固定通道里的两条停止序列也收不到 —— 所以全屏期间 `Esc` 凑不成"连按两下停止"。`preventDefault()` 拦掉浏览器默认动作。
+- **③ 未命中就不动**：不吞事件、不动作，这一按原样交给当地控件与固定通道——唯一例外是宽限内的裸 `Esc`（⑨）：它仍归那次关栏，继续吞掉。
+- **④ 先吞，再动作。** `stopImmediatePropagation()` 同时停掉同一节点（window 捕获）上后注册的监听和到目标 / 冒泡阶段的路：本地控件收不到，本插件其他捕获钩子收不到，固定通道里的两条停止序列也收不到 —— 所以全屏期间 `Esc` 凑不成"连按两下停止"。`preventDefault()` 拦掉浏览器默认动作。本桥因此排在 `apply()` 的最前面：它必须先于本插件的审批、提问等捕获钩子登记，`stopImmediatePropagation()` 才挡得住它们（见 `src/client.ts`）。
 - **⑤ 关栏动词。** `sidebarRight.toggleExpanded()` 就是面板自带折叠按钮调的那个服务动词（`sidebar.right.toggle` 命令的 `run()` 走的也是它）：展开即折叠，`openWithPaneFocus` 在折叠时不搬焦点。它只折叠呈现、不重置记录的模式，所以再次展开仍回到全屏 —— 与点那个按钮逐字相同。
 - **⑥ 准入 `fullscreenDismissEligible`：** 裸 `Esc`、首次、未消费、无修饰键、`modal === null`、`region !== 'terminal'`，且 `editable` 只在目标**不在** `[data-sidebar-right-session]` 内时放行。两半理由：终端与模态各自有 `Esc` 的语义（与停止桥、审批桥、提问桥同一批门槛）；右栏自己的文本控件也有 —— 终端页签的重命名输入框就在它自己的 `keydown` 里用 `Esc` 取消重命名，而它自己的 `stopPropagation()` 挡不住 window 捕获阶段的这条监听。
 - **⑦⑧ 防陈旧标记的一对。** ⑦ 服务面确认右栏仍在展开态，⑧ 在 DOM 上找 `[data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]`：呈现方式与开合状态落在同一个元素上，两个标记同时成立才算全屏面板（手动全屏与窄窗口自动全屏都带它）。两者不一致时（例如面板正在卸载）不动作 —— 否则 `toggleExpanded()` 在折叠态下的"展开"语义会被误触发。
-- **它压住另外两条 `Esc` 桥。** 待答审批与提问卡片都是 composer 顶替，浮层盖住整块 composer 后**在屏幕上看不见**。两条桥因此各加一条 `fullscreenSidebarShown()` 守卫（5.9.2 ⑤′、5.10.1 第 4 步）：面板全屏时不在这一按上作答。审批桥的捕获监听与本桥挂在同一个节点、同一阶段，`stopPropagation()` 挡不住对方（它只挡别的节点），所以这条守卫是"一次按键只被一处处理"的唯一保证。
+- **⑨ 关栏宽限（`DISMISS_GRACE_MS = 500`）：这一按不只属于第一次 `keydown`。** 面板有折叠动画，用户常在看起来没反应时再按一下；浏览器也可能把同一按重复投递一次。关栏成功后的一小段时间里，裸 `Esc` 仍归这次关栏：本桥继续 `preventDefault()` + `stopImmediatePropagation()` 把它吞掉，不做动作。宽限内的 `Esc` 也不进审批 / 提问 / 停止三条桥的判定——它们各自读同一个 `recentlyDismissedFullscreenSidebar()` 让位，否则第二下会落到刚露出来的审批卡片上，表现成"按 `Esc` 关右侧栏却把 dsh 发起的授权拒掉"。`Enter`（允许一次）与带修饰键的组合不受影响；终端与模态层也保留自己的 `Esc`（它们不是「刚露出来的待答交互」）；宽限过期后 `Esc` 恢复原有归属。时刻记录在 `markFullscreenDismissed()`，测试可用显式时刻推进或 `resetFullscreenDismissed()` 复位。
+- **它压住另外两条 `Esc` 桥。** 待答审批与提问卡片都是 composer 顶替，浮层盖住整块 composer 后**在屏幕上看不见**。两条桥因此各加一条 `fullscreenSidebarShown()` 守卫（5.9.2 ⑤′、5.10.1 第 4 步）：面板全屏时不在这一按上作答；关栏宽限内再加一条 `recentlyDismissedFullscreenSidebar()` 守卫（⑨）。审批桥的捕获监听与本桥挂在同一个节点、同一阶段，`stopPropagation()` 挡不住对方（它只挡别的节点）——这正是本桥改用 `stopImmediatePropagation()` 并排在最前面的原因。
 - **Web 与 Desktop 都安装。** 停止序列、审批键与提问卡片取消在两端都由 DOM 固定通道驱动（`installKeyboard` 的 `fixed?.()` 在 native 分支返回之前执行），这条捕获监听在两端都够得着；`Esc` 不是可配置绑定，不存在"原生桥再派发一次"的问题（与分屏桥、全屏 / 关页免聚焦回退的 Desktop 边界不同）。
 - **不注册固定行。** 裸 `Esc` 早已被上游 `response.stop` 与 `approval.reject` 两条固定行预约；本桥只在「全屏 + 展开」这一个状态下抢先用掉它，不改那份预约表，也不在快捷键设置里多出一行。

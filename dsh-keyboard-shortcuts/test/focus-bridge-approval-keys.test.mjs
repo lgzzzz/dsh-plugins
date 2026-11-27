@@ -3,6 +3,7 @@
  * 卸载复位,以及 window 捕获阶段路径(焦点在过程卡片上时先于卡片自己的 keydown 拦下)。
  */
 import { applyPlugin, approvalPending, captureWarnings, check, checkTrue, domApproval, domBody, domComposer, FakeElement, fakeDocument, fakeKeyEvent, fakeShortcuts, fakeSidebar, fakeSessions, fakeUiSession, fakeWindow, FakeCtx, finish, gesture, harness, keydown, session, shortcutContext, sleep, statusWith } from './focus-helpers.mjs'
+import { markFullscreenDismissed } from '../src/fullscreen-dismiss.ts'
 
 /** 装配一个"主视图 s1 正挂着一条待答审批"的场景。 */
 function withPending(pending, options = {}) {
@@ -483,6 +484,47 @@ console.log('--- I⑭ 隐藏会话遗留的全屏面板不挡审批:Enter / Esc 
     } finally {
       dom.restore()
     }
+  }
+}
+
+console.log('--- I⑮ 关栏宽限:刚用 Esc 关掉全屏右栏,这一按不拒绝审批 ---')
+{
+  // 关栏桥会先把面板折叠、再记下时刻;用户常在折叠动画期间再按一下(或浏览器重复投递),
+  // 这一下不能落到刚露出来的审批上。宽限内只让位给那次关栏,Enter(允许一次)另行。
+  const app = new FakeElement('div', { 'data-app': '' })
+  const card = staleCard(app)
+  const dom = withApprovalDom({ app, activeElement: card })
+  const pending = approvalPending()
+  const { shortcuts } = withPending(pending)
+  try {
+    markFullscreenDismissed(performance.now())
+
+    // 捕获路径:先于卡片处理器;宽限内这一按归关栏桥继续吞掉,审批不作答。
+    const capture = fakeKeyEvent({ path: [card, app], code: 'Escape' })
+    dom.window.emit(capture)
+    check('捕获路宽限内:不拒绝', pending.answers, [])
+    check('捕获路宽限内:被关栏桥吞掉', [capture.prevented, capture.stopped], [1, 1])
+
+    // 固定通道那条路读同一条宽限。
+    const fixed = keydown(gesture('Escape'), shortcutContext({ target: card }))
+    shortcuts.emit(fixed.input)
+    check('固定通道宽限内:不拒绝', pending.answers, [])
+    check('固定通道宽限内:不消费', fixed.consumed.count, 0)
+
+    // Enter 不受宽限影响:允许一次照常作答。
+    const allow = keydown(gesture('Enter'), shortcutContext({ target: domBody }))
+    shortcuts.emit(allow.input)
+    check('宽限内 Enter:照常允许一次', pending.answers, ['allowed-once'])
+    check('宽限内 Enter:被消费', allow.consumed.count, 1)
+
+    // 宽限过期后,同一按重新归审批固定行。
+    markFullscreenDismissed(performance.now() - 1000)
+    const later = keydown(gesture('Escape'), shortcutContext({ target: domBody }))
+    shortcuts.emit(later.input)
+    check('宽限过后 Esc:照常拒绝', pending.answers, ['allowed-once', 'rejected'])
+    check('宽限过后 Esc:被消费', later.consumed.count, 1)
+  } finally {
+    dom.restore()
   }
 }
 

@@ -26,7 +26,7 @@
 | 页面切换／会话视图 | 右栏**展开**时：`sidebar.mounted`（右侧栏正在画的会话）的页面列表 `tabsIn` 与当前页 `active()`；右栏**折叠**时：主会话此刻渲染出来的 `[data-conversation-tabs] [role="tab"]` 与 `aria-selected` | `focus(tabId)` 切页（与点击芯片同一操作，记入布局历史）；切页后在**下一帧**执行 `focusShownPage` 把键盘交给新显示的页面，页面自聚焦（如终端）则不抢。页签行另有两处补偿：注入一条作用域限定在右侧栏的样式规则消掉"先回到最左、再迅速滑过去"的动画，并在切页前后保持观察窗口（切页前记下 chip box 的位置，下一帧先还回去、只有目标不在窗口里时才最小推移）（见第 5.4 节）。**折叠态**改用同一对键切换会话视图：环状步进后 `click()` 目标页签按钮 —— 与用户点标签是同一次上游 `selectView`，所以持久化偏好、激活 target 与宽度预算折叠全由上游处理；候选只含此刻画在行里的页签（折进「更多会话视图」菜单的不算），不足两颗时不动作、不消费（见 `view-cycle.ts`） |
 | 聚焦右栏页面（`⌘⌥K` / `Ctrl+Alt+K`） | 插件自己的固定行 `dsh-keyboard-shortcuts.focus-page` 占用这一按（`fixedRowOwns`），且右栏展开、`sidebar.mounted` 有会话 | `focusShownPage(sessionId)`：与页面切换键共用同一条交棒判定（页面自持键盘就不抢，否则聚焦可见 pane 并下探页面自己的输入面，终端即 `.xterm-helper-textarea`）；不换页 |
 | 会话导航 | 左侧栏此刻渲染出来的会话行：`[data-row-key="workspace:…"]` / `session:…` 两类行里取前三个工作区的会话行；当前会话由 `sessions.list` 的 `retainedBy.mainView` 给出，活跃与否读 `uiSession.sessionStatus` | `uiWorkspace.openSession(id)`（与点击侧栏那一行同一操作）；`⌘↑/↓`（macOS）/ `Ctrl+↑/↓`（Windows/Linux）（`session-cycle`）在全部候选里环状走，`⌘⌥↑/↓`（macOS）/ `Ctrl+Alt+↑/↓`（Windows/Linux）（`session-active-cycle`）只走候选里带状态点的活跃会话（运行中 / 待交互 / 已完成未读） |
-| 全屏右栏关栏（`Esc`） | DOM 上 `[data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]` 与 `sidebarRight.isExpanded()` 同时成立，且焦点不在终端、不在右栏自己的文本控件里 | `toggleExpanded()`（与面板自带的折叠按钮同一个动词）；只关栏、不重置记录的模式，所以再次展开仍回到全屏。面板全屏时待答审批与提问卡片也不在这一按上作答——它们被这块浮层盖住（见第 5.11 节） |
+| 全屏右栏关栏（`Esc`） | DOM 上 `[data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]` 与 `sidebarRight.isExpanded()` 同时成立，且焦点不在终端、不在右栏自己的文本控件里；关栏后的 500ms 宽限内裸 `Esc` 也归它 | `toggleExpanded()`（与面板自带的折叠按钮同一个动词）；只关栏、不重置记录的模式，所以再次展开仍回到全屏。面板全屏时待答审批与提问卡片也不在这一按上作答——它们被这块浮层盖住；关栏宽限内同样不作答（见第 5.11 节） |
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
 

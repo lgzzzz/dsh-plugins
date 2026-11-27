@@ -4,7 +4,10 @@
  * 准入、展开态与可见面板标记。
  */
 import { check, checkTrue, FakeElement, fakeDocument, fakeSidebar, finish, gesture, shortcutContext } from './focus-helpers.mjs'
-import { fullscreenDismissEligible, fullscreenDismissOwned, fullscreenSidebarShown, sidebarOwnsTarget } from '../src/fullscreen-dismiss.ts'
+import {
+  DISMISS_GRACE_MS, dismissalFollowUp, fullscreenDismissEligible, fullscreenDismissOwned, fullscreenSidebarShown,
+  markFullscreenDismissed, recentlyDismissedFullscreenSidebar, resetFullscreenDismissed, sidebarOwnsTarget,
+} from '../src/fullscreen-dismiss.ts'
 
 /** 装一段假 document(判定函数只读这个全局),跑完还原。 */
 function withDocument(root, run) {
@@ -183,6 +186,33 @@ console.log('--- Y⑥ 极简 document:没有 querySelectorAll / closest 也不�
     if (previous === undefined) delete globalThis.document
     else globalThis.document = previous
   }
+}
+
+console.log('--- Y⑦ 关栏宽限:时刻推进与裸 Esc 判定 ---')
+{
+  resetFullscreenDismissed()
+  check('没有关栏记录:不算宽限', recentlyDismissedFullscreenSidebar(1000), false)
+  check('没有关栏记录:裸 Esc 也不追吞', dismissalFollowUp(gesture('Escape')), false)
+
+  markFullscreenDismissed(1000)
+  checkTrue('刚关栏:算宽限', recentlyDismissedFullscreenSidebar(1000))
+  checkTrue('宽限内(末尾前一毫秒):算宽限', recentlyDismissedFullscreenSidebar(1000 + DISMISS_GRACE_MS - 1))
+  check('宽限到期:不算宽限', recentlyDismissedFullscreenSidebar(1000 + DISMISS_GRACE_MS), false)
+  check('时钟回拨到关栏之前:不算宽限', recentlyDismissedFullscreenSidebar(999), false)
+
+  // 归关栏的那一按用当前时钟判定。
+  markFullscreenDismissed(performance.now())
+  checkTrue('宽限内裸 Esc:继续归关栏', dismissalFollowUp(gesture('Escape')))
+  check('宽限内带 Ctrl 的 Esc:不是关栏那一按', dismissalFollowUp(gesture('Escape', { control: true })), false)
+  check('宽限内带 Meta 的 Esc:不是关栏那一按', dismissalFollowUp(gesture('Escape', { meta: true })), false)
+  check('宽限内组字中的 Esc:留给输入法', dismissalFollowUp(gesture('Escape', { composing: true })), false)
+  check('宽限内 Enter:不受影响', dismissalFollowUp(gesture('Enter')), false)
+
+  markFullscreenDismissed(performance.now() - 1000)
+  check('宽限过后裸 Esc:不再归关栏', dismissalFollowUp(gesture('Escape')), false)
+
+  resetFullscreenDismissed()
+  check('复位后:不算宽限', recentlyDismissedFullscreenSidebar(1000), false)
 }
 
 finish()

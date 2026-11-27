@@ -15,7 +15,7 @@
  *
  * 机制与 `dismiss()` 的三种落点见 docs/dsh-keyboard-shortcuts/05-approval-key-bridge.md。
  */
-import { fullscreenSidebarShown } from './fullscreen-dismiss.ts'
+import { fullscreenSidebarShown, recentlyDismissedFullscreenSidebar } from './fullscreen-dismiss.ts'
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {ShortcutContext, ShortcutGesture, Shortcuts} from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {ISessions} from '@deepseek-ai/dsh-api-session-controller/client'
@@ -114,6 +114,9 @@ function handleQuestionInput(
   const gesture: ShortcutGesture = input.gesture
   const context = input.context
   if (!questionEscapeEligible(gesture, context)) return
+  // 刚用 `Esc` 关掉全屏右栏：这一按（同一按的重复投递或紧接着的第二按）仍归那次关栏，
+  // 取消一个刚露出来、用户还没看清的提问等于替用户作答（见 fullscreen-dismiss.ts）。
+  if (recentlyDismissedFullscreenSidebar()) return
   const question: PendingQuestion | undefined = presentedQuestion(
     mainViewSessionId(sessions.list.getSnapshot()),
     uiSession.sessionStatus.getSnapshot(),

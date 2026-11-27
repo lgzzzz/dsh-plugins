@@ -15,7 +15,7 @@
  */
 import { captureContext, captureGesture, pressElement } from './capture.ts'
 import { suppressFocusRing } from './focus-ring.ts'
-import { fullscreenSidebarShown } from './fullscreen-dismiss.ts'
+import { fullscreenSidebarShown, recentlyDismissedFullscreenSidebar } from './fullscreen-dismiss.ts'
 import { fixedRowOwns } from './binding.ts'
 import { isKeydown, mainViewSessionId, name, warn, type KeydownInput, type SessionId } from './runtime.ts'
 import type {
@@ -161,6 +161,9 @@ function installApprovalCapture(
       target,
     )
     if (outcome === undefined) return
+    // 刚用 `Esc` 关掉全屏右栏：这一按（同一按的重复投递或紧接着的第二按）仍归那次关栏，
+    // 拒绝一个刚露出来、用户还没看清的审批等于替用户作答；`Enter`（允许）不受影响。
+    if (outcome === 'rejected' && recentlyDismissedFullscreenSidebar()) return
     // 全屏右栏盖在待答交互之上：这一按归它关栏（两条捕获监听互不消费对方，只有这里的让位能保证
     // 一次按键只被一处处理；见 fullscreen-dismiss.ts）。
     if (fullscreenSidebarShown()) return
@@ -195,6 +198,9 @@ function handleApprovalInput(
   const rows = shortcuts.fixedCatalog.getSnapshot()
   const outcome: ApprovalDecision | undefined = approvalOutcomeFor(rows, gesture, APPROVAL_COMMAND_IDS)
   if (outcome === undefined) return
+  // 刚用 `Esc` 关掉全屏右栏：这一按（同一按的重复投递或紧接着的第二按）仍归那次关栏，
+  // 拒绝一个刚露出来、用户还没看清的审批等于替用户作答；`Enter`（允许）不受影响。
+  if (outcome === 'rejected' && recentlyDismissedFullscreenSidebar()) return
   // 落在面板内的按键归面板：它要么已自行作答，要么把 Enter 留给面板内聚焦的按钮。
   if (approvalPanelOwnsTarget(context.target)) return
   // 全屏右栏盖在待答交互之上：这一按归它关栏，见 fullscreen-dismiss.ts。

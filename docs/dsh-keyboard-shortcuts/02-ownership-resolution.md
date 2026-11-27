@@ -215,7 +215,8 @@ return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallba
 
 右栏**全屏呈现**时盖住整个视口（手动全屏，或窄于 768px 的窗口里展开即自动全屏）。这一状态下裸 `Esc` 有几个候选 owner，按「浮层先关」排定：全屏的面板在最上面，先关它。
 
-- **全屏关栏桥**（`src/fullscreen-dismiss.ts`）：只要面板仍是全屏呈现且已展开就认领这一按。它挂在 window **捕获阶段**，早于固定通道与任何本地控件；命中即 `preventDefault() + stopPropagation()` 再调 `sidebarRight.toggleExpanded()`（与面板自带的折叠按钮同一个动词，见 [第 5.11 节](05-approval-key-bridge.md)）。官方 `response.stop` 与本插件的停止桥都在固定通道里，因此全屏期间收不到这一按，凑不成「连按两下停止」；关栏之后再按两下才停。
+- **全屏关栏桥**（`src/fullscreen-dismiss.ts`）：只要面板仍是全屏呈现且已展开就认领这一按。它挂在 window **捕获阶段**，早于固定通道与任何本地控件；命中即 `preventDefault() + stopImmediatePropagation()` 再调 `sidebarRight.toggleExpanded()`（与面板自带的折叠按钮同一个动词，见 [第 5.11 节](05-approval-key-bridge.md)）。官方 `response.stop` 与本插件的停止桥都在固定通道里，因此全屏期间收不到这一按，凑不成「连按两下停止」；关栏之后再按两下才停。
+- **关栏宽限（500ms）**：折叠动画期间用户常会再按一下（或浏览器把同一按重复投递），这一下仍归那次关栏。宽限内关栏桥继续吞掉裸 `Esc`，审批 / 提问 / 停止三条桥也各自让位；否则第二下会落到刚露出来的待答卡片上，表现成「按 `Esc` 关右侧栏却把审批拒掉」。
 - **待答审批（3.4）与提问卡片（3.5）**：两者都是 composer 顶替，浮层盖住整块 composer 后**在屏幕上看不见**。这两条桥各加一条 `fullscreenSidebarShown()` 守卫：面板全屏且展开时不在这一按上作答，否则同一次按键会既关栏、又答掉一个看不见的请求。
 
 让位条件都来自浮层自身的边界：
@@ -228,3 +229,4 @@ return [<div style={{ display: elected === null ? "contents" : "none" }}>{fallba
 | 右栏已折叠，或 DOM 上不是全屏呈现（`push`） | 无人 | 不动作、不消费（只在「全屏 + 展开」时才接管） |
 | 服务面读到折叠、DOM 上却仍留着全屏标记（面板正在卸载） | 无人 | 两侧读数不一致时不动作：`toggleExpanded()` 在折叠态下的语义是**展开**，不能凭陈旧标记去碰它 |
 | 焦点在被浮层盖住的 composer 里（`editable`，但不在右栏内） | 全屏关栏桥 | 照常关栏并消费：浮层比它盖住的控件更近 |
+| 关栏后的 500ms 宽限内（同一按的重复投递 / 折叠动画期间的第二下） | 全屏关栏桥（继续吞掉） | 不吃审批 / 提问 / 停止：待答卡片刚露出来，这一按仍属于那次关栏 |
