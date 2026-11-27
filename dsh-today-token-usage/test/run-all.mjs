@@ -14,10 +14,13 @@ const here = dirname(fileURLToPath(import.meta.url))
 // 先纯逻辑，再宿主装配，最后产物与真 React 渲染。
 const ORDER = [
   'journal.test.mjs',
+  'month.test.mjs',
+  'pricing.test.mjs',
   'tap.test.mjs',
   'store.test.mjs',
   'route.test.mjs',
   'usage-client.test.mjs',
+  'view.test.mjs',
   'aggregate.test.mjs',
   'plugin-apply.test.mjs',
   'artifact-client.test.mjs',

@@ -5,9 +5,10 @@
  * auto-review，以及任何插件直接 `ctx.llm.stream()` 发出的调用，都会经过这里；用量取流里
  * 最后一个 `usage` 块（provider 真正回报的值），没有回报的请求不产生记录。
  *
- * 记录落盘在 `$DSH_HOME/state/today-token-usage/requests-YYYY-MM-DD.jsonl`，保留今天 + 前
- * 29 天共 30 天；重启后当天合计从文件恢复。浏览器半部通过同源、owner-only 的
- * `GET /today-token-usage/today` 读当天合计，面板因此与 journal 是同一个数。
+ * 记录落盘在 `$DSH_HOME/state/today-token-usage/requests-YYYY-MM-DD.jsonl`（保留今天 + 前
+ * 34 天）；每月再写一份汇总到 `months/YYYY-MM.json`，不随日文件清理（过去的数据存起来，以后
+ * 有需要再读）。重启后当天与当月合计都从文件恢复。浏览器半部通过同源、owner-only 的 SSE 推送
+ * 读当天与当月合计，面板因此与 journal 是同一个数。
  *
  * 本层没有任何可调参数：保留天数与路由路径都固定。装/卸都只影响记录与那一栏读数。
  */

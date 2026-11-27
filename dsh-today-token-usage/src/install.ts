@@ -1,12 +1,13 @@
 /**
- * 宿主半部的接线：把「每一次模型调用」接到 journal 上，并把当天合计开到只读路由。
+ * 宿主半部的接线：把「每一次模型调用」接到 journal 上，并把当天 / 当月合计开到只读路由。
  *
  * 三块注册都挂在插件自己的 fiber 上，卸载时一起收回：
  *
  *   - `llm/stream` global 监听：覆盖进程内所有模型调用（主对话、子智能体、标题生成、压缩摘要、
  *     时间线报告、第三方插件直接发起的调用）。监听只包一层 {@link tapStream}，绝不改写请求；
- *   - journal store：启动时读回当天文件，之后每次调用同步更新内存、串行追加一行；
- *   - `webServer` 路由（可选服务）：`GET /today-token-usage/today` 给浏览器半部读数。
+ *   - journal store：启动时读回当天文件与月度汇总，之后每次调用同步更新当天 / 当月内存、
+ *     串行追加一行，并按节流写一份月度汇总；
+ *   - `webServer` 路由（可选服务）：当天快照与 SSE 推送（载荷里同时带当月累计）。
  *
  * 单独导出（而不是全写在 `index.ts` 里）是为了让测试用临时目录跑真装配。
  */
@@ -74,7 +75,7 @@ export async function installRecorder(
   }, { global: true })
 
   // webServer 只在 web composition 里存在；缺席时安静地只记录、不开放路由。
-  // 页面用 SSE 推送；JSON 快照路由留给 curl / 排障 / 兜底。
+  // 页面用 SSE 推送；JSON 快照留给 curl / 排障。
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => {
       const disposeSnapshot = webCtx.webServer.register({

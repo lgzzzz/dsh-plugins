@@ -19,6 +19,9 @@ const reactStub = {
   useMemo(factory) {
     return factory()
   },
+  useSyncExternalStore(subscribe, getSnapshot) {
+    return getSnapshot()
+  },
   useState(initial) {
     return [typeof initial === 'function' ? initial() : initial, () => {}]
   },
@@ -86,9 +89,9 @@ check('一个分区注册', registrations.length, 1)
 const { options, component } = registrations[0]
 check('槽键', options.name, 'conversation.session.panel.section')
 check('分区 id', options.id, 'today-usage')
-check('排序', options.order, 300)
+check('排序', options.order, 310)
 check('命名空间', options.locale, 'dsh-today-token-usage')
-check('标题走字典', options.label(), 'section.title')
+check('标题走字典（今日）', options.label(), 'section.title')
 check('组件是函数', typeof component, 'function')
 check('字典登记', localeRegistrations.length, 1)
 check('字典命名空间', localeRegistrations[0].namespace, 'dsh-today-token-usage')
@@ -97,8 +100,10 @@ const zh = localeRegistrations[0].dictionaries.zh
 const en = localeRegistrations[0].dictionaries.en
 const zhKeys = Object.keys(zh).sort()
 check('中英文字典键一致', Object.keys(en).sort(), zhKeys)
-checkTrue('标题与每行标签齐全', ['section.title', 'row.total', 'row.requests', 'row.cacheHit', 'row.uncachedInput', 'row.cacheRead', 'row.cacheWrite', 'row.output']
+checkTrue('两个标题与每行标签齐全', ['section.title', 'section.monthTitle', 'row.total', 'row.requests', 'row.cacheHit', 'row.uncachedInput', 'row.cacheRead', 'row.cacheWrite', 'row.output', 'row.switchMonth', 'row.switchToday']
   .every(key => typeof zh[key] === 'string' && typeof en[key] === 'string'))
+check('切换按钮的可见文案', [zh['row.switchMonth'], zh['row.switchToday']], ['切换本月', '切换今日'])
+check('两个标题的文案', [zh['section.title'], zh['section.monthTitle']], ['今日 Token 用量', '本月 Token 用量'])
 check('挂了一个 effect', effects.length, 1)
 checkTrue('effect 带清理函数', typeof effects[0].disposer === 'function')
 
