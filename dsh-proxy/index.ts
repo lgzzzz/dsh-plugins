@@ -60,8 +60,6 @@ export async function apply(ctx: Context, config: unknown): Promise<void> {
   )
 
   log.push('action', `插件已加载，运行时目录 ${resolved.dataDir}`)
-  void service.startupReport().then((report) => {
-    log.push('action', report)
-    if (report.includes('没有找到') || report.includes('无法执行')) console.error(`[dsh-proxy] ${report}`)
-  })
+  // 内核：定位二进制、报告版本，再按配置自动启动。失败只写日志，不阻塞插件加载。
+  void service.boot()
 }

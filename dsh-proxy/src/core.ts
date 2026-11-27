@@ -249,6 +249,15 @@ export class CoreManager {
       this.lastError = resolved.error ?? '没有可用的 xray 可执行文件'
       throw new Error(this.lastError)
     }
+    // 入站端口被占用时 xray 绑不上。先查一次，否则「新进程立刻退出、旧进程还在监听」
+    // 会被 waitForPorts 误判成启动成功。
+    const busy = await this.busyInboundPorts()
+    if (busy.length > 0) {
+      this.state = 'error'
+      this.lastError = `端口已被占用：${busy.join('、')}。可能是上一次运行的内核没有退出，或者本机已有代理在监听。`
+      this.log.push('error', this.lastError)
+      throw new Error(this.lastError)
+    }
     this.writeConfigFile(body)
     // 访问日志顺序要求：`xray -test` 会创建空文件，所以偏移放在它之后、spawn 之前算。
     this.access?.bindProxy(proxyLabel)
@@ -259,8 +268,9 @@ export class CoreManager {
     this.log.push('action', `启动内核：${resolved.path} -config ${this.configPath}`)
     const env = this.assetEnvironment()
     if (env !== undefined) this.log.push('action', `geo 数据目录：${this.config.geoDir}`)
+    let handle: SubprocessHandle
     try {
-      const handle = this.ctx.subprocess.spawn({
+      handle = this.ctx.subprocess.spawn({
         argv: [resolved.path, '-config', this.configPath],
         cwd: this.config.dataDir,
         stdio: { stdin: 'ignore', stdout: { maxBytes: COLLECT_BYTES }, stderr: { maxBytes: COLLECT_BYTES } },
@@ -277,7 +287,11 @@ export class CoreManager {
       throw error
     }
 
-    const ready = await this.waitForPorts()
+    const ready = await Promise.race([
+      this.waitForPorts(),
+      // 进程先退出（二进制不可执行、配置被拒）时立刻失败，而不是等满端口超时。
+      handle.done.then(() => false, () => false),
+    ])
     if (!ready) {
       const tail = this.log.tailText(8)
       this.state = 'error'
@@ -315,6 +329,14 @@ export class CoreManager {
       this.log.push('error', `内核进程异常：${this.lastError}`)
       this.handle = undefined
     }
+  }
+
+  /** 入站端口里已被别人占用的那些，给启动失败的提示用。 */
+  private async busyInboundPorts(): Promise<string[]> {
+    const busy: string[] = []
+    if (await probePort(this.config.socksPort)) busy.push(`socks ${this.config.socksPort}`)
+    if (await probePort(this.config.httpPort)) busy.push(`http ${this.config.httpPort}`)
+    return busy
   }
 
   private async waitForPorts(): Promise<boolean> {

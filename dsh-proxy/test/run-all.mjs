@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const ORDER = ['ir.test.mjs', 'compile.test.mjs', 'explain.test.mjs', 'access.test.mjs', 'nodes.test.mjs', 'labels.test.mjs', 'core.test.mjs', 'e2e.test.mjs', 'host.test.mjs']
+const ORDER = ['ir.test.mjs', 'compile.test.mjs', 'explain.test.mjs', 'access.test.mjs', 'nodes.test.mjs', 'labels.test.mjs', 'core.test.mjs', 'autostart.test.mjs', 'e2e.test.mjs', 'host.test.mjs']
 
 const filters = process.argv.slice(2)
 const all = readdirSync(here).filter((name) => name.endsWith('.test.mjs'))

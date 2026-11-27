@@ -19,6 +19,12 @@ export interface ProxyConfig {
   toolExposure?: ToolExposure
   /** 是否写访问日志（每条连接的目的与出口）。默认 `true`；关闭后「连接」页签没有记录。 */
   accessLog?: boolean
+  /**
+   * 插件加载后是否自动启动内核。默认 `true`。
+   *
+   * 只在有选中节点、二进制可用且端口空闲时启动；任何失败都只写日志，不影响插件加载。
+   */
+  autoStart?: boolean
 }
 
 /** 解析后的配置：路径都是绝对路径，端口都有默认值。 */
@@ -36,6 +42,8 @@ export interface ResolvedConfig {
   accessLog: boolean
   /** 访问日志路径；`accessLog: false` 时不会被使用。 */
   accessLogPath: string
+  /** 插件加载后是否自动启动内核。 */
+  autoStart: boolean
 }
 
 function portOr(value: unknown, fallback: number): number {
@@ -68,6 +76,8 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
     // 只有显式 false 才关闭：默认要能回答「刚才走没走代理」。
     accessLog: input.accessLog !== false,
     accessLogPath: join(dataDir, 'access.log'),
+    // 默认开启：插件加载后自动拉起内核。只有显式 false 才改为手动启动。
+    autoStart: input.autoStart !== false,
   }
 }
 

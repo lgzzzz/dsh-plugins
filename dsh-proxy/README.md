@@ -7,6 +7,10 @@ Xray-core binary executes them.
 
 ## What it does
 
+- Starts the kernel as soon as the plugin loads once a node is selected
+  (`autoStart`, default `true`) and stops it on unload. A missing binary, no
+  selected node, occupied ports, or a rejected config never blocks loading;
+  rule editing and simulation keep working.
 - Stores rules, nodes, and the selected exit in the storage domain `dsh_proxy`
   (rules and selection in the domain's global record; nodes and subscriptions
   in tables), so nothing is written into the workspace.
@@ -34,6 +38,17 @@ If you rely on `geosite:` / `geoip:` values, point `geoDir` at the directory
 that holds `geosite.dat` / `geoip.dat` (empty means `<DSH_HOME>/proxy/geo`);
 a kernel installed with its own asset directory keeps using it when `geoDir`
 has no `.dat` files.
+
+## Startup
+
+Loading the plugin resolves the binary and — when `autoStart` is on (the
+default) and a node is selected — starts the kernel with the saved rules.
+Unloading stops it. Set `autoStart: false` to keep the kernel stopped until the
+panel's start button or `POST /proxy-api/core` starts it. Without a selected
+node auto-start does nothing. A missing binary or a failed start — including
+SOCKS / HTTP ports already in use — is written to the log, and the panel's
+start button remains the retry path. Rules and simulation do not depend on the
+kernel either way.
 
 ## Tools
 

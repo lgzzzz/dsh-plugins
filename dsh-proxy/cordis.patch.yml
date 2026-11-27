@@ -16,3 +16,6 @@
         # Connections tab and readable through `proxy_traffic_read`. Writes
         # `<dataDir>/access.log`; set false to record nothing.
         accessLog: true
+        # Start the kernel right after the plugin loads, once a node is selected.
+        # Failures are logged only; the panel's start button stays available.
+        autoStart: true

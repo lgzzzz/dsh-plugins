@@ -38,6 +38,21 @@ function fakeDomain(spec) {
   }
 }
 
+/**
+ * 建一套跨多次 `open()` 复用的替身存储：同名域返回同一份数据，模拟真实存储在
+ * 插件重载后仍然保留。`createFakeHost` 默认每次新建一套，测试要验证「重新加载」时
+ * 显式传进来。
+ */
+export function createFakeStorageDomain() {
+  const domains = new Map()
+  return {
+    async open(spec) {
+      if (!domains.has(spec.name)) domains.set(spec.name, fakeDomain(spec))
+      return domains.get(spec.name)
+    },
+  }
+}
+
 function makeRequest(method, url, body) {
   const handlers = { data: [], end: [], error: [] }
   const req = {
@@ -76,6 +91,7 @@ function makeResponse() {
 /**
  * 建一套替身宿主。
  * @param options - `subprocess` 可替换成真实本地运行时；省略时任何进程操作都会抛错。
+ *   `storageDomain` 可换成跨加载复用的替身存储（见 `createFakeStorageDomain`）。
  */
 export function createFakeHost(options = {}) {
   const routes = []
@@ -121,9 +137,7 @@ export function createFakeHost(options = {}) {
         return () => {}
       },
     },
-    storageDomain: {
-      open: async (spec) => fakeDomain(spec),
-    },
+    storageDomain: options.storageDomain ?? createFakeStorageDomain(),
     subprocess: options.subprocess ?? {
       async resolveExecutable() {
         throw new Error('xray 不在 PATH 上')

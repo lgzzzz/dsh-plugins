@@ -394,7 +394,9 @@ stopped ──start──► starting ──端口就绪──► running
                       └──超时/退出──► error └──apply──► restarting（失败自动回滚）
 ```
 
-- **启动**：生成 `config.generated.json`（0600）→ `xray -test -config` → `ctx.subprocess.spawn` → 轮询端口（500ms × 6）→ running。
+- **启动**：`start()` 先探测 socks / http 端口是否已被占用 → 写 `config.generated.json`（0600）→ `ctx.subprocess.spawn` → 轮询端口（250ms × 24，约 6 秒）→ running；`apply()` 在重启前先跑 `xray -test -config` 校验。
+- **自动启动**：`apply()` 末尾走 `boot()`：定位二进制、把路径与版本写进日志，再按 `autoStart`（默认 `true`）启动内核。没有选中节点时跳过；二进制缺失、端口被占用或启动失败只写日志（后两者把状态置为 error），都不阻塞插件加载。`shutdown()` 先标记已卸载，启动流程若在卸载后才完成，会把刚起来的进程停掉。
+- **端口占用**：spawn 前先探测 socks / http 端口，已被占用就直接失败并在日志与状态里点名是哪个端口，不等端口超时；端口轮询同时等 `handle.done`，进程先退出（二进制不可执行、配置被拒）时立刻失败，避免「新进程已退出、旧进程仍在监听」被误判为 running。
 - **重启**：`terminate()` → `waitForExit()` → 重新 spawn。xray 不支持热加载配置，所以必须重启。
 - **回滚**：保存旧 IR 与新 IR，新配置启动失败时写回旧 IR 再启动一次，把内核 stderr 尾部返回给调用方（与 v2rayA 的 `ApplyCoreConfig` 同款语义）。
 - **崩溃**：`done` resolve 且非主动停止 → 状态转 error，记录 exitCode 与 stderr 尾部，不自动重启（避免代理环路时无限重启）。

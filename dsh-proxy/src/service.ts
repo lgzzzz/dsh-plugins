@@ -122,6 +122,8 @@ export class ProxyService {
   readonly access: AccessLog
   private readonly ctx: Context
   private readonly log: RingLog
+  /** 插件已卸载：自动启动的异步流程据此放弃后续动作。 */
+  private disposed = false
 
   constructor(ctx: Context, config: ResolvedConfig, store: ProxyStore, log: RingLog) {
     this.ctx = ctx
@@ -562,16 +564,68 @@ export class ProxyService {
 
   /** 插件卸载：停内核、关存储域。 */
   async shutdown(): Promise<void> {
+    // 先标记：自动启动流程可能正在 await，看到标记后不再拉起内核。
+    this.disposed = true
     await this.core.stop()
     await this.store.close()
   }
 
-  /** 启动时的状态检查：报告缺什么，但不阻塞插件加载。 */
-  async startupReport(): Promise<string> {
+  /**
+   * 插件加载后的启动流程：定位内核、报告版本，再按配置自动启动。
+   *
+   * 只写日志、不抛错 —— 内核缺失或启动失败都不该让插件加载失败。
+   */
+  async boot(): Promise<void> {
+    try {
+      const binary = await this.core.resolveBinary()
+      ensureDataDir(this.config)
+      if (binary.path === null) {
+        const message = binary.error ?? '没有可用的 xray 可执行文件'
+        this.log.push('error', message)
+        console.error(`[dsh-proxy] ${message}`)
+        return
+      }
+      const version = this.core.status().version
+      this.log.push('action', `内核：${binary.path}${version === null ? '' : `（${version}）`}`)
+      await this.autoStart()
+    } catch (error) {
+      this.log.push('error', `启动流程异常：${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * 按配置自动启动内核：`autoStart` 开启、有选中节点、内核未在运行、端口空闲时才尝试。
+   *
+   * 失败只写日志，交给面板的启停按钮重试；插件卸载后不会再拉起内核。
+   */
+  async autoStart(): Promise<void> {
+    if (this.disposed) return
+    if (!this.config.autoStart) {
+      this.log.push('action', '自动启动已关闭（autoStart: false）')
+      return
+    }
+    const state = this.core.status().state
+    if (state === 'running' || state === 'starting') return
+    if (this.store.selectedNode() === null) {
+      this.log.push('action', '自动启动跳过：还没有选中节点')
+      return
+    }
     const binary = await this.core.resolveBinary()
-    ensureDataDir(this.config)
-    if (binary.path === null) return binary.error ?? '没有可用的 xray 可执行文件'
-    return `内核：${binary.path}${this.core.status().version === null ? '' : `（${this.core.status().version}）`}`
+    if (binary.path === null) {
+      this.log.push('error', `自动启动跳过：${binary.error ?? '没有可用的 xray 可执行文件'}`)
+      return
+    }
+    if (this.disposed) return
+    const built = this.buildConfig()
+    this.log.push('action', '自动启动：跟随插件加载启动内核')
+    try {
+      await this.core.start(built.config, built.proxyLabel)
+    } catch (error) {
+      this.log.push('error', `自动启动失败：${(error as Error).message}`)
+      return
+    }
+    // 启动期间被卸载：shutdown() 只停了当时那一个进程，这里把刚起来的也停掉。
+    if (this.disposed) await this.core.stop()
   }
 
   /** 供 HTTP 与工具共用的节点视图。 */
