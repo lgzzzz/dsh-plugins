@@ -446,4 +446,33 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
 [data-session-panel='docked'] {
   width: 300px !important;
 }
+
+/* 会话面板([data-session-panel])自身与整棵子树 14px(跟随 --dsh-content-font-size,默认 14px)。
+   面板的内容是各插件注册的 section:环境(工作目录 / 工作树 / 项目)、变更请求、主智能体、
+   子智能体会话树、共享任务、今日 Token 用量、后台任务。字号散落在几十个 CSS Module 里:
+   区块标题 12px/18px(._…_title 的 var(--dsw-font-xxs-12))、行 13px/20px(._…_row 的
+   var(--dsw-font-xs-13))、行的第二行 12px/17px、折叠行 12px/16px、环境备注 12px/18px、
+   后台任务区 10–12px、子智能体会话树 12px、各 section 的操作按钮/计数也各自声明 10–13px。
+   逐个组件覆盖既容易漏、又会随 section 增删漂移,所以按面板根锚点统一整棵子树。
+   面板根 aside 自己没有 font-size,继承 body 的 16px;后代又各自声明更小的字号,因此根元素
+   与后代都要覆盖,并靠 !important 压过后代自己的声明(上游 <style> 由模块自注入,挂载顺序
+   不归本插件掌握)。
+   只改 font-size:行高 / 字重 / 字体族 / 颜色保持上游 —— 行高仍按上游的 17–20px 排版,
+   区块标题保留 --dsw-font-xxs-12 里的 18px 行高,只把字号提到 14px;面板宽度固定 300px
+   (见上一条),字号变大后长文本按上游的 ellipsis / nowrap 截断,不会撑破面板。
+   --dsh-content-font-size 由主题写在 document.body 的行内样式上(默认 14px),aside 在 body
+   下、变量可继承;取值与 [data-jobs-section]、子智能体会话树两条窄作用域规则一致,字号设置
+   变大时整个面板一起跟随(默认即 14px)。
+   面板里的右键菜单 / tooltip 是 portal 到 document.body 的共享浮层,不在 [data-session-panel]
+   子树里,字号不变;面板行详情的 HoverCard 是面板自己的详情视图(portal 到 body,标题本来就是
+   14px,说明行 / 状态 / 指标是 12px),单独用 [data-session-panel-details] 锚点一并提到 14px。
+   锚点:data-session-panel 是 aside 根上的呈现态属性(docked / overlay),data-session-panel-details
+   是 PanelDetails 根上的标记。属性改名时规则整条落空、面板字号回到上游 10–13px,
+   由 css-contract.json 的 panel-docked-attr / session-panel-details-attr 两条契约在构建后报失效。 */
+[data-session-panel],
+[data-session-panel] *,
+[data-session-panel-details],
+[data-session-panel-details] * {
+  font-size: var(--dsh-content-font-size, 14px) !important;
+}
 `
