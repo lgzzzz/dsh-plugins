@@ -3,7 +3,7 @@
  *
  *   - `GET /today-token-usage/today`：一次性 JSON 快照（curl / 排障 / 兜底用）；
  *   - `GET /today-token-usage/stream`：SSE 长连接，页面用它收推送。宿主在每次记录成功
- *     （以及跨零点）时把当天读数写成一帧 `data: {...}`，不需要浏览器轮询。
+ *     （以及跨零点）时把当天读数（含当月累计）写成一帧 `data: {...}`，不需要浏览器轮询。
  *
  * 安全约束（两条路由相同）：注册时 `auth: 'required'`（必须是活着的 Peer，浏览器带会话
  * cookie 才能过 `webserver/authorize` → `connection.authentication.authenticate`），处理函数

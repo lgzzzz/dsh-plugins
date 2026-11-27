@@ -1,5 +1,5 @@
 /**
- * journal 的纯词汇：一天一行 JSON 的记录格式、文件名、解析与合计。
+ * journal 的纯词汇：一天一行 JSON 的记录格式、文件名、解析、合计与按日折价。
  *
  * 记录只存元数据与用量（provider / model / 可选的推理强度、会话、用途、结束原因），
  * 不存 prompt、消息内容或凭据。一行一个请求，便于人工用 `jq` 查账：
@@ -10,17 +10,25 @@
  *  "usage":{"inputTokens":1234,"outputTokens":456,"cacheReadTokens":7890,"cacheWriteTokens":0}}
  * ```
  *
+ * 合计除了四个 Token 桶，还按模型与完成时刻把每条记录折成人民币费用（见 `./pricing.ts`），
+ * 峰谷拆分与「未计价请求数」随合计一起走。
+ *
  * 纯模块：不做 I/O，宿主半部的 store 与测试共用。
  */
 
 import type { TokenUsage } from '@deepseek-ai/dsh-llm'
-import type { TodayUsagePayload } from './wire.ts'
+import { priceUsage } from './pricing.ts'
+import type { UsageTotals } from './wire.ts'
+import { ZERO_COST } from './wire.ts'
 
 /** 记录格式版本；字段语义变化时加一，旧版本行会被跳过。 */
 export const RECORD_VERSION = 1
 
-/** 文件保留天数：今天 + 前 29 天，共 30 个日文件。 */
-export const RETENTION_DAYS = 30
+/** 日文件保留天数：今天 + 前 34 天，共 35 个日文件。
+ *
+ * 多留几天是为了月度汇总缺失 / 损坏时还能把整月重算出来：最长的一个月有 31 天，35 天足够覆盖。
+ * 月度汇总（`months/YYYY-MM.json`）不随日文件清理。 */
+export const RETENTION_DAYS = 35
 
 /** 日文件名前缀。 */
 export const JOURNAL_FILE_PREFIX = 'requests-'
@@ -58,8 +66,11 @@ export interface UsageRecord {
   readonly usage: JournalUsage
 }
 
-/** 当天合计（journal 内部状态与路由响应共用）。 */
-export interface TodayTotals extends TodayUsagePayload {}
+/** 当天合计：四个桶 + 请求数 + 费用，外加日期键（journal 内部状态与路由响应共用）。 */
+export interface TodayTotals extends UsageTotals {
+  /** 宿主本地日期 `YYYY-MM-DD`。 */
+  readonly day: string
+}
 
 /** 当天零值。 */
 export function emptyTotals(day: string): TodayTotals {
@@ -70,6 +81,7 @@ export function emptyTotals(day: string): TodayTotals {
     outputTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
+    cost: ZERO_COST,
   }
 }
 
@@ -203,12 +215,14 @@ export function parseRecordLine(line: string, fileDay: string): UsageRecord | un
  * 把一条记录加进当天合计，返回新对象（不改入参）。
  *
  * 口径与面板一致：`inputTokens` 是未缓存输入，四桶相加即总用量；`reasoningTokens` 已经在
- * `outputTokens` 里，`totalTokens` 可能与四桶口径不一致，两者都不参与合计。
+ * `outputTokens` 里，`totalTokens` 可能与四桶口径不一致，两者都不参与合计。费用按记录的
+ * 模型与完成时刻逐条计算，峰谷分别累加；模型不在价目表里时只增加「未计价请求数」。
  * @param totals - 当前合计。
  * @param record - 新记录。
  * @returns 下一个合计。
  */
 export function addRecord(totals: TodayTotals, record: UsageRecord): TodayTotals {
+  const priced = priceUsage(record.model, record.time, record.usage)
   return {
     day: totals.day,
     requests: totals.requests + 1,
@@ -216,6 +230,12 @@ export function addRecord(totals: TodayTotals, record: UsageRecord): TodayTotals
     outputTokens: totals.outputTokens + record.usage.outputTokens,
     cacheReadTokens: totals.cacheReadTokens + record.usage.cacheReadTokens,
     cacheWriteTokens: totals.cacheWriteTokens + record.usage.cacheWriteTokens,
+    cost: {
+      total: totals.cost.total + priced.total,
+      peak: totals.cost.peak + priced.peak,
+      offPeak: totals.cost.offPeak + priced.offPeak,
+      unpricedRequests: totals.cost.unpricedRequests + (priced.priced ? 0 : 1),
+    },
   }
 }
 
@@ -229,4 +249,35 @@ export function totalsFromRecords(day: string, records: Iterable<UsageRecord>): 
   let totals = emptyTotals(day)
   for (const record of records) totals = addRecord(totals, record)
   return totals
+}
+
+/** 一份 journal 文本折成的合计与坏行数。 */
+export interface JournalTextTotals {
+  /** 合法记录累加出的合计。 */
+  readonly totals: TodayTotals
+  /** 无法解析而被跳过的非空行数。 */
+  readonly skipped: number
+}
+
+/**
+ * 把一天的 journal 文本（一行一条记录）累加成合计。
+ *
+ * 与 `store.load()` 同一条解析路径：坏行、版本不符、日期与文件名不符的行都跳过并计数，
+ * 不中断整天的合计。历史读取按日复用这个函数，面板与 journal 因此永远同一个口径。
+ * @param day - 这份文件对应的日期键。
+ * @param text - 文件全文。
+ * @returns 合计与坏行数。
+ */
+export function totalsFromJournalText(day: string, text: string): JournalTextTotals {
+  let totals = emptyTotals(day)
+  let skipped = 0
+  for (const line of text.split('\n')) {
+    const record = parseRecordLine(line, day)
+    if (record === undefined) {
+      if (line.trim().length > 0) skipped += 1
+      continue
+    }
+    totals = addRecord(totals, record)
+  }
+  return { totals, skipped }
 }

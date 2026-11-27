@@ -25,6 +25,22 @@ export function check(label, actual, expected) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — 期望 ${e},实得 ${a}`}`)
 }
 
+/** 按 12 位小数归一浮点数：费用是逐笔累加出来的小数，字面量与计算值可能差 1 ulp。 */
+function normalizeNumbers(value) {
+  return JSON.parse(JSON.stringify(value, (_key, item) =>
+    typeof item === 'number' && !Number.isInteger(item) ? Number(item.toFixed(12)) : item))
+}
+
+/**
+ * 比较两份日合计：字段与 Token 数逐位相等，费用按 12 位小数归一后再比。
+ * @param label - 断言名。
+ * @param actual - 实际值。
+ * @param expected - 期望值。
+ */
+export function checkUsage(label, actual, expected) {
+  check(label, normalizeNumbers(actual), normalizeNumbers(expected))
+}
+
 export function checkTrue(label, actual) {
   const ok = actual === true
   if (!ok) failures += 1

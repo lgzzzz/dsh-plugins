@@ -6,7 +6,13 @@
  *
  * 运行：`node test/route.test.mjs`（或 pnpm test 跑全部）。直接 import `src/route.ts`。
  */
-import { KEEP_ALIVE_MS, TODAY_USAGE_PATH, TODAY_USAGE_STREAM_PATH, createTodayUsageHandler, createTodayUsageStream } from '../src/route.ts'
+import {
+  KEEP_ALIVE_MS,
+  TODAY_USAGE_PATH,
+  TODAY_USAGE_STREAM_PATH,
+  createTodayUsageHandler,
+  createTodayUsageStream,
+} from '../src/route.ts'
 import { check, checkTrue, finish } from './helpers.mjs'
 
 const SNAPSHOT = {
@@ -16,6 +22,16 @@ const SNAPSHOT = {
   outputTokens: 20,
   cacheReadTokens: 30,
   cacheWriteTokens: 0,
+  cost: { total: 0.000123, peak: 0.0001, offPeak: 0.000023, unpricedRequests: 0 },
+  month: {
+    month: '2026-11',
+    requests: 9,
+    uncachedInputTokens: 10,
+    outputTokens: 20,
+    cacheReadTokens: 30,
+    cacheWriteTokens: 0,
+    cost: { total: 0.0009, peak: 0.0008, offPeak: 0.0001, unpricedRequests: 0 },
+  },
 }
 
 /** 假 store：快照可推进，订阅者可手动扇出。 */

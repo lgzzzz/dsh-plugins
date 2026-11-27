@@ -7,6 +7,11 @@
  *
  * 断线由浏览器 `EventSource` 自动重连；重连成功后宿主会先补发当前快照，页面读数自动追平。
  * 每帧都过一遍形状守卫，坏帧（HTML fallback、手工篡改）直接忽略，不影响上一份读数。
+ *
+ * 两个导出面：
+ *   - {@link subscribeTodayUsage} 一次订阅一条连接（单元测试直接用它）；
+ *   - {@link subscribeSharedTodayUsage} / {@link readTodayUsageSnapshot} 全页共用一条连接并缓存
+ *     最近一帧——面板切换视图会重建这一节，缓存让重建时不必空等下一帧（否则整栏会闪一下）。
  */
 
 import { TODAY_USAGE_STREAM_PATH, parseTodayUsagePayload } from './wire.ts'
@@ -77,4 +82,62 @@ export function subscribeTodayUsage(
     source.onerror = null
     source.close()
   }
+}
+
+/** 最近一帧读数：全页共用，面板重建时先用它渲染，下一条推送再覆盖。 */
+let latest: TodayUsagePayload | undefined
+
+/** 共用连接的关闭函数；没有订阅者时为 undefined（连接已关）。 */
+let sharedClose: (() => void) | undefined
+
+/** 共用连接的订阅者（React 的 `useSyncExternalStore` 回调）。 */
+const sharedListeners = new Set<() => void>()
+
+/**
+ * 最近一帧读数。
+ * @returns 最近一帧，或 undefined（这一页还没收到过推送）。
+ */
+export function readTodayUsageSnapshot(): TodayUsagePayload | undefined {
+  return latest
+}
+
+/**
+ * 订阅全页共用的当天读数。
+ *
+ * 第一个订阅者建立连接，最后一个取订时关闭；连接建立时宿主先补发一帧，所以取订后不必自己拉一次。
+ * @param listener - 收到新读数时回调（不传参数，读 {@link readTodayUsageSnapshot}）。
+ * @param createSource - EventSource 工厂；默认用浏览器原生实现，仅在建连时生效。
+ * @returns 取消订阅。
+ */
+export function subscribeSharedTodayUsage(
+  listener: () => void,
+  createSource: EventSourceFactory = openEventSource,
+): () => void {
+  sharedListeners.add(listener)
+  if (sharedClose === undefined) {
+    sharedClose = subscribeTodayUsage((payload) => {
+      latest = payload
+      for (const event of [...sharedListeners]) event()
+    }, createSource)
+  }
+  return () => {
+    sharedListeners.delete(listener)
+    if (sharedListeners.size > 0 || sharedClose === undefined) return
+    const close = sharedClose
+    sharedClose = undefined
+    close()
+  }
+}
+
+/**
+ * 丢掉共用连接与缓存。
+ *
+ * 只给测试用：模块级状态会在同一进程的用例之间串，取订后再清一次。
+ */
+export function resetSharedTodayUsage(): void {
+  const close = sharedClose
+  sharedClose = undefined
+  sharedListeners.clear()
+  latest = undefined
+  close?.()
 }

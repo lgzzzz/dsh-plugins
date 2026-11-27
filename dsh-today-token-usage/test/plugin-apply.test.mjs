@@ -159,7 +159,8 @@ try {
   snapshotRoute.handler({ method: 'GET' }, res, OWNER)
   check('路由 200', res.statusCode, 200)
   const payload = JSON.parse(res.chunks[0])
-  check('路由当天读数', payload, {
+  const { cost: payloadCost, month: payloadMonth, ...payloadTotals } = payload
+  check('路由当天读数', payloadTotals, {
     day: dayKey(Date.now()),
     requests: 1,
     uncachedInputTokens: 100,
@@ -167,6 +168,10 @@ try {
     cacheReadTokens: 900,
     cacheWriteTokens: 3,
   })
+  checkTrue('费用随读数一起下发', payloadCost.total > 0 && payloadCost.unpricedRequests === 0)
+  checkTrue('峰谷拆分相加等于总价', Math.abs(payloadCost.peak + payloadCost.offPeak - payloadCost.total) < 1e-12)
+  check('当月累计一起下发', [payloadMonth.month, payloadMonth.requests], [dayKey(Date.now()).slice(0, 7), 1])
+  checkTrue('当月与当天同口径', payloadMonth.cost.total === payloadCost.total)
 
   console.log('--- P④ SSE：初始快照 + 记录后自动推送 ---')
   const streamRoute = routeOf(routes, TODAY_USAGE_STREAM_PATH)
@@ -177,7 +182,9 @@ try {
   await consume(listener, { provider: 'p', model: 'm', messages: [], sessionId: 'session-2' },
     { inputTokens: 7, outputTokens: 8 })
   check('记录后推了一帧', live.chunks.length, 2)
-  check('推送内容', framePayload(live.chunks[1]), {
+  const pushed = framePayload(live.chunks[1])
+  const { cost: pushedCost, month: pushedMonth, ...pushedTotals } = pushed
+  check('推送内容', pushedTotals, {
     day: dayKey(Date.now()),
     requests: 2,
     uncachedInputTokens: 107,
@@ -185,6 +192,9 @@ try {
     cacheReadTokens: 900,
     cacheWriteTokens: 3,
   })
+  // 第二笔的模型 'm' 不在价目表里：费用只来自第一笔，未计价请求 +1。
+  check('推送也带费用与未计价数', [pushedCost.total > 0, pushedCost.unpricedRequests], [true, 1])
+  check('推送也带当月累计', [pushedMonth.month, pushedMonth.requests, pushedMonth.cost.unpricedRequests], [dayKey(Date.now()).slice(0, 7), 2, 1])
 
   console.log('--- P⑤ 没有用量的请求不计数 ---')
   await consume(listener, { provider: 'p', model: 'm', messages: [] }, undefined)
@@ -202,7 +212,11 @@ try {
   check('记录带请求身份', [record.provider, record.model, record.sessionId, record.purpose, record.finish], [
     'opencode-go', 'deepseek-v4.1-flash', 'session-1', 'session-title', 'stop',
   ])
-  check('保留期 30 天', RETENTION_DAYS, 30)
+  check('保留期 35 天', RETENTION_DAYS, 35)
+  const month = dayKey(Date.now()).slice(0, 7)
+  const monthFile = JSON.parse(await readFile(join(root, 'state', 'today-token-usage', 'months', `${month}.json`), 'utf8'))
+  check('月度汇总随退出落盘', [monthFile.month, monthFile.totals.requests], [month, 2])
+  check('月度汇总的 checkpoint 是今天', monthFile.checkpointDay, dayKey(Date.now()))
   check('没有告警', warnings, [])
 } finally {
   if (previousHome === undefined) delete process.env.DSH_HOME
