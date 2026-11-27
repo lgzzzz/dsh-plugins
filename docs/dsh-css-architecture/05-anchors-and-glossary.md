@@ -16,6 +16,8 @@
 - 本仓库 [`../../tsdown.client.mjs`](../../tsdown.client.mjs)：三个 CSS 虚拟模块（`\0dsh-css:` / `\0dsh-global-css:` / `\0dsh-inline-css:`）、`styleInjectionModule()`、lightningcss `cssModules: { pattern: '[hash]_[local]' }`。
 - 本仓库 [`../../dsh-ui-css-patches/src/css.ts`](../../dsh-ui-css-patches/src/css.ts)、[`../../dsh-ui-css-patches/src/client.ts`](../../dsh-ui-css-patches/src/client.ts)：插件自己的 `data-*` / CSS 变量 / 局部类名规则与注入生命周期。
 - 本仓库 [`../../dsh-ui-css-patches/css-contract.json`](../../dsh-ui-css-patches/css-contract.json) + [`../../dsh-ui-css-patches/check-css.mjs`](../../dsh-ui-css-patches/check-css.mjs)：构建后契约校验。
+- 正文限宽的参考常量：`SIDEBAR_DEFAULT = 280` / `SIDEBAR_AUTO_COLLAPSE = 1024`（`dsh-client-ui-layout/src/client/columns.ts`）、会话面板 `--panel-clear: 40px` / `--panel-edge: 8px` / `--panel-min-width: 300px`（`dsh-client-ui-session-panel/src/client/SessionPanel.module.css`）、聊天滚动框 32px 侧内边距（`dsh-client-ui-chat/src/client/chat/ChatView.module.css`）、`--dsh-scrollbar-width: 5px`（`dsh-client-ui-theme/src/styles/scrollbar.css`）与滚动框 `margin-right: 2px`（`dsh-client-ui-conversation/src/client/skeleton/ConversationRoot.module.css`）；这些常量经 `css-contract.json` 的 `sidebar-default` / `sidebar-auto-collapse` / `panel-*` / `chat-scroll-*` / `scrollbar-width-var` 契约校验。
+- 开关轨道动画的锚点：`[data-animating]`（`AppFrame` 只在离散的左右栏开关 / 折叠上置位，同时挂 300ms 的 `grid-template-columns` 过渡；本插件把它置为 `transition: none`，让正文列宽度与位置一步到位，不逐帧跟随中间宽度与末端预留），经 `css-contract.json` 的 `animating-attr` 契约校验。
 - dockkit tab 真实 DOM：`<div role="tab" data-dockkit-tab="<id>" class="_tab_6nhg2_134 …">` —— 两属性同元素，复合选择器命中。
 
 -----

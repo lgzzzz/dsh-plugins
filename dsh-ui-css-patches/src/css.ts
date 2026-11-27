@@ -358,60 +358,80 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   font-size: 14px !important;
 }
 
-/* 主对话正文列宽 = 滚动口宽 − 400px(没有下限),正文列左缘固定距滚动口左缘 52px。
-   400 = 348(会话面板停靠所需的末端预留:40 面板与正文净空 + 8 面板距 Chat 末端边距 +
-   300 面板最小宽) + 52(左边距,由下面 [data-chat-flow] 那条规则固定)。宽度取 V − 400 时
-   --dsh-chat-end-inset 恒为 296px、--dsh-chat-end-reserve-max 恒为 368px,而面板请求
-   348px,停靠探针始终在边界之上回报 1px:只要滚动口放得下面板,面板就以 docked 出现,
-   不再有「窗口不够宽就隐藏面板」的窗口阈值。正文列右缘停在 V − 348px,即面板预留区
-   (40 净空 + 8 边距 + 300 面板)的起点,预留区里的 40px 就是正文与面板之间的净空。
-   去掉上游 CONTENT_MIN 的 640px 下限后,正文宽度随滚动口一起收窄;V < 400px 时差值为负,
-   max-width 失效为 none,正文按内容框宽度铺开(极端窄窗口的兜底)。
-   V 是滚动口 clientWidth,计数包含末端预留的 padding,让位不会反过来改变 V。
-   宽度由上游 ConversationWidthControls 用内联样式持续重写,且
-   --dsh-chat-content-width-resolved 同时是末端预留公式的输入,所以两个宽度变量都必须
-   !important;作用域限定 main.conversation,嵌入的侧边对话(.embeddedBody)保持自己的
-   宽度、居中与把手。上游彻底不发布 V 时(var() 兜底生效)按 1040px 估算,即 640px 正文。
-   上游 40 / 8 / 300、reserve-room 的边界步进、探针 >= 1px 判定、两个宽度变量或默认
-   pinned 改名/改值时,规则会静默退化;由 css-contract.json 的 main-slot / content-attr /
-   width-handle-attr / viewport-width-var / viewport-width-published /
-   resolved-width-declared / content-width-alias / chat-flow-attr / chat-flow-column /
-   chat-scroll-side-padding / panel-clear / panel-edge / panel-min-width /
-   composer-side-clearance / reserve-rule / reserve-max-formula / reserve-room-step /
-   probe-measure / presentation-docked / panel-docked-attr / pinned-default 21 条契约
-   在构建后报失效。 */
+/* 主对话正文列最大宽度 =「左边栏开启、右栏关闭、会话面板打开」时的宽度,由整个窗口宽度
+   减去该状态下其余元素的宽度动态算出:
+     100vw − 左栏 280 − 会话面板预留 348(40 净空 + 8 边距 + 300 面板)
+           − 正文列左缘 52(32 滚动框内边距 + 20 居中余量)− 滚动条 5
+           (--dsh-scrollbar-width)− 2(滚动框的 2px 偏移)
+   左栏参考宽度按 AppFrame 的 SIDEBAR_AUTO_COLLAPSE(1024)取:≥1024 左栏正常展开,本插件
+   已把它钉在 280,参考值取 280;低于 1024 时上游会自动收起左栏(抽屉 / 图标轨道),
+   参考值取 0,最大宽度 = 100vw − 407。
+   正文列实际宽度取 min(最大宽度, 滚动口宽 V − 104):右栏占轨把中心列压窄时,正文跟着
+   滚动口收窄,只留左右各 52;滚动口比参考状态宽(左栏收起 / 窗口更宽)时,正文停在最大
+   宽度,多余空间留在两侧,不再随左栏收起继续变宽。窗口极窄、最大宽度或 V − 104 算成
+   负数时,max-width 失效为 none,正文按内容框铺开(与旧规则相同的极端窄窗口兜底)。
+   V 是滚动口 clientWidth,计数包含末端预留的 padding,面板让位不会反过来改变 V;
+   --dsh-conversation-viewport-width 由上游 ConversationWidthControls 持续发布,未发布时
+   按 1040px 估算。
+   **停靠探针与正文宽度**:上游探针宽度 = max(尾部空档 − 348 + 1px, reserve-room),
+   reserve-room 由 reserve-max = V − 正文宽 − 32 与面板请求的 348 比较得出,尾部空档
+   = (V − 正文宽) / 2 + 末端 inset / 2。正文停在本规则的最大宽度时 reserve-max = 368px
+   (左栏收起时 648px)≥ 348,探针回报 1px、面板 docked;右栏占轨时正文通常退到 V − 104,
+   reserve-max = 72px、尾部空档 52px,探针回报 0;左栏收起释放的空间大于右栏时正文仍可
+   停在最大宽度,但尾部空档不足 348px、reserve-max 也低于 348,探针同样回报 0、面板 hidden。
+   所以面板是否停靠只由正文宽度与预留空间决定,没有单独的右栏开关:右栏一占轨,正文要么
+   退到 V − 104,要么尾部空档不足以停靠面板,探针归零、面板让位;右栏关闭、正文回到最大
+   宽度,探针恢复、面板重新 docked。
+   居中:正文列沿用上游 .column 的 margin: 0 auto(本插件不再把它改成左对齐),最大宽度
+   留下多余空间时列在聊天框里居中;输入卡片同样居中,宽度为正文 + 32px、比正文每侧宽
+   16px,两者始终同轴。左缘 52 = 滚动框 32 + 居中余量 20 在内容框恰为正文 + 40px 的状态
+   (参考态 / 右栏占轨)成立;左栏收起、正文停在最大宽度时,列在聊天框里居中,窗口位置与
+   参考状态相同,释放出的左栏宽度留在左侧空白区。
+   两条宽度变量仍用 !important 压过内联与模块样式;作用域限定 main.conversation,嵌入的
+   侧边对话(.embeddedBody)保持自己的宽度。上游 40 / 8 / 300、SIDEBAR_DEFAULT、
+   SIDEBAR_AUTO_COLLAPSE、--dsh-scrollbar-width、滚动框 32px 内边距 / 2px 偏移、reserve
+   公式、探针 >= 1px 判定、两个宽度变量或默认 pinned 改名/改值时,规则会静默退化;由
+   css-contract.json 的 main-slot / content-attr / width-handle-attr / viewport-width-var /
+   viewport-width-published / resolved-width-declared / content-width-alias /
+   chat-scroll-side-padding / chat-scroll-margin / panel-clear / panel-edge / panel-min-width /
+   sidebar-default / sidebar-auto-collapse / scrollbar-width-var / composer-side-clearance /
+   reserve-rule / reserve-max-formula / reserve-room-step / probe-measure /
+   presentation-docked / panel-docked-attr / pinned-default 23 条契约在构建后报失效;
+   下面「开关不做轨道动画」那条另由 animating-attr 契约钉住。 */
 [data-slot="main.conversation"] [data-conversation-content] {
-  --dsh-chat-content-width-resolved: calc(
-    var(--dsh-conversation-viewport-width, 1040px) - 400px
+  --dsh-chat-ref-sidebar: 280px;
+  --dsh-chat-content-cap: calc(
+    100vw - var(--dsh-chat-ref-sidebar) - 348px - 52px
+      - var(--dsh-scrollbar-width, 5px) - 2px
+  );
+  --dsh-chat-content-width-resolved: min(
+    var(--dsh-chat-content-cap),
+    calc(var(--dsh-conversation-viewport-width, 1040px) - 104px)
   ) !important;
   --dsh-chat-content-width: var(--dsh-chat-content-width-resolved) !important;
 }
 
-/* 正文列左缘固定距滚动口左缘 52px:上游 .column 用 margin: 0 auto 把正文列居中在聊天
-   滚动框的内容框里,列左缘会随滚动口宽度与面板状态左右移动。正文列元素自己带
-   data-chat-flow(ChatView 渲染的 <div class="…_column" data-chat-flow>),把它改成
-   左 20px、右 auto 后,列不再参与居中:左缘固定在聊天滚动框内容区左侧 20px 处。
-   聊天滚动框自己带 32px 左右内边距(composer 净空 16 + 16),所以正文列左缘距滚动口
-   左缘恒为 32 + 20 = 52px;滚动口宽变化、面板隐藏(inset 归零)或侧栏收起时都不变。
-   20 = 52 − 32,52 又恰是 400 − 348:正文宽 V − 400、面板预留 348px(40 净空 + 8 边距 +
-   300 面板),列右缘因此停在 V − 348,与面板左缘之间保留 40px 净空;52 + (V − 400) +
-   348 = V。
-   data-chat-flow 不是正文列独占:过程组成员区(ChatGroupSeat 的
-   <div class="…_content" data-step-process-content data-chat-flow>)也带它,用作行锚点。
-   过程组在正文列里面,若不排除,这条 margin 会把整组中间过程向右缩进 20px、同时压窄
-   20px,组内行首和组标题对不齐;选择器因此用 :not([data-step-process-content]) 只命中
-   正文列,过程组成员区保持上游的零 margin、与组根同一条左缘。
-   规则只改横向 margin,列的 width: 100% / max-width 与纵向 margin 保持上游。
-   特异性 (0,3,0) 大于上游 .column 的 (0,1,0),不依赖 <style> 挂载顺序,不需要 !important。
-   52px 与 32px 都是本地常量:上游 40 / 8 / 300、正文宽减量 400、
-   聊天滚动框的侧内边距变化时,由 css-contract.json 的 panel-clear / panel-edge /
-   panel-min-width / chat-scroll-side-padding / chat-flow-attr / chat-flow-column 契约
-   报失效,需要同步改这里。data-chat-flow 改名、从列元素挪走,或过程组成员区不再带
-   data-step-process-content 时规则落空或误伤,由 chat-flow-attr / chat-flow-column /
-   step-process-content-attr 契约报失效。嵌入侧边对话不在 main.conversation 作用域内,
-   仍按自己的轴居中。 */
-[data-slot="main.conversation"] [data-chat-flow]:not([data-step-process-content]) {
-  margin-inline: 20px auto;
+@media (width < 1024px) {
+  [data-slot="main.conversation"] [data-conversation-content] {
+    --dsh-chat-ref-sidebar: 0px;
+  }
+}
+
+/* 开关左右栏不做轨道动画:正文列的宽度、末端预留与居中位置都由滚动口宽 V 派生,
+   上游 AppFrame 只在离散的开关 / 折叠上给 grid-template-columns 挂 300ms 过渡
+   (data-animating),过渡期间中心列逐帧变窄,会把中间态一帧一帧写进正文列。实测
+   (headless Chrome,1600×1000,右栏 720px):打开右栏时列左缘 332 → 465(面板预留让位
+   的那一帧)→ 312 → 332、宽度 913 → 489 连续收窄;关闭右栏反向一遍;左栏收起 / 展开
+   也有约「每帧 V 变化量一半」的左右摆动(慢放到 3s 时仍有 5px)。这里把帧自己的过渡
+   置为 none:布局一步到位,正文列每帧位置恒为 332、宽度只变一次(实测 913 → 489),
+   不再有中间态。
+   作用域只有帧本身:右栏面板的滑入 / 滑出(dockkit 项的 transform)、左右栏内部的淡入
+   淡出、抽屉的遮罩都用各自的元素,照旧播放;窗口缩放不置 data-animating,行为不变。
+   特异性 (0,1,0) 低于上游 .frame[data-animating] 的 (0,2,0),!important 是必需的
+   (上游那条不带 !important)。属性改名时本规则整条落空、抖动回来,由 animating-attr
+   契约在构建后报失效。 */
+[data-animating] {
+  transition: none !important;
 }
 
 /* 宽度不可调整:隐藏正文列左右两条 10px 的宽度拖动条(指针拖动与把手上的滚轮滚动一并消失)。
@@ -422,10 +442,11 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
 }
 
 /* 会话面板开关隐藏:会话标题栏最左侧那个按钮(上游注册 id session-panel,渲染成带
-   data-session-panel-toggle 的 Button)。面板是否显示只由同一条偏好
-   (localStorage dsh.sessionPanel.pinned,默认 true)决定,而这是唯一的关闭入口;
-   隐藏它以后面板在页面存活期间不会再被关掉,窗口宽度够时按上游规则 docked,窄到放不下时
-   回到上游的 hidden,重新变宽后自动恢复 docked。
+   data-session-panel-toggle 的 Button)。面板是否显示由 pinned 偏好
+   (localStorage dsh.sessionPanel.pinned,默认 true)与停靠探针共同决定,而这是唯一的
+   关闭入口;隐藏它以后 pinned 偏好不会再被关掉。面板是否停靠由正文宽度派生:正文达到
+   上面的最大宽度时停靠探针回报 1px、面板 docked;右栏占轨把正文压到最大宽度以下
+   (或滚动口太窄)时探针归零、面板 hidden,空间恢复后自动重新 docked。
    只把按钮 display:none:按钮仍在 DOM 里,React 的事件绑定与 aria-* 不变,本插件启动期的
    兜底(见 src/pin.ts)可以在它上面派发一次 click 把历史上关掉的面板重新打开;标题栏里
    其它动作照常排布。

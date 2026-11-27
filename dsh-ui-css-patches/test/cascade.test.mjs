@@ -10,6 +10,10 @@
  * 谁赢由浏览器判定,不再靠人读特异性。
  * 工具行那条同理:体量后缀与 diff 统计共用 summarySuffix,只有前者应被 `:not(…_diffStat)`
  * 排除出去,display 的计算值由浏览器给出。
+ * 正文限宽那条也是同一类问题:静态契约只能证明 280 / 1024 / 348 / 52 / 滚动条还在,
+ * 证明不了 `min(100vw − 687px, V − 104px)` 的三段取值(参考态、右栏占轨、左栏收起)
+ * 以及探针随正文宽度的 1px / 0px 翻转。这里用一份最小 DOM(内容盒 + 聊天框 + 列 +
+ * 上游探针公式桩)在浏览器里改 V 与视口,量计算宽度。
  *
  * 依赖本机安装的 DSH(与 check-css 同一套解析)与 Chrome/Chromium(可用 $CHROME_PATH 指定)。
  * 任一缺失时跳过并以 0 退出;设置 DSH_CSS_STRICT=1 可让跳过也报失败。
@@ -261,26 +265,64 @@ const MEASURE = `(() => {
     const el = document.getElementById(id)
     return el === null ? null : getComputedStyle(el).display
   }
+  const transition = (id) => {
+    const el = document.getElementById(id)
+    return el === null ? null : getComputedStyle(el).transitionProperty
+  }
+  const read = () => ({
+    answer: size('answer-code'),
+    thinking: size('thinking-code'),
+    plan: size('plan-code'),
+    document: size('doc-code'),
+    kbSuffix: display('kb-suffix'),
+    diffStat: display('diff-stat'),
+    animatingTransition: transition('animating-frame'),
+    staticTransition: transition('static-frame'),
+  })
   const plugin = document.getElementById('plugin')
-  const withPlugin = {
-    answer: size('answer-code'),
-    thinking: size('thinking-code'),
-    plan: size('plan-code'),
-    document: size('doc-code'),
-    kbSuffix: display('kb-suffix'),
-    diffStat: display('diff-stat'),
-  }
+  const withPlugin = read()
   plugin.disabled = true
-  const upstreamOnly = {
-    answer: size('answer-code'),
-    thinking: size('thinking-code'),
-    plan: size('plan-code'),
-    document: size('doc-code'),
-    kbSuffix: display('kb-suffix'),
-    diffStat: display('diff-stat'),
-  }
+  const upstreamOnly = read()
   plugin.disabled = false
   return { withPlugin, upstreamOnly }
+})()`
+
+/**
+ * 视口 1600 下的正文限宽三态:参考态(V=1313)、右栏占轨(V=593)、左栏收起(V=1593)。
+ * 正文取 min(100vw − 687px, V − 104px),探针桩按上游公式回报 1px / 0px。
+ */
+const LAYOUT_MEASURE = `(() => {
+  const content = document.getElementById('layout-content')
+  const column = document.getElementById('layout-column')
+  const probe = document.getElementById('layout-probe')
+  const read = () => ({
+    column: Math.round(column.getBoundingClientRect().width),
+    probe: getComputedStyle(probe).width,
+  })
+  const viewport = (px) => {
+    content.style.setProperty('--dsh-conversation-viewport-width', px + 'px')
+    content.style.width = px + 'px'
+  }
+  viewport(1313)
+  const normal = read()
+  viewport(593)
+  const squeezed = read()
+  viewport(1593)
+  const sidebarClosed = read()
+  return { normal, squeezed, sidebarClosed }
+})()`
+
+/** 视口 800(<1024,参考左栏 0)下同一棵树:最大宽度 = 100vw − 407px。 */
+const LAYOUT_NARROW_MEASURE = `(() => {
+  const content = document.getElementById('layout-content')
+  const column = document.getElementById('layout-column')
+  const probe = document.getElementById('layout-probe')
+  content.style.setProperty('--dsh-conversation-viewport-width', '793px')
+  content.style.width = '793px'
+  return {
+    column: Math.round(column.getBoundingClientRect().width),
+    probe: getComputedStyle(probe).width,
+  }
 })()`
 
 async function main() {
@@ -334,6 +376,20 @@ ${rules.compactRoot}
 ${rules.compactCode}
 ${tool.toolCss}
 ${tool.shimmerCss}
+/* 开关时帧上的轨道过渡(上游 .frame[data-animating] 的原样写法):插件必须把帧自己的
+   transition 关掉,否则正文列会被 300ms 的中间态逐帧拖动。 */
+.frame[data-animating] { transition: grid-template-columns 300ms var(--ds-ease-in-out); }
+/* 正文限宽的上游桩:探针宽度按上游公式 max(尾部空档 − 348 + 1px, reserve-room) 取,
+   尾部空档用 (V − 正文宽)/2,reserve-max 用 V − 正文宽 − 32;max-width:1px 把结果钉成 1/0。 */
+#layout-probe {
+  display: block;
+  max-width: 1px;
+  height: 0;
+  width: max(
+    calc((var(--dsh-conversation-viewport-width, 1040px) - var(--dsh-chat-content-width, 100%)) / 2 - 348px + 1px),
+    clamp(0px, calc((var(--dsh-conversation-viewport-width, 1040px) - var(--dsh-chat-content-width, 100%) - 380px) * 10000000 + 1px), 1px)
+  );
+}
 </style></head>
 <body>
 <div data-chat-flow-kind="assistant-step">
@@ -361,6 +417,21 @@ ${tool.shimmerCss}
     <span id="diff-stat" class="${tool.shimmerRoot} ${tool.suffix} ${tool.diffStat}">+12 -3</span>
   </div>
 </div>
+<!-- 开关轨道动画:上游只在 data-animating 上挂 grid-template-columns 过渡,插件必须关掉;
+     没有该属性的帧不受影响(transition-property 保持初始的 all)。 -->
+<div id="animating-frame" class="frame" data-animating></div>
+<div id="static-frame" class="frame"></div>
+<!-- 正文限宽:100vw 由 Emulation 固定成 1600/800,内容盒宽度模拟滚动口 V;列照上游
+     用 width:100% + max-width 取正文宽度,探针桩读同一组变量。 -->
+<div data-slot="main.conversation">
+  <div id="layout-content" data-conversation-content
+    style="--dsh-conversation-viewport-width:1313px;width:1313px">
+    <div id="layout-scroll" style="box-sizing:border-box;width:100%;padding:16px 32px">
+      <div id="layout-column" style="width:100%;max-width:var(--dsh-chat-content-width);height:4px"></div>
+    </div>
+    <div id="layout-probe"></div>
+  </div>
+</div>
 </body></html>`
 
   const dir = mkdtempSync(join(tmpdir(), 'dsh-cascade-fixture-'))
@@ -370,6 +441,8 @@ ${tool.shimmerCss}
   const chrome = await launchChrome(chromePath)
   try {
     await chrome.send('Page.enable')
+    // 正文限宽用 100vw 计算:固定成 1600,让最大宽度可断言(1600 − 280 − 348 − 52 − 5 − 2 = 913)。
+    await chrome.send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false })
     const loaded = chrome.once('Page.loadEventFired')
     await chrome.send('Page.navigate', { url: pathToFileURL(fixturePath).href })
     await Promise.race([
@@ -397,6 +470,33 @@ ${tool.shimmerCss}
     check('上游单独作用:编辑工具行的 diff 统计 = inline-grid', upstreamOnly.diffStat, 'inline-grid')
     check('插件生效:编辑工具行的 KB 体量后缀 display:none', withPlugin.kbSuffix, 'none')
     check('插件生效:编辑工具行的 diff 统计仍然显示', withPlugin.diffStat, 'inline-grid')
+    // 开关轨道动画:上游在 .frame[data-animating] 上挂 grid-template-columns 过渡(后写、特异性更高),
+    // 插件用 !important 把帧自己的过渡关掉;没有 data-animating 的帧不受影响。
+    check('上游单独作用:data-animating 帧的轨道过渡仍在', upstreamOnly.animatingTransition, 'grid-template-columns')
+    check('插件生效:data-animating 帧不做轨道过渡', withPlugin.animatingTransition, 'none')
+    check('插件生效:静止帧的过渡不被误伤', withPlugin.staticTransition, 'all')
+
+    const layoutOutcome = await chrome.send('Runtime.evaluate', { expression: LAYOUT_MEASURE, returnByValue: true })
+    if (layoutOutcome.exceptionDetails) throw new Error(layoutOutcome.exceptionDetails.exception?.description ?? '正文限宽测量脚本抛错')
+    const layout = layoutOutcome.result.value
+    // 参考态:左栏 280、右栏关闭、面板打开 —— 正文停在最大宽度,探针 1px。
+    check('正文限宽:参考态(V=1313)正文 913px(100vw − 687)', layout.normal.column, 913)
+    check('正文限宽:参考态探针 1px', layout.normal.probe, '1px')
+    // 右栏占轨:正文压到 V − 104,reserve-room 归零、探针 0px。
+    check('正文限宽:右栏占轨(V=593)正文 489px(V − 104)', layout.squeezed.column, 489)
+    check('正文限宽:右栏占轨探针 0px', layout.squeezed.probe, '0px')
+    // 左栏收起:正文停在最大宽度,不跟着变宽;探针仍 1px。
+    check('正文限宽:左栏收起(V=1593)正文停在 913px', layout.sidebarClosed.column, 913)
+    check('正文限宽:左栏收起探针仍 1px', layout.sidebarClosed.probe, '1px')
+
+    // 窄视口:参考左栏取 0,最大宽度 = 800 − 407 = 393。
+    await chrome.send('Emulation.setDeviceMetricsOverride', { width: 800, height: 1000, deviceScaleFactor: 1, mobile: false })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const narrowOutcome = await chrome.send('Runtime.evaluate', { expression: LAYOUT_NARROW_MEASURE, returnByValue: true })
+    if (narrowOutcome.exceptionDetails) throw new Error(narrowOutcome.exceptionDetails.exception?.description ?? '窄视口正文限宽测量脚本抛错')
+    const narrow = narrowOutcome.result.value
+    check('正文限宽:800px 视口(V=793)正文 393px(100vw − 407)', narrow.column, 393)
+    check('正文限宽:800px 视口探针 1px', narrow.probe, '1px')
   } finally {
     await chrome.dispose()
     rmSync(dir, { recursive: true, force: true })
