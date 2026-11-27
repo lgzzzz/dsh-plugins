@@ -122,6 +122,30 @@ function readToolRowRules(dshRoot) {
   return null
 }
 
+/**
+ * 从安装产物里抽出轮次导航轨道(TurnNavigator)的真实模块 CSS 与类名。
+ * 这条轨道由上游 `@container (width<=900px){.…_frame{display:none}}` 在窄容器里隐藏,
+ * 插件要把它恢复成 block;frame / slot 的类名带构建哈希,运行时从模块 CSS 文本里读,
+ * 不写死。结构变了(找不到 sheet 或两条规则)时返回 null,由调用方报失败。
+ */
+function readTurnRailRules(dshRoot) {
+  const chatDir = join(dshRoot, 'node_modules', '@deepseek-ai', 'dsh-client-ui-chat', 'lib')
+  if (!existsSync(chatDir)) return null
+  for (const name of readdirSync(chatDir)) {
+    if (!name.endsWith('.js')) continue
+    const text = readFileSync(join(chatDir, name), 'utf8')
+    const sheet = text.match(/"src\/client\/chat\/TurnNavigator\.module\.css":\{text:context=>`([^`]*)`/)
+    if (!sheet) continue
+    const railCss = sheet[1]
+    const slot = railCss.match(/\.([A-Za-z0-9_-]+)_slot\{/)
+    const frame = railCss.match(/\.([A-Za-z0-9_-]+)_frame\{/)
+    if (!slot || !frame || slot[1] !== frame[1]) continue
+    if (!/@container \(width<=900px\)\{[^{}]*_frame\{display:none\}\}/.test(railCss)) continue
+    return { hash: slot[1], railCss, railFile: join(chatDir, name) }
+  }
+  return null
+}
+
 /** 按平台常见路径找 Chrome/Chromium;都没有时返回 null。 */
 function findChrome() {
   const explicit = process.env.CHROME_PATH
@@ -278,6 +302,9 @@ const MEASURE = `(() => {
     diffStat: display('diff-stat'),
     animatingTransition: transition('animating-frame'),
     staticTransition: transition('static-frame'),
+    railFrame: display('rail-frame'),
+    railFrameBare: display('rail-frame-bare'),
+    railFrameWide: display('rail-frame-wide'),
   })
   const plugin = document.getElementById('plugin')
   const withPlugin = read()
@@ -348,6 +375,13 @@ async function main() {
     return finish()
   }
 
+  const rail = readTurnRailRules(dshRoot)
+  if (!rail) {
+    failures += 1
+    console.log('FAIL 上游轮次导航轨道的结构变了 — 找不到 TurnNavigator 的 frame / slot 类名或窄容器隐藏规则,请复核本测试与 css.ts 里的轨道常显规则')
+    return finish()
+  }
+
   const chromePath = findChrome()
   if (!chromePath) return skip('未找到 Chrome/Chromium(可用 $CHROME_PATH 指定)')
   if (typeof WebSocket === 'undefined') return skip('当前 Node 没有全局 WebSocket(需要 Node 22+)')
@@ -376,6 +410,8 @@ ${rules.compactRoot}
 ${rules.compactCode}
 ${tool.toolCss}
 ${tool.shimmerCss}
+/* 轮次导航轨道(TurnNavigator)的真实模块 CSS:含窄容器隐藏 frame 的 @container 规则。 */
+${rail.railCss}
 /* 开关时帧上的轨道过渡(上游 .frame[data-animating] 的原样写法):插件必须把帧自己的
    transition 关掉,否则正文列会被 300ms 的中间态逐帧拖动。 */
 .frame[data-animating] { transition: grid-template-columns 300ms var(--ds-ease-in-out); }
@@ -421,6 +457,19 @@ ${tool.shimmerCss}
      没有该属性的帧不受影响(transition-property 保持初始的 all)。 -->
 <div id="animating-frame" class="frame" data-animating></div>
 <div id="static-frame" class="frame"></div>
+<!-- 轮次导航轨道:slot 自带 container-type:inline-size,@container 读它的内容盒
+     (600 − 32 − 32 = 536px < 900px),上游把 frame 隐藏,插件必须恢复成 block。
+     第一份在 [data-conversation-scroll] 下(主选择器),第二份不在(父子兜底),
+     第三份容器 1136px > 900px(上游本来就可见,插件不能误伤)。 -->
+<div data-conversation-scroll style="position:relative;width:600px">
+  <div class="${rail.hash}_slot"><nav id="rail-frame" class="${rail.hash}_frame"></nav></div>
+</div>
+<div style="position:relative;width:600px">
+  <div class="${rail.hash}_slot"><nav id="rail-frame-bare" class="${rail.hash}_frame"></nav></div>
+</div>
+<div style="position:relative;width:1200px">
+  <div class="${rail.hash}_slot"><nav id="rail-frame-wide" class="${rail.hash}_frame"></nav></div>
+</div>
 <!-- 正文限宽:100vw 由 Emulation 固定成 1600/800,内容盒宽度模拟滚动口 V;列照上游
      用 width:100% + max-width 取正文宽度,探针桩读同一组变量。 -->
 <div data-slot="main.conversation">
@@ -454,7 +503,7 @@ ${tool.shimmerCss}
     if (outcome.exceptionDetails) throw new Error(outcome.exceptionDetails.exception?.description ?? '页面测量脚本抛错')
     const { withPlugin, upstreamOnly } = outcome.result.value
 
-    console.log(`fixture:${rules.hash}_markdown(来源 ${rules.file});${tool.suffix} / ${tool.diffStat}(来源 ${tool.toolFile})`)
+    console.log(`fixture:${rules.hash}_markdown(来源 ${rules.file});${tool.suffix} / ${tool.diffStat}(来源 ${tool.toolFile});${rail.hash}_frame(来源 ${rail.railFile})`)
     // 对照组先证明这棵树真的会命中上游规则,否则下面的 14px 只是没被覆盖。
     check('上游单独作用:正文行内代码 = 0.875em × 14px', upstreamOnly.answer, '12.25px')
     check('上游单独作用:思考行内代码 = 1em × compact 的 13px', upstreamOnly.thinking, '13px')
@@ -475,6 +524,13 @@ ${tool.shimmerCss}
     check('上游单独作用:data-animating 帧的轨道过渡仍在', upstreamOnly.animatingTransition, 'grid-template-columns')
     check('插件生效:data-animating 帧不做轨道过渡', withPlugin.animatingTransition, 'none')
     check('插件生效:静止帧的过渡不被误伤', withPlugin.staticTransition, 'all')
+    // 轮次导航轨道:窄容器里上游整条隐藏,插件必须常显;宽容器两边都显示。
+    check('上游单独作用:536px 容器里的轨道隐藏', upstreamOnly.railFrame, 'none')
+    check('上游单独作用:不在滚动口里的 536px 容器轨道隐藏', upstreamOnly.railFrameBare, 'none')
+    check('上游单独作用:1136px 容器里的轨道显示', upstreamOnly.railFrameWide, 'block')
+    check('插件生效:536px 容器里的轨道显示', withPlugin.railFrame, 'block')
+    check('插件生效:不在滚动口里的轨道由父子兜底显示', withPlugin.railFrameBare, 'block')
+    check('插件生效:1136px 容器里的轨道不受影响', withPlugin.railFrameWide, 'block')
 
     const layoutOutcome = await chrome.send('Runtime.evaluate', { expression: LAYOUT_MEASURE, returnByValue: true })
     if (layoutOutcome.exceptionDetails) throw new Error(layoutOutcome.exceptionDetails.exception?.description ?? '正文限宽测量脚本抛错')

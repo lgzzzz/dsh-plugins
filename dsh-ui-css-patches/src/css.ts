@@ -2,7 +2,8 @@
  * `dsh-ui-css-patches` 的全部补丁规则,由 `client.ts` 挂成一条 `<style>`。
  *
  * 同特异性规则的覆盖顺序由本文件的源码顺序唯一确定(后写者胜);锚点是稳定的 `data-*` / `role` /
- * `aria-label`。一处例外:侧栏会话行的时间戳额外用了 CSS Module 的局部类名通配符(见该处注释)。
+ * `aria-label`。例外是几处只有 CSS Module 局部类名可抓的元素:侧栏会话行的时间戳、授权卡的
+ * 状态条、工具行的体量后缀,以及轮次导航轨道的 frame / slot(各自见该处注释)。
  *
  * 后台任务区是会话面板里的一个 section(`<ul class="…_list" data-jobs-section>`,槽位
  * `conversation.session.panel.section`),由上游按面板宽度自然排布;补丁只统一它的字号,
@@ -458,6 +459,32 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
    重新挂载时的顺序翻盘。 */
 [data-slot="main.conversation"] [data-width-handle] {
   display: none !important;
+}
+
+/* 轮次导航轨道(TurnNavigator,左侧那排轮次刻度)常显:每个刻度悬停显示该轮的用户消息与
+   最终回复,点击跳到该轮的用户消息。上游在轨道自己的宽度容器上挂了一条
+   @container (width<=900px){.…_frame{display:none}} —— 容器是轨道外层 .…_slot 的内容盒
+   (滚动口去掉左右各 32px 内边距后剩下的宽度),所以右栏一占轨、中心列被压到 900px 以下,
+   整条轨道就消失;这是它唯一的隐藏入口(轮次数 < 2 时组件自己返回 null,与宽度无关)。
+   规则只把 frame 恢复成 display:block,宽度 / 位置 / 预览都不动:轨道仍在滚动口左缘
+   (left:12px、28px 宽),正文列左缘由上面的限宽规则固定在 32px 内边距 + 20px 居中余量
+   = 52px(右栏占轨时恒为 52px;左栏收起 / 窗口更宽时列居中,只会更靠右),20px 宽的
+   刻度线与正文之间总留出 12px 以上。容器变窄时预览卡跟着 min(300px, 100cqw − 120px)
+   收缩,不会把正文挤出窗口。
+   锚点:nav 上只有 CSS Module 的局部类名 frame(生成名 [hash]_frame,构建只换 hash
+   前缀),父元素是同一个模块的 slot([hash]_slot)。主选择器 [data-conversation-scroll]
+   nav[class*="_frame"] 借会话滚动口限定(上游给 .…_slot 的 sticky 也用同一祖先);再补一条
+   [class*="_slot"] > nav[class*="_frame"]:ChatView 自己拥有滚动时轨道不在
+   [data-conversation-scroll] 里,这条按父子关系命中,不依赖祖先。
+   上游那条 display:none 不带 !important,本规则用 !important 只为不被模块样式重挂时的
+   顺序翻盘;两条选择器的特异性 (0,2,1) 也都高于 .…_frame 的 (0,1,0)。
+   局部类名改名、nav 改挂到 slot 以外、容器查询改阈值 / 改锚点、或上游不再隐藏轨道时,
+   规则整条落空或变成多余的兜底,由 css-contract.json 的 turn-rail-frame-class /
+   turn-rail-slot-class / turn-rail-nav-structure / conversation-scroll-attr /
+   turn-rail-container-hide 五条契约在构建后报失效。 */
+[data-conversation-scroll] nav[class*="_frame"],
+[class*="_slot"] > nav[class*="_frame"] {
+  display: block !important;
 }
 
 /* 会话面板开关隐藏:会话标题栏最左侧那个按钮(上游注册 id session-panel,渲染成带
