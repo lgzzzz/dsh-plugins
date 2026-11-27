@@ -358,35 +358,60 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
   font-size: 14px !important;
 }
 
-/* 主对话正文列宽固定为 max(640px, 滚动口宽 − 400px),并隐藏正文列左右两条宽度拖动把手。
+/* 主对话正文列宽 = 滚动口宽 − 400px(没有下限),正文列左缘固定距滚动口左缘 52px。
    400 = 348(会话面板停靠所需的末端预留:40 面板与正文净空 + 8 面板距 Chat 末端边距 +
-   300 面板最小宽) + 52(起始空白);52 里 32(16 + 16)是上游让位后保留的最小起始安全区,
-   其余 20px 是起始侧余量。面板的请求仍是 348px,所以面板钉住时末端只让出 348px:正文列
-   右边缘停在 V − 348px,宽窗口时起始空白为 52px(32px 最小安全区 + 20px 余量),多出的
-   20px 全部落在列左侧。正文宽取 V − 400 时 --dsh-chat-end-inset 为 296px、
-   --dsh-chat-end-reserve-max 为 368px,停靠探针仍在边界之上回报 1px,面板默认
-   (pinned = true)直接以 docked 出现;关闭面板后宽度不变、余量仍在,再次打开也直接停靠,
-   不会出现先开浮层再自动关闭的闪烁。V 是滚动口 clientWidth,计数包含末端预留的 padding,
-   让位不会反过来改变 V。
-   宽度由上游 ConversationWidthControls 用内联样式持续重写,且 --dsh-chat-content-width-resolved
-   同时是末端预留公式的输入,所以两个宽度变量都必须 !important;作用域限定 main.conversation,
-   嵌入的侧边对话(.embeddedBody)保持自己的宽度与把手。V ≤ 1040px 时 max() 取 640px
-   (与上游 CONTENT_MIN 一致);V ∈ [1020px, 1040px] 时列宽停在下限,尾部余量 V − 640px
-   仍不少于 380px(reserve-max ≥ 348px),面板照旧停靠;V < 1020px 时 reserve-max < 348px,
-   面板回到上游的 hidden(开关已被文件末尾那条规则隐藏,不再有手动开浮层的入口),窗口重新
-   变宽、尾部余量回到至少 380px 后自动恢复 docked;宽度不随面板状态变化,不会振荡。
-   上游 40 / 8 / 300、reserve-room 的边界步进、探针 >= 1px 判定、两个宽度变量或默认 pinned
-   改名/改值时,规则会静默退化;由 css-contract.json 的 main-slot / content-attr /
-   width-handle-attr / viewport-width-var / viewport-width-published / resolved-width-declared /
-   content-width-alias / content-min / panel-clear / panel-edge / panel-min-width /
+   300 面板最小宽) + 52(左边距,由下面 [data-chat-flow] 那条规则固定)。宽度取 V − 400 时
+   --dsh-chat-end-inset 恒为 296px、--dsh-chat-end-reserve-max 恒为 368px,而面板请求
+   348px,停靠探针始终在边界之上回报 1px:只要滚动口放得下面板,面板就以 docked 出现,
+   不再有「窗口不够宽就隐藏面板」的窗口阈值。正文列右缘停在 V − 348px,即面板预留区
+   (40 净空 + 8 边距 + 300 面板)的起点,预留区里的 40px 就是正文与面板之间的净空。
+   去掉上游 CONTENT_MIN 的 640px 下限后,正文宽度随滚动口一起收窄;V < 400px 时差值为负,
+   max-width 失效为 none,正文按内容框宽度铺开(极端窄窗口的兜底)。
+   V 是滚动口 clientWidth,计数包含末端预留的 padding,让位不会反过来改变 V。
+   宽度由上游 ConversationWidthControls 用内联样式持续重写,且
+   --dsh-chat-content-width-resolved 同时是末端预留公式的输入,所以两个宽度变量都必须
+   !important;作用域限定 main.conversation,嵌入的侧边对话(.embeddedBody)保持自己的
+   宽度、居中与把手。上游彻底不发布 V 时(var() 兜底生效)按 1040px 估算,即 640px 正文。
+   上游 40 / 8 / 300、reserve-room 的边界步进、探针 >= 1px 判定、两个宽度变量或默认
+   pinned 改名/改值时,规则会静默退化;由 css-contract.json 的 main-slot / content-attr /
+   width-handle-attr / viewport-width-var / viewport-width-published /
+   resolved-width-declared / content-width-alias / chat-flow-attr / chat-flow-column /
+   chat-scroll-side-padding / panel-clear / panel-edge / panel-min-width /
    composer-side-clearance / reserve-rule / reserve-max-formula / reserve-room-step /
-   probe-measure / presentation-docked / panel-docked-attr / pinned-default 19 条契约在构建后报失效。 */
+   probe-measure / presentation-docked / panel-docked-attr / pinned-default 21 条契约
+   在构建后报失效。 */
 [data-slot="main.conversation"] [data-conversation-content] {
-  --dsh-chat-content-width-resolved: max(
-    640px,
-    calc(var(--dsh-conversation-viewport-width, 1040px) - 400px)
+  --dsh-chat-content-width-resolved: calc(
+    var(--dsh-conversation-viewport-width, 1040px) - 400px
   ) !important;
   --dsh-chat-content-width: var(--dsh-chat-content-width-resolved) !important;
+}
+
+/* 正文列左缘固定距滚动口左缘 52px:上游 .column 用 margin: 0 auto 把正文列居中在聊天
+   滚动框的内容框里,列左缘会随滚动口宽度与面板状态左右移动。正文列元素自己带
+   data-chat-flow(ChatView 渲染的 <div class="…_column" data-chat-flow>),把它改成
+   左 20px、右 auto 后,列不再参与居中:左缘固定在聊天滚动框内容区左侧 20px 处。
+   聊天滚动框自己带 32px 左右内边距(composer 净空 16 + 16),所以正文列左缘距滚动口
+   左缘恒为 32 + 20 = 52px;滚动口宽变化、面板隐藏(inset 归零)或侧栏收起时都不变。
+   20 = 52 − 32,52 又恰是 400 − 348:正文宽 V − 400、面板预留 348px(40 净空 + 8 边距 +
+   300 面板),列右缘因此停在 V − 348,与面板左缘之间保留 40px 净空;52 + (V − 400) +
+   348 = V。
+   data-chat-flow 不是正文列独占:过程组成员区(ChatGroupSeat 的
+   <div class="…_content" data-step-process-content data-chat-flow>)也带它,用作行锚点。
+   过程组在正文列里面,若不排除,这条 margin 会把整组中间过程向右缩进 20px、同时压窄
+   20px,组内行首和组标题对不齐;选择器因此用 :not([data-step-process-content]) 只命中
+   正文列,过程组成员区保持上游的零 margin、与组根同一条左缘。
+   规则只改横向 margin,列的 width: 100% / max-width 与纵向 margin 保持上游。
+   特异性 (0,3,0) 大于上游 .column 的 (0,1,0),不依赖 <style> 挂载顺序,不需要 !important。
+   52px 与 32px 都是本地常量:上游 40 / 8 / 300、正文宽减量 400、
+   聊天滚动框的侧内边距变化时,由 css-contract.json 的 panel-clear / panel-edge /
+   panel-min-width / chat-scroll-side-padding / chat-flow-attr / chat-flow-column 契约
+   报失效,需要同步改这里。data-chat-flow 改名、从列元素挪走,或过程组成员区不再带
+   data-step-process-content 时规则落空或误伤,由 chat-flow-attr / chat-flow-column /
+   step-process-content-attr 契约报失效。嵌入侧边对话不在 main.conversation 作用域内,
+   仍按自己的轴居中。 */
+[data-slot="main.conversation"] [data-chat-flow]:not([data-step-process-content]) {
+  margin-inline: 20px auto;
 }
 
 /* 宽度不可调整:隐藏正文列左右两条 10px 的宽度拖动条(指针拖动与把手上的滚轮滚动一并消失)。
