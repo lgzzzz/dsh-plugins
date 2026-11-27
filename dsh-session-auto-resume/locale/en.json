@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Session auto-resume",
+    "description": "After DSH starts, resumes sessions whose last turn was cut off in the last seven days and continues them automatically. Only crash-or-shutdown interruptions (interrupted) and cancellations not made by the user (aborted) qualify; sessions stopped by the user, completed, failed, or truncated are left alone. The window, resume cap, continuation message, and dry-run mode are configurable. Resuming spends tokens.",
+    "detail": "docs/DETAIL.md"
+  }
+}

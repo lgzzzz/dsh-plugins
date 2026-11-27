@@ -1,0 +1,49 @@
+{
+  "name": "dsh-session-auto-resume",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH 启动后自动恢复没有正常结束的会话：只挑最后一轮因崩溃、退出或非用户原因被打断（interrupted，或 aborted 且原因不是 user）的会话，恢复其 Agent 并追加一条可配置的续跑消息；用户点了停止、正常完成、报错、超长截断的会话一律不动。时间窗、恢复数量上限、续跑文案和干跑模式都可配置。",
+  "engines": {
+    "dsh": "^0.2.3-alpha.2"
+  },
+  "main": "index.ts",
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "docs",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "node --check index.ts && node --check src/decide.ts",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.2.0-alpha.1",
+    "@deepseek-ai/dsh-agent": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-session-query": "^0.2.3-alpha.2",
+    "@deepseek-ai/dsh-workspace": "^0.2.3-alpha.2",
+    "@deepseek-ai/schemastery": "~3.20.0-alpha.1",
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3"
+  }
+}
