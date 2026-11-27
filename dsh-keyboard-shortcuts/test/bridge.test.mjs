@@ -13,11 +13,10 @@ import {
 } from '../src/shortcuts.ts'
 import { check, checkUndefined, finish, gesture } from './helpers.mjs'
 
-console.log('--- A① 八条目标全部落在官方命令 id 上 ---')
+console.log('--- A① 七条目标全部落在官方命令 id 上 ---')
 {
   check('目标 id', targetIds(), [
     'session.new',
-    'sidebar.left.toggle',
     'workspace.openLocal',
     'sidebar.right.toggle',
     'workspace.files',
@@ -30,7 +29,6 @@ console.log('--- A① 八条目标全部落在官方命令 id 上 ---')
     TARGETS.map((target) => [target.id, target.binding.code, target.binding.modifiers]),
     [
       ['session.new', 'KeyN', ['primary', 'alt']],
-      ['sidebar.left.toggle', 'KeyB', ['primary', 'alt']],
       ['workspace.openLocal', 'KeyP', ['primary', 'alt']],
       ['sidebar.right.toggle', 'KeyO', ['primary', 'alt']],
       ['workspace.files', 'Backslash', ['primary', 'alt']],
@@ -50,7 +48,6 @@ console.log('--- A② 固定行 id 与键帽 ---')
     TARGETS.map(fixedIdOf),
     [
       'dsh-keyboard-shortcuts.session.new',
-      'dsh-keyboard-shortcuts.sidebar.left.toggle',
       'dsh-keyboard-shortcuts.workspace.openLocal',
       'dsh-keyboard-shortcuts.sidebar.right.toggle',
       'dsh-keyboard-shortcuts.workspace.files',
@@ -61,9 +58,9 @@ console.log('--- A② 固定行 id 与键帽 ---')
   )
   check('逻辑绑定', bindingOf(TARGETS[0]), { code: 'KeyN', modifiers: ['primary', 'alt'] })
   check('Linux 键帽', keycaps(TARGETS[0], 'linux'), ['Ctrl', 'Alt', 'N'])
-  check('Windows 键帽', keycaps(TARGETS[4], 'windows'), ['Ctrl', 'Alt', '\\'])
-  check('macOS 键帽', keycaps(TARGETS[7], 'macos'), ['⌘', '⌥', ','])
-  check('Enter 键帽', keycaps(TARGETS[6], 'linux'), ['Ctrl', 'Alt', 'Enter'])
+  check('Windows 键帽', keycaps(TARGETS[3], 'windows'), ['Ctrl', 'Alt', '\\'])
+  check('macOS 键帽', keycaps(TARGETS[6], 'macos'), ['⌘', '⌥', ','])
+  check('Enter 键帽', keycaps(TARGETS[5], 'linux'), ['Ctrl', 'Alt', 'Enter'])
 }
 
 console.log('--- A③ Linux/Windows 认 Ctrl+Alt，macOS 认 ⌘⌥ ---')
@@ -98,6 +95,8 @@ console.log('--- A④ 修饰键必须恰好匹配 ---')
     targetForGesture('linux', gesture('KeyN', { control: true, alt: true, secondCode: 'KeyS' })),
   )
   checkUndefined('按键不匹配', targetForGesture('linux', gesture('KeyZ', { control: true, alt: true })))
+  // 左侧栏的固定行已移除：B 不再被本插件占用（官方绑定由 remove-sidebar-toggle 清空）。
+  checkUndefined('左侧栏 B 键不再命中', targetForGesture('linux', gesture('KeyB', { control: true, alt: true })))
 }
 
 finish()

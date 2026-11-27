@@ -32,6 +32,25 @@ export const CSS = `
   display: none !important;
 }
 
+/* 左栏的收起按钮只在左栏已经收起时(56px 图标轨道 / 抽屉关闭)保留为「打开侧边栏」入口;
+   展开状态下隐藏。收起方向本身由 src/sidebar.ts 的守卫禁掉:任何 toggleSidebar 在展开态
+   都是空操作,左栏只会因为窗口变窄被自动收起,所以展开态的这个按钮已经没有可做的动作,
+   隐藏它同时去掉「收起侧边栏」的提示与快捷键键帽。
+   按钮根带 data-sidebar-toggle;收起标记 data-sidebar-collapsed 在 AppFrame 的帧元素上,
+   只在 sidebarCollapsed 时输出(React 渲染成 data-sidebar-collapsed="true"),是侧栏子树
+   的祖先。展开时属性缺席,第二条规则落空,按钮保持 display:none;收起时按钮按上游
+   .…_iconButton 的 inline-flex 显示。上游给 .…_iconButton 声明了 display:inline-flex,
+   两条规则都用 !important,不依赖本插件 <style> 与模块样式的挂载顺序。
+   按钮锚点或收起标记改名时规则整条落空、收起按钮重新出现在展开态,由 css-contract.json 的
+   sidebar-toggle-attr / sidebar-collapsed-attr 两条契约在构建后报失效。 */
+[data-sidebar-toggle] {
+  display: none !important;
+}
+
+[data-sidebar-collapsed] [data-sidebar-toggle] {
+  display: inline-flex !important;
+}
+
 /* 右栏文件列表(workspace navigator)宽度不可调整:隐藏左缘那条既是拖动入口也是键盘入口的分隔条。
    文件列表的宽度偏好只有一个写入者 —— 分隔条自己的手势调 actions.resized:指针拖动、方向键 ±20px、
    Home(最窄)/ End(最宽)都挂在这条 8px 宽、绝对定位的分隔条上(类 css.separator,left:-4px,

@@ -27,17 +27,17 @@
 | `dsh-subagent-forge-panel` | 子智能体会话的会话面板里**直接不显示** forge 那条注定失败的 Git 与变更请求连接行（「状态已停止更新」与「重试」一起消失，不留说明、不留占位）：借行槽拿会话作用域，用不可见的标记元素定位分区，一条 CSS 规则隐藏上游那一行；普通会话一行不动 | [说明](dsh-subagent-forge-panel.md) |
 | `dsh-jobs-detail-reveal` | 点开「后台任务」里某条命令的输出后，会话面板自动把这条任务行滚到顶部（收起它的按钮停在面板顶部、命令输出在下面整块露出），并按需加高：行 + 详情比上游 `max-height` 还高时把面板加高到刚好装下（封顶在视口内），关掉详情立刻恢复；详情流式变高时跟着加高但不重新滚动。只动面板元素的 `scrollTop` 与内联 `max-height`，不改上游产物 | [说明](dsh-jobs-detail-reveal.md) |
 | `dsh-turn-process-open` | 把已结束轮次的中间过程锁定为展开（详细模式下新消息 / 自动收起不再折叠整轮），锁定后标题右侧的展开箭头随之隐藏；自挂 `⌘⌥.` / `Ctrl+Alt+.` 折叠当前会话已展开的工作步骤，把最新一轮封口成历史轮次的组头形态，并按阅读线保持阅读位置 | [说明](dsh-turn-process-open.md) |
-| `dsh-changes-behavior` | 改动视图统一行为：改动卡片标题、`⌘⌥Y` 与会话面板那行「本地变更」打开 changes 页面时默认全屏，其余任何打开右栏的入口（文件行、过程链接、上下文菜单、其它插件）默认非全屏；审查标签页按呈现方式默认分栏并默认换行；关掉卡片 500ms 悬停浮层；「本地变更」「变更请求」字号统一 14px、文件列表宽度固定为上游默认值（隐藏拖动把手，宽度不再可调）；`⌘⌥Y` 也由本插件注册；宿主启动时给上游产物打一行补丁，让单文件改动卡片也按「已编辑 1 个文件 + 文件行」的汇总形制渲染 | [说明](dsh-changes-behavior.md) |
-| `dsh-keyboard-shortcuts` | 快捷键插件：八条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+B` 左侧栏、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽 | [说明](dsh-keyboard-shortcuts.md) |
+| `dsh-changes-behavior` | 改动视图统一行为：改动卡片标题与会话面板那行「本地变更」打开 changes 页面时默认全屏，其余任何打开右栏的入口（文件行、过程链接、上下文菜单、其它插件）默认非全屏；审查标签页按呈现方式默认分栏并默认换行；关掉卡片 500ms 悬停浮层；「本地变更」「变更请求」字号统一 14px、文件列表宽度固定为上游默认值（隐藏拖动把手，宽度不再可调）；宿主启动时给上游产物打一行补丁，让单文件改动卡片也按「已编辑 1 个文件 + 文件行」的汇总形制渲染 | [说明](dsh-changes-behavior.md) |
+| `dsh-keyboard-shortcuts` | 快捷键插件：七条官方命令固定行（`Ctrl+Alt+N` 新会话、`Ctrl+Alt+P` 在本地打开、`Ctrl+Alt+O` 右侧栏、`Ctrl+Alt+\` 工作区文件、`Ctrl+Alt+L` 新建终端、`Ctrl+Alt+Enter` 面板全屏、`Ctrl+Alt+,` 关闭当前页面／窗口），面板全屏与关页在 Web 上焦点不在右栏时回退到活动面板；另含免聚焦桥接（`Esc Esc` 停止、审批 `Enter`/`Esc`、提问 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J` 聚焦输入框、`⌘⌥K` 聚焦右栏页面、`⌘⌥←/→` 切页（右栏折叠时改切会话视图）、`⌘↑/↓` 与 `⌘⌥↑/↓` 导航会话、`⌘\` 分屏），终端 `.xterm` 内同样生效；消息滚动口的 PageUp/PageDown 按可见消息带翻页、Space 屏蔽；左侧栏的固定行与官方绑定都已移除（左栏只允许因窗口变窄自动收起，见 `dsh-ui-css-patches`） | [说明](dsh-keyboard-shortcuts.md) |
 | `dsh-skill-technical-doc-writing` | 把「通用技术文档与文案标准」技能打包成插件自带资产（`technical-doc`，source `bundled`），宿主与用户两处都可调用 | [说明](dsh-skill-technical-doc-writing.md) |
-| `dsh-ui-css-patches` | Web UI 的 CSS 补丁；另隐藏会话面板开关，并用启动期兜底恢复被历史关掉的面板（窄窗口仍按上游隐藏，变宽后自动恢复） | — |
+| `dsh-ui-css-patches` | Web UI 的 CSS 补丁；另隐藏会话面板开关，并用启动期兜底恢复被历史关掉的面板（窄窗口仍按上游隐藏，变宽后自动恢复）；左栏只允许因窗口变窄自动收起：包住布局的 `toggleSidebar`，展开态的手动收起（按钮 / 快捷键 / 抽屉遮罩）一律不生效，并用 CSS 隐藏展开态的收起按钮 | — |
 | `dsh-desktop-notify` | 桌面通知 | — |
 | `dsh-directory-picker-browse` | 应用内目录浏览选择器 | — |
 | `dsh-git-guard` | git 操作保护 | — |
 
 > `dsh-jobs-optimize` 已退役并从仓库移除：0.2.2-rc.2 起上游后台任务控件原生实现悬停 150ms 展开、离开 120ms 折叠与点击钉住，插件不再必要。
 
-> `dsh-shortcut-utils` 不是可安装插件，不在上表：它是 `dsh-keyboard-shortcuts` 与 `dsh-changes-behavior` 共用的纯函数包（固定行绑定匹配、键帽格式化、捕获层手势 / 归属读取），见[说明](dsh-shortcut-utils.md)。
+> `dsh-shortcut-utils` 不是可安装插件，不在上表：它是 `dsh-keyboard-shortcuts` 使用的纯函数包（固定行绑定匹配、键帽格式化、捕获层手势 / 归属读取），见[说明](dsh-shortcut-utils.md)。
 
 ## 主题文档
 
@@ -60,10 +60,10 @@
 | 插件 | 清单 | 校验的契约 |
 | --- | --- | --- |
 | `dsh-opencode-status` | [`contract.json`](../dsh-opencode-status/contract.json) | 会话面板分区槽与渲染 + 通用行标记（`data-session-panel-row` / `data-row-part`）+ `ctx.webServer.register(route)`、`webserver/authorize` 与浏览器 cookie 鉴权提供方 |
-| `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + `role` / `aria-label` 文案（含一条反向的 `forbid`）+ CSS 变量 + 槽位键 + 主对话正文宽度 / 左缘固定间隔与面板停靠探针 + 会话面板开关 / 探针 / pinned 键 |
-| `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 |
+| `dsh-ui-css-patches` | [`css-contract.json`](../dsh-ui-css-patches/css-contract.json) | `data-*` 属性 + `role` / `aria-label` 文案（含一条反向的 `forbid`）+ CSS 变量 + 槽位键 + 主对话正文宽度 / 左缘固定间隔与面板停靠探针 + 会话面板开关 / 探针 / pinned 键 + 左栏收起按钮 / 收起标记 / `toggleSidebar` 与私有动作表 |
+| `dsh-keyboard-shortcuts` | [`css-contract.json`](../dsh-keyboard-shortcuts/css-contract.json) | DOM 锚点 + 内联样式规则 + 上游左栏命令 id 与快捷键 `edit` 写入面 |
 | `dsh-turn-process-open` | [`css-contract.json`](../dsh-turn-process-open/css-contract.json) | 轮次过程标题 / 计数锚点（含 `aria-expanded` 同元素）+ 标题右侧箭头的图标与 `chevron` 局部类名 + fiber 读取的 `turnProcess` / `setTurnProcessOpen` + 主会话槽位与会话作用域 + 折叠目标 / 聊天行 / 轮次 / 跟随尾部 / 上游动画 / 封口锚点 |
-| `dsh-changes-behavior` | [`contract.json`](../dsh-changes-behavior/contract.json) | 改动卡片锚点（含启动期补丁的 `singleFile` 初始化锚点）+ 本地变更地址 + 右栏四个打开入口 / `mounted` / `claim` / `data-sidebar-right-panel` / `commandTarget` / `isTargetCurrent` / `toggleFullscreen` / 窄窗口断点 + 审查根 / 分栏 / 换行 / review store seed + 快捷键固定行服务 + 悬停延迟 + 两个 forge 字号锚点与反向 `!important` + 文件树分隔条的 `role` / `aria-controls`（固定文件列表宽度用）+ 会话面板根与会话面板「本地变更」行的打开动作（点它切全屏用，共 47 条） |
+| `dsh-changes-behavior` | [`contract.json`](../dsh-changes-behavior/contract.json) | 改动卡片锚点（含启动期补丁的 `singleFile` 初始化锚点）+ 本地变更地址 + 右栏四个打开入口 / `mounted` / `claim` / `data-sidebar-right-panel` / `commandTarget` / `isTargetCurrent` / `toggleFullscreen` / 窄窗口断点 + 审查根 / 分栏 / 换行 / review store seed + 悬停延迟 + 两个 forge 字号锚点与反向 `!important` + 文件树分隔条的 `role` / `aria-controls`（固定文件列表宽度用）+ 会话面板根与会话面板「本地变更」行的打开动作（点它切全屏用，共 50 条） |
 | `dsh-stats-ttft` | [`contract.json`](../dsh-stats-ttft/contract.json) | `conversation.composer.dock` 槽与 `activity` 注册 / order + 同 id 遮蔽规则 + 渲染期读取条目 component + `stats.counts` 键与调用 + 两个时长单位与上游取整规则 + `sessionStats` 的 TTFT 字段 + `useProjection` / `useChat` 标准 props |
 | `dsh-agent-team-hero-toggle` | [`css-contract.json`](../dsh-agent-team-hero-toggle/css-contract.json) | `conversation.hero.options` 槽 + forge 工作树注册 id + `agentTeam` 投影 + `agentTeams/setEnabled` 端点 + 11 个 `--dsw-*` 令牌 |
 | `dsh-subagent-parent-nav` | [`css-contract.json`](../dsh-subagent-parent-nav/css-contract.json) | `conversation.session.panel.section` 槽 + 标准 props 的 `useSessions` + `uiWorkspace.openSession` + 9 个 `--dsw-*` 令牌 |

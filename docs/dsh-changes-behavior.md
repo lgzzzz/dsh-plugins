@@ -2,7 +2,7 @@
 
 右栏改动视图的统一行为插件。它把原先五个独立插件合成一个，并为「打开右栏」定一条统一策略：
 
-- **改动卡片标题**打开右栏「本地变更」、**`⌘⌥Y` / `Ctrl+Alt+Y`** 打开会话绑定的「变更请求」页（没有绑定时打开「本地变更」）、**点会话面板那行「本地变更」**时，默认**全屏**；
+- **改动卡片标题**打开右栏「本地变更」、**点会话面板那行「本地变更」**时，默认**全屏**；
 - **其余任何打开右栏的入口**——改动卡片的文件行、中间过程里的文件 / 资源链接、上下文菜单、其它插件发起的打开——都默认**非全屏**（推挤呈现）；
 - 改动审查（`changes-review`）标签页按面板呈现方式默认分栏（非全屏单栏、全屏左右对比），并默认开启自动换行；
 - 关掉改动文件卡片 500ms 悬停弹出的单列 diff 浮层；
@@ -11,7 +11,7 @@
 - **行内评论框键盘**：「本地变更」「变更请求」的评论框里 `Enter` 与「添加到输入框」等价，`Shift+Enter` 换行，`Esc` 取消；
 - **单文件改动卡片也按汇总形制渲染**：标题是 `已编辑 1 个文件`，下面列出那一个文件（启动期给上游客户端产物打一行补丁，见下文）。
 
-宿主 + 客户端插件：宿主半部只在启动时做那行补丁，其余行为全在浏览器半部；不注册服务、不占 slot、没有配置项。装上即生效，从 profile 移除即恢复上游默认（补丁在卸载时也会还原）。原先的 `dsh-changes-card-local`、`dsh-changes-review-fullscreen`、`dsh-changes-review-wrap`、`dsh-changes-hover-off`、`dsh-forge-changes-font-14` 已全部并入本包；「变更请求」快捷键也从 `dsh-keyboard-shortcuts` 迁来。
+宿主 + 客户端插件：宿主半部只在启动时做那行补丁，其余行为全在浏览器半部；不注册服务、不占 slot、没有配置项。装上即生效，从 profile 移除即恢复上游默认（补丁在卸载时也会还原）。原先的 `dsh-changes-card-local`、`dsh-changes-review-fullscreen`、`dsh-changes-review-wrap`、`dsh-changes-hover-off`、`dsh-forge-changes-font-14` 已全部并入本包；「变更请求」快捷键（`⌘⌥Y` / `Ctrl+Alt+Y`）已移除。
 
 -----
 
@@ -20,7 +20,6 @@
 | 打开方式 | 结果 |
 |---|---|
 | 改改动卡片**标题** | 打开 / 聚焦「本地变更」，并切到全屏 |
-| `⌘⌥Y` / `Ctrl+Alt+Y` | 打开 / 聚焦会话第一张变更请求卡片的变更页（没有绑定时是「本地变更」），并切到全屏 |
 | 点**会话面板**里「本地变更 · N 个文件」那行的行主体，或同一行「⋯」菜单里的「查看变更」 | 打开 / 聚焦「本地变更」，并切到全屏（已经是全屏时保持） |
 | 改动卡片**文件行** | 打开本轮审查页，**非全屏** |
 | 中间过程 / 正文里的可点击文件、资源链接 | 打开对应右栏页面，**非全屏** |
@@ -32,7 +31,7 @@
 
 指定入口用两种方式告诉包装层「这一次打开要全屏」：
 
-- **卡片标题、`⌘⌥Y`** 在自己的打开动作外套一个 `withFullscreenIntent()`。包装层看到意图就跳过「切回推挤」，打开后再由 `presentFullscreen()` 按 DOM 现值决定：原本是推挤就切成全屏，原本已经全屏就保持。意图只在同一个同步任务内有效，`finally` 一定还原，不会泄漏到下一次打开。
+- **卡片标题**在自己的打开动作外套一个 `withFullscreenIntent()`。包装层看到意图就跳过「切回推挤」，打开后再由 `presentFullscreen()` 按 DOM 现值决定：原本是推挤就切成全屏，原本已经全屏就保持。意图只在同一个同步任务内有效，`finally` 一定还原，不会泄漏到下一次打开。
 - **会话面板那一行**在打开入口上判定（`session-panel.ts` 的 `isSessionPanelLocalOpen`）：打开的是当前会话的「本地变更」页、且此刻会话面板可见，就算这一行的打开。包层跳过「切回推挤」，打开后自己调 `presentFullscreen()` 切成全屏。行主体与行内「⋯」菜单走的是同一个打开入口，所以两者结果一致；已经全屏时从这一行再打开也不会被推回推挤（见「会话面板的『本地变更』行」）。
 
 不干预的情况：
@@ -75,7 +74,7 @@
 
 行主体（`data-row-part="body"`）与右侧「⋯」菜单里的「查看变更」都走同一个动作：`viewLocalChanges()` → `openChanges(sessionId,{kind:'local'})` → `sidebarRight.openResourceIn(sessionId, dsh-resource://forge-changes/<session>/local)`，随后各自 `dismissOverlay()` 收起浮层版的面板。
 
-本插件让它和改动卡片标题、`⌘⌥Y` 一样**打开即全屏**，但不用拦点击：那一行点完还要收起浮层版面板，吞掉点击会让面板留在原地；同一行有两个入口，菜单还 portal 到 `document.body`，没有稳定锚点。判定改放在打开入口上（`src/session-panel.ts`）：
+本插件让它和改动卡片标题一样**打开即全屏**，但不用拦点击：那一行点完还要收起浮层版面板，吞掉点击会让面板留在原地；同一行有两个入口，菜单还 portal 到 `document.body`，没有稳定锚点。判定改放在打开入口上（`src/session-panel.ts`）：
 
 ```ts
 isSessionPanelLocalOpen(address, sessionId, doc)
@@ -252,22 +251,14 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-comment-keys') 
    ```
 
 3. 在正文 / 中间过程里点一个文件或资源链接 → 右栏打开对应页面，面板是 `'push'`。
-4. 按 `⌘⌥Y` / `Ctrl+Alt+Y` → 固定行已挂载且打开会话第一张变更请求卡片的变更页（`dsh-resource://forge-changes/<session>/change/<url>`）；会话没有绑定变更请求时打开「本地变更」页。
-
-   ```js
-   [...document.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)   // 含变更请求编号（如 '#7'）或 '本地变更'
-   ```
-
-   面板原本是推挤时切成全屏；已经是全屏时保持。
-5. 在右栏已经是全屏时再按 `⌘⌥Y` → 仍是全屏（不会被包装层切回推挤）。
-6. 把窗口缩到 768px 以下操作上述入口 → 跟随上游自动全屏，右栏不会被收起。
-7. 指针停在改动卡片文件行上 500ms → 不出现浮层；字号检查：
+4. 把窗口缩到 768px 以下操作上述入口 → 跟随上游自动全屏，右栏不会被收起。
+5. 指针停在改动卡片文件行上 500ms → 不出现浮层；字号检查：
 
    ```js
    getComputedStyle(document.querySelector('[data-forge-changes]')).fontSize   // '14px'
    ```
 
-8. 「本地变更」里文件列表旁看不到分隔条（默认在左侧，被工具栏切到右侧或隐藏时同样没有），鼠标划过去也不出现拖动光标，宽度不再可调：
+6. 「本地变更」里文件列表旁看不到分隔条（默认在左侧，被工具栏切到右侧或隐藏时同样没有），鼠标划过去也不出现拖动光标，宽度不再可调：
 
    ```js
    const separator = document.querySelector('[data-forge-changes] [role="separator"][aria-controls]')
@@ -275,7 +266,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-comment-keys') 
    separator?.parentElement?.getBoundingClientRect().width   // 240（面板窄时更小）
    ```
 
-9. 只改了一个文件的一轮：卡片标题是 `已编辑 1 个文件`，`data-single` 不再出现，下面有一行文件行：
+7. 只改了一个文件的一轮：卡片标题是 `已编辑 1 个文件`，`data-single` 不再出现，下面有一行文件行：
 
    ```js
    const card = document.querySelector('[data-changed-files]')
@@ -286,7 +277,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-comment-keys') 
 
    启动日志里对应的证据是 `[dsh-changes-single-card] 单文件卡片已改为汇总形制：<产物路径>`。
 
-10. 点会话面板里「本地变更 · N 个文件」那行的**行主体**（或它的「⋯」→「查看变更」）→ 右栏活动页是「本地变更」，面板变全屏，浮层版的会话面板同时收起；右栏已经是全屏时从这一行再打开，仍是全屏：
+8. 点会话面板里「本地变更 · N 个文件」那行的**行主体**（或它的「⋯」→「查看变更」）→ 右栏活动页是「本地变更」，面板变全屏，浮层版的会话面板同时收起；右栏已经是全屏时从这一行再打开，仍是全屏：
 
    ```js
    document.querySelector('[data-session-panel] [data-forge-local] button[data-row-part="body"]')
@@ -294,7 +285,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-comment-keys') 
      .getAttribute('data-sidebar-right-panel')   // 'fullscreen'
    ```
 
-11. 在「本地变更」的 diff 里选中几行 → 弹出评论框。输入文字后：
+9. 在「本地变更」的 diff 里选中几行 → 弹出评论框。输入文字后：
 
     - 按 `Enter` → 评论框关闭，会话输入框里多出一段引用（输入框上方出现引用 chip）；
     - 按 `Shift+Enter` → 只换行，评论框还在，不提交；
@@ -340,8 +331,6 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-comment-keys') 
 | 右栏其它可拖动元素、其它标签页、终端、文档预览 | 不处理（字号也只覆盖两个 forge 根） |
 | 非浏览器环境（没有 `document`） | 空操作 |
 | `sidebarRight` 服务缺席 | 卡片 / 打开策略不装，其余行为照常；控制台告警一次 |
-| `shortcuts` 服务缺席 | `⌘⌥Y` 不装，其余行为照常 |
-| forge 的 `remote.forgePanel` 缺席 | `⌘⌥Y` 直接打开本地变更页，不读面板流、不等待 |
 | 面板流第一帧 1.5s 内没到 / 读取失败 / 没有绑定 | 按没有绑定处理，打开本地变更页 |
 | 分栏 / 换行按钮或 review store seed 变了 | 该标签页保持上游默认，告警一次；工具栏仍可手动开关 |
 | 「本地变更」「变更请求」行内评论框 `Enter` | 等价于点「添加到输入框」：引用进会话输入框，评论框关闭 |
@@ -360,7 +349,7 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-comment-keys') 
 |---|---|
 | [`index.ts`](../dsh-changes-behavior/index.ts) | 宿主入口：等 `clientModules` 就绪后安装 / 卸载启动期补丁 |
 | [`src/host/single-card.ts`](../dsh-changes-behavior/src/host/single-card.ts) | 单文件卡片补丁：文本三态、写产物、`rebuilt`、卸载恢复 |
-| [`src/client.ts`](../dsh-changes-behavior/src/client.ts) | 浏览器入口：先装 changes 面板行为，再装 `⌘⌥Y` 桥 |
+| [`src/client.ts`](../dsh-changes-behavior/src/client.ts) | 浏览器入口：装 changes 面板行为 |
 | [`src/install.ts`](../dsh-changes-behavior/src/install.ts) | 总装：逐条安装、单条失败不阻断其余、逆序卸载 |
 | [`src/presentation.ts`](../dsh-changes-behavior/src/presentation.ts) | 面板呈现方式读数、指定入口全屏、四个打开入口的包层、全屏意图与 `designated` 判定接缝 |
 | [`src/card.ts`](../dsh-changes-behavior/src/card.ts) | 卡片标题 / 文件行 / 折叠按钮判定、本地变更地址 |
@@ -371,15 +360,10 @@ document.documentElement.hasAttribute('data-dsh-changes-behavior-comment-keys') 
 | [`src/hover-gate.ts`](../dsh-changes-behavior/src/hover-gate.ts) | 卡片悬停闸门与浮层网兜 |
 | [`src/font-14.ts`](../dsh-changes-behavior/src/font-14.ts) | 14px `<style>` 的安装与卸载 |
 | [`src/tree-fixed.ts`](../dsh-changes-behavior/src/tree-fixed.ts) | 文件列表宽度固定：隐藏文件树分隔条的 `<style>` 与安装 / 卸载 |
-| [`src/changes-open.ts`](../dsh-changes-behavior/src/changes-open.ts) | `⌘⌥Y` 固定行、固定输入观察者、终端捕获、按绑定关系选择变更页 |
-| [`src/change-request.ts`](../dsh-changes-behavior/src/change-request.ts) | 变更页地址、面板流第一帧解析（带超时与释放） |
 | [`src/comment-keys.ts`](../dsh-changes-behavior/src/comment-keys.ts) | 行内评论框键盘：按键映射、归属判定、按文案认按钮、降级与捕获监听安装 / 卸载 |
 | [`src/fiber.ts`](../dsh-changes-behavior/src/fiber.ts) | 从 React fiber 取按钮 `onClick`、向上查组件 props（分栏 / 换行 / 评论框共用） |
-| [`dsh-shortcut-utils`](dsh-shortcut-utils.md) | 快捷键判定与捕获层；共享纯函数包，客户端构建时内联 |
-| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（54 条） |
+| [`contract.json`](../dsh-changes-behavior/contract.json) | 依赖的上游锚点与公开面清单（50 条） |
 | [`check-css.mjs`](../dsh-changes-behavior/check-css.mjs) | 构建后逐条校验上面的清单 |
-
-快捷键的共享纯函数（固定行绑定匹配、键帽格式化、捕获阶段手势 / 归属上下文）放在 [`dsh-shortcut-utils`](dsh-shortcut-utils.md)，由 `dsh-keyboard-shortcuts` 与 `dsh-changes-behavior` 共用；它是纯函数包，没有运行时状态，客户端构建时分别内联进两个 bundle。
 
 ```bash
 pnpm --filter dsh-changes-behavior build
@@ -423,7 +407,6 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-changes-behavior
 - 面板 `data-sidebar-right-panel` 与 push / fullscreen 两值；
 - 审查根 / 正文 / 分栏 / 换行按钮 / `aria-pressed` / `toggledSplit` / `toggledWrap` / review store 首次 seed 的 `split:true, wrap:false`；
 - 侧栏占位实例 / 标签页 / 会话三个身份属性；
-- 快捷键服务的 `registerFixed(command` / `observeFixedInput(listener` / `fixedCatalog` / `platform`；
 - 悬停浮层的 `openDelayMs: 500` 与 `data-changes-hover-preview`；
 - 两个 forge 根锚点，以及上游没有用 `!important` 钉字号（反向）；
 - 文件树分隔条的 `role="separator"` 与 `aria-controls`（固定宽度依赖的隐藏锚点）；
@@ -436,7 +419,6 @@ dsh plugin --profile web add /Users/lz/dsh-plugins/dsh-changes-behavior
 
 ## 进一步探索
 
-- [共享快捷键工具包](dsh-shortcut-utils.md) —— 两个插件共用的绑定匹配与捕获层纯函数。
-- [快捷键插件](dsh-keyboard-shortcuts.md) —— 其余固定键与免聚焦桥接（`⌘⌥Y` 已迁到本插件）。
+- [快捷键插件](dsh-keyboard-shortcuts.md) —— 其余固定键与免聚焦桥接（左侧栏开关与 `⌘⌥Y` 都已移除）。
 - [DSH 组件 CSS 架构](dsh-css-architecture.md) —— `data-*` 锚点与右栏标记的作用域。
 - [`dsh.client.inject` 完整说明](dsh-client-inject.md) —— 客户端半部如何进入浏览器 roster。

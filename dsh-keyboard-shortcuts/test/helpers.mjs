@@ -94,7 +94,6 @@ export function observable(initial) {
 /** 官方命令的本地化标签（目录行只用于固定行名称）。 */
 export const OFFICIAL_LABELS = {
   'session.new': '新会话',
-  'sidebar.left.toggle': '展开／收起左侧栏',
   'workspace.openLocal': '在本地打开',
   'sidebar.right.toggle': '展开／收起右侧栏',
   'workspace.files': '工作区文件',
@@ -147,11 +146,14 @@ export function fakeShortcuts({
   const commands = []
   const invocations = []
   let listener
+  let revision = 0
   const catalog = observable(rows)
+  const config = observable({ status: 'ready', revision: 'revision-0' })
   const service = {
     platform,
     runtime,
     catalog,
+    config,
     commands,
     invocations,
     registry: withRegistry
@@ -182,6 +184,18 @@ export function fakeShortcuts({
     },
     setRows(next) {
       catalog.set(next)
+    },
+    /** 模拟官方设置页的一次快捷键编辑；`set` 更新目录行并推进 revision。 */
+    edit(change, expectedRevision) {
+      if (expectedRevision !== config.getSnapshot().revision) {
+        return Promise.resolve({ status: 'stale', snapshot: config.getSnapshot() })
+      }
+      if (change.type !== 'set') return Promise.resolve({ status: 'saved', snapshot: config.getSnapshot() })
+      catalog.set(catalog.getSnapshot().map((row) => (row.id === change.id ? { ...row, binding: change.binding } : row)))
+      revision += 1
+      const snapshot = { status: 'ready', revision: `revision-${revision}` }
+      config.set(snapshot)
+      return Promise.resolve({ status: 'saved', snapshot })
     },
   }
   return service

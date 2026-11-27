@@ -20,8 +20,8 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 
 | 文件 | 内容 |
 |---|---|
-| `src/shortcuts.ts` | 八条官方命令的目标表：命令 id、逻辑绑定、固定行 id、平台键帽与手势匹配 |
-| `src/fixed-keys.ts` | 固定键组：挂八条固定行、接固定输入、补终端捕获；Web 上的全屏 / 关页免聚焦回退 |
+| `src/shortcuts.ts` | 七条官方命令的目标表：命令 id、逻辑绑定、固定行 id、平台键帽与手势匹配 |
+| `src/fixed-keys.ts` | 固定键组：挂七条固定行、接固定输入、补终端捕获；Web 上的全屏 / 关页免聚焦回退 |
 | `src/pane-split.ts` | 分屏桥 `⌘\` / `Ctrl+\`：跟随 `pane.split` 的生效绑定，焦点不在面板内时回退到活动 dock pane |
 | `src/stop-sequence.ts` | 停止序列 `Esc` `Esc` |
 | `src/approval-keys.ts` | 审批键 `Enter` 允许一次 / `Esc` 拒绝 |
@@ -42,9 +42,9 @@ node --check lib/client.js && node --check index.ts  # 语法检查（或 pnpm c
 
 > 这些文件不自行重述上游类型：手势 / 绑定 / 目录行 / 待答审批 / 待答提问 / 会话与服务面都是 `import type` 自上游声明（清单见第 6 册第 8 节），打包时被擦除。
 
-`test/` 共 30 个测试文件，共享装置在 `test/focus-helpers.mjs` 与 `test/helpers.mjs`，runner 是 `test/run-all.mjs`：
+`test/` 共 31 个测试文件，共享装置在 `test/focus-helpers.mjs` 与 `test/helpers.mjs`，runner 是 `test/run-all.mjs`：
 
-- **固定键与判定**：`bridge.test.mjs`（目标表、固定行 id、平台修饰键）、`install.test.mjs`（固定行装配、固定输入、终端捕获、卸载）、`fullscreen.test.mjs`（全屏免聚焦桥）、`page-close.test.mjs`（关页免聚焦回退）、`artifact-client.test.mjs`（`lib/client.js` 的模块 id / 插件名 / `inject` 与八条固定行）；
+- **固定键与判定**：`bridge.test.mjs`（目标表、固定行 id、平台修饰键）、`install.test.mjs`（固定行装配、固定输入、终端捕获、卸载）、`fullscreen.test.mjs`（全屏免聚焦桥）、`page-close.test.mjs`（关页免聚焦回退）、`artifact-client.test.mjs`（`lib/client.js` 的模块 id / 插件名 / `inject` 与七条固定行）、`remove-sidebar-toggle.test.mjs`（左栏官方绑定清空：只写一次、等配置就绪、`stale` 重试、失败告警与卸载）；
 - **纯决策**：`focus-decide-binding.test.mjs`（绑定匹配、`enabledBinding`、分屏归属）、`focus-decide-escape.test.mjs`、`focus-decide-ownership.test.mjs`、`focus-decide-stop-sequence.test.mjs`、`focus-decide-approval.test.mjs`、`focus-decide-question.test.mjs`、`focus-decide-focus-composer.test.mjs`、`focus-decide-focus-page.test.mjs`、`focus-decide-page-cycle.test.mjs`、`focus-decide-session-cycle.test.mjs`、`focus-decide-fullscreen-dismiss.test.mjs`；
 - **桥接**：`focus-bridge-pane-split.test.mjs`（分屏回退）、`focus-bridge-stop-sequence.test.mjs`、`focus-bridge-approval-keys.test.mjs`、`focus-bridge-question-keys.test.mjs`、`focus-bridge-focus-composer.test.mjs`、`focus-bridge-focus-page.test.mjs`、`focus-bridge-page-cycle.test.mjs`、`focus-bridge-session-cycle.test.mjs`、`focus-bridge-fullscreen-dismiss.test.mjs`；
 - **端到端与补偿**：`focus-bridge-platform-keys.test.mjs`（macOS / Windows 物理键与键帽）、`focus-strip-scroll.test.mjs`（页签行滚动）、`chat-paging.test.mjs`（翻页步长、边界钳制、Space 屏蔽、rAF 平滑滚动 / 连按 / 取消 / 减少动态效果、内层滚动让位与捕获监听卸载）、`focus-artifact-client.test.mjs`（真产物装配：固定键、全屏 / 关页回退、停止 / 审批 / 提问、会话导航、终端捕获、全屏关栏）。
@@ -63,7 +63,7 @@ node check-css.mjs --manifest <清单>      # 换一份清单（默认同目录�
 
 - DSH 根目录解析顺序：`--dsh-root` > `$DSH_ROOT` > `npm root -g` > 常见全局安装路径。
 - 每条 check 是 `{ id, plugin, token | pattern, paths, hint }`：`token` 按子串、`pattern` 按正则（带 `s` 标志）匹配；`paths` 是从 `<DSH>/node_modules/@deepseek-ai/` 起算的搜索目录。
-- 覆盖 26 条锚点：审批面板根、会话根 / 输入区、提问卡片与 plan-review 根、模态选择器、`data-dsh-automatic-focus` 标记与主题规则、终端根类与 `xterm-helper-textarea`、右栏会话根 / 展开标记 / 呈现方式、dockkit 的 pane / 浮动 pane / 活动标记 / chip box / 页面芯片、页签行的 `scroll-behavior:smooth`，左侧栏 `data-row-key` 的两个前缀与归档行标记，消息滚动口 / composer 座位。
+- 覆盖 31 条锚点：审批面板根、会话根 / 输入区、提问卡片与 plan-review 根、模态选择器、`data-dsh-automatic-focus` 标记与主题规则、终端根类与 `xterm-helper-textarea`、右栏会话根 / 展开标记 / 呈现方式、dockkit 的 pane / 浮动 pane / 活动标记 / chip box / 页面芯片、页签行的 `scroll-behavior:smooth`，左侧栏 `data-row-key` 的两个前缀与归档行标记，消息滚动口 / composer 座位。
 - 退出码：`0` 全部通过（定位不到 DSH 根目录时只告警也算通过）；`1` 有锚点缺失（**升级 DSH 之后先看这里**）；`2` 清单路径或 JSON 有问题。
 - 它只证明"**有东西可选**"：不解析选择器、不跑 CSS 引擎。运行时行为仍需按第 10 节手测。
 
@@ -80,7 +80,7 @@ dsh plugin --profile web add <本仓库路径>/dsh-keyboard-shortcuts
 - 焦点在输入框，按 `⌘⌥Enter` / `Ctrl+Alt+Enter` → 右侧栏直接全屏；再按一次还原；
 - 焦点在输入框，按 `⌘⌥,` / `Ctrl+Alt+,` → 关掉右侧栏**当前**那一页，键盘不用先点进右栏；焦点已在面板内按同一键 → 官方命令关页（插件让位），效果相同；
 - 右栏折叠时按 `⌘⌥,` → 无动作；打开设置 / 快捷键弹窗后按 `⌘⌥,` → 弹窗被关掉、后台页面不受影响；
-- 按八条固定键里的其余各键（`⌘⌥N` 新会话、`⌘⌥B` 左栏、`⌘⌥P` 在本地打开、`⌘⌥O` 右栏、`⌘⌥\` 工作区文件、`⌘⌥L` 新建终端）→ 对应官方动作执行；打开「设置 → 快捷键」能看到这些只读固定行，与它们重叠的可配置项显示冲突；
+- 按七条固定键里的其余各键（`⌘⌥N` 新会话、`⌘⌥P` 在本地打开、`⌘⌥O` 右栏、`⌘⌥\` 工作区文件、`⌘⌥L` 新建终端）→ 对应官方动作执行；打开「设置 → 快捷键」能看到这些只读固定行，与它们重叠的可配置项显示冲突；
 - 焦点点到消息空白处，连按两下 `Esc` → 停止当前轮次；
 - 触发审批，**不要点卡片**：直接按 `Enter` → 允许一次；再触发一次，按 `Esc` → 拒绝；先把焦点点在一张过程卡片上再按 `Enter` → 允许一次，卡片不展开 / 不改变选中，也不留焦点边框；
 - 让 agent 提一个问题（`ask_user_question` 或 plan-review 卡片），**不要点卡片**：直接按 `Esc` → 卡片取消 / 关闭；焦点落在卡片自己的答案输入框里按 `Esc` → 同样关闭；焦点在侧栏搜索框或终端里按 `Esc` → 不关卡片；

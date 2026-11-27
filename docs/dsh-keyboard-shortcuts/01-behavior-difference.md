@@ -1,6 +1,6 @@
 # 行为差异与影响面
 
-> 本文件是 [dsh-keyboard-shortcuts 说明](../dsh-keyboard-shortcuts.md) 的第 1 册：插件由「八条固定键」与「一组免聚焦桥接」两层组成，以及后文反复用到的 DOM / 焦点 / 事件术语。
+> 本文件是 [dsh-keyboard-shortcuts 说明](../dsh-keyboard-shortcuts.md) 的第 1 册：插件由「七条固定键」与「一组免聚焦桥接」两层组成，以及后文反复用到的 DOM / 焦点 / 事件术语。
 
 -----
 
@@ -8,17 +8,16 @@
 
 插件打开两条互补的通道：
 
-1. **固定键层**把八条快捷键注册成官方快捷键服务的只读固定行，按键命中后调用官方命令注册表。固定行不检查焦点：只要页面收到 `keydown`，目标动作就能执行。面板全屏与关闭当前页面在 Web 上另有一层免聚焦回退：焦点不在右栏时用 `sidebarRight.commandTarget()` 解析当前 Session 的活动 dock 面板，再执行与官方命令相同的 `toggleFullscreen()` / `closeTarget()`。
-2. **免聚焦桥接层**处理内置命令够不着的状态：连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏；另外新增五条固定键（`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`）与 `⌘\` 分屏回退。`⌘⌥Y` 变更请求已迁到 [`dsh-changes-behavior`](../dsh-changes-behavior.md)。
+1. **固定键层**把七条快捷键注册成官方快捷键服务的只读固定行，按键命中后调用官方命令注册表。固定行不检查焦点：只要页面收到 `keydown`，目标动作就能执行。面板全屏与关闭当前页面在 Web 上另有一层免聚焦回退：焦点不在右栏时用 `sidebarRight.commandTarget()` 解析当前 Session 的活动 dock 面板，再执行与官方命令相同的 `toggleFullscreen()` / `closeTarget()`。
+2. **免聚焦桥接层**处理内置命令够不着的状态：连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏；另外新增五条固定键（`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`）与 `⌘\` 分屏回退。左栏开关与 `⌘⌥Y` 变更请求都已移除。
 
-### 1.1 八条固定键
+### 1.1 七条固定键
 
 主修饰键 `primary` 在 macOS 上展开为 `⌘`，在 Windows/Linux 上展开为 `Ctrl`；下表按 Windows/Linux 记。
 
 | 动作 | 官方命令 id | 固定行 id | 快捷键 |
 | --- | --- | --- | --- |
 | 新建会话 | `session.new` | `dsh-keyboard-shortcuts.session.new` | `Ctrl+Alt+N` |
-| 展开／收起左侧栏 | `sidebar.left.toggle` | `dsh-keyboard-shortcuts.sidebar.left.toggle` | `Ctrl+Alt+B` |
 | 在本地打开 | `workspace.openLocal` | `dsh-keyboard-shortcuts.workspace.openLocal` | `Ctrl+Alt+P` |
 | 展开／收起右侧栏 | `sidebar.right.toggle` | `dsh-keyboard-shortcuts.sidebar.right.toggle` | `Ctrl+Alt+O` |
 | 工作区文件 | `workspace.files` | `dsh-keyboard-shortcuts.workspace.files` | `Ctrl+Alt+\` |
@@ -43,11 +42,11 @@
 
 > 键位写法：官方把主修饰键记作 `primary`，在 macOS 上映射成 `⌘`（`meta`），在 Windows/Linux 上映射成 `Ctrl`（`control`）。固定行声明的是逻辑组合，由 `registerFixed` 按设备平台规范化。本插件自己挂的固定键按平台落成：`primary+alt+J` 是 `⌘⌥J` / `Ctrl+Alt+J`，`primary+alt+K` 是 `⌘⌥K` / `Ctrl+Alt+K`，`primary+alt+←` / `primary+alt+→` 是 `⌘⌥←` / `⌘⌥→`（macOS）、`Ctrl+Alt+←` / `Ctrl+Alt+→`（Windows/Linux），`primary+↑` / `primary+↓` 是 `⌘↑` / `⌘↓`（macOS）、`Ctrl+↑` / `Ctrl+↓`（Windows/Linux），`primary+alt+↑` / `primary+alt+↓` 是 `⌘⌥↑` / `⌘⌥↓`（macOS）、`Ctrl+Alt+↑` / `Ctrl+Alt+↓`（Windows/Linux）。
 
-> 固定行与官方默认可配置键的关系：`session.new`、`sidebar.left.toggle`、`pane.fullscreen.toggle` 的默认键与固定行相同，动作也相同；`workspace.files` 的 `Ctrl+Alt+P` 被让给「在本地打开」；`workspace.add` 的 `Ctrl+Alt+O` 与右栏开关重叠；`settings.open` 的 `Ctrl+Alt+,` 与关页重叠。与固定行重叠的可配置命令会进入冲突状态，按键派发不再执行它们，但固定行仍按命令 id 调官方命令。取舍与恢复方式见 [第 6 册](06-boundaries-and-contracts.md) 第 7 节。
+> 固定行与官方默认可配置键的关系：`session.new`、`pane.fullscreen.toggle` 的默认键与固定行相同，动作也相同；`workspace.files` 的 `Ctrl+Alt+P` 被让给「在本地打开」；`workspace.add` 的 `Ctrl+Alt+O` 与右栏开关重叠；`settings.open` 的 `Ctrl+Alt+,` 与关页重叠。与固定行重叠的可配置命令会进入冲突状态，按键派发不再执行它们，但固定行仍按命令 id 调官方命令。取舍与恢复方式见 [第 6 册](06-boundaries-and-contracts.md) 第 7 节。
 
 > 本插件另外挂五条固定键：`primary+alt+J`（`dsh-keyboard-shortcuts.focus-composer`，把键盘交还 composer）、`primary+alt+K`（`dsh-keyboard-shortcuts.focus-page`，把键盘交给右侧栏当前显示的那一页）、`primary+alt+←/→`（`dsh-keyboard-shortcuts.page-cycle`，右栏展开时切右栏页面并把键盘交给新页面、折叠时切会话视图标签）、`primary+↑/↓`（`dsh-keyboard-shortcuts.session-cycle`，在前三个工作区当前显示出来的会话行之间导航）与 `primary+alt+↑/↓`（`dsh-keyboard-shortcuts.session-active-cycle`，只在带状态点的活跃会话之间切换）。`primary+alt+Y`（变更请求）已迁到 [`dsh-changes-behavior`](../dsh-changes-behavior.md)。其中 `focus-page` **有意占用** Web 上内置 `session.search` 的默认键位，代价见 [第 3 册第 5.6 节](03-fixed-input-and-pane-keys.md) 与 [第 6 册](06-boundaries-and-contracts.md) 第 7 节。对照表见 [第 6 册](06-boundaries-and-contracts.md)，构建与启用见 [第 7 册](07-build-test-and-enable.md)。
 
-> 焦点落在**终端**（`.xterm`）里时，八条固定键与上面五条自挂键都由 window **捕获阶段**接管：终端在自己的 textarea 处理器里对经手的按键 `preventDefault()+stopPropagation()`，事件到不了 window 上的固定通道，所以各桥在事件进入终端前判定并吞掉这一按（见 [第 3 册](03-fixed-input-and-pane-keys.md) 第 4 节）。固定键的终端捕获统一调用官方命令注册表；五条自挂键复用各自的固定输入判定。分屏没有捕获钩子。
+> 焦点落在**终端**（`.xterm`）里时，七条固定键与上面五条自挂键都由 window **捕获阶段**接管：终端在自己的 textarea 处理器里对经手的按键 `preventDefault()+stopPropagation()`，事件到不了 window 上的固定通道，所以各桥在事件进入终端前判定并吞掉这一按（见 [第 3 册](03-fixed-input-and-pane-keys.md) 第 4 节）。固定键的终端捕获统一调用官方命令注册表；五条自挂键复用各自的固定输入判定。分屏没有捕获钩子。
 
 ### 1.3 全屏右栏上的 `Esc`：插件补的关闭路径
 

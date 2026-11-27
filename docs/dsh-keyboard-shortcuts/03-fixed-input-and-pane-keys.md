@@ -6,10 +6,10 @@
 
 ## 4. 机制总览
 
-插件挂两层固定键，共十三条只读行（八条官方命令 + 五条自挂）：
+插件挂两层固定键，共十二条只读行（七条官方命令 + 五条自挂）：
 
-- **八条官方命令固定键**（`fixed-keys.ts`）：`session.new`、`sidebar.left.toggle`、`workspace.openLocal`、`sidebar.right.toggle`、`workspace.files`、`terminal.new`、`pane.fullscreen.toggle`、`page.close`。它们占住 `primary+alt+…` 组合，命中后调用官方命令注册表的 `registry.invoke()`；面板全屏与关页在 Web 上先走 `sidebarRight.commandTarget()` 的免聚焦回退。
-- **五条本插件自挂固定键**：聚焦输入框（`focus-composer`）、聚焦右栏页面（`focus-page`）、页面循环（`page-cycle`，右栏展开切页、折叠切会话视图）、全部会话导航（`session-cycle`）与活跃会话导航（`session-active-cycle`）。变更请求（`⌘⌥Y`）已迁到 [`dsh-changes-behavior`](../dsh-changes-behavior.md)。其中 `focus-page`（`⌘⌥K` / `Ctrl+Alt+K`）**有意占用** Web 上内置 `session.search` 的默认键位（见 [第 5.6 节](03-fixed-input-and-pane-keys.md)）。固定键与可配置命令是两套目录。
+- **七条官方命令固定键**（`fixed-keys.ts`）：`session.new`、`workspace.openLocal`、`sidebar.right.toggle`、`workspace.files`、`terminal.new`、`pane.fullscreen.toggle`、`page.close`。它们占住 `primary+alt+…` 组合，命中后调用官方命令注册表的 `registry.invoke()`；面板全屏与关页在 Web 上先走 `sidebarRight.commandTarget()` 的免聚焦回退。
+- **五条本插件自挂固定键**：聚焦输入框（`focus-composer`）、聚焦右栏页面（`focus-page`）、页面循环（`page-cycle`，右栏展开切页、折叠切会话视图）、全部会话导航（`session-cycle`）与活跃会话导航（`session-active-cycle`）。左栏开关与变更请求（`⌘⌥Y`）都已移除。其中 `focus-page`（`⌘⌥K` / `Ctrl+Alt+K`）**有意占用** Web 上内置 `session.search` 的默认键位（见 [第 5.6 节](03-fixed-input-and-pane-keys.md)）。固定键与可配置命令是两套目录。
 
 除分屏外，其余内置命令不再由插件跟随生效绑定：固定行只按命令 id 转交，键位改绑 / 解绑 / 冲突都不影响固定行。用户要改这些键位，只能修改 `src/shortcuts.ts` 的 `TARGETS` 后重新构建。
 
@@ -17,7 +17,7 @@
 
 | 按键组 | 归属判定来源 | 执行 |
 |---|---|---|
-| 固定键（八条官方命令） | 固定行是否占用这一按；面板全屏与关页另用 `sidebarRight.commandTarget()` 的"活动 dock pane"回退 | `registry.invoke(commandId, …)`；全屏 / 关页在回退命中时直接执行 `toggleFullscreen(target)` / `closeTarget(target)` |
+| 固定键（七条官方命令） | 固定行是否占用这一按；面板全屏与关页另用 `sidebarRight.commandTarget()` 的"活动 dock pane"回退 | `registry.invoke(commandId, …)`；全屏 / 关页在回退命中时直接执行 `toggleFullscreen(target)` / `closeTarget(target)` |
 | 分屏（`pane.split`） | **生效目录**里 `pane.split` 当前那一行（`enabledBinding`） | `sidebarRight.commandTarget()` 回退后 `split(target.paneId)` |
 | 停止（`Esc Esc`） | `sessions.list` 里"主视图正在持有的会话" | 该会话上的 `conversation.cancel()` |
 | 审批键 | 同一条"主视图持有的会话"当前发布的 `pendingInteraction`（`{ kind: 'approval', answerable, answer() }`） | `answer()`（面板按钮用的同一个方法） |
@@ -30,9 +30,9 @@
 
 审批桥与提问桥读的是同一个槽位、靠 `kind` 分工，所以两者不会认领同一按。
 
-八条官方固定键、聚焦输入框、聚焦右栏页面、页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。macOS Web 另有一条只认 `⌘⌥N` 的捕获监听：Option+N 是死键，固定通道会把这一按标成组字中，监听直接认领并执行官方 `session.new`。
+七条官方固定键、聚焦输入框、聚焦右栏页面、页面切换与会话导航另有 window **捕获阶段**的 keydown 监听（早于一切冒泡 / 目标处理器）。固定输入通道挂在 window 的冒泡监听上，而终端在自己的 textarea 处理器里对每个经手的键 `preventDefault()+stopPropagation()`，焦点在终端里时按键根本到不了通道。捕获监听只对会落进 `.xterm` 的按键拦下（命中判定后 `preventDefault()+stopPropagation`，顺带不让终端把 `\x1b[1;7D`/`\x1b[1;7C`、`\x1b[1;7A`/`\x1b[1;7B`（Windows/Linux 的 `Ctrl+Alt+方向键`）与 `\x1b[1;5A`/`\x1b[1;5B`（Windows/Linux 的 `Ctrl+方向键`）这类转义序列塞给 shell；`Ctrl+Alt+J` / `Ctrl+Alt+M` / `Ctrl+Alt+N` 在 Windows/Linux 上常被当作 AltGr 输入字符，同样在这里被截下），其余按键放行给通道；两路共用同一个判定。macOS Web 另有一条只认 `⌘⌥N` 的捕获监听：Option+N 是死键，固定通道会把这一按标成组字中，监听直接认领并执行官方 `session.new`。
 
-> 各捕获路径只在 `.xterm` 内出手，所以它们与冒泡通道互斥、一次按键最多只被处理一次：命中即 `stopPropagation()`，window 冒泡上的固定通道再也看不到这一按。聚焦输入框那条的冒泡准入（`focusComposerEligible`）仍对 `terminal` 区域让位 —— 终端那一半只由捕获路径负责。固定键的终端捕获调用官方命令；八条命令的页面 / 文本控件那一半由固定输入通道处理。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
+> 各捕获路径只在 `.xterm` 内出手，所以它们与冒泡通道互斥、一次按键最多只被处理一次：命中即 `stopPropagation()`，window 冒泡上的固定通道再也看不到这一按。聚焦输入框那条的冒泡准入（`focusComposerEligible`）仍对 `terminal` 区域让位 —— 终端那一半只由捕获路径负责。固定键的终端捕获调用官方命令；七条命令的页面 / 文本控件那一半由固定输入通道处理。分屏没有捕获钩子，终端内的 `⌘\` / `Ctrl+\` 不保证到达固定通道。
 
 全屏右栏关栏另有一条**不挑落点**的捕获监听：右栏全屏呈现时它认领整页的裸 `Esc`（终端与右栏自己的文本控件除外），命中即吞掉这一按再折叠右栏。它不注册固定行、也不开观察者，两条投递路径都不经过固定通道（见 [第 5.11 节](05-approval-key-bridge.md)）。
 
@@ -92,7 +92,7 @@ function enabledBinding(rows, id) {
 
 ### 5.3 固定键与分屏桥
 
-#### 5.3.1 八条官方命令固定键
+#### 5.3.1 七条官方命令固定键
 
 `fixed-keys.ts` 为 `TARGETS` 的每一条注册固定行，并打开一个固定输入观察者。命中时按目标分流：
 

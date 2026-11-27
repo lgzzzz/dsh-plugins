@@ -33,15 +33,11 @@ function commandId(id: string): ShortcutCommandId {
   return id as ShortcutCommandId
 }
 
-/** 八条目标绑定；顺序与需求列表一致。 */
+/** 七条目标绑定；顺序与需求列表一致。 */
 export const TARGETS: readonly TargetSpec[] = [
   {
     id: commandId('session.new'),
     binding: { code: 'KeyN', modifiers: ['primary', 'alt'] },
-  },
-  {
-    id: commandId('sidebar.left.toggle'),
-    binding: { code: 'KeyB', modifiers: ['primary', 'alt'] },
   },
   {
     id: commandId('workspace.openLocal'),
@@ -86,7 +82,7 @@ export function keycaps(target: TargetSpec, platform: ShortcutPlatform): string[
     : ['Ctrl', 'Alt', target.binding.code === 'Enter' ? 'Enter' : keycapOf(target.binding.code)]
 }
 
-/** 物理码到可读键帽（只覆盖本插件的八个码）。 */
+/** 物理码到可读键帽（只覆盖本插件的七个码）。 */
 function keycapOf(code: string): string {
   if (code === 'Backslash') return '\\'
   if (code === 'Comma') return ','

@@ -1,8 +1,8 @@
 # dsh-keyboard-shortcuts
 
-Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**的只读固定行，命中后调用官方命令注册表；另一层为内置命令够不着的状态补上免聚焦桥接（连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`、`⌘\` 分屏）。面板全屏与关闭当前页面在 Web 上还会在焦点不在右栏时回退到当前 Session 的活动 dock 面板；`⌘⌥←/→` 这一对按右栏状态分两档——右栏展开切右栏页面，右栏折叠切**会话视图**标签（对话／轨迹／插件注册的 View）；消息滚动口内的 PageUp/PageDown 按可见消息带翻页，Space 的原生翻页被吞掉。
+Web 快捷键插件：一层把七条快捷键注册成**官方快捷键服务**的只读固定行，命中后调用官方命令注册表；另一层为内置命令够不着的状态补上免聚焦桥接（连按两下 `Esc` 停止、审批面板 `Enter` / `Esc`、提问卡片 `Esc`、全屏右栏 `Esc` 关栏、`⌘⌥J`、`⌘⌥K`、`⌘⌥←/→`、`⌘↑/↓`、`⌘⌥↑/↓`、`⌘\` 分屏）。面板全屏与关闭当前页面在 Web 上还会在焦点不在右栏时回退到当前 Session 的活动 dock 面板；`⌘⌥←/→` 这一对按右栏状态分两档——右栏展开切右栏页面，右栏折叠切**会话视图**标签（对话／轨迹／插件注册的 View）；消息滚动口内的 PageUp/PageDown 按可见消息带翻页，Space 的原生翻页被吞掉。
 
-> `⌘⌥Y` / `Ctrl+Alt+Y` 打开「变更请求」已迁到 [`dsh-changes-behavior`](dsh-changes-behavior.md)：它与改动卡片标题打开「本地变更」同属 changes 打开行为，需要共用「本次打开要全屏」的意图。本插件不再注册这一条固定行，其余固定键与桥接不变。
+> 左栏开关（`sidebar.left.toggle`）不再有快捷键：本插件不再注册它的固定行，并把上游的官方绑定清成显式未绑定（见 `src/remove-sidebar-toggle.ts`）。左栏只允许因窗口变窄自动收起，手动收起由 `dsh-ui-css-patches` 的布局守卫拦住。`⌘⌥Y` / `Ctrl+Alt+Y` 打开「变更请求」也已移除。
 
 ## 目录
 
@@ -20,12 +20,11 @@ Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**
 
 主修饰键 `primary` 在 macOS 上展开为 `⌘`，在 Windows/Linux 上展开为 `Ctrl`；下表按 Windows/Linux 记。
 
-### 八条固定键
+### 七条固定键
 
 | 动作 | 官方命令 id | 固定行 id | 快捷键 |
 | --- | --- | --- | --- |
 | 新建会话 | `session.new` | `dsh-keyboard-shortcuts.session.new` | `Ctrl+Alt+N` |
-| 展开／收起左侧栏 | `sidebar.left.toggle` | `dsh-keyboard-shortcuts.sidebar.left.toggle` | `Ctrl+Alt+B` |
 | 在本地打开 | `workspace.openLocal` | `dsh-keyboard-shortcuts.workspace.openLocal` | `Ctrl+Alt+P` |
 | 展开／收起右侧栏 | `sidebar.right.toggle` | `dsh-keyboard-shortcuts.sidebar.right.toggle` | `Ctrl+Alt+O` |
 | 工作区文件 | `workspace.files` | `dsh-keyboard-shortcuts.workspace.files` | `Ctrl+Alt+\` |
@@ -65,7 +64,7 @@ Web 快捷键插件：一层把八条快捷键注册成**官方快捷键服务**
 
 ## 为什么走固定行
 
-Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行极少数组合：`Ctrl+/`、`Ctrl+Shift+,`、`Ctrl+Shift+.`。`Ctrl+Alt+N`、`Ctrl+Alt+B` 这类组合会被标成 `unsupported-browser`，既不能保存进 `dsh.keybindings.v1`，也不会执行。因此不能靠 `shortcuts.edit()` 把这些键写进官方设置。
+Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行极少数组合：`Ctrl+/`、`Ctrl+Shift+,`、`Ctrl+Shift+.`。`Ctrl+Alt+N` 这类组合会被标成 `unsupported-browser`，既不能保存进 `dsh.keybindings.v1`，也不会执行。因此不能靠 `shortcuts.edit()` 把这些键写进官方设置。
 
 固定行（`registerFixed()`）不做这层 Web 组合校验，是保留这些组合的公开入口。它只读、不可改绑，并在官方快捷键参考里占一行。动作执行仍走官方命令注册表，不在本插件里重写。
 
@@ -93,7 +92,7 @@ Web/Linux 的官方可配置绑定校验（`isWebBindingAllowed()`）只放行�
 - 与固定行重叠的官方可配置命令会进入冲突状态（官方目录里的红字），正常按键派发不会执行它们；本插件的固定通道仍按命令 id 调官方命令，所以目标动作照常执行。
 - Web/Linux 上这些官方命令大多没有默认绑定，基本不会产生冲突。
 - Web（macOS/Windows）上会重叠的官方默认键包括：
-  - `session.new`、`sidebar.left.toggle`、`pane.fullscreen.toggle` 的默认键与目标相同，动作也相同；
+  - `session.new`、`pane.fullscreen.toggle` 的默认键与目标相同，动作也相同；
   - `workspace.files` 的 `Ctrl+Alt+P` 被让给「在本地打开」；
   - `workspace.openLocal` 的 `Ctrl+Shift+O` 仍可用（与固定行不重叠）；
   - `sidebar.right.toggle` 的 `Ctrl+Shift+B` 仍可用；

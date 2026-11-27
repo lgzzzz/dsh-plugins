@@ -344,42 +344,6 @@
       "hint": "审查页开始用 !important 钉字号：本插件的 !important 可能被更高特异性或更晚的压过"
     },
     {
-      "id": "shortcuts-register-fixed",
-      "plugin": "dsh-changes-behavior",
-      "token": "registerFixed(command",
-      "paths": [
-        "dsh-client-shortcuts/lib"
-      ],
-      "hint": "快捷键服务不再提供 registerFixed(command：⌘⌥Y 固定行注册失败，变更请求键不会生效"
-    },
-    {
-      "id": "shortcuts-observe-fixed",
-      "plugin": "dsh-changes-behavior",
-      "token": "observeFixedInput(listener",
-      "paths": [
-        "dsh-client-shortcuts/lib"
-      ],
-      "hint": "快捷键服务不再提供 observeFixedInput(listener)：⌘⌥Y 的 DOM 投递路径消失"
-    },
-    {
-      "id": "shortcuts-fixed-catalog",
-      "plugin": "dsh-changes-behavior",
-      "token": "fixedCatalog",
-      "paths": [
-        "dsh-client-shortcuts/lib"
-      ],
-      "hint": "快捷键服务不再输出 fixedCatalog：无法确认固定行仍然占用这一按"
-    },
-    {
-      "id": "shortcuts-platform",
-      "plugin": "dsh-changes-behavior",
-      "token": "platform",
-      "paths": [
-        "dsh-client-shortcuts/lib"
-      ],
-      "hint": "快捷键服务不再输出 platform：固定行键帽无法按平台格式化"
-    },
-    {
       "id": "forge-changes-tree-root",
       "plugin": "dsh-changes-behavior",
       "token": "data-forge-changes",

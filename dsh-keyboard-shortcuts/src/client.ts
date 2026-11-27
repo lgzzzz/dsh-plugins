@@ -1,7 +1,7 @@
 /**
  * 浏览器入口：固定键组 + 免聚焦桥接组。
  *
- * 固定键组把八条快捷键注册成官方快捷键服务的只读固定行，命中后调用官方命令注册表，
+ * 固定键组把七条快捷键注册成官方快捷键服务的只读固定行，命中后调用官方命令注册表，
  * 由官方命令自己的 `resolve()` / `run()` 执行动作；面板全屏与关闭当前页面在 Web 上
  * 另走一层免聚焦回退（`sidebarRight.commandTarget()`），焦点不在右栏时也能执行。
  *
@@ -16,6 +16,10 @@
  * 另装一条与固定键无关的 DOM 补偿：消息滚动口的 PageUp/PageDown 按“可见消息带”
  * 翻页，Space 的原生翻页在滚动口内被吞掉（见 `chat-paging.ts`）。
  *
+ * 还把上游 `sidebar.left.toggle` 的官方绑定从快捷键偏好里清掉（本插件不再注册它的固定行）：
+ * 左栏只允许因窗口变窄自动收起，手动收起在 `dsh-ui-css-patches` 的守卫里被拦住，快捷键也
+ * 不再占用任何组合。见 `remove-sidebar-toggle.ts`。
+ *
  * 各桥的机制与边界见 docs/dsh-keyboard-shortcuts/ 下的分册。
  */
 import { installApprovalBridge } from './approval-keys.ts'
@@ -27,6 +31,7 @@ import { installFullscreenDismissBridge } from './fullscreen-dismiss.ts'
 import { installPageCycleBridge } from './page-cycle.ts'
 import { installPaneSplitBridge } from './pane-split.ts'
 import { installQuestionBridge } from './question-keys.ts'
+import { removeLeftSidebarShortcut } from './remove-sidebar-toggle.ts'
 import { installSessionCycleBridge } from './session-cycle.ts'
 import { installStopBridge } from './stop-sequence.ts'
 import { name } from './runtime.ts'
@@ -44,7 +49,7 @@ export function apply(ctx: Context): void {
   installFullscreenDismissBridge(ctx)
   // 消息滚动口的翻页补偿不依赖固定键服务，先装；它只接管裸 PageUp/PageDown/Space。
   installChatPaging(ctx)
-  // 免聚焦桥：它们各自消费自己的按键，固定键组只处理另外八条组合。
+  // 免聚焦桥：它们各自消费自己的按键，固定键组只处理另外七条组合。
   installStopBridge(ctx)
   installApprovalBridge(ctx)
   installQuestionBridge(ctx)
@@ -54,4 +59,8 @@ export function apply(ctx: Context): void {
   installSessionCycleBridge(ctx)
   installPaneSplitBridge(ctx)
   installFixedKeyBridge(ctx)
+  // 左栏快捷键整条移除：固定行已从 TARGETS 拿掉，这里再把官方可配置绑定清空。
+  ctx.inject(['shortcuts'], (scope) => {
+    scope.effect(() => removeLeftSidebarShortcut(scope.shortcuts), `${name}: left sidebar shortcut removed`)
+  })
 }

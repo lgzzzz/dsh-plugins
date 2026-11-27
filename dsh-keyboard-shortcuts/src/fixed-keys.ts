@@ -1,5 +1,5 @@
 /**
- * 固定键组：把八条快捷键注册成官方快捷键服务的固定行，按键命中后调用官方命令
+ * 固定键组：把七条快捷键注册成官方快捷键服务的固定行，按键命中后调用官方命令
  * 注册表的 `invoke()`，由官方命令自己的 `resolve()` / `run()` 执行对应功能。
  *
  * 为什么不写官方可配置绑定：Web/Linux 的官方校验 `isWebBindingAllowed()` 只放行
@@ -81,7 +81,7 @@ function registryOf(shortcuts: Shortcuts): RegistryFace | undefined {
 }
 
 /**
- * 固定键分组：挂八条固定行、接固定输入、补终端捕获。
+ * 固定键分组：挂七条固定行、接固定输入、补终端捕获。
  *
  * 面板全屏与关闭当前页面在 Web 上另有免聚焦回退：焦点不在右栏时用
  * `sidebarRight.commandTarget()` 解析活动 dock 面板，消费按键后执行与官方命令相同的

@@ -1,6 +1,8 @@
 {
   "description": "dsh-keyboard-shortcuts 依赖的 DSH 客户端 DOM 锚点（第 6 册第 8 节列的非正式契约）。check-css.mjs 逐条验证这些锚点仍存在于上游构建产物中：锚点被改名 / 搬走时，对应的桥会退化成 no-op 或改用别的读数，这里把那种静默退化提前变成一次显式失败，并在 hint 里写明会退化成什么。",
   "checks": [
+    {"id":"layout-sidebar-toggle-command","plugin":"dsh-keyboard-shortcuts","token":"sidebar.left.toggle","paths":["dsh-client-ui-layout/lib"],"hint":"上游左栏开关命令改名或消失：remove-sidebar-toggle 找不到要清空的行，快捷键会留在目录里（动作仍被布局守卫拦住，但键帽与设置条目回来）"},
+    {"id":"shortcuts-edit-api","plugin":"dsh-keyboard-shortcuts","pattern":"edit\\(.*?\\.\\.\\.args\\)","paths":["dsh-client-shortcuts/lib"],"hint":"快捷键服务不再暴露 edit(...) 写入面：左栏开关的官方绑定无法清空，⌘B / ⌘⌥B 仍会派发（收起方向由布局守卫兜底）"},
     {"id":"approval-key","plugin":"dsh-keyboard-shortcuts","token":"data-approval-key","paths":["dsh-client-ui-approval/lib"],"hint":"审批面板根标记消失：审批桥的让位判定（以及停止桥的让位选择器）落空，焦点在面板内时插件会从面板手里抢答"},
     {"id":"conversation-session","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-session","paths":["dsh-client-ui-conversation/lib"],"hint":"会话根标记消失：停止桥的归属判定恒为假，连按两下 Esc 不再停止回合"},
     {"id":"conversation-scroll","plugin":"dsh-keyboard-shortcuts","token":"data-conversation-scroll","paths":["dsh-client-ui-conversation/lib"],"hint":"消息滚动口标记消失：翻页补偿找不到外层 transcript，PageUp/PageDown 回到按整个滚动口（含 composer）翻页，每页跳过 composerHeight - 40px；Space 也不再被屏蔽"},

@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 
 // 主题顺序;其余文件按名字补在后面。
-const ORDER = ['pin.test.mjs', 'cascade.test.mjs']
+const ORDER = ['pin.test.mjs', 'sidebar.test.mjs', 'cascade.test.mjs']
 
 const filters = process.argv.slice(2)
 const all = readdirSync(here).filter((name) => name.endsWith('.test.mjs'))
