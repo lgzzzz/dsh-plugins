@@ -14,6 +14,10 @@
  * 证明不了 `min(100vw − 687px, V − 104px)` 的三段取值(参考态、右栏占轨、左栏收起)
  * 以及探针随正文宽度的 1px / 0px 翻转。这里用一份最小 DOM(内容盒 + 聊天框 + 列 +
  * 上游探针公式桩)在浏览器里改 V 与视口,量计算宽度。
+ * 右栏的滑入 / 滑出同理:上游给 dockkit 的 host / empty / divider 挂的是
+ * `transform + visibility` 过渡,插件用 `transition: none !important` 压掉;过渡属性算不算
+ * `none`、稳态位移有没有被误改,只有浏览器知道。这里用右栏真实的模块 CSS 搭一个打开态 +
+ * 一个关闭态的面板,外加一块面板外的 dockkit 内容作对照组。
  *
  * 依赖本机安装的 DSH(与 check-css 同一套解析)与 Chrome/Chromium(可用 $CHROME_PATH 指定)。
  * 任一缺失时跳过并以 0 退出;设置 DSH_CSS_STRICT=1 可让跳过也报失败。
@@ -142,6 +146,31 @@ function readTurnRailRules(dshRoot) {
     if (!slot || !frame || slot[1] !== frame[1]) continue
     if (!/@container \(width<=900px\)\{[^{}]*_frame\{display:none\}\}/.test(railCss)) continue
     return { hash: slot[1], railCss, railFile: join(chatDir, name) }
+  }
+  return null
+}
+
+/**
+ * 从安装产物里抽出右栏(SidebarRight)的真实模块 CSS 与面板局部类名。
+ * 面板里的 dockkit 内容(host / empty / divider)在打开 / 关闭时靠 `transform: translateX(
+ * var(--dsh-sidebar-width))` + `transition: transform …` 滑入滑出;插件的
+ * `[data-sidebar-right-panel] [data-dockkit-*]` 规则要把过渡压成 none。类名带构建哈希,
+ * 运行时从模块 CSS 文本里读,不写死。结构变了(找不到 sheet / 面板类 / 那条过渡)时返回 null。
+ */
+function readSidebarRightRules(dshRoot) {
+  const dir = join(dshRoot, 'node_modules', '@deepseek-ai', 'dsh-client-ui-sidebar-right', 'lib')
+  if (!existsSync(dir)) return null
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.js')) continue
+    const text = readFileSync(join(dir, name), 'utf8')
+    const sheet = text.match(/"src\/client\/shell\/SidebarRight\.module\.css":\{text:context=>`([^`]*)`/)
+    if (!sheet) continue
+    const rightCss = sheet[1]
+    const panel = rightCss.match(/\.([A-Za-z0-9_-]+)_panel\{/)
+    if (!panel) continue
+    const slide = /\[data-dockkit-host=dock\][^{}]*\{[^}]*transform:translateX\(var\(--dsh-sidebar-width\)\)[^}]*transition:transform var\(--ds-transition-duration-slow\)/
+    if (!slide.test(rightCss)) continue
+    return { hash: panel[1], rightCss, rightFile: join(dir, name) }
   }
   return null
 }
@@ -293,6 +322,14 @@ const MEASURE = `(() => {
     const el = document.getElementById(id)
     return el === null ? null : getComputedStyle(el).transitionProperty
   }
+  const transform = (id) => {
+    const el = document.getElementById(id)
+    return el === null ? null : getComputedStyle(el).transform
+  }
+  const visibility = (id) => {
+    const el = document.getElementById(id)
+    return el === null ? null : getComputedStyle(el).visibility
+  }
   const read = () => ({
     answer: size('answer-code'),
     thinking: size('thinking-code'),
@@ -305,6 +342,14 @@ const MEASURE = `(() => {
     railFrame: display('rail-frame'),
     railFrameBare: display('rail-frame-bare'),
     railFrameWide: display('rail-frame-wide'),
+    dockOpenTransition: transition('rb-dock'),
+    emptyOpenTransition: transition('rb-empty'),
+    dividerOpenTransition: transition('rb-divider'),
+    dockClosedTransition: transition('rb-dock-closed'),
+    outsideDockTransition: transition('rb-outside-dock'),
+    dockOpenTransform: transform('rb-dock'),
+    dockClosedTransform: transform('rb-dock-closed'),
+    dockClosedVisibility: visibility('rb-dock-closed'),
   })
   const plugin = document.getElementById('plugin')
   const withPlugin = read()
@@ -382,6 +427,13 @@ async function main() {
     return finish()
   }
 
+  const right = readSidebarRightRules(dshRoot)
+  if (!right) {
+    failures += 1
+    console.log('FAIL 上游右栏的结构变了 — 找不到 SidebarRight 的面板类名或 dockkit 的 translateX + 300ms 过渡,请复核本测试与 css.ts 里的「右栏不做滑入滑出」规则')
+    return finish()
+  }
+
   const chromePath = findChrome()
   if (!chromePath) return skip('未找到 Chrome/Chromium(可用 $CHROME_PATH 指定)')
   if (typeof WebSocket === 'undefined') return skip('当前 Node 没有全局 WebSocket(需要 Node 22+)')
@@ -412,6 +464,11 @@ ${tool.toolCss}
 ${tool.shimmerCss}
 /* 轮次导航轨道(TurnNavigator)的真实模块 CSS:含窄容器隐藏 frame 的 @container 规则。 */
 ${rail.railCss}
+/* 右栏(SidebarRight)的真实模块 CSS:面板里的 dockkit host / empty / divider 在打开 /
+   关闭时用 transform:translateX(…) + 300ms 过渡滑入滑出,插件必须把过渡压成 none,
+   同时不改稳态位移(打开态 none、关闭态 translateX(720px))。 */
+${right.rightCss}
+:root { --ds-transition-duration-slow: 300ms; --ds-ease-in-out: ease; }
 /* 开关时帧上的轨道过渡(上游 .frame[data-animating] 的原样写法):插件必须把帧自己的
    transition 关掉,否则正文列会被 300ms 的中间态逐帧拖动。 */
 .frame[data-animating] { transition: grid-template-columns 300ms var(--ds-ease-in-out); }
@@ -470,6 +527,25 @@ ${rail.railCss}
 <div style="position:relative;width:1200px">
   <div class="${rail.hash}_slot"><nav id="rail-frame-wide" class="${rail.hash}_frame"></nav></div>
 </div>
+<!-- 右栏滑入滑出:面板根带 data-sidebar-right-panel(push / fullscreen 都输出该属性)。
+     打开态:上游 [data-sidebar-right-open] 把三块 dockkit 内容的 transform 改回 none;
+     关闭态:transform:translateX(720px) + visibility:hidden。插件只压过渡,不改这两个稳态。
+     最后一块在面板外(dockkit 也可能出现在别的用法里),过渡不能被误伤。 -->
+<div id="rb-open" class="${right.hash}_panel" data-sidebar-right-panel="push" data-sidebar-right-open
+  style="--dsh-sidebar-right-panel-width:720px">
+  <div class="${right.hash}_panelBody">
+    <div id="rb-dock" data-dockkit-host="dock"></div>
+    <div id="rb-empty" data-dockkit-empty="true"></div>
+    <div id="rb-divider" data-dockkit-divider="pane1:0"></div>
+  </div>
+</div>
+<div id="rb-closed" class="${right.hash}_panel" data-sidebar-right-panel="push"
+  style="--dsh-sidebar-right-panel-width:720px">
+  <div class="${right.hash}_panelBody">
+    <div id="rb-dock-closed" data-dockkit-host="dock"></div>
+  </div>
+</div>
+<div id="rb-outside-dock" data-dockkit-host="dock"></div>
 <!-- 正文限宽:100vw 由 Emulation 固定成 1600/800,内容盒宽度模拟滚动口 V;列照上游
      用 width:100% + max-width 取正文宽度,探针桩读同一组变量。 -->
 <div data-slot="main.conversation">
@@ -503,7 +579,7 @@ ${rail.railCss}
     if (outcome.exceptionDetails) throw new Error(outcome.exceptionDetails.exception?.description ?? '页面测量脚本抛错')
     const { withPlugin, upstreamOnly } = outcome.result.value
 
-    console.log(`fixture:${rules.hash}_markdown(来源 ${rules.file});${tool.suffix} / ${tool.diffStat}(来源 ${tool.toolFile});${rail.hash}_frame(来源 ${rail.railFile})`)
+    console.log(`fixture:${rules.hash}_markdown(来源 ${rules.file});${tool.suffix} / ${tool.diffStat}(来源 ${tool.toolFile});${rail.hash}_frame(来源 ${rail.railFile});${right.hash}_panel(来源 ${right.rightFile})`)
     // 对照组先证明这棵树真的会命中上游规则,否则下面的 14px 只是没被覆盖。
     check('上游单独作用:正文行内代码 = 0.875em × 14px', upstreamOnly.answer, '12.25px')
     check('上游单独作用:思考行内代码 = 1em × compact 的 13px', upstreamOnly.thinking, '13px')
@@ -531,6 +607,18 @@ ${rail.railCss}
     check('插件生效:536px 容器里的轨道显示', withPlugin.railFrame, 'block')
     check('插件生效:不在滚动口里的轨道由父子兜底显示', withPlugin.railFrameBare, 'block')
     check('插件生效:1136px 容器里的轨道不受影响', withPlugin.railFrameWide, 'block')
+    // 右栏滑入滑出:上游给 dockkit 的三块内容挂 transform(+ 关闭时 visibility)过渡,
+    // 插件必须把过渡全部关掉,同时不改打开 / 关闭两个稳态的位移与隐藏。
+    check('上游单独作用:右栏打开时 dockkit 内容有 transform 过渡', upstreamOnly.dockOpenTransition, 'transform')
+    check('上游单独作用:右栏关闭时 dockkit 内容有 transform + visibility 过渡', upstreamOnly.dockClosedTransition, 'transform, visibility')
+    check('上游单独作用:关闭态位移是 translateX(720px) 且隐藏', [upstreamOnly.dockClosedTransform, upstreamOnly.dockClosedVisibility], ['matrix(1, 0, 0, 1, 720, 0)', 'hidden'])
+    check('插件生效:右栏打开时 dockkit 内容不做过渡', withPlugin.dockOpenTransition, 'none')
+    check('插件生效:右栏关闭时 dockkit 内容不做过渡', withPlugin.dockClosedTransition, 'none')
+    check('插件生效:引导页(empty)不做过渡', withPlugin.emptyOpenTransition, 'none')
+    check('插件生效:分栏分隔条(divider)不做过渡', withPlugin.dividerOpenTransition, 'none')
+    check('插件生效:稳态位移不变(打开 none / 关闭 translateX(720px))', [withPlugin.dockOpenTransform, withPlugin.dockClosedTransform], ['none', 'matrix(1, 0, 0, 1, 720, 0)'])
+    check('插件生效:关闭态仍然隐藏', withPlugin.dockClosedVisibility, 'hidden')
+    check('插件生效:面板外的 dockkit 内容过渡不被误伤', withPlugin.outsideDockTransition, 'all')
 
     const layoutOutcome = await chrome.send('Runtime.evaluate', { expression: LAYOUT_MEASURE, returnByValue: true })
     if (layoutOutcome.exceptionDetails) throw new Error(layoutOutcome.exceptionDetails.exception?.description ?? '正文限宽测量脚本抛错')

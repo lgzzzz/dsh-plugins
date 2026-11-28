@@ -445,12 +445,43 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
    也有约「每帧 V 变化量一半」的左右摆动(慢放到 3s 时仍有 5px)。这里把帧自己的过渡
    置为 none:布局一步到位,正文列每帧位置恒为 332、宽度只变一次(实测 913 → 489),
    不再有中间态。
-   作用域只有帧本身:右栏面板的滑入 / 滑出(dockkit 项的 transform)、左右栏内部的淡入
-   淡出、抽屉的遮罩都用各自的元素,照旧播放;窗口缩放不置 data-animating,行为不变。
+   作用域只有帧本身:左右栏内部的淡入淡出、抽屉的遮罩用各自的元素,照旧播放;右栏面板
+   内容的滑入 / 滑出(dockkit 项的 transform)由下面那条单独关掉;窗口缩放不置
+   data-animating,行为不变。
    特异性 (0,1,0) 低于上游 .frame[data-animating] 的 (0,2,0),!important 是必需的
    (上游那条不带 !important)。属性改名时本规则整条落空、抖动回来,由 animating-attr
    契约在构建后报失效。 */
 [data-animating] {
+  transition: none !important;
+}
+
+/* 右栏打开 / 关闭不做滑入滑出:面板内容一步到位。
+   上游 SidebarRight.module.css 给面板里的三块 dockkit 内容挂了同一组过渡 ——
+   [data-dockkit-host="dock"](有标签页时的整块面板)、[data-dockkit-empty](没有标签页时的
+   引导页)、[data-dockkit-divider](分栏分隔条):
+       transform: translateX(var(--dsh-sidebar-width)); visibility: hidden;
+       transition: transform var(--ds-transition-duration-slow) …, visibility 0s linear …;
+   面板展开时这三块改成 transform:none / visibility:visible,收起时回到平移 + 隐藏,首次
+   展开还叠加一条 @starting-style 的 translateX 起始值。于是右栏打开时内容从窗口右缘外
+   滑进来、关闭时滑出去,各 300ms(实测 720px 右栏:transform 逐帧 720 → 696 → 498 →
+   219 → 12 → 0,dockkit 的 host 与 empty 都是这样),即使 AppFrame 的列宽过渡已经被上一条
+   关掉,这层滑入仍然存在。
+   把这三块的 transition 置为 none:transform 与 visibility 直接落到当前状态的声明值,
+   展开时内容立刻出现在面板里、收起时立刻移出并隐藏;稳态的位移 / 隐藏仍由上游那两条规则
+   决定,本规则不改它们(实测:开 / 关的首帧 transform 就是 none / translateX(720px),
+   document.getAnimations() 里不再有 300ms 的 transform 过渡,也没有起始帧的平移)。
+   !important 用来压过上游两条规则 —— 关闭态 .…_panel [data-dockkit-host=dock] 是
+   (0,2,0)、展开态 .…_panel[data-sidebar-right-open] [data-dockkit-host=dock] 是 (0,3,0),
+   两条都不带 !important,而本插件 <style> 在启动期挂载,与模块样式谁先挂上不归本插件掌握。
+   作用域限定在 [data-sidebar-right-panel] 面板内:该属性由面板根输出(push / fullscreen),
+   dockkit 的 host / empty / divider 属性在右侧栏以外(别的 dockkit 用法、分栏)也出现,
+   不能全局关掉。
+   面板根属性、三块 dockkit 内容或上游那组过渡改名 / 删除时,规则整条落空、滑入滑出回来,
+   由 css-contract.json 的 sidebar-right-panel-attr / sidebar-right-slide-rule / dockkit-attrs
+   三条契约在构建后报失效。 */
+[data-sidebar-right-panel] [data-dockkit-host="dock"],
+[data-sidebar-right-panel] [data-dockkit-empty],
+[data-sidebar-right-panel] [data-dockkit-divider] {
   transition: none !important;
 }
 
