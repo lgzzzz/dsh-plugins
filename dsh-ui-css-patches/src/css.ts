@@ -573,4 +573,42 @@ div[role="tree"]:is([aria-label="子智能体会话"], [aria-label="Subagent ses
 [data-session-panel-details] * {
   font-size: var(--dsh-content-font-size, 14px) !important;
 }
+
+/* 会话统计 / Token 用量浮窗不跟着正文滚动上移:纵向锚点从按钮位置改成停靠条的高度。
+   两个浮窗(portal 到 body 的 position:fixed 层,正文各自带 data-session-stats-details /
+   data-session-stats-usage)由上游用 CSS anchor positioning 放在触发按钮上方:
+   bottom: max(12px, calc(anchor(top) + 8px))。按钮在 sticky 的 composer 座位里,Chromium 158
+   的 anchor(top) 取的是按钮的静态(未补偿 sticky)位置:正文跟着流式输出向下滚时,浮窗按 scrollTop
+   的增量逐帧上移——实测滚 40px 上移 40px、滚 320px 后顶边到视口外;按钮本身仍在原位,所以不是
+   布局变化,只是锚点读错了位置。把纵向换成停靠条([data-composer-dock])的 anchor-size(height):
+   同一个盒子,但只取尺寸;停靠条高度不随滚动变化,也不随卡片里的草稿行数变化(草稿只把卡片
+   向上撑高,停靠条仍贴在座位底部),只在字号设置变大时按 --dsh-content-font-delta-secondary 增长。
+   bottom = 高度 + 8px 与上游的 8px 间隙一致:停靠条底距座位底 4px(root 的 padding-bottom)、按钮顶
+   距停靠条顶 4px(dock 的 padding-top),两者抵消后浮窗底边仍停在按钮顶上方 8px;实测两种浮窗
+   的 y 与修复前完全相同,滚动时不动。
+   水平轴不动:竖向滚动不影响 anchor(left),仍锚在各自按钮的左缘;只把左缘夹在视口内,窄窗口里
+   浮窗不越出右边(按钮被压缩到负 x 时也落在 12px)。高度上限按停靠条上方的可用空间算,超长内容
+   在浮窗内部滚动;position-try-fallbacks 关掉,因为上游那五条兜底全部仍用 anchor(top),一旦
+   触发会把同一段上移带回来。字体增量由 anchor-size 自动跟随;不支持 anchor-size 的浏览器用前一条
+   声明(34px + 增量)兜底——34px 就是当前停靠条 26px + 间隙 8px 的等价常量。
+   只选这两个会话统计浮窗:每轮用量的浮窗锚在消息尾部、本来就该随正文滚动,不在本规则里;
+   上下文占用浮窗是另一个组件(没有 data-session-stats-* 锚点),未纳入。
+   锚点改名(按钮正文的 data-session-stats-* 或停靠条的 data-composer-dock)时规则整条落空,
+   浮窗回到上游的上移;上游若改成别的定位方式,本规则变成多余。由 css-contract.json 的
+   composer-dock-attr / stats-dialog-details-attr / stats-dialog-usage-attr / stats-dialog-anchor-top
+   四条契约在构建后报失效。级联测试用上游真实的 stat-dialog 模块 CSS 搭了同一棵树:禁用插件样式时
+   滚动 240px 浮窗上移 240px,启用后位置不变。 */
+[data-composer-dock] {
+  anchor-name: --dsh-css-dock-anchor;
+}
+
+[role="dialog"]:has([data-session-stats-details]),
+[role="dialog"]:has([data-session-stats-usage]) {
+  top: auto !important;
+  bottom: calc(34px + var(--dsh-content-font-delta-secondary, 0px)) !important;
+  bottom: calc(anchor-size(--dsh-css-dock-anchor height) + 8px) !important;
+  left: clamp(12px, anchor(left), calc(100vw - 12px - min(440px, 100vw - 24px))) !important;
+  max-height: calc(100dvh - anchor-size(--dsh-css-dock-anchor height) - 8px - max(12px, var(--dsh-frame-overlay-top, 12px))) !important;
+  position-try-fallbacks: none !important;
+}
 `

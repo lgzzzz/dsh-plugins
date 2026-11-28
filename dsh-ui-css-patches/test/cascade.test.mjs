@@ -175,6 +175,29 @@ function readSidebarRightRules(dshRoot) {
   return null
 }
 
+/**
+ * 从安装产物里抽出会话统计浮窗(stat-dialog)的真实模块 CSS 与面板局部类名。
+ * 插件把两个统计浮窗的纵向定位从按钮的 `anchor(top)` 换成停靠条的 `anchor-size(height)`:
+ * 上游浮窗的 `bottom:max(12px,calc(anchor(top) + 8px))` 是这条补丁的前提。类名带构建哈希,
+ * 运行时从模块 CSS 文本里读,不写死。结构变了(找不到 sheet / 面板类 / 那条 anchor(top) 规则)时返回 null。
+ */
+function readStatDialogRules(dshRoot) {
+  const dir = join(dshRoot, 'node_modules', '@deepseek-ai', 'dsh-client-ui-chat', 'lib')
+  if (!existsSync(dir)) return null
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.js')) continue
+    const text = readFileSync(join(dir, name), 'utf8')
+    const sheet = text.match(/"src\/client\/chat\/stat-dialog\.module\.css":\{text:[A-Za-z_$][\w$]*=>`([^`]*)`/)
+    if (!sheet) continue
+    const statCss = sheet[1]
+    const panel = statCss.match(/\.([A-Za-z0-9_-]+)_panel\{/)
+    if (!panel) continue
+    if (!/bottom:max\(12px, calc\(anchor\(top\) \+ 8px\)\)/.test(statCss)) continue
+    return { hash: panel[1], statCss, statFile: join(dir, name) }
+  }
+  return null
+}
+
 /** 按平台常见路径找 Chrome/Chromium;都没有时返回 null。 */
 function findChrome() {
   const explicit = process.env.CHROME_PATH
@@ -397,6 +420,46 @@ const LAYOUT_NARROW_MEASURE = `(() => {
   }
 })()`
 
+/**
+ * 会话统计浮窗的跟随滚动测试:搭一个和真实对话同构的树 —— 滚动口铺满视口、sticky 座位贴底、
+ * 停靠条在座位里、按钮自己带 anchor-name,浮窗是 body 下的 fixed 面板。
+ * 基准:滚动到顶;然后让正文长高 6×40px 并每次滚到底(模拟流式输出 + 跟随尾部),再量浮窗底边。
+ * 上游 anchor(top) 不补偿 sticky 的滚动,浮窗底边随 scrollTop 上移;插件改用停靠条 anchor-size,
+ * 底边不动。返回基准 / 增长后的面板底边、位移量与按钮顶到面板底的间距。
+ */
+const STAT_DIALOG_MEASURE = `(async () => {
+  const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  const scroller = document.getElementById('stat-scroll')
+  const filler = document.getElementById('stat-filler')
+  const panel = document.getElementById('stat-panel')
+  const pill = document.querySelector('[data-composer-stat="activity"]')
+  const read = () => ({
+    panelBottom: +panel.getBoundingClientRect().bottom.toFixed(1),
+    pillTop: +pill.getBoundingClientRect().top.toFixed(1),
+    scrollTop: scroller.scrollTop,
+  })
+  const reset = async () => {
+    scroller.scrollTop = 0
+    filler.style.height = '1200px'
+    await frame()
+  }
+  await reset()
+  const base = read()
+  for (let i = 0; i < 6; i++) {
+    filler.style.height = (filler.getBoundingClientRect().height + 40) + 'px'
+    scroller.scrollTop = scroller.scrollHeight
+    await frame()
+  }
+  const grown = read()
+  await reset()
+  return {
+    base,
+    grown,
+    delta: +(grown.panelBottom - base.panelBottom).toFixed(1),
+    gap: +(grown.pillTop - grown.panelBottom).toFixed(1),
+  }
+})()`
+
 async function main() {
   const dshRoot = resolveDshRoot(dshRootArg(process.argv.slice(2)))
   if (!dshRoot) return skip('无法定位 DSH 根目录(可用 --dsh-root 或 $DSH_ROOT 指定)')
@@ -434,6 +497,13 @@ async function main() {
     return finish()
   }
 
+  const stat = readStatDialogRules(dshRoot)
+  if (!stat) {
+    failures += 1
+    console.log('FAIL 上游会话统计浮窗的结构变了 — 找不到 stat-dialog 的面板类名或 anchor(top) 定位规则,请复核本测试与 css.ts 里的「统计浮窗不随滚动上移」规则')
+    return finish()
+  }
+
   const chromePath = findChrome()
   if (!chromePath) return skip('未找到 Chrome/Chromium(可用 $CHROME_PATH 指定)')
   if (typeof WebSocket === 'undefined') return skip('当前 Node 没有全局 WebSocket(需要 Node 22+)')
@@ -468,6 +538,9 @@ ${rail.railCss}
    关闭时用 transform:translateX(…) + 300ms 过渡滑入滑出,插件必须把过渡压成 none,
    同时不改稳态位移(打开态 none、关闭态 translateX(720px))。 */
 ${right.rightCss}
+/* 会话统计浮窗(stat-dialog)的真实模块 CSS:fixed 面板用 anchor(top)+8px 放在按钮上方,
+   插件把纵向换成停靠条的 anchor-size(height),位置不再随正文滚动上移。 */
+${stat.statCss}
 :root { --ds-transition-duration-slow: 300ms; --ds-ease-in-out: ease; }
 /* 开关时帧上的轨道过渡(上游 .frame[data-animating] 的原样写法):插件必须把帧自己的
    transition 关掉,否则正文列会被 300ms 的中间态逐帧拖动。 */
@@ -557,6 +630,29 @@ ${right.rightCss}
     <div id="layout-probe"></div>
   </div>
 </div>
+<!-- 会话统计浮窗的跟随滚动树:滚动口铺满视口,sticky 座位贴底,停靠条在座位里,按钮自带
+     anchor-name;浮窗是 body 下的 fixed 面板(position-anchor 指回按钮),和真实 portal 同构。
+     正文从 1200px 长到 1440px 并每次滚到底时,上游 anchor(top) 会让浮窗底边随 scrollTop
+     上移;插件锚在停靠条高度上,底边不动。 -->
+<div id="stat-scroll"
+  style="position:fixed;top:0;left:0;width:700px;height:100%;overflow-y:auto;display:flex;flex-direction:column;background:#fafafa">
+  <div id="stat-filler" style="height:1200px;flex:none"></div>
+  <div data-composer-seat
+    style="position:sticky;bottom:0;z-index:9;margin-top:auto;will-change:transform;overflow-anchor:none;background:#fff;padding:0 8px 4px">
+    <div style="height:60px"></div>
+    <div data-composer-dock style="display:flex;justify-content:center;gap:12px;padding-top:4px;min-height:22px">
+      <span data-composer-stat="activity"
+        style="anchor-name:--dsh-cascade-stat;display:inline-flex;font-size:12px;line-height:20px">
+        <button id="stat-trigger" type="button" style="border:0;background:none;padding:1px 8px">22 轮 34 步 · 45.0 tok/s</button>
+      </span>
+    </div>
+  </div>
+</div>
+<div id="stat-panel" class="${stat.hash}_panel" role="dialog" aria-label="会话统计"
+  style="position-anchor:--dsh-cascade-stat">
+  <div style="display:flex;justify-content:space-between;gap:16px;font-weight:500">会话统计 <span>22 轮 34 步</span></div>
+  <dl data-session-stats-details><dt>模型用时</dt><dd>6分53秒</dd></dl>
+</div>
 </body></html>`
 
   const dir = mkdtempSync(join(tmpdir(), 'dsh-cascade-fixture-'))
@@ -641,6 +737,37 @@ ${right.rightCss}
     const narrow = narrowOutcome.result.value
     check('正文限宽:800px 视口(V=793)正文 393px(100vw − 407)', narrow.column, 393)
     check('正文限宽:800px 视口探针 1px', narrow.probe, '1px')
+
+    // 会话统计浮窗:上游 anchor(top) 不补偿 sticky 座位的滚动,正文增长 + 跟随尾部时浮窗
+    // 随 scrollTop 上移;插件的 anchor-size 纵向锚点让位置不变,且保持按钮上方的 8px 间距。
+    // 两组测量各从一份新加载的 fixture 开始,避免上一组滚动 / 增长后的锚点位置残留。
+    const reloadFixture = async () => {
+      const loaded = chrome.once('Page.loadEventFired')
+      await chrome.send('Page.navigate', { url: pathToFileURL(fixturePath).href })
+      await Promise.race([
+        loaded,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('fixture 页面 10s 内未重新加载完成')), 10000)),
+      ])
+    }
+    await reloadFixture()
+    const statWithOutcome = await chrome.send('Runtime.evaluate', {
+      expression: STAT_DIALOG_MEASURE, returnByValue: true, awaitPromise: true,
+    })
+    if (statWithOutcome.exceptionDetails) throw new Error(statWithOutcome.exceptionDetails.exception?.description ?? '统计浮窗测量脚本抛错')
+    const statWithPlugin = statWithOutcome.result.value
+    await reloadFixture()
+    await chrome.send('Runtime.evaluate', { expression: 'document.getElementById("plugin").disabled = true', returnByValue: true })
+    const statUpstreamOutcome = await chrome.send('Runtime.evaluate', {
+      expression: STAT_DIALOG_MEASURE, returnByValue: true, awaitPromise: true,
+    })
+    if (statUpstreamOutcome.exceptionDetails) throw new Error(statUpstreamOutcome.exceptionDetails.exception?.description ?? '统计浮窗测量脚本抛错')
+    const statUpstream = statUpstreamOutcome.result.value
+
+    check('插件生效:统计浮窗不随正文滚动上移', statWithPlugin.delta, 0)
+    check('插件生效:统计浮窗与按钮保持 8px 间距', statWithPlugin.gap, 8)
+    check('上游单独作用:统计浮窗的基准位置也在按钮上方 8px',
+      +(statUpstream.base.pillTop - statUpstream.base.panelBottom).toFixed(1), 8)
+    check('上游单独作用:统计浮窗随正文滚动上移', statUpstream.delta < -100, true)
   } finally {
     await chrome.dispose()
     rmSync(dir, { recursive: true, force: true })
